@@ -40,10 +40,22 @@ jobs:
 
           openfoam_archive="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tgz"
           thirdparty_archive="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tgz"
+          openfoam_tar="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tar"
+          thirdparty_tar="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tar"
 
           wget --no-verbose --no-clobber --directory-prefix="${SOURCE_CACHE_DIR}" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/OpenFOAM-${OPENFOAM_VER}.tgz" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/ThirdParty-${OPENFOAM_VER}.tgz"
+
+          if [ ! -s "${openfoam_tar}" ]; then
+            echo "Caching ${openfoam_tar}"
+            gzip -dc "${openfoam_archive}" > "${openfoam_tar}"
+          fi
+
+          if [ ! -s "${thirdparty_tar}" ]; then
+            echo "Caching ${thirdparty_tar}"
+            gzip -dc "${thirdparty_archive}" > "${thirdparty_tar}"
+          fi
 
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             build_tag="dispatch-$(date +%H%M%S)"
@@ -56,10 +68,10 @@ jobs:
           mkdir -p "${build_root}"
           echo "OPENFOAM_BUILD_ROOT=${build_root}" >> "${GITHUB_ENV}"
 
-          echo "Extracting ${openfoam_archive}"
-          tar xfp "${openfoam_archive}" -C "${build_root}"
-          echo "Extracting ${thirdparty_archive}"
-          tar xfp "${thirdparty_archive}" -C "${build_root}"
+          echo "Extracting ${openfoam_tar}"
+          tar xfp "${openfoam_tar}" -C "${build_root}"
+          echo "Extracting ${thirdparty_tar}"
+          tar xfp "${thirdparty_tar}" -C "${build_root}"
 
       - name: Build OpenFOAM on login node
         run: |
@@ -90,7 +102,7 @@ jobs:
           set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc" \
             WM_COMPILER=Icx \
-            WM_MPLIB=SYSTEMMPI \
+            WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
@@ -139,7 +151,7 @@ jobs:
           set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
             WM_COMPILER=Icx \
-            WM_MPLIB=SYSTEMMPI \
+            WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
