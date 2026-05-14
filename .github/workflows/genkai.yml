@@ -2,6 +2,7 @@ name: OpenFOAM on genkai
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   openfoam:
