@@ -1,7 +1,6 @@
 #!/bin/sh
 #SBATCH -J "allrun"
 #SBATCH -o /home/apacsc14/ni/hpc/results/%j-%x.out
-set -e
 
 cat $0
 

@@ -3,8 +3,6 @@
 #SBATCH -o /home/apacsc14/ni/hpc/results/%j-%x.out
 # SBATCH -w g4
 # SBATCH -t 01:00:00
-# set -e
-
 cat $0
 date
 

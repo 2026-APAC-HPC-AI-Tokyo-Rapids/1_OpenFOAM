@@ -34,7 +34,7 @@ jobs:
 
       - name: Prepare OpenFOAM source
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           mkdir -p "${SOURCE_CACHE_DIR}" "${RESULT_DIR}"
 
@@ -76,7 +76,7 @@ jobs:
       - name: Build OpenFOAM on login node
         run: |
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
-          set -exo pipefail
+          set -x -o pipefail
 
           mkdir -p "${RESULT_DIR}"
           exec > >(tee "${RESULT_DIR}/build_openfoam.out") 2>&1
@@ -123,7 +123,7 @@ jobs:
 
       - name: Submit OpenFOAM case job
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           mkdir -p "${RESULT_DIR}"
           case_log="${RESULT_DIR}/allrun.out"
@@ -138,7 +138,7 @@ jobs:
           #!/bin/bash
 
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
-          set -exo pipefail
+          set -x -o pipefail
 
           cat "$0"
 
