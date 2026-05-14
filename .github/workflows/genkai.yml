@@ -102,8 +102,6 @@ jobs:
             WM_COMPILE_CONTROL="+ccache"
           set -eu
 
-          command -v ${WM_CC}
-          command -v ${WM_CXX}
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
