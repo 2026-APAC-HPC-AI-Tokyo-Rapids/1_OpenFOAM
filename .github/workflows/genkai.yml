@@ -85,6 +85,8 @@ jobs:
 
           export CC=mpiicx
           export CXX=mpiicpx
+          export CMAKE_C_COMPILER_LAUNCHER=ccache
+          export CMAKE_CXX_COMPILER_LAUNCHER=ccache
           export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
           ccache --zero-stats || true
           ccache --show-config || true
@@ -99,6 +101,9 @@ jobs:
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
           set -eu
+
+          command -v ${WM_CC}
+          command -v ${WM_CXX}
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
