@@ -18,10 +18,11 @@ jobs:
       SOURCE_CACHE_DIR: /home/pj26000080/ku60000563/openfoam-runner/source-cache
       RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results
       CASE_DIR: /home/pj26000080/ku60000563/openfoam-runner/hpc/incompressible/simpleFoam/occDrivAerStaticMesh
+      BASH_ENV: ${HOME}/.bashrc
 
     defaults:
       run:
-        shell: bash
+        shell: bash --noprofile --norc -o pipefail {0}
 
     steps:
       - name: Checkout
