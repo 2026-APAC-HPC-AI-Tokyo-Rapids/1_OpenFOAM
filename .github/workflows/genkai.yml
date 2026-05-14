@@ -88,7 +88,10 @@ jobs:
           export CMAKE_C_COMPILER_LAUNCHER=ccache
           export CMAKE_CXX_COMPILER_LAUNCHER=ccache
           export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
-          ccache --zero-stats || true
+          export CCACHE_DEBUG=1
+          export CCACHE_DEBUGDIR=${RESULT_DIR}/ccache-debug
+          mkdir -p ${CCACHE_DEBUGDIR}
+          ccache --show-stats --verbose || true
           ccache --show-config || true
 
           cd ${build_root}
