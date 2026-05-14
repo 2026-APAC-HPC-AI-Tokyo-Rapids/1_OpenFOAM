@@ -75,7 +75,8 @@ jobs:
 
       - name: Build OpenFOAM on login node
         run: |
-          set -euo pipefail
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -exo pipefail
 
           mkdir -p "${RESULT_DIR}"
           exec > >(tee "${RESULT_DIR}/build_openfoam.out") 2>&1
@@ -99,14 +100,12 @@ jobs:
 
           export openfoam_ver="${OPENFOAM_VER}"
 
-          set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
-          set -u
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
@@ -138,7 +137,8 @@ jobs:
               -o "${case_log}" <<'PJM' 2>&1
           #!/bin/bash
 
-          set -euo pipefail
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -exo pipefail
 
           cat "$0"
 
@@ -148,14 +148,12 @@ jobs:
           export CC=mpiicx
           export CXX=mpiicpx
 
-          set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
-          set -u
 
           cd "${CASE_DIR}"
 
