@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Show runner context
         run: |
@@ -41,7 +41,7 @@ jobs:
           openfoam_archive="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tgz"
           thirdparty_archive="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tgz"
 
-          wget --no-clobber --directory-prefix="${SOURCE_CACHE_DIR}" \
+          wget --no-verbose --no-clobber --directory-prefix="${SOURCE_CACHE_DIR}" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/OpenFOAM-${OPENFOAM_VER}.tgz" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/ThirdParty-${OPENFOAM_VER}.tgz"
 
@@ -56,8 +56,10 @@ jobs:
           mkdir -p "${build_root}"
           echo "OPENFOAM_BUILD_ROOT=${build_root}" >> "${GITHUB_ENV}"
 
-          tar xvfp "${openfoam_archive}" -C "${build_root}"
-          tar xvfp "${thirdparty_archive}" -C "${build_root}"
+          echo "Extracting ${openfoam_archive}"
+          tar xfp "${openfoam_archive}" -C "${build_root}"
+          echo "Extracting ${thirdparty_archive}"
+          tar xfp "${thirdparty_archive}" -C "${build_root}"
 
       - name: Build OpenFOAM on login node
         run: |
