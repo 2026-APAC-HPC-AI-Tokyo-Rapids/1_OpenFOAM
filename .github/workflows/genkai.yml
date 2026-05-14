@@ -41,22 +41,10 @@ jobs:
 
           openfoam_archive="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tgz"
           thirdparty_archive="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tgz"
-          openfoam_tar="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tar"
-          thirdparty_tar="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tar"
 
           wget --no-verbose --no-clobber --directory-prefix="${SOURCE_CACHE_DIR}" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/OpenFOAM-${OPENFOAM_VER}.tgz" \
             "https://dl.openfoam.com/source/${OPENFOAM_VER}/ThirdParty-${OPENFOAM_VER}.tgz"
-
-          if [ ! -s "${openfoam_tar}" ]; then
-            echo "Caching ${openfoam_tar}"
-            gzip -dc "${openfoam_archive}" > "${openfoam_tar}"
-          fi
-
-          if [ ! -s "${thirdparty_tar}" ]; then
-            echo "Caching ${thirdparty_tar}"
-            gzip -dc "${thirdparty_archive}" > "${thirdparty_tar}"
-          fi
 
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             build_tag="dispatch-$(date +%H%M%S)"
@@ -64,15 +52,17 @@ jobs:
             build_tag="${GITHUB_SHA::7}"
           fi
 
-          build_root="${WORKDIR}/openfoam-build-${build_tag}"
-          rm -rf "${build_root}"
-          mkdir -p "${build_root}"
-          echo "OPENFOAM_BUILD_ROOT=${build_root}" >> "${GITHUB_ENV}"
+          final_build_root=${WORKDIR}/openfoam-build-${build_tag}
+          temp_build_root="$(mktemp -d)"
+          echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
+          echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
+          echo "Using temporary build root: ${temp_build_root}"
+          echo "Final build root: ${final_build_root}"
 
-          echo "Extracting ${openfoam_tar}"
-          tar xfp "${openfoam_tar}" -C "${build_root}"
-          echo "Extracting ${thirdparty_tar}"
-          tar xfp "${thirdparty_tar}" -C "${build_root}"
+          echo "Extracting ${openfoam_archive}"
+          tar xzf ${openfoam_archive} -C ${temp_build_root}
+          echo "Extracting ${thirdparty_archive}"
+          tar xzf ${thirdparty_archive} -C ${temp_build_root}
 
       - name: Build OpenFOAM on login node
         run: |
@@ -83,6 +73,7 @@ jobs:
           exec > >(tee "${RESULT_DIR}/build_openfoam.out") 2>&1
 
           date
+          build_root=${OPENFOAM_BUILD_TMP_ROOT}
 
           module purge
           module load intel/2025.1.3 impi/2021.15
@@ -95,18 +86,20 @@ jobs:
 
           export CC=mpiicx
           export CXX=mpiicpx
+          export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
           ccache --zero-stats || true
+          ccache --show-config || true
 
-          cd "${OPENFOAM_BUILD_ROOT}"
+          cd ${build_root}
 
-          export openfoam_ver="${OPENFOAM_VER}"
+          export openfoam_ver=${OPENFOAM_VER}
+          export WM_COMPILER=Icx
+          export WM_MPLIB=INTELMPI
+          export WM_LABEL_SIZE=64
+          export WM_PRECISION_OPTION=DP
+          export WM_COMPILE_CONTROL="+ccache"
 
-          source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc" \
-            WM_COMPILER=Icx \
-            WM_MPLIB=INTELMPI \
-            WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL="+ccache"
+          source ${build_root}/OpenFOAM-${openfoam_ver}/etc/bashrc
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
@@ -121,6 +114,15 @@ jobs:
 
           date
           ccache --show-stats || true
+          ccache --show-stats --verbose || true
+
+      - name: Move OpenFOAM build into place
+        run: |
+          set -uo pipefail
+
+          mkdir -p $(dirname ${OPENFOAM_BUILD_ROOT})
+          mv ${OPENFOAM_BUILD_TMP_ROOT} ${OPENFOAM_BUILD_ROOT}
+          echo "OpenFOAM build root: ${OPENFOAM_BUILD_ROOT}"
 
       - name: Submit OpenFOAM case job
         run: |
@@ -148,13 +150,15 @@ jobs:
 
           export CC=mpiicx
           export CXX=mpiicpx
+          export CCACHE_LOGFILE=${RESULT_DIR}/ccache-case.log
+          export openfoam_ver=${OPENFOAM_VER}
+          export WM_COMPILER=Icx
+          export WM_MPLIB=INTELMPI
+          export WM_LABEL_SIZE=64
+          export WM_PRECISION_OPTION=DP
+          export WM_COMPILE_CONTROL="+ccache"
 
-          source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
-            WM_COMPILER=Icx \
-            WM_MPLIB=INTELMPI \
-            WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL="+ccache"
+          source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc
 
           cd "${CASE_DIR}"
 
@@ -200,3 +204,10 @@ jobs:
           path: |
             ${{ env.RESULT_DIR }}
             ${{ env.CASE_DIR }}
+
+      - name: Cleanup temporary build root
+        if: always()
+        run: |
+          set -uo pipefail
+
+          rm -rf ${OPENFOAM_BUILD_TMP_ROOT}
