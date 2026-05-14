@@ -17,7 +17,6 @@ jobs:
       BUILD_PARALLELISM: 60
       SOURCE_CACHE_DIR: /home/pj26000080/ku60000563/openfoam-runner/source-cache
       RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results
-      CASE_DIR: /home/pj26000080/ku60000563/openfoam-runner/hpc/incompressible/simpleFoam/occDrivAerStaticMesh
       BASH_ENV: ${HOME}/.bashrc
 
     defaults:
@@ -67,7 +66,7 @@ jobs:
       - name: Build OpenFOAM on login node
         run: |
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
-          set -x -o pipefail
+          set -xo pipefail
 
           mkdir -p "${RESULT_DIR}"
           exec > >(tee "${RESULT_DIR}/build_openfoam.out") 2>&1
@@ -93,13 +92,13 @@ jobs:
           cd ${build_root}
 
           export openfoam_ver=${OPENFOAM_VER}
-          export WM_COMPILER=Icx
-          export WM_MPLIB=INTELMPI
-          export WM_LABEL_SIZE=64
-          export WM_PRECISION_OPTION=DP
-          export WM_COMPILE_CONTROL="+ccache"
-
-          source ${build_root}/OpenFOAM-${openfoam_ver}/etc/bashrc
+          source ${build_root}/OpenFOAM-${openfoam_ver}/etc/bashrc \
+            WM_COMPILER=Icx \
+            WM_MPLIB=INTELMPI \
+            WM_LABEL_SIZE=64 \
+            WM_PRECISION_OPTION=DP \
+            WM_COMPILE_CONTROL="+ccache"
+          set -eu
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
@@ -111,6 +110,9 @@ jobs:
           date
           cd "$WM_PROJECT_DIR/applications/solvers/basic/potentialFoam"
           time wmake -j ${BUILD_PARALLELISM}
+
+          command -v simpleFoam
+          command -v potentialFoam
 
           date
           ccache --show-stats || true
@@ -141,7 +143,7 @@ jobs:
           #!/bin/bash
 
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
-          set -x -o pipefail
+          set -xo pipefail
 
           cat "$0"
 
@@ -152,15 +154,26 @@ jobs:
           export CXX=mpiicpx
           export CCACHE_LOGFILE=${RESULT_DIR}/ccache-case.log
           export openfoam_ver=${OPENFOAM_VER}
-          export WM_COMPILER=Icx
-          export WM_MPLIB=INTELMPI
-          export WM_LABEL_SIZE=64
-          export WM_PRECISION_OPTION=DP
-          export WM_COMPILE_CONTROL="+ccache"
+          source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc \
+            WM_COMPILER=Icx \
+            WM_MPLIB=INTELMPI \
+            WM_LABEL_SIZE=64 \
+            WM_PRECISION_OPTION=DP \
+            WM_COMPILE_CONTROL="+ccache"
+          set -eu
 
-          source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc
+          command -v simpleFoam
 
-          cd "${CASE_DIR}"
+          tutorial_src="${FOAM_TUTORIALS}/incompressible/simpleFoam/airFoil2D"
+          case_dir="${RESULT_DIR}/cases/simpleFoam-airFoil2D"
+
+          test -d "${tutorial_src}"
+          rm -rf "${case_dir}"
+          mkdir -p "$(dirname "${case_dir}")"
+          cp -a "${tutorial_src}" "${case_dir}"
+          cd "${case_dir}"
+          foamDictionary system/controlDict -entry endTime -set 100
+          foamDictionary system/controlDict -entry writeInterval -set 50
 
           ./Allrun
           PJM
@@ -203,7 +216,6 @@ jobs:
           if-no-files-found: warn
           path: |
             ${{ env.RESULT_DIR }}
-            ${{ env.CASE_DIR }}
 
       - name: Cleanup temporary build root
         if: always()
