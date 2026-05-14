@@ -1,0 +1,70 @@
+/*---------------------------------------------------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2412                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+Build  : _8dbc61e11c-20241220 OPENFOAM=2412 version=v2412
+Arch   : "LSB;label=64;scalar=64"
+Exec   : renumberMesh -constant -overwrite -parallel
+Date   : Mar 21 2026
+Time   : 21:38:03
+Host   : g4
+PID    : 3467760
+I/O    : uncollated
+Case   : /scratch/home/apacsc14/ni/hpc/hpc/incompressible/simpleFoam/occDrivAerStaticMesh
+nProcs : 64
+Hosts  :
+(
+    (g4 64)
+)
+Pstream initialized with:
+    floatTransfer      : false
+    maxCommsSize       : 0
+    nProcsSimpleSum    : 0
+    nonBlockingExchange: 0 (tuning: 0)
+    exchange algorithm : 0
+    commsType          : nonBlocking
+    polling iterations : 0
+trapFpe: Floating point exception trapping enabled (FOAM_SIGFPE).
+fileModificationChecking : Monitoring run-time modified files using timeStampMaster (fileModificationSkew 5, maxFileModificationPolls 20)
+allowSystemOperations : Allowing user-supplied system call operations
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+Create time
+
+Create mesh for time = constant
+
+Mesh region0 size: 65334765
+Before renumbering
+    band           : 991145
+    profile        : 1110638103525
+
+Using renumber-method: CuthillMcKee [default]
+
+Reading fields
+
+Renumbering processor cell decomposition map cellProcAddressing
+Renumbering processor face decomposition map faceProcAddressing
+Renumbering processor point decomposition map pointProcAddressing
+After renumbering
+    band           : 37712
+    profile        : 719983397614
+
+Writing mesh to "constant"
+
+Timings:
+    read mesh   : 1.989721007
+    read fields : 0.033205198
+    decompose   : 0
+    cell-cells  : 0
+    renumber    : 0.476594149
+    write       : 1.630761676
+TotalTime = 7.604143871 s
+
+ExecutionTime = 7.22 s  ClockTime = 9 s
+
+End
+
+Finalising parallel run
