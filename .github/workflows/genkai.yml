@@ -87,12 +87,14 @@ jobs:
 
           export openfoam_ver="${OPENFOAM_VER}"
 
+          set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=SYSTEMMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
+          set -u
 
           cd "$WM_PROJECT_DIR"
           time ./Allwmake -j ${BUILD_PARALLELISM}
@@ -134,12 +136,14 @@ jobs:
           export CC=mpiicx
           export CXX=mpiicpx
 
+          set +u
           source "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=SYSTEMMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
+          set -u
 
           cd "${CASE_DIR}"
 
