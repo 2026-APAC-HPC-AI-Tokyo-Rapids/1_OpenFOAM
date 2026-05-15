@@ -101,18 +101,19 @@ jobs:
           icpx --version
           mpiicx --version
           mpiicpx --version
-          ccache --version
+          # ccache disabled to avoid temp-dir pressure during parallel builds.
+          # ccache --version
 
           export CC=mpiicx
           export CXX=mpiicpx
-          export CMAKE_C_COMPILER_LAUNCHER=ccache
-          export CMAKE_CXX_COMPILER_LAUNCHER=ccache
-          export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
-          export CCACHE_DEBUG=1
-          export CCACHE_DEBUGDIR=${RESULT_DIR}/ccache-debug
-          mkdir -p ${CCACHE_DEBUGDIR}
-          ccache --show-stats --verbose || true
-          ccache --show-config || true
+          # export CMAKE_C_COMPILER_LAUNCHER=ccache
+          # export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+          # export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
+          # export CCACHE_DEBUG=1
+          # export CCACHE_DEBUGDIR=${RESULT_DIR}/ccache-debug
+          # mkdir -p ${CCACHE_DEBUGDIR}
+          # ccache --show-stats --verbose || true
+          # ccache --show-config || true
 
           cd ${build_root}
 
@@ -121,8 +122,7 @@ jobs:
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL="+ccache"
+            WM_PRECISION_OPTION=DP
           set -eu
 
 
@@ -140,9 +140,10 @@ jobs:
           command -v simpleFoam
           command -v potentialFoam
 
+          # ccache disabled; keep the old summary calls commented for rollback.
           date
-          ccache --show-stats || true
-          ccache --show-stats --verbose || true
+          # ccache --show-stats || true
+          # ccache --show-stats --verbose || true
 
       - name: Move OpenFOAM build into place
         run: |
@@ -178,14 +179,13 @@ jobs:
 
           export CC=mpiicx
           export CXX=mpiicpx
-          export CCACHE_LOGFILE=${RESULT_DIR}/ccache-case.log
+          # export CCACHE_LOGFILE=${RESULT_DIR}/ccache-case.log
           export openfoam_ver=${OPENFOAM_VER}
           source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL="+ccache"
+            WM_PRECISION_OPTION=DP
           set -eu
 
           command -v simpleFoam
