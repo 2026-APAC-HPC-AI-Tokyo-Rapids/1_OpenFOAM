@@ -1,0 +1,11 @@
+--- OpenFOAM-v2412/etc/config.sh/adios2
++++ OpenFOAM-v2412/etc/config.sh/adios2
+@@ -21,7 +21,7 @@
+ #------------------------------------------------------------------------------
+ # USER EDITABLE PART: Changes made here may be lost with the next upgrade
+ 
+-adios2_version=ADIOS2-2.10.1
++adios2_version=ADIOS2-2.12.1
+ export ADIOS2_ARCH_PATH="$WM_THIRD_PARTY_DIR/platforms/$WM_ARCH$WM_COMPILER/$adios2_version"
+ 
+ # END OF (NORMAL) USER EDITABLE PART

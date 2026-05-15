@@ -63,6 +63,26 @@ jobs:
           echo "Extracting ${thirdparty_archive}"
           tar xzf ${thirdparty_archive} -C ${temp_build_root}
 
+      - name: Fetch ADIOS2 source
+        run: |
+          set -uo pipefail
+
+          adios2_version=ADIOS2-2.12.1
+          adios2_archive="${SOURCE_CACHE_DIR}/ADIOS2-v2.12.1.tar.gz"
+          adios2_source_root="${OPENFOAM_BUILD_TMP_ROOT}/ThirdParty-${OPENFOAM_VER}/sources/adios"
+
+          mkdir -p "${adios2_source_root}"
+          wget --no-verbose --no-clobber --output-document="${adios2_archive}" \
+            "https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.12.1.tar.gz"
+          tar xzf "${adios2_archive}" -C "${adios2_source_root}"
+
+      - name: Apply local patches
+        run: |
+          set -uo pipefail
+
+          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
+            < "${GITHUB_WORKSPACE}/.github/patches/adios2-v2.12.1.patch"
+
       - name: Build OpenFOAM on login node
         run: |
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
