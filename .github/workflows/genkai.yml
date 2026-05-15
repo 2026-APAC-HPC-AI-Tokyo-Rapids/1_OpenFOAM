@@ -52,7 +52,7 @@ jobs:
           fi
 
           final_build_root=${WORKDIR}/openfoam-build-${build_tag}
-          temp_build_root="$(mktemp -d)"
+          temp_build_root="$(mktemp -d "/dev/shm/${USER}.XXXXXXXXXXX")"
           echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
           echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
           echo "Using temporary build root: ${temp_build_root}"
@@ -228,4 +228,4 @@ jobs:
         run: |
           set -uo pipefail
 
-          rm -rf ${OPENFOAM_BUILD_TMP_ROOT}
+          rm -rf "${OPENFOAM_BUILD_TMP_ROOT}" "${OPENFOAM_BUILD_ROOT}"
