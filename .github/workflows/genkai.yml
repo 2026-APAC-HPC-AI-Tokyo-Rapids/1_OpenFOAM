@@ -16,8 +16,8 @@ jobs:
       OPENFOAM_VER: v2412
       BUILD_PARALLELISM: 60
       SOURCE_CACHE_DIR: /home/pj26000080/ku60000563/openfoam-runner/source-cache
-      RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results
-      BASH_ENV: ${HOME}/.bashrc
+      RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results/${{ github.run_id }}
+      BASH_ENV: ${HOME}/.local/.setenv
 
     defaults:
       run:
@@ -52,7 +52,8 @@ jobs:
           fi
 
           final_build_root=${WORKDIR}/openfoam-build-${build_tag}
-          temp_build_root="$(mktemp -d "/dev/shm/${USER}.XXXXXXXXXXX")"
+          mkdir -p "${WORKDIR}/tmp"
+          temp_build_root="$(mktemp -d "${WORKDIR}/tmp/openfoam-build-${build_tag}.XXXXXXXXXXX")"
           echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
           echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
           echo "Using temporary build root: ${temp_build_root}"
@@ -116,19 +117,20 @@ jobs:
           icpx --version
           mpiicx --version
           mpiicpx --version
-          # ccache disabled to avoid temp-dir pressure during parallel builds.
-          # ccache --version
+          ccache --version
 
           export CC=mpiicx
           export CXX=mpiicpx
-          # export CMAKE_C_COMPILER_LAUNCHER=ccache
-          # export CMAKE_CXX_COMPILER_LAUNCHER=ccache
-          # export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
-          # export CCACHE_DEBUG=1
-          # export CCACHE_DEBUGDIR=${RESULT_DIR}/ccache-debug
-          # mkdir -p ${CCACHE_DEBUGDIR}
-          # ccache --show-stats --verbose || true
-          # ccache --show-config || true
+          ccache_tmp_root="$(mktemp -d "/dev/shm/${USER}-ccache-tmp-XXXXXXXXXXX")"
+          export CCACHE_TEMPDIR="${ccache_tmp_root}/tmp"
+          mkdir -p "${CCACHE_TEMPDIR}"
+          echo "CCACHE_TMP_ROOT=${ccache_tmp_root}" >> "${GITHUB_ENV}"
+          echo "CCACHE_TEMPDIR=${CCACHE_TEMPDIR}" >> "${GITHUB_ENV}"
+          export CMAKE_C_COMPILER_LAUNCHER=ccache
+          export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+          export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
+          ccache --show-stats --verbose || true
+          ccache --show-config || true
 
           cd ${build_root}
 
@@ -137,7 +139,8 @@ jobs:
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP
+            WM_PRECISION_OPTION=DP \
+            WM_COMPILE_CONTROL="+ccache"
           set -eu
 
           fftw_lib_dir="${FFTW_ARCH_PATH}/lib"
@@ -158,10 +161,9 @@ jobs:
           command -v simpleFoam
           command -v potentialFoam
 
-          # ccache disabled; keep the old summary calls commented for rollback.
           date
-          # ccache --show-stats || true
-          # ccache --show-stats --verbose || true
+          ccache --show-stats || true
+          ccache --show-stats --verbose || true
 
       - name: Move OpenFOAM build into place
         run: |
@@ -203,7 +205,8 @@ jobs:
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP
+            WM_PRECISION_OPTION=DP \
+            WM_COMPILE_CONTROL="+ccache"
           set -eu
 
           command -v simpleFoam
@@ -219,6 +222,7 @@ jobs:
           foamDictionary system/controlDict -entry endTime -set 100
           foamDictionary system/controlDict -entry writeInterval -set 50
 
+          test -x ./Allrun
           ./Allrun
           PJM
           )"
@@ -252,6 +256,26 @@ jobs:
           fi
           exit "${case_exit_code}"
 
+      - name: Package OpenFOAM artifacts
+        if: always()
+        run: |
+          set -uo pipefail
+
+          artifact_dir="${RESULT_DIR}/artifact"
+          rm -rf "${artifact_dir}"
+          mkdir -p "${artifact_dir}"
+
+          cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/" 2>/dev/null || true
+          cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/" 2>/dev/null || true
+
+          case_dir="${RESULT_DIR}/cases/simpleFoam-airFoil2D"
+          if [ -d "${case_dir}" ]; then
+            tar --exclude='simpleFoam-airFoil2D/processor*' \
+              -czf "${artifact_dir}/simpleFoam-airFoil2D-results.tgz" \
+              -C "${RESULT_DIR}/cases" \
+              simpleFoam-airFoil2D
+          fi
+
       - name: Upload OpenFOAM outputs
         if: always()
         uses: actions/upload-artifact@v7
@@ -259,11 +283,17 @@ jobs:
           name: openfoam-outputs-${{ github.run_id }}
           if-no-files-found: warn
           path: |
-            ${{ env.RESULT_DIR }}
+            ${{ env.RESULT_DIR }}/artifact
 
       - name: Cleanup temporary build root
         if: always()
         run: |
           set -uo pipefail
 
-          rm -rf "${OPENFOAM_BUILD_TMP_ROOT}" "${OPENFOAM_BUILD_ROOT}"
+          if [ -n "${OPENFOAM_BUILD_TMP_ROOT:-}" ]; then
+            rm -rf "${OPENFOAM_BUILD_TMP_ROOT}"
+          fi
+          if [ -n "${CCACHE_TMP_ROOT:-}" ]; then
+            rm -rf "${CCACHE_TMP_ROOT}"
+          fi
+          echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT:-unset}"
