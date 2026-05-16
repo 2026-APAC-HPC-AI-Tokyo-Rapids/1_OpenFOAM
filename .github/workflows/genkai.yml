@@ -68,10 +68,6 @@ jobs:
           echo "Extracting ${thirdparty_archive}"
           tar xzf ${thirdparty_archive} -C ${temp_build_root}
 
-      - name: Fetch ADIOS2 source
-        run: |
-          set -uo pipefail
-
           adios2_version=ADIOS2-2.12.1
           adios2_archive="${SOURCE_CACHE_DIR}/ADIOS2-v2.12.1.tar.gz"
           adios2_source_root="${OPENFOAM_BUILD_TMP_ROOT}/ThirdParty-${OPENFOAM_VER}/sources/adios"
@@ -80,10 +76,6 @@ jobs:
           wget --no-verbose --no-clobber --output-document="${adios2_archive}" \
             "https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.12.1.tar.gz"
           tar xzf "${adios2_archive}" -C "${adios2_source_root}"
-
-      - name: Fetch CGAL source
-        run: |
-          set -uo pipefail
 
           cgal_version=CGAL-6.1.1
           cgal_archive="${SOURCE_CACHE_DIR}/${cgal_version}.tar.xz"
