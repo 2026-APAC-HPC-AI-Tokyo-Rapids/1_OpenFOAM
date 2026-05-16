@@ -52,8 +52,7 @@ jobs:
           fi
 
           final_build_root=${WORKDIR}/openfoam-build-${build_tag}
-          mkdir -p "${WORKDIR}/tmp"
-          temp_build_root="$(mktemp -d "${WORKDIR}/tmp/openfoam-build-${build_tag}.XXXXXXXXXXX")"
+          temp_build_root="$(mktemp -d "/dev/shm/openfoam-build-${build_tag}.XXXXXXXXXXX")"
           echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
           echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
           echo "Using temporary build root: ${temp_build_root}"
@@ -95,9 +94,9 @@ jobs:
           set -uo pipefail
 
           patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/.github/patches/adios2-v2.12.1.patch"
+            < "${GITHUB_WORKSPACE}/patches/adios2-v2.12.1.patch"
           patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/.github/patches/cgal-v6.1.1.patch"
+            < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
 
       - name: Build OpenFOAM on login node
         run: |
@@ -121,10 +120,7 @@ jobs:
 
           export CC=mpiicx
           export CXX=mpiicpx
-          ccache_tmp_root="$(mktemp -d "/dev/shm/${USER}-ccache-tmp-XXXXXXXXXXX")"
-          export CCACHE_TEMPDIR="${ccache_tmp_root}/tmp"
-          mkdir -p "${CCACHE_TEMPDIR}"
-          echo "CCACHE_TMP_ROOT=${ccache_tmp_root}" >> "${GITHUB_ENV}"
+          export CCACHE_TEMPDIR="$(mktemp -d "/dev/shm/${USER}-ccache-tmp-XXXXXXXXXXX")"
           echo "CCACHE_TEMPDIR=${CCACHE_TEMPDIR}" >> "${GITHUB_ENV}"
           export CMAKE_C_COMPILER_LAUNCHER=ccache
           export CMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -209,20 +205,11 @@ jobs:
             WM_COMPILE_CONTROL="+ccache"
           set -eu
 
-          command -v simpleFoam
+          tutorial_run_dir="${RESULT_DIR}/tutorials"
+          rm -rf "${tutorial_run_dir}"
+          cp -a "${FOAM_TUTORIALS}" "${tutorial_run_dir}"
+          cd "${tutorial_run_dir}"
 
-          tutorial_src="${FOAM_TUTORIALS}/incompressible/simpleFoam/airFoil2D"
-          case_dir="${RESULT_DIR}/cases/simpleFoam-airFoil2D"
-
-          test -d "${tutorial_src}"
-          rm -rf "${case_dir}"
-          mkdir -p "$(dirname "${case_dir}")"
-          cp -a "${tutorial_src}" "${case_dir}"
-          cd "${case_dir}"
-          foamDictionary system/controlDict -entry endTime -set 100
-          foamDictionary system/controlDict -entry writeInterval -set 50
-
-          test -x ./Allrun
           ./Allrun
           PJM
           )"
@@ -268,12 +255,12 @@ jobs:
           cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/" 2>/dev/null || true
           cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/" 2>/dev/null || true
 
-          case_dir="${RESULT_DIR}/cases/simpleFoam-airFoil2D"
-          if [ -d "${case_dir}" ]; then
-            tar --exclude='simpleFoam-airFoil2D/processor*' \
-              -czf "${artifact_dir}/simpleFoam-airFoil2D-results.tgz" \
-              -C "${RESULT_DIR}/cases" \
-              simpleFoam-airFoil2D
+          tutorial_run_dir="${RESULT_DIR}/tutorials"
+          if [ -d "${tutorial_run_dir}" ]; then
+            tar --exclude='tutorials/processor*' \
+              -czf "${artifact_dir}/tutorial-results.tgz" \
+              -C "${RESULT_DIR}" \
+              tutorials
           fi
 
       - name: Upload OpenFOAM outputs
@@ -293,7 +280,5 @@ jobs:
           if [ -n "${OPENFOAM_BUILD_TMP_ROOT:-}" ]; then
             rm -rf "${OPENFOAM_BUILD_TMP_ROOT}"
           fi
-          if [ -n "${CCACHE_TMP_ROOT:-}" ]; then
-            rm -rf "${CCACHE_TMP_ROOT}"
-          fi
+          rm -rf "${CCACHE_TEMPDIR}"
           echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT:-unset}"
