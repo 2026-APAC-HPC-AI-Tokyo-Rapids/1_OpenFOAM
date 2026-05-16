@@ -76,12 +76,27 @@ jobs:
             "https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.12.1.tar.gz"
           tar xzf "${adios2_archive}" -C "${adios2_source_root}"
 
+      - name: Fetch CGAL source
+        run: |
+          set -uo pipefail
+
+          cgal_version=CGAL-6.1.1
+          cgal_archive="${SOURCE_CACHE_DIR}/${cgal_version}.tar.xz"
+          cgal_source_root="${OPENFOAM_BUILD_TMP_ROOT}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
+
+          mkdir -p "${cgal_source_root}"
+          wget --no-verbose --no-clobber --output-document="${cgal_archive}" \
+            "https://github.com/CGAL/cgal/releases/download/v6.1.1/${cgal_version}.tar.xz"
+          tar xJf "${cgal_archive}" -C "${cgal_source_root}"
+
       - name: Apply local patches
         run: |
           set -uo pipefail
 
           patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
             < "${GITHUB_WORKSPACE}/.github/patches/adios2-v2.12.1.patch"
+          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
+            < "${GITHUB_WORKSPACE}/.github/patches/cgal-v6.1.1.patch"
 
       - name: Build OpenFOAM on login node
         run: |
