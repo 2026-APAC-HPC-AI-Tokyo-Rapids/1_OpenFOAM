@@ -52,10 +52,15 @@ jobs:
           fi
 
           final_build_root=${WORKDIR}/openfoam-build-${build_tag}
-          temp_build_root="$(mktemp -d "/dev/shm/openfoam-build-${build_tag}.XXXXXXXXXXX")"
+          temp_build_real="$(mktemp -d "/dev/shm/openfoam-build-${build_tag}.XXXXXXXXXXX")"
+          temp_build_root="${WORKDIR}/openfoam-build-cache-root"
+          rm -rf "${temp_build_root}"
+          ln -s "${temp_build_real}" "${temp_build_root}"
           echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
           echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
+          echo OPENFOAM_BUILD_TMP_REAL=${temp_build_real} >> ${GITHUB_ENV}
           echo "Using temporary build root: ${temp_build_root}"
+          echo "Temporary build root target: ${temp_build_real}"
           echo "Final build root: ${final_build_root}"
 
           echo "Extracting ${openfoam_archive}"
@@ -97,6 +102,10 @@ jobs:
             < "${GITHUB_WORKSPACE}/patches/adios2-v2.12.1.patch"
           patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
             < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
+          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
+            < "${GITHUB_WORKSPACE}/patches/icx-cpp-preprocessor.patch"
+          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
+            < "${GITHUB_WORKSPACE}/patches/tutorials-genkai.patch"
 
       - name: Build OpenFOAM on login node
         run: |
@@ -166,7 +175,9 @@ jobs:
           set -uo pipefail
 
           mkdir -p $(dirname ${OPENFOAM_BUILD_ROOT})
-          mv ${OPENFOAM_BUILD_TMP_ROOT} ${OPENFOAM_BUILD_ROOT}
+          rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
+          rm -rf "${OPENFOAM_BUILD_ROOT}"
+          mv "${OPENFOAM_BUILD_TMP_REAL}" "${OPENFOAM_BUILD_ROOT}"
           echo "OpenFOAM build root: ${OPENFOAM_BUILD_ROOT}"
 
       - name: Submit OpenFOAM case job
@@ -179,7 +190,7 @@ jobs:
 
           job_submit_output="$(
             pjsub \
-              -L "rscgrp=a-batch,node=1,elapse=00:10:00" \
+              -L "rscgrp=a-batch,node=1,elapse=02:00:00" \
               -X \
               -j \
               -o "${case_log}" <<'PJM' 2>&1
@@ -255,12 +266,13 @@ jobs:
           cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/" 2>/dev/null || true
           cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/" 2>/dev/null || true
 
-          tutorial_run_dir="${RESULT_DIR}/tutorials"
-          if [ -d "${tutorial_run_dir}" ]; then
-            tar --exclude='tutorials/processor*' \
-              -czf "${artifact_dir}/tutorial-results.tgz" \
-              -C "${RESULT_DIR}" \
-              tutorials
+          if [ -d "${RESULT_DIR}/tutorials" ]; then
+            (
+              cd "${RESULT_DIR}"
+              find tutorials -type f \
+                \( -name 'log.*' -o -name 'testLoopReport' \) \
+                -exec cp --parents -t "${artifact_dir}" {} +
+            )
           fi
 
       - name: Upload OpenFOAM outputs
@@ -278,7 +290,10 @@ jobs:
           set -uo pipefail
 
           if [ -n "${OPENFOAM_BUILD_TMP_ROOT:-}" ]; then
-            rm -rf "${OPENFOAM_BUILD_TMP_ROOT}"
+            rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
+          fi
+          if [ -n "${OPENFOAM_BUILD_TMP_REAL:-}" ]; then
+            rm -rf "${OPENFOAM_BUILD_TMP_REAL}"
           fi
           rm -rf "${CCACHE_TEMPDIR}"
           echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT:-unset}"
