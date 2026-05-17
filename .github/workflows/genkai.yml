@@ -70,7 +70,7 @@ jobs:
 
           adios2_version=ADIOS2-2.12.1
           adios2_archive="${SOURCE_CACHE_DIR}/ADIOS2-v2.12.1.tar.gz"
-          adios2_source_root="${OPENFOAM_BUILD_TMP_ROOT}/ThirdParty-${OPENFOAM_VER}/sources/adios"
+          adios2_source_root="${temp_build_root}/ThirdParty-${OPENFOAM_VER}/sources/adios"
 
           mkdir -p "${adios2_source_root}"
           wget --no-verbose --no-clobber --output-document="${adios2_archive}" \
@@ -79,7 +79,7 @@ jobs:
 
           cgal_version=CGAL-6.1.1
           cgal_archive="${SOURCE_CACHE_DIR}/${cgal_version}.tar.xz"
-          cgal_source_root="${OPENFOAM_BUILD_TMP_ROOT}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
+          cgal_source_root="${temp_build_root}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
 
           mkdir -p "${cgal_source_root}"
           wget --no-verbose --no-clobber --output-document="${cgal_archive}" \
@@ -287,5 +287,5 @@ jobs:
           if [ -n "${OPENFOAM_BUILD_TMP_REAL:-}" ]; then
             rm -rf "${OPENFOAM_BUILD_TMP_REAL}"
           fi
-          rm -rf "${CCACHE_TEMPDIR}"
+          rm -rf "${CCACHE_TEMPDIR:-}"
           echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT:-unset}"
