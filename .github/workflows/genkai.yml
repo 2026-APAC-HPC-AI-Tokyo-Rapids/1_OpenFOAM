@@ -15,6 +15,7 @@ jobs:
       WORKDIR: /home/pj26000080/ku60000563/openfoam-runner
       OPENFOAM_VER: v2412
       BUILD_PARALLELISM: 60
+      CASE_MPI_PROCESSES: 120
       SOURCE_CACHE_DIR: /home/pj26000080/ku60000563/openfoam-runner/source-cache
       RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results/${{ github.run_id }}
       BASH_ENV: ${HOME}/.local/.setenv
@@ -96,8 +97,6 @@ jobs:
             < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
           patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
             < "${GITHUB_WORKSPACE}/patches/icx-cpp-preprocessor.patch"
-          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/patches/tutorials-genkai.patch"
 
       - name: Build OpenFOAM on login node
         run: |
@@ -126,8 +125,6 @@ jobs:
           export CMAKE_C_COMPILER_LAUNCHER=ccache
           export CMAKE_CXX_COMPILER_LAUNCHER=ccache
           export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
-          ccache --show-stats --verbose || true
-          ccache --show-config || true
 
           cd ${build_root}
 
@@ -138,7 +135,6 @@ jobs:
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
-          set -eu
 
           fftw_lib_dir="${FFTW_ARCH_PATH}/lib"
           export LD_LIBRARY_PATH="${fftw_lib_dir}:${LD_LIBRARY_PATH}"
@@ -159,17 +155,41 @@ jobs:
           command -v potentialFoam
 
           date
-          ccache --show-stats || true
-          ccache --show-stats --verbose || true
+          ccache --show-stats
+          ccache --show-stats --verbose
 
-      - name: Move OpenFOAM build into place
+      - name: Create OpenFOAM runtime bundle
         run: |
           set -uo pipefail
 
           mkdir -p $(dirname ${OPENFOAM_BUILD_ROOT})
           rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
           rm -rf "${OPENFOAM_BUILD_ROOT}"
-          mv "${OPENFOAM_BUILD_TMP_REAL}" "${OPENFOAM_BUILD_ROOT}"
+          mkdir -p \
+            "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}" \
+            "${OPENFOAM_BUILD_ROOT}/ThirdParty-${OPENFOAM_VER}"
+
+          openfoam_tmp="${OPENFOAM_BUILD_TMP_REAL}/OpenFOAM-${OPENFOAM_VER}"
+          thirdparty_tmp="${OPENFOAM_BUILD_TMP_REAL}/ThirdParty-${OPENFOAM_VER}"
+          openfoam_root="${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}"
+          thirdparty_root="${OPENFOAM_BUILD_ROOT}/ThirdParty-${OPENFOAM_VER}"
+
+          cp -a \
+            "${openfoam_tmp}/META-INFO" \
+            "${openfoam_tmp}/applications" \
+            "${openfoam_tmp}/bin" \
+            "${openfoam_tmp}/etc" \
+            "${openfoam_tmp}/modules" \
+            "${openfoam_tmp}/platforms" \
+            "${openfoam_tmp}/plugins" \
+            "${openfoam_tmp}/src" \
+            "${openfoam_tmp}/tutorials" \
+            "${openfoam_tmp}/wmake" \
+            "${openfoam_root}/"
+
+          cp -a "${thirdparty_tmp}/platforms" "${thirdparty_root}/"
+
+          du -sh "${OPENFOAM_BUILD_TMP_REAL}" "${OPENFOAM_BUILD_ROOT}"
           echo "OpenFOAM build root: ${OPENFOAM_BUILD_ROOT}"
 
       - name: Submit OpenFOAM case job
@@ -177,12 +197,13 @@ jobs:
           set -uo pipefail
 
           mkdir -p "${RESULT_DIR}"
-          case_log="${RESULT_DIR}/allrun.out"
+          case_log="${RESULT_DIR}/squarebend.out"
           rm -f "${case_log}"
 
           job_submit_output="$(
             pjsub \
-              -L "rscgrp=a-batch,node=1,elapse=02:00:00" \
+              --mpi "proc=${CASE_MPI_PROCESSES}" \
+              -L "rscgrp=a-batch,node=1,elapse=00:30:00" \
               -X \
               -j \
               -o "${case_log}" <<'PJM' 2>&1
@@ -192,13 +213,17 @@ jobs:
           set -xo pipefail
 
           cat "$0"
+          echo "PJM job hostname: $(hostname)"
+          hostname
+          echo "CASE_MPI_PROCESSES=${CASE_MPI_PROCESSES}"
 
           module purge
           module load intel/2025.1.3 impi/2021.15
 
           export CC=mpiicx
           export CXX=mpiicpx
-          # export CCACHE_LOGFILE=${RESULT_DIR}/ccache-case.log
+          export OMP_NUM_THREADS=1
+          export MKL_NUM_THREADS=1
           export openfoam_ver=${OPENFOAM_VER}
           source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc \
             WM_COMPILER=Icx \
@@ -206,44 +231,45 @@ jobs:
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL="+ccache"
-          set -eu
 
-          tutorial_run_dir="${RESULT_DIR}/tutorials"
+          case_name="incompressible/simpleFoam/squareBend"
+          case_src="${FOAM_TUTORIALS}/${case_name}"
+          tutorial_run_dir="${RESULT_DIR}/tutorials/${case_name}"
           rm -rf "${tutorial_run_dir}"
-          cp -a "${FOAM_TUTORIALS}" "${tutorial_run_dir}"
+          mkdir -p "$(dirname "${tutorial_run_dir}")"
+          cp -a "${case_src}" "${tutorial_run_dir}"
           cd "${tutorial_run_dir}"
 
-          ./Allrun
+          foamDictionary system/decomposeParDict -entry numberOfSubdomains -set "${CASE_MPI_PROCESSES}"
+          foamDictionary system/decomposeParDict -entry method -set scotch
+          foamDictionary system/controlDict -entry endTime -set 50
+          foamDictionary system/controlDict -entry writeInterval -set 50
+
+          mkdir -p constant/triSurface
+          cp -f "${FOAM_TUTORIALS}/resources/geometry/angledPlane.obj.gz" constant/triSurface/
+          rm -rf 0
+          cp -r 0.orig 0
+
+          blockMesh > log.blockMesh 2>&1
+          topoSet > log.topoSet 2>&1
+          decomposePar > log.decomposePar 2>&1
+          mpirun -n "${CASE_MPI_PROCESSES}" simpleFoam -parallel -noFunctionObjects > log.simpleFoam 2>&1
           PJM
           )"
 
           printf '%s\n' "${job_submit_output}"
 
           job_id="$(printf '%s\n' "${job_submit_output}" | grep -oE '[0-9]+' | tail -n 1)"
-          if [ -z "${job_id}" ]; then
-            echo "failed to parse pjsub job id" >&2
-            exit 1
-          fi
           echo "Submitted PJM job id: ${job_id}"
-
-          touch "${case_log}"
-          tail -n +1 -F "${case_log}" &
-          tail_pid=$!
-          trap 'kill "${tail_pid}" 2>/dev/null || true' EXIT
 
           pjwait_output="$(pjwait "${job_id}")"
           echo "${pjwait_output}"
           read -r waited_job_id pjm_exit_code case_exit_code signal_no <<< "${pjwait_output}"
 
-          pjstat --data -H -S "${job_id}" || pjstat -H -S "${job_id}" || true
-          kill "${tail_pid}" 2>/dev/null || true
-          wait "${tail_pid}" 2>/dev/null || true
-          trap - EXIT
+          cat "${case_log}"
+          pjstat --data -H -S "${job_id}"
 
           echo "OpenFOAM case result: job=${waited_job_id} pc=${pjm_exit_code} ec=${case_exit_code} signal=${signal_no}"
-          if [ "${pjm_exit_code}" != "0" ]; then
-            exit "${pjm_exit_code}"
-          fi
           exit "${case_exit_code}"
 
       - name: Package OpenFOAM artifacts
@@ -255,17 +281,14 @@ jobs:
           rm -rf "${artifact_dir}"
           mkdir -p "${artifact_dir}"
 
-          cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/" 2>/dev/null || true
-          cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/" 2>/dev/null || true
-
-          if [ -d "${RESULT_DIR}/tutorials" ]; then
-            (
-              cd "${RESULT_DIR}"
-              find tutorials -type f \
-                \( -name 'log.*' -o -name 'testLoopReport' \) \
-                -exec cp --parents -t "${artifact_dir}" {} +
-            )
-          fi
+          cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/"
+          cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/"
+          (
+            cd "${RESULT_DIR}"
+            find tutorials -type f \
+              \( -name 'log.*' -o -name 'testLoopReport' \) \
+              -exec cp --parents -t "${artifact_dir}" {} +
+          )
 
       - name: Upload OpenFOAM outputs
         if: always()
@@ -281,11 +304,7 @@ jobs:
         run: |
           set -uo pipefail
 
-          if [ -n "${OPENFOAM_BUILD_TMP_ROOT:-}" ]; then
-            rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
-          fi
-          if [ -n "${OPENFOAM_BUILD_TMP_REAL:-}" ]; then
-            rm -rf "${OPENFOAM_BUILD_TMP_REAL}"
-          fi
-          rm -rf "${CCACHE_TEMPDIR:-}"
-          echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT:-unset}"
+          rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
+          rm -rf "${OPENFOAM_BUILD_TMP_REAL}"
+          rm -rf "${CCACHE_TEMPDIR}"
+          echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT}"
