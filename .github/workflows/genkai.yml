@@ -12,13 +12,16 @@ jobs:
       - genkai
 
     env:
-      WORKDIR: /home/pj26000080/ku60000563/openfoam-runner
+      WORKDIR: /home/pj26000080/share/openfoam-build
       OPENFOAM_VER: v2412
       BUILD_PARALLELISM: 60
       CASE_MPI_PROCESSES: 120
-      SOURCE_CACHE_DIR: /home/pj26000080/ku60000563/openfoam-runner/source-cache
-      RESULT_DIR: /home/pj26000080/ku60000563/openfoam-runner/results/${{ github.run_id }}
       BASH_ENV: ${HOME}/.local/.setenv
+      OPENFOAM_ARCHIVE_URL: https://dl.openfoam.com/source/v2412/OpenFOAM-v2412.tgz
+      THIRDPARTY_ARCHIVE_URL: https://dl.openfoam.com/source/v2412/ThirdParty-v2412.tgz
+      ADIOS2_ARCHIVE_URL: https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.12.1.tar.gz
+      CGAL_ARCHIVE_URL: https://github.com/CGAL/cgal/releases/download/v6.1.1/CGAL-6.1.1.tar.xz
+      ARTIFACT_UPLOAD_MAX_BYTES: 1073741824
 
     defaults:
       run:
@@ -28,77 +31,207 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Show runner context
+      - name: Initialize build cache
         run: |
-          hostname
-          pwd
-
-      - name: Prepare OpenFOAM source
-        run: |
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
           set -uo pipefail
 
-          mkdir -p "${SOURCE_CACHE_DIR}" "${RESULT_DIR}"
+          safe_ref="$(printf '%s' "${GITHUB_REF_NAME:-detached}" | sed 's/[^A-Za-z0-9._-]/_/g')"
+          run_suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          source_cache_dir="${WORKDIR}/source-cache"
+          build_root="${WORKDIR}/builds/openfoam-run-${run_suffix}"
+          artifacts_dir="${build_root}/artifacts"
+          result_dir="${artifacts_dir}/results"
+          runtime_root="${WORKDIR}/runs/${run_suffix}/runtime"
+          tmp_parent="${WORKDIR}/tmp"
+
+          mkdir -p "${source_cache_dir}" "${artifacts_dir}/fingerprint" "${result_dir}" "${runtime_root}" "${tmp_parent}"
+
+          echo "SAFE_GITHUB_REF_NAME=${safe_ref}" >> "${GITHUB_ENV}"
+          echo "SOURCE_CACHE_DIR=${source_cache_dir}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_BUILD_ROOT=${build_root}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_ARTIFACTS_DIR=${artifacts_dir}" >> "${GITHUB_ENV}"
+          echo "RESULT_DIR=${result_dir}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_RUNTIME_ROOT=${runtime_root}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_BUILD_BUNDLE=${build_root}/build.tar.zst" >> "${GITHUB_ENV}"
+
+          module purge
+          module load intel/2025.1.3 impi/2021.15
+
+          {
+            echo "OPENFOAM_VER=${OPENFOAM_VER}"
+            echo "module_load=intel/2025.1.3 impi/2021.15"
+            module list 2>&1 | sed 's/[[:space:]]\+/ /g'
+            icx --version 2>&1
+            icpx --version 2>&1
+            mpiicx --version 2>&1
+            mpiicpx --version 2>&1
+            ccache --version 2>&1
+            echo "CC=mpiicx"
+            echo "CXX=mpiicpx"
+            echo "WM_COMPILER=Icx"
+            echo "WM_MPLIB=INTELMPI"
+            echo "WM_LABEL_SIZE=64"
+            echo "WM_PRECISION_OPTION=DP"
+            echo "WM_COMPILE_CONTROL=+ccache"
+            echo "ADIOS2_VERSION=2.12.1"
+            echo "CGAL_VERSION=6.1.1"
+            echo "FOAM_EXTRA_LDFLAGS=fftw rpath-link"
+            sed -n '/name: Build OpenFOAM on login node/,/name: Create reusable OpenFOAM build bundle/p' \
+              "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" | sed 's/[[:space:]]\+$//'
+          } > "${artifacts_dir}/fingerprint/build-env.txt"
+
+          {
+            echo "OPENFOAM_ARCHIVE_URL=${OPENFOAM_ARCHIVE_URL}"
+            echo "THIRDPARTY_ARCHIVE_URL=${THIRDPARTY_ARCHIVE_URL}"
+            echo "ADIOS2_ARCHIVE_URL=${ADIOS2_ARCHIVE_URL}"
+            echo "CGAL_ARCHIVE_URL=${CGAL_ARCHIVE_URL}"
+            if command -v yq >/dev/null 2>&1; then
+              yq '.jobs.openfoam.steps[] | select(has("run")) | .run' \
+                "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" |
+                sed '/pjsub /q' | sed 's/[[:space:]]\+$//'
+            else
+              sed -n '1,/name: Submit OpenFOAM case job/p' \
+                "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" |
+                sed -n '/run: |/,$p' | sed 's/[[:space:]]\+$//'
+            fi
+            git ls-files -s patches .github/workflows/genkai.yml
+            find "${GITHUB_WORKSPACE}/patches" -type f -name '*.patch' -print0 |
+              sort -z |
+              xargs -0 sha256sum
+          } > "${artifacts_dir}/fingerprint/source.txt"
+
+          build_env_hash="$(sha256sum "${artifacts_dir}/fingerprint/build-env.txt" | awk '{print $1}')"
+          source_hash="$(sha256sum "${artifacts_dir}/fingerprint/source.txt" | awk '{print $1}')"
+          cache_dir="${WORKDIR}/cache/${build_env_hash}"
+          cache_path="${cache_dir}/${source_hash}.tar.zst"
+
+          echo "BUILD_ENV_HASH=${build_env_hash}" >> "${GITHUB_ENV}"
+          echo "SOURCE_HASH=${source_hash}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_CACHE_DIR=${cache_dir}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_CACHE_PATH=${cache_path}" >> "${GITHUB_ENV}"
+          echo "BUILD_ENV_HASH=${build_env_hash}" | tee "${artifacts_dir}/fingerprint/hash-summary.txt"
+          echo "SOURCE_HASH=${source_hash}" | tee -a "${artifacts_dir}/fingerprint/hash-summary.txt"
+          echo "OPENFOAM_CACHE_PATH=${cache_path}" | tee -a "${artifacts_dir}/fingerprint/hash-summary.txt"
+
+          valid_bundle() {
+            bundle="$1"
+            [ -f "${bundle}" ] || return 1
+            [ -r "${bundle}" ] || return 1
+            tar -I zstd -tf "${bundle}" >/dev/null 2>&1
+          }
+
+          cache_hit=false
+          seed_bundle=
+          if [ -L "${cache_path}" ]; then
+            resolved_cache="$(readlink -f "${cache_path}" || true)"
+            if [ -n "${resolved_cache}" ] && valid_bundle "${resolved_cache}"; then
+              cache_hit=true
+              mkdir -p "${build_root}"
+              ln -s "${resolved_cache}" "${build_root}/build.tar.zst"
+              echo "Exact OpenFOAM build cache hit: ${resolved_cache}"
+            else
+              echo "Exact OpenFOAM build cache is present but invalid: ${cache_path}"
+            fi
+          fi
+
+          if [ "${cache_hit}" != true ] && [ -d "${cache_dir}" ]; then
+            while IFS= read -r candidate; do
+              [ -L "${candidate}" ] || continue
+              resolved_seed="$(readlink -f "${candidate}" || true)"
+              if [ -n "${resolved_seed}" ] && valid_bundle "${resolved_seed}"; then
+                seed_bundle="${resolved_seed}"
+                break
+              fi
+            done < <(find "${cache_dir}" -maxdepth 1 -type l -name '*.tar.zst' | sort)
+          fi
+
+          echo "CACHE_HIT=${cache_hit}" >> "${GITHUB_ENV}"
+          echo "OPENFOAM_BUILD_SEED_BUNDLE=${seed_bundle}" >> "${GITHUB_ENV}"
+          if [ -n "${seed_bundle}" ]; then
+            echo "Using seed OpenFOAM build bundle: ${seed_bundle}"
+          elif [ "${cache_hit}" != true ]; then
+            echo "No reusable seed OpenFOAM build bundle found."
+          fi
+
+      - name: Prepare OpenFOAM source
+        if: env.CACHE_HIT != 'true'
+        run: |
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -xo pipefail
 
           openfoam_archive="${SOURCE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VER}.tgz"
           thirdparty_archive="${SOURCE_CACHE_DIR}/ThirdParty-${OPENFOAM_VER}.tgz"
+          adios2_archive="${SOURCE_CACHE_DIR}/ADIOS2-v2.12.1.tar.gz"
+          cgal_archive="${SOURCE_CACHE_DIR}/CGAL-6.1.1.tar.xz"
 
-          wget --no-verbose --no-clobber --directory-prefix="${SOURCE_CACHE_DIR}" \
-            "https://dl.openfoam.com/source/${OPENFOAM_VER}/OpenFOAM-${OPENFOAM_VER}.tgz" \
-            "https://dl.openfoam.com/source/${OPENFOAM_VER}/ThirdParty-${OPENFOAM_VER}.tgz"
+          fetch_archive() {
+            archive_path="$1"
+            archive_url="$2"
+            if [ ! -s "${archive_path}" ]; then
+              archive_tmp="${archive_path}.tmp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              rm -f "${archive_tmp}"
+              wget --no-verbose --output-document="${archive_tmp}" "${archive_url}"
+              mv -f "${archive_tmp}" "${archive_path}"
+            fi
+          }
 
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            build_tag="dispatch-$(date +%H%M%S)"
+          fetch_archive "${openfoam_archive}" "${OPENFOAM_ARCHIVE_URL}"
+          fetch_archive "${thirdparty_archive}" "${THIRDPARTY_ARCHIVE_URL}"
+          fetch_archive "${adios2_archive}" "${ADIOS2_ARCHIVE_URL}"
+          fetch_archive "${cgal_archive}" "${CGAL_ARCHIVE_URL}"
+
+          tmp_real="$(mktemp -d "${WORKDIR}/tmp/openfoam-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
+          echo "OPENFOAM_BUILD_TMP_ROOT=${tmp_real}" >> "${GITHUB_ENV}"
+
+          if [ -n "${OPENFOAM_BUILD_SEED_BUNDLE}" ]; then
+            staging_root="$(mktemp -d "${WORKDIR}/tmp/openfoam-staging-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
+            echo "OPENFOAM_SOURCE_STAGING_ROOT=${staging_root}" >> "${GITHUB_ENV}"
+
+            tar -I zstd -xf "${OPENFOAM_BUILD_SEED_BUNDLE}" -C "${tmp_real}"
+
+            tar xzf "${openfoam_archive}" -C "${staging_root}"
+            tar xzf "${thirdparty_archive}" -C "${staging_root}"
+
+            adios2_source_root="${staging_root}/ThirdParty-${OPENFOAM_VER}/sources/adios"
+            cgal_source_root="${staging_root}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
+            mkdir -p "${adios2_source_root}" "${cgal_source_root}"
+            tar xzf "${adios2_archive}" -C "${adios2_source_root}"
+            tar xJf "${cgal_archive}" -C "${cgal_source_root}"
+
+            patch -d "${staging_root}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/adios2-v2.12.1.patch"
+            patch -d "${staging_root}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
+            patch -d "${staging_root}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/icx-cpp-preprocessor.patch"
+
+            rsync -a --delete "${staging_root}/OpenFOAM-${OPENFOAM_VER}/" \
+              "${tmp_real}/OpenFOAM-${OPENFOAM_VER}/"
+            rsync -a --delete "${staging_root}/ThirdParty-${OPENFOAM_VER}/" \
+              "${tmp_real}/ThirdParty-${OPENFOAM_VER}/"
           else
-            build_tag="${GITHUB_SHA::7}"
+            echo "OPENFOAM_SOURCE_STAGING_ROOT=" >> "${GITHUB_ENV}"
+
+            tar xzf "${openfoam_archive}" -C "${tmp_real}"
+            tar xzf "${thirdparty_archive}" -C "${tmp_real}"
+
+            adios2_source_root="${tmp_real}/ThirdParty-${OPENFOAM_VER}/sources/adios"
+            cgal_source_root="${tmp_real}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
+            mkdir -p "${adios2_source_root}" "${cgal_source_root}"
+            tar xzf "${adios2_archive}" -C "${adios2_source_root}"
+            tar xJf "${cgal_archive}" -C "${cgal_source_root}"
+
+            patch -d "${tmp_real}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/adios2-v2.12.1.patch"
+            patch -d "${tmp_real}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
+            patch -d "${tmp_real}" -p0 \
+              < "${GITHUB_WORKSPACE}/patches/icx-cpp-preprocessor.patch"
           fi
 
-          final_build_root=${WORKDIR}/openfoam-build-${build_tag}
-          temp_build_real="$(mktemp -d "/dev/shm/openfoam-build-${build_tag}.XXXXXXXXXXX")"
-          temp_build_root="${WORKDIR}/openfoam-build-cache-root"
-          rm -rf "${temp_build_root}"
-          ln -s "${temp_build_real}" "${temp_build_root}"
-          echo OPENFOAM_BUILD_ROOT=${final_build_root} >> ${GITHUB_ENV}
-          echo OPENFOAM_BUILD_TMP_ROOT=${temp_build_root} >> ${GITHUB_ENV}
-          echo OPENFOAM_BUILD_TMP_REAL=${temp_build_real} >> ${GITHUB_ENV}
-          echo "Using temporary build root: ${temp_build_root}"
-          echo "Temporary build root target: ${temp_build_real}"
-          echo "Final build root: ${final_build_root}"
-
-          echo "Extracting ${openfoam_archive}"
-          tar xzf ${openfoam_archive} -C ${temp_build_root}
-          echo "Extracting ${thirdparty_archive}"
-          tar xzf ${thirdparty_archive} -C ${temp_build_root}
-
-          adios2_version=ADIOS2-2.12.1
-          adios2_archive="${SOURCE_CACHE_DIR}/ADIOS2-v2.12.1.tar.gz"
-          adios2_source_root="${temp_build_root}/ThirdParty-${OPENFOAM_VER}/sources/adios"
-
-          mkdir -p "${adios2_source_root}"
-          wget --no-verbose --no-clobber --output-document="${adios2_archive}" \
-            "https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.12.1.tar.gz"
-          tar xzf "${adios2_archive}" -C "${adios2_source_root}"
-
-          cgal_version=CGAL-6.1.1
-          cgal_archive="${SOURCE_CACHE_DIR}/${cgal_version}.tar.xz"
-          cgal_source_root="${temp_build_root}/ThirdParty-${OPENFOAM_VER}/sources/cgal"
-
-          mkdir -p "${cgal_source_root}"
-          wget --no-verbose --no-clobber --output-document="${cgal_archive}" \
-            "https://github.com/CGAL/cgal/releases/download/v6.1.1/${cgal_version}.tar.xz"
-          tar xJf "${cgal_archive}" -C "${cgal_source_root}"
-
-      - name: Apply local patches
-        run: |
-          set -uo pipefail
-
-          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/patches/adios2-v2.12.1.patch"
-          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/patches/cgal-v6.1.1.patch"
-          patch -d "${OPENFOAM_BUILD_TMP_ROOT}" -p0 \
-            < "${GITHUB_WORKSPACE}/patches/icx-cpp-preprocessor.patch"
-
       - name: Build OpenFOAM on login node
+        if: env.CACHE_HIT != 'true'
         run: |
           PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
           set -xo pipefail
@@ -107,8 +240,6 @@ jobs:
           exec > >(tee "${RESULT_DIR}/build_openfoam.out") 2>&1
 
           date
-          build_root=${OPENFOAM_BUILD_TMP_ROOT}
-
           module purge
           module load intel/2025.1.3 impi/2021.15
 
@@ -126,10 +257,8 @@ jobs:
           export CMAKE_CXX_COMPILER_LAUNCHER=ccache
           export CCACHE_LOGFILE=${RESULT_DIR}/ccache-build.log
 
-          cd ${build_root}
-
-          export openfoam_ver=${OPENFOAM_VER}
-          source ${build_root}/OpenFOAM-${openfoam_ver}/etc/bashrc \
+          cd "${OPENFOAM_BUILD_TMP_ROOT}"
+          source "${OPENFOAM_BUILD_TMP_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
@@ -137,19 +266,19 @@ jobs:
             WM_COMPILE_CONTROL="+ccache"
 
           fftw_lib_dir="${FFTW_ARCH_PATH}/lib"
-          export LD_LIBRARY_PATH="${fftw_lib_dir}:${LD_LIBRARY_PATH}"
+          export LD_LIBRARY_PATH="${fftw_lib_dir}:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${fftw_lib_dir}"
 
-          cd "$WM_PROJECT_DIR"
-          time ./Allwmake -j ${BUILD_PARALLELISM}
+          cd "${WM_PROJECT_DIR}"
+          time ./Allwmake -j "${BUILD_PARALLELISM}"
 
           date
-          cd "$WM_PROJECT_DIR/applications/solvers/incompressible/simpleFoam"
-          time wmake -j ${BUILD_PARALLELISM}
+          cd "${WM_PROJECT_DIR}/applications/solvers/incompressible/simpleFoam"
+          time wmake -j "${BUILD_PARALLELISM}"
 
           date
-          cd "$WM_PROJECT_DIR/applications/solvers/basic/potentialFoam"
-          time wmake -j ${BUILD_PARALLELISM}
+          cd "${WM_PROJECT_DIR}/applications/solvers/basic/potentialFoam"
+          time wmake -j "${BUILD_PARALLELISM}"
 
           command -v simpleFoam
           command -v potentialFoam
@@ -158,43 +287,87 @@ jobs:
           ccache --show-stats
           ccache --show-stats --verbose
 
-      - name: Create OpenFOAM runtime bundle
+      - name: Create reusable OpenFOAM build bundle
+        if: env.CACHE_HIT != 'true'
+        run: |
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -xo pipefail
+
+          mkdir -p "${OPENFOAM_BUILD_ROOT}" "${OPENFOAM_BUILD_TMP_ROOT}/BUILD_INFO"
+          cp -f "${OPENFOAM_ARTIFACTS_DIR}/fingerprint/"*.txt "${OPENFOAM_BUILD_TMP_ROOT}/BUILD_INFO/"
+          {
+            echo "created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "github_repository=${GITHUB_REPOSITORY}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "github_ref_name=${GITHUB_REF_NAME}"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "build_env_hash=${BUILD_ENV_HASH}"
+            echo "source_hash=${SOURCE_HASH}"
+            echo "seed_bundle=${OPENFOAM_BUILD_SEED_BUNDLE}"
+          } > "${OPENFOAM_BUILD_TMP_ROOT}/BUILD_INFO/build-info.txt"
+
+          tar -I "zstd -T0 -3" -cf "${OPENFOAM_BUILD_BUNDLE}" \
+            -C "${OPENFOAM_BUILD_TMP_ROOT}" \
+            "OpenFOAM-${OPENFOAM_VER}" \
+            "ThirdParty-${OPENFOAM_VER}" \
+            BUILD_INFO
+
+          tar -I zstd -tf "${OPENFOAM_BUILD_BUNDLE}" >/dev/null
+          du -sh "${OPENFOAM_BUILD_TMP_ROOT}" "${OPENFOAM_BUILD_BUNDLE}"
+
+      - name: Publish OpenFOAM build cache symlink
+        if: env.CACHE_HIT != 'true'
         run: |
           set -uo pipefail
 
-          mkdir -p $(dirname ${OPENFOAM_BUILD_ROOT})
-          rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
-          rm -rf "${OPENFOAM_BUILD_ROOT}"
-          mkdir -p \
-            "${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}" \
-            "${OPENFOAM_BUILD_ROOT}/ThirdParty-${OPENFOAM_VER}"
+          mkdir -p "${OPENFOAM_CACHE_DIR}"
+          cache_tmp="${OPENFOAM_CACHE_PATH}.tmp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rm -f "${cache_tmp}"
+          ln -s "${OPENFOAM_BUILD_BUNDLE}" "${cache_tmp}"
+          mv -Tf "${cache_tmp}" "${OPENFOAM_CACHE_PATH}"
+          ls -l "${OPENFOAM_CACHE_PATH}"
 
-          openfoam_tmp="${OPENFOAM_BUILD_TMP_REAL}/OpenFOAM-${OPENFOAM_VER}"
-          thirdparty_tmp="${OPENFOAM_BUILD_TMP_REAL}/ThirdParty-${OPENFOAM_VER}"
-          openfoam_root="${OPENFOAM_BUILD_ROOT}/OpenFOAM-${OPENFOAM_VER}"
-          thirdparty_root="${OPENFOAM_BUILD_ROOT}/ThirdParty-${OPENFOAM_VER}"
+      - name: Extract OpenFOAM runtime
+        run: |
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -xo pipefail
 
-          cp -a \
-            "${openfoam_tmp}/META-INFO" \
-            "${openfoam_tmp}/applications" \
-            "${openfoam_tmp}/bin" \
-            "${openfoam_tmp}/etc" \
-            "${openfoam_tmp}/modules" \
-            "${openfoam_tmp}/platforms" \
-            "${openfoam_tmp}/plugins" \
-            "${openfoam_tmp}/src" \
-            "${openfoam_tmp}/tutorials" \
-            "${openfoam_tmp}/wmake" \
-            "${openfoam_root}/"
+          rm -rf "${OPENFOAM_RUNTIME_ROOT}"
+          mkdir -p "${OPENFOAM_RUNTIME_ROOT}"
 
-          cp -a "${thirdparty_tmp}/platforms" "${thirdparty_root}/"
+          top_level="$(tar -I zstd -tf "${OPENFOAM_BUILD_BUNDLE}" |
+            awk -F/ 'NF {print $1}' |
+            sort -u |
+            paste -sd ' ' -)"
+          echo "Bundle top-level entries: ${top_level}"
+          [ "${top_level}" = "BUILD_INFO OpenFOAM-${OPENFOAM_VER} ThirdParty-${OPENFOAM_VER}" ]
 
-          du -sh "${OPENFOAM_BUILD_TMP_REAL}" "${OPENFOAM_BUILD_ROOT}"
-          echo "OpenFOAM build root: ${OPENFOAM_BUILD_ROOT}"
+          tar -I zstd -xf "${OPENFOAM_BUILD_BUNDLE}" \
+            -C "${OPENFOAM_RUNTIME_ROOT}" \
+            "OpenFOAM-${OPENFOAM_VER}/META-INFO" \
+            "OpenFOAM-${OPENFOAM_VER}/applications" \
+            "OpenFOAM-${OPENFOAM_VER}/bin" \
+            "OpenFOAM-${OPENFOAM_VER}/etc" \
+            "OpenFOAM-${OPENFOAM_VER}/modules" \
+            "OpenFOAM-${OPENFOAM_VER}/platforms" \
+            "OpenFOAM-${OPENFOAM_VER}/plugins" \
+            "OpenFOAM-${OPENFOAM_VER}/src" \
+            "OpenFOAM-${OPENFOAM_VER}/tutorials" \
+            "OpenFOAM-${OPENFOAM_VER}/wmake" \
+            "ThirdParty-${OPENFOAM_VER}/platforms" \
+            BUILD_INFO
+
+          test -d "${OPENFOAM_RUNTIME_ROOT}/ThirdParty-${OPENFOAM_VER}/platforms"
+          test -d "${OPENFOAM_RUNTIME_ROOT}/OpenFOAM-${OPENFOAM_VER}/platforms"
+          test -d "${OPENFOAM_RUNTIME_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc"
+          test -d "${OPENFOAM_RUNTIME_ROOT}/OpenFOAM-${OPENFOAM_VER}/wmake"
+          du -sh "${OPENFOAM_RUNTIME_ROOT}"
 
       - name: Submit OpenFOAM case job
         run: |
-          set -uo pipefail
+          PS4='+ ${BASH_SOURCE:-bash}:${LINENO}: '
+          set -xo pipefail
 
           mkdir -p "${RESULT_DIR}"
           case_log="${RESULT_DIR}/squarebend.out"
@@ -216,6 +389,8 @@ jobs:
           echo "PJM job hostname: $(hostname)"
           hostname
           echo "CASE_MPI_PROCESSES=${CASE_MPI_PROCESSES}"
+          echo "OPENFOAM_RUNTIME_ROOT=${OPENFOAM_RUNTIME_ROOT}"
+          echo "RESULT_DIR=${RESULT_DIR}"
 
           module purge
           module load intel/2025.1.3 impi/2021.15
@@ -224,8 +399,7 @@ jobs:
           export CXX=mpiicpx
           export OMP_NUM_THREADS=1
           export MKL_NUM_THREADS=1
-          export openfoam_ver=${OPENFOAM_VER}
-          source ${OPENFOAM_BUILD_ROOT}/OpenFOAM-${openfoam_ver}/etc/bashrc \
+          source "${OPENFOAM_RUNTIME_ROOT}/OpenFOAM-${OPENFOAM_VER}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
@@ -254,6 +428,7 @@ jobs:
           topoSet > log.topoSet 2>&1
           decomposePar > log.decomposePar 2>&1
           mpirun -n "${CASE_MPI_PROCESSES}" simpleFoam -parallel -noFunctionObjects > log.simpleFoam 2>&1
+          potentialFoam -help > log.potentialFoam-help 2>&1
           PJM
           )"
 
@@ -272,39 +447,66 @@ jobs:
           echo "OpenFOAM case result: job=${waited_job_id} pc=${pjm_exit_code} ec=${case_exit_code} signal=${signal_no}"
           exit "${case_exit_code}"
 
-      - name: Package OpenFOAM artifacts
+      - name: Compact OpenFOAM case outputs
         if: always()
         run: |
           set -uo pipefail
 
-          artifact_dir="${RESULT_DIR}/artifact"
-          rm -rf "${artifact_dir}"
-          mkdir -p "${artifact_dir}"
+          mkdir -p "${OPENFOAM_ARTIFACTS_DIR}/logs"
 
-          cp -f "${RESULT_DIR}"/*.out "${artifact_dir}/"
-          cp -f "${RESULT_DIR}"/ccache-*.log "${artifact_dir}/"
-          (
-            cd "${RESULT_DIR}"
-            find tutorials -type f \
-              \( -name 'log.*' -o -name 'testLoopReport' \) \
-              -exec cp --parents -t "${artifact_dir}" {} +
-          )
+          if [ -d "${RESULT_DIR}/tutorials" ]; then
+            find "${RESULT_DIR}/tutorials" -type f -name 'log.*' -print0 |
+              while IFS= read -r -d '' log_file; do
+                rel_path="${log_file#${RESULT_DIR}/tutorials/}"
+                dest_path="${OPENFOAM_ARTIFACTS_DIR}/logs/${rel_path}"
+                mkdir -p "$(dirname "${dest_path}")"
+                cp -f "${log_file}" "${dest_path}"
+              done
+
+            tar -I "zstd -T0 -3" -cf "${OPENFOAM_ARTIFACTS_DIR}/case-results.tar.zst" \
+              -C "${RESULT_DIR}" tutorials
+            rm -rf "${RESULT_DIR}/tutorials"
+          fi
+
+      - name: Decide artifact upload
+        if: always()
+        run: |
+          set -uo pipefail
+
+          upload_size=0
+          if [ -d "${OPENFOAM_ARTIFACTS_DIR}" ]; then
+            upload_size="$(du -sb "${OPENFOAM_ARTIFACTS_DIR}" | awk '{print $1}')"
+          fi
+          echo "OpenFOAM artifact candidate size: ${upload_size} bytes"
+          if [ "${upload_size}" -gt "${ARTIFACT_UPLOAD_MAX_BYTES}" ]; then
+            echo "OpenFOAM artifacts are too large for upload (${upload_size} bytes > ${ARTIFACT_UPLOAD_MAX_BYTES} bytes); skipping upload."
+            echo "UPLOAD_OPENFOAM_OUTPUTS=false" >> "${GITHUB_ENV}"
+          else
+            echo "UPLOAD_OPENFOAM_OUTPUTS=true" >> "${GITHUB_ENV}"
+          fi
 
       - name: Upload OpenFOAM outputs
-        if: always()
+        if: always() && env.UPLOAD_OPENFOAM_OUTPUTS == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-outputs-${{ github.run_id }}
+          name: openfoam-outputs-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: |
-            ${{ env.RESULT_DIR }}/artifact
+            ${{ env.OPENFOAM_ARTIFACTS_DIR }}/fingerprint/*.txt
+            ${{ env.OPENFOAM_ARTIFACTS_DIR }}/logs/**/log.*
+            ${{ env.OPENFOAM_ARTIFACTS_DIR }}/case-results.tar.zst
+            ${{ env.RESULT_DIR }}/*.out
+            ${{ env.RESULT_DIR }}/ccache-*.log
 
       - name: Cleanup temporary build root
         if: always()
         run: |
           set -uo pipefail
 
-          rm -f "${OPENFOAM_BUILD_TMP_ROOT}"
-          rm -rf "${OPENFOAM_BUILD_TMP_REAL}"
-          rm -rf "${CCACHE_TEMPDIR}"
+          rm -rf "${OPENFOAM_BUILD_TMP_ROOT:-}"
+          rm -rf "${OPENFOAM_SOURCE_STAGING_ROOT:-}"
+          rm -rf "${OPENFOAM_RUNTIME_ROOT:-}"
+          rm -rf "${CCACHE_TEMPDIR:-}"
           echo "OpenFOAM build root retained: ${OPENFOAM_BUILD_ROOT}"
+          echo "OpenFOAM runtime root removed: ${OPENFOAM_RUNTIME_ROOT}"
