@@ -23,7 +23,6 @@ jobs:
 
       # 永続化するソースアーカイブ
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
-      OPENFOAM_BUILD_LOG: ${{ runner.temp }}/openfoam-build-${{ github.run_id }}-${{ github.run_attempt }}.log
 
       # OpenFOAMのwmakeとThirdPartyのCMakeビルドで使うコンパイラ設定
       CC: mpiicx
@@ -52,6 +51,7 @@ jobs:
           done
 
       - name: Prepare /dev/shm build directory
+        id: prepare_build_directory
         run: |
           openfoam_build_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           # サーバー側のキャッシュを使い、ビルドパスの正規化と一時ファイルのtmpfs配置だけを指定する。
@@ -66,8 +66,7 @@ jobs:
         run: |
           for source_package in OpenFOAM ThirdParty
           do
-            tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/${source_package}-${OPENFOAM_VERSION}.tgz" \
-              -C "${OPENFOAM_BUILD_TMPDIR}"
+            tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/${source_package}-${OPENFOAM_VERSION}.tgz" -C "${OPENFOAM_BUILD_TMPDIR}"
           done
           thirdparty_source_dir="${OPENFOAM_BUILD_TMPDIR}/ThirdParty-${OPENFOAM_VERSION}"
           mkdir -p "${thirdparty_source_dir}/sources/adios" "${thirdparty_source_dir}/sources/cgal"
@@ -97,30 +96,27 @@ jobs:
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL=+ccache
-            
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
           cd -L "${openfoam_source_dir}"
           # -log内部のteeでもwmakeの終了コードを保持し、teeの標準出力は破棄する。
-
           build_status=0
-          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s -log="${OPENFOAM_BUILD_LOG}" > /dev/null || build_status=$?
-
+          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
               '(^|[[:space:]])(fatal[[:space:]]+)?error:|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
-              "${OPENFOAM_BUILD_LOG}" >&2 || true
+              "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" >&2 || true
             exit "${build_status}"
           fi
           ccache --show-stats
 
       - name: Upload OpenFOAM build log
-        if: always()
+        if: always() && steps.prepare_build_directory.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.OPENFOAM_BUILD_LOG }}
+          path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/allwmake.log
           if-no-files-found: warn
           compression-level: 9
 
