@@ -104,13 +104,21 @@ jobs:
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
           cd "${WM_PROJECT_DIR}"
           wmake -check-dir "${WM_PROJECT_DIR}"
-          # -log内部のteeでもwmakeの終了コードを保持し、teeの標準出力は破棄する。
+          # -log開始前のエラーも失わないよう、コンソール出力を一時ログへ退避する。
+          allwmake_log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log"
+          allwmake_console_log="${OPENFOAM_BUILD_TMPDIR}/allwmake-console.log"
           build_status=0
-          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
+          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s -log="${allwmake_log}" \
+            > "${allwmake_console_log}" 2>&1 || build_status=$?
+          if [[ -s "${allwmake_log}" ]]; then
+            rm -f "${allwmake_console_log}"
+          else
+            mv "${allwmake_console_log}" "${allwmake_log}"
+          fi
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
-              '(^|[[:space:]])(fatal[[:space:]]+)?error:|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
-              "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" >&2 || true
+              '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
+              "${allwmake_log}" >&2 || true
             exit "${build_status}"
           fi
           ccache --show-stats
