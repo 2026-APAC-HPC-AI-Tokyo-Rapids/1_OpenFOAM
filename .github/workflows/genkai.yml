@@ -90,35 +90,23 @@ jobs:
           done
           ccache --show-config
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
-          # OpenFOAMのbashrcは初期化前の変数を参照するため、読み込み中だけnounsetを無効化する。
-          set +u
+          # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
+          set +eu
           source "${openfoam_source_dir}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL=+ccache
-          set -u
+          set -eu
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
           cd "${WM_PROJECT_DIR}"
-          wmake -check-dir "${WM_PROJECT_DIR}" \
-            > "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" 2>&1 || {
-              cat "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" >&2
-              exit 1
-            }
-          # -log開始前のエラーも失わないよう、コンソール出力を一時ログへ退避する。
+          # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
           time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s \
-            -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" \
-            > "${OPENFOAM_BUILD_TMPDIR}/allwmake-console.log" 2>&1 || build_status=$?
-          if [[ -s "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" ]]; then
-            rm -f "${OPENFOAM_BUILD_TMPDIR}/allwmake-console.log"
-          else
-            mv "${OPENFOAM_BUILD_TMPDIR}/allwmake-console.log" \
-              "${OPENFOAM_BUILD_TMPDIR}/allwmake.log"
-          fi
+            -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
               '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
