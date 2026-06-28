@@ -102,7 +102,8 @@ jobs:
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
-          cd -L "${openfoam_source_dir}"
+          cd "${WM_PROJECT_DIR}"
+          wmake -check-dir "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、teeの標準出力は破棄する。
           build_status=0
           time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
