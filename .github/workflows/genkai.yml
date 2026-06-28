@@ -90,12 +90,15 @@ jobs:
           done
           ccache --show-config
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
+          # OpenFOAMのbashrcは初期化前の変数を参照するため、読み込み中だけnounsetを無効化する。
+          set +u
           source "${openfoam_source_dir}/etc/bashrc" \
             WM_COMPILER=Icx \
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
             WM_COMPILE_CONTROL=+ccache
+          set -u
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
