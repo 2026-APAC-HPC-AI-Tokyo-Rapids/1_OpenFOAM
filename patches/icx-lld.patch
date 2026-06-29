@@ -1,0 +1,23 @@
+--- OpenFOAM-v2412/wmake/rules/General/Icx/link-c++
++++ OpenFOAM-v2412/wmake/rules/General/Icx/link-c++
+@@ -2,13 +2,19 @@
+ 
+ LINK_LIBS   = $(c++DBUG)
+ 
++ifneq (,$(findstring +lld,$(WM_COMPILE_CONTROL)))
++    LINKER_FLAGS = -fuse-ld=lld
++else
++    LINKER_FLAGS = -Xlinker --add-needed
++endif
++
+ LINKLIBSO   = $(CC) $(c++FLAGS) -shared \
+-    -Xlinker --add-needed \
++    $(LINKER_FLAGS) \
+     -Xlinker --no-as-needed
+ 
+ LINKEXE     = $(CC) $(c++FLAGS) \
+-    -Xlinker --add-needed \
++    $(LINKER_FLAGS) \
+     -Xlinker --no-as-needed
+ 
+ #------------------------------------------------------------------------------
