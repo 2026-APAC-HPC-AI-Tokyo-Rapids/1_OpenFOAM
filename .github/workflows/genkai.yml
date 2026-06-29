@@ -88,7 +88,6 @@ jobs:
           do
             "${build_tool}" --version
           done
-          command -v pidstat
           ccache --show-config
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
           # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
@@ -111,14 +110,7 @@ jobs:
               -o "${OPENFOAM_BUILD_TMPDIR}/perf.data" -- \
             /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/resource-usage.log" \
               bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
-              -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null &
-          build_pid=$!
-          pidstat -druw -h -p "${build_pid}" -T ALL 5 \
-            > "${OPENFOAM_BUILD_TMPDIR}/pidstat.log" &
-          pidstat_pid=$!
-          wait "${build_pid}" || build_status=$?
-          kill "${pidstat_pid}" 2>/dev/null || true
-          wait "${pidstat_pid}" 2>/dev/null || true
+              -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if [[ -s "${OPENFOAM_BUILD_TMPDIR}/perf.data" ]]; then
             perf report --stdio --sort comm,dso,symbol --percent-limit 0.1 \
               -i "${OPENFOAM_BUILD_TMPDIR}/perf.data" \
@@ -142,7 +134,6 @@ jobs:
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-stat.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-report.txt
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf.data
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/pidstat.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/resource-usage.log
           if-no-files-found: warn
           compression-level: 1
