@@ -1,113 +1,50 @@
-# ビルドprofiling調査結果
+# ビルド性能の傾向
 
-## 結論
+## 支配要因
 
-OpenFOAM-v2412のウォームビルドは、コンパイル計算よりもLustre上のpage faultとmetadata lockに強く制約されている。ccache hit率は約99.5%だが、短命プロセスによるファイル走査、依存生成、コピー、installが残り、120並列時にはkernelのspin lock待ちが支配的になる。
+ウォームビルドはコンパイル計算より、Lustre上のpage faultとmetadata操作に制約されている。
 
-735MBのrawデータを生成したDWARF call graph方式は撤去した。実行時間への有意な影響がなく、artifactも約28MBだったframe-pointer方式はCIに残している。
+- ccache hit率が約99.5%でも、依存生成、link、install、file scanは残る。
+- System CPUはUser CPUを大幅に上回る。
+- `open`、`stat`、inode lookup、Lustre lock待ちがperfで観測される。
+- `sh`、`cp`、`sed`、`mkdir`、`wmkdepend`などの短命processが無視できない。
 
-- Allwmake出力の秒単位タイムスタンプ
-- 5秒間隔の`perf stat -d`
-- 1Hz、frame-pointer call graphの`perf record`
-- `/usr/bin/time -v`によるprocess tree全体のresource usage
+実コンパイルをcacheしても、build system自体が行う大量の小file操作はcacheされない。これがccache warm後の主要コストになる。
 
-## 測定環境
+## 工程別の傾向
 
-| 項目 | 構成 |
-|---|---|
-| OpenFOAM | v2412 |
-| Compiler | Intel oneAPI Icx 2025.1.1 |
-| MPI | Intel MPI 2021.15 |
-| ABI | DP / Int64 |
-| 並列数 | 120 |
-| Build directory | `/dev/shm`上の`mktemp`ディレクトリ |
-| ccache | `/fast/pj26000080/ccache_cache_dir`、最大50GB |
-| Linker | GNU ld |
+代表的な14分程度のbuildでは、時間配分は概ね次の通りだった。
 
-## 工程時間
-
-Run [28364738522](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28364738522)のAllwmake実時間は14分02.80秒だった。
-
-| 工程 | 時間 |
+| 工程 | 時間の目安 |
 |---|---:|
-| ThirdParty | 5分42秒 |
-| OpenFOAM libraries | 5分30秒 |
-| OpenFOAM applications | 1分54秒 |
-| OpenFOAM modules | 53秒 |
+| ThirdParty | 5分から6分 |
+| OpenFOAM libraries | 5分から6分 |
+| OpenFOAM applications | 2分前後 |
+| modules | 1分未満 |
 
-ThirdPartyの内訳は時刻付きログの各見出し間から算出した概算値である。
+ThirdPartyではScotch、Boost、FFTW、ADIOS2が主な時間を占める。OpenFOAM側ではlibrary buildが最も長く、依存生成とlinkの固定費が残る。
 
-| ThirdParty工程 | 時間 |
-|---|---:|
-| Scotch / PT-Scotch | 1分36秒 |
-| METIS | 15秒 |
-| Boost | 1分21秒 |
-| CGAL install | 2秒 |
-| FFTW | 1分29秒 |
-| ADIOS2 | 57秒 |
+## 実行時間の変動
 
-## Resource usage
+同じsource、同じccache hit状況、同じprofiling設定でも、Allwmakeは14分台から25分台まで変動した。
 
-| 指標 | 値 |
-|---|---:|
-| User CPU | 689.88秒 |
-| System CPU | 23,165.86秒 |
-| Wall clock | 842.80秒 |
-| 平均CPU使用率 | 2,830% |
-| Major page faults | 6,904 |
-| Minor page faults | 64,078,620 |
-| Voluntary context switches | 1,020,672 |
-| Involuntary context switches | 1,442,116 |
-| File system inputs | 1,020,216 |
-| File system outputs | 167,320 |
+遅いrunでは次の傾向があった。
 
-System CPUは全子プロセスの累計である。user CPUの約34倍あり、kernel側の待機とmetadata処理が大きい。
+- User CPUは通常runとほぼ同じ。
+- System CPUが2倍以上へ増加する。
+- Voluntary context switchが桁違いに増える。
+- ThirdPartyとapplicationsが同時に遅くなる。
+- perfではLustreのdirectory lookupとdistributed lock待ちが増える。
 
-## perf結果
+したがって単一packageやprofilerの問題ではなく、共有Lustre metadata負荷の時間変動と考えられる。単発runだけで高速化を判定してはいけない。
 
-Run [28363430866](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28363430866)とRun [28364738522](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28364738522)では、次のLustre client処理が確認された。
+## tmpfsの効果範囲
 
-- `native_queued_spin_lock_slowpath`
-- `ll_fault`
-- `ll_cl_add` / `ll_cl_remove`
-- `ll_inode_permission`
-- `ldlm_*`
-- `ptlrpc_*`
+sourceとbuild outputを`/dev/shm`へ置くことには効果がある。ただし次のpathは引き続きLustre上にある。
 
-Run [28362137687](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28362137687)では、spin lock中のprocess名は次の比率だった。
+- ccache storage
+- Intel oneAPI toolchain
+- GCC standard headers
+- moduleやuser環境の一部
 
-| Process | Samples |
-|---|---:|
-| `sh` | 35.06% |
-| `cp` | 20.20% |
-| `sed` | 11.76% |
-| `mkdir` | 5.01% |
-| `ccache` | 4.25% |
-| `wmkdepend` | 3.78% |
-| `makeTargetDir` | 3.26% |
-| `clang` | 2.34% |
-
-実コンパイルだけではなく、shell、コピー、依存生成、ディレクトリ操作の総量がLustre metadata競合を引き起こしている。
-
-## Run #69の長時間化
-
-Run [#69 / 28371443227](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28371443227)は成功したが、Allwmakeに25分19.91秒を要した。同じframe-pointer profiling構成で14分02.80秒だったrunと比較する。
-
-| 指標 | 14分run | Run #69 |
-|---|---:|---:|
-| User CPU | 689.88秒 | 699.05秒 |
-| System CPU | 23,165.86秒 | 54,120.12秒 |
-| Voluntary context switches | 1,020,672 | 120,256,909 |
-| Involuntary context switches | 1,442,116 | 762,882 |
-| File system inputs | 1,020,216 | 926,328 |
-
-User CPUとfile system input量はほぼ同じだが、System CPUは2.34倍、voluntary context switchは約118倍だった。工程時間もThirdPartyが5分42秒から11分27秒、applicationsが1分54秒から6分28秒へ悪化した。
-
-call graphでは`sh`の`open`と`stat`から、`d_alloc_parallel`、Lustre lookup、`ldlm`、`ptlrpc`へ至る待機が支配的だった。build内容やprofiler設定の変更ではなく、共有Lustre metadata負荷の時間変動と判断する。
-
-## 注意事項
-
-- genkai0001は共有ノードであり、wall timeのrun間変動が大きい。
-- perf比率はサンプリング結果であり、絶対的なCPU使用率ではない。
-- `time -v`のfile system inputs/outputsはrusage counterであり、byte数ではない。
-- ccache hit率約99.5%は個別build統計から算出した。
+tmpfs化は参照先そのものを変更した処理にしか効かない。build directoryだけをtmpfs化しても、toolchainとcacheのmetadata accessは残る。
