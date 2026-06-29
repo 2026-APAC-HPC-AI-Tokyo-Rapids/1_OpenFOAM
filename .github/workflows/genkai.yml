@@ -97,7 +97,7 @@ jobs:
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL=+ccache+lld
+            WM_COMPILE_CONTROL=+ccache
           set -eu
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
