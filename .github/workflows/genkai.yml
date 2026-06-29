@@ -79,7 +79,6 @@ jobs:
             echo "OPENFOAM_BUILD_TMPDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_BASEDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_TEMPDIR=${openfoam_build_tmpdir}/.ccache-tmp"
-            echo "CCACHE_STATSLOG=${openfoam_build_tmpdir}/ccache-stats.log"
           } >> "${GITHUB_ENV}"
           mkdir -p "${openfoam_build_tmpdir}/.ccache-tmp"
           printf 'parallelism=%s\nccache_mode=%s\n' \
@@ -135,6 +134,10 @@ jobs:
               ;;
           esac
           ccache --show-config
+          {
+            echo '[ccache before]'
+            ccache --print-stats
+          } >> "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
           # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
           set +eu
@@ -160,7 +163,10 @@ jobs:
               "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" >&2 || true
             exit "${build_status}"
           fi
-          ccache --show-log-stats -vv | tee -a "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
+          {
+            echo '[ccache after]'
+            ccache --print-stats
+          } >> "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
           cat "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
 
       - name: Upload OpenFOAM build log
@@ -171,7 +177,6 @@ jobs:
           path: |
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/allwmake.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/benchmark.log
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/ccache-stats.log
           if-no-files-found: warn
           compression-level: 9
 
