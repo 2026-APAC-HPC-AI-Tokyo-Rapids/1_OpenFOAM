@@ -3,6 +3,8 @@ name: OpenFOAM on genkai
 on:
   workflow_dispatch:
   push:
+    paths-ignore:
+      - 'research/build-performance/**'
 
 jobs:
   openfoam:
@@ -106,16 +108,9 @@ jobs:
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
           perf stat -d -I 5000 -o "${OPENFOAM_BUILD_TMPDIR}/perf-stat.log" -- \
-            perf record -F 1 -g --call-graph fp -e task-clock \
-              -o "${OPENFOAM_BUILD_TMPDIR}/perf.data" -- \
             /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/resource-usage.log" \
               bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
               -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
-          if [[ -s "${OPENFOAM_BUILD_TMPDIR}/perf.data" ]]; then
-            perf report --stdio --sort comm,dso,symbol --percent-limit 0.1 \
-              -i "${OPENFOAM_BUILD_TMPDIR}/perf.data" \
-              > "${OPENFOAM_BUILD_TMPDIR}/perf-report.txt"
-          fi
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
               '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
@@ -132,11 +127,9 @@ jobs:
           path: |
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/allwmake.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-stat.log
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-report.txt
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf.data
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/resource-usage.log
           if-no-files-found: warn
-          compression-level: 1
+          compression-level: 9
 
       - name: Cleanup /dev/shm build directory
         if: always()
