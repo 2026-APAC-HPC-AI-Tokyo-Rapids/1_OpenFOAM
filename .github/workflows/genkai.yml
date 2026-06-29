@@ -105,7 +105,7 @@ jobs:
           cd "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
-          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s \
+          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
             -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
