@@ -1,3 +1,4 @@
+# genkai build performance measurements (seconds)
 category	condition	run_id	wall_time_seconds	note
 parallelism	30	28345869093	1338.27	server ccache
 parallelism	30	28350579303	1033.93	server ccache
@@ -16,3 +17,4 @@ profiling	baseline	28356014551	839.64	no profiler
 profiling	baseline	28356789505	1327.85	no profiler
 profiling	perf-dwarf	28363430866	829.00	735MB raw perf.data
 profiling	perf-frame-pointer	28364738522	842.80	138MB raw perf.data
+profiling	perf-frame-pointer-lustre-contention	28371443227	1519.91	system CPU 54120.12s; voluntary context switches 120256909

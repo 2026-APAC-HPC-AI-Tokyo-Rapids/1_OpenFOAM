@@ -1,4 +1,4 @@
-# 調査結果
+# ビルドprofiling調査結果
 
 ## 結論
 
@@ -88,6 +88,22 @@ Run [28362137687](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/ac
 | `clang` | 2.34% |
 
 実コンパイルだけではなく、shell、コピー、依存生成、ディレクトリ操作の総量がLustre metadata競合を引き起こしている。
+
+## Run #69の長時間化
+
+Run [#69 / 28371443227](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/28371443227)は成功したが、Allwmakeに25分19.91秒を要した。同じframe-pointer profiling構成で14分02.80秒だったrunと比較する。
+
+| 指標 | 14分run | Run #69 |
+|---|---:|---:|
+| User CPU | 689.88秒 | 699.05秒 |
+| System CPU | 23,165.86秒 | 54,120.12秒 |
+| Voluntary context switches | 1,020,672 | 120,256,909 |
+| Involuntary context switches | 1,442,116 | 762,882 |
+| File system inputs | 1,020,216 | 926,328 |
+
+User CPUとfile system input量はほぼ同じだが、System CPUは2.34倍、voluntary context switchは約118倍だった。工程時間もThirdPartyが5分42秒から11分27秒、applicationsが1分54秒から6分28秒へ悪化した。
+
+call graphでは`sh`の`open`と`stat`から、`d_alloc_parallel`、Lustre lookup、`ldlm`、`ptlrpc`へ至る待機が支配的だった。build内容やprofiler設定の変更ではなく、共有Lustre metadata負荷の時間変動と判断する。
 
 ## 注意事項
 
