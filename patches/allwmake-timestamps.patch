@@ -1,0 +1,14 @@
+--- OpenFOAM-v2412/wmake/scripts/AllwmakeParseArguments
++++ OpenFOAM-v2412/wmake/scripts/AllwmakeParseArguments
+@@ -215,8 +215,9 @@
+         echo "Logging wmake -all output to '$wmakeOpt_log'" 1>&2
+         echo 1>&2
+         exec wmake $wmakeOpt_frontend -all \
+-            $wmakeOpt_debug $wmakeOpt_strict $wmakeOpt_queue $wmakeOpt_openmp $* 2>&1 | \
+-            /usr/bin/tee $wmakeOpt_log
++            $wmakeOpt_debug $wmakeOpt_strict $wmakeOpt_queue $wmakeOpt_openmp $* 2>&1 |\
++            awk '{ print strftime("%Y-%m-%d %H:%M:%S"), $0; fflush() }' |\
++            /usr/bin/tee "$wmakeOpt_log"
+         # Need to cleanup after the tee
+         rc=$? # Error code from tee (not wmake), but not entirely important
+         echo "Done logging to '$wmakeOpt_log'" 1>&2
