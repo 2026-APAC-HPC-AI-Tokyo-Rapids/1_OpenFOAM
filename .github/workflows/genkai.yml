@@ -124,10 +124,6 @@ jobs:
           if-no-files-found: warn
           compression-level: 9
 
-      - name: Remove benchmark ccache
-        if: always()
-        run: rm -rf -- "/dev/shm/openfoam-ccache-${OPENFOAM_VERSION}-${INTEL_ONEAPI_MODULE_VERSION}"
-
       - name: Cleanup /dev/shm build directory
         if: always()
         run: |
