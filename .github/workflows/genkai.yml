@@ -97,11 +97,11 @@ jobs:
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL=+ccache
+            WM_COMPILE_CONTROL="+ccache +lld"
           set -eu
-          # lldを使い、OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
+          # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
-          export FOAM_EXTRA_LDFLAGS="-fuse-ld=lld -Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
+          export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
           cd "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
