@@ -97,7 +97,7 @@ jobs:
             WM_MPLIB=INTELMPI \
             WM_LABEL_SIZE=64 \
             WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL="+ccache +lld"
+            WM_COMPILE_CONTROL=+ccache+lld
           set -eu
           # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
@@ -105,7 +105,7 @@ jobs:
           cd "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
-          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
+          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -q -s \
             -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
