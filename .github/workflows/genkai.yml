@@ -2,26 +2,6 @@ name: OpenFOAM on genkai
 
 on:
   workflow_dispatch:
-    inputs:
-      parallelism:
-        description: Allwmakeの並列数
-        required: true
-        default: '60'
-        type: choice
-        options:
-          - '30'
-          - '60'
-          - '90'
-          - '120'
-      ccache_mode:
-        description: ccacheの配置方式
-        required: true
-        default: server
-        type: choice
-        options:
-          - server
-          - tmpfs-copy
-          - tmpfs-hot
   push:
 
 jobs:
@@ -39,7 +19,7 @@ jobs:
       ADIOS2_VERSION: 2.12.1
       CGAL_VERSION: 6.1.1
       INTEL_ONEAPI_MODULE_VERSION: 2025.1.3
-      OPENFOAM_BUILD_PARALLELISM: ${{ inputs.parallelism || '60' }}
+      OPENFOAM_BUILD_PARALLELISM: 120
 
       # 永続化するソースアーカイブ
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
@@ -81,9 +61,6 @@ jobs:
             echo "CCACHE_TEMPDIR=${openfoam_build_tmpdir}/.ccache-tmp"
           } >> "${GITHUB_ENV}"
           mkdir -p "${openfoam_build_tmpdir}/.ccache-tmp"
-          printf 'parallelism=%s\nccache_mode=%s\n' \
-            "${OPENFOAM_BUILD_PARALLELISM}" "${{ inputs.ccache_mode || 'server' }}" \
-            > "${openfoam_build_tmpdir}/benchmark.log"
 
       - name: Extract and patch sources
         run: |
@@ -111,33 +88,7 @@ jobs:
           do
             "${build_tool}" --version
           done
-          persistent_ccache_dir="$(ccache --get-config cache_dir)"
-          case "${{ inputs.ccache_mode || 'server' }}" in
-            server)
-              ;;
-            tmpfs-copy)
-              mkdir -p "${OPENFOAM_BUILD_TMPDIR}/ccache"
-              /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/benchmark.log" -a \
-                cp -a "${persistent_ccache_dir}/." "${OPENFOAM_BUILD_TMPDIR}/ccache/"
-              export CCACHE_DIR="${OPENFOAM_BUILD_TMPDIR}/ccache"
-              ;;
-            tmpfs-hot)
-              ccache_dir="/dev/shm/openfoam-ccache-${OPENFOAM_VERSION}-${INTEL_ONEAPI_MODULE_VERSION}"
-              if [[ ! -f "${ccache_dir}/.ready" ]]; then
-                rm -rf -- "${ccache_dir}"
-                mkdir -p "${ccache_dir}"
-                /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/benchmark.log" -a \
-                  cp -a "${persistent_ccache_dir}/." "${ccache_dir}/"
-                touch "${ccache_dir}/.ready"
-              fi
-              export CCACHE_DIR="${ccache_dir}"
-              ;;
-          esac
           ccache --show-config
-          {
-            echo '[ccache before]'
-            ccache --print-stats
-          } >> "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
           # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
           set +eu
@@ -154,8 +105,7 @@ jobs:
           cd "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
-          /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/benchmark.log" -a \
-            bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
+          time bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
             -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
           if (( build_status != 0 )); then
             grep -Eai -m 200 \
@@ -163,22 +113,20 @@ jobs:
               "${OPENFOAM_BUILD_TMPDIR}/allwmake.log" >&2 || true
             exit "${build_status}"
           fi
-          {
-            echo '[ccache after]'
-            ccache --print-stats
-          } >> "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
-          cat "${OPENFOAM_BUILD_TMPDIR}/benchmark.log"
+          ccache --show-stats
 
       - name: Upload OpenFOAM build log
         if: always() && steps.prepare_build_directory.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/allwmake.log
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/benchmark.log
+          path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/allwmake.log
           if-no-files-found: warn
           compression-level: 9
+
+      - name: Remove benchmark ccache
+        if: always()
+        run: rm -rf -- "/dev/shm/openfoam-ccache-${OPENFOAM_VERSION}-${INTEL_ONEAPI_MODULE_VERSION}"
 
       - name: Cleanup /dev/shm build directory
         if: always()
