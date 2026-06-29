@@ -1,4 +1,4 @@
-# 実験結果
+# ビルド最適化実験結果
 
 ## 並列数
 
@@ -32,5 +32,6 @@ cache全体のコピーには約1分22秒かかり、コピー済みでも有意
 | 28363430866 | `perf record`、DWARF call graph | Allwmake 13分49.00秒 |
 | 28364738522 | `perf record`、frame-pointer call graph | Allwmake 14分02.80秒 |
 | 28365703413 | frame-pointer profiling | Build step 14分58秒 |
+| 28371443227 | 同一frame-pointer profiling、Lustre高負荷 | Allwmake 25分19.91秒 |
 
 共有ノードの変動幅よりprofiler有無の差が小さく、有意なwall time増加は確認されなかった。DWARF call graphはrawデータ735MBで過大だったため撤去した。frame-pointer方式はrawデータ約138MB、artifact圧縮後約28MBであり、継続利用する。
