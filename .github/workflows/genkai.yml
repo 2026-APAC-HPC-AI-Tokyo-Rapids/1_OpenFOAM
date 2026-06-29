@@ -88,6 +88,7 @@ jobs:
           do
             "${build_tool}" --version
           done
+          command -v pidstat
           ccache --show-config
           openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
           # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
@@ -105,11 +106,17 @@ jobs:
           cd "${WM_PROJECT_DIR}"
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
-          /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/resource-usage.log" \
-            perf stat -d -I 5000 -o "${OPENFOAM_BUILD_TMPDIR}/perf-stat.log" -- \
-            perf record -F 9 -e task-clock -o "${OPENFOAM_BUILD_TMPDIR}/perf.data" -- \
-            bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
+          pidstat -druw -h -G 'ccache|icpx|icx|clang|ld|make|wmake|wmkdepend|cp|sh|sed' 5 \
+            > "${OPENFOAM_BUILD_TMPDIR}/pidstat.log" &
+          pidstat_pid=$!
+          perf stat -d -I 5000 -o "${OPENFOAM_BUILD_TMPDIR}/perf-stat.log" -- \
+            perf record -F 1 -g --call-graph dwarf,4096 -e task-clock \
+              -o "${OPENFOAM_BUILD_TMPDIR}/perf.data" -- \
+            /usr/bin/time -v -o "${OPENFOAM_BUILD_TMPDIR}/resource-usage.log" \
+              bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
               -log="${OPENFOAM_BUILD_TMPDIR}/allwmake.log" > /dev/null || build_status=$?
+          kill "${pidstat_pid}" 2>/dev/null || true
+          wait "${pidstat_pid}" 2>/dev/null || true
           if [[ -s "${OPENFOAM_BUILD_TMPDIR}/perf.data" ]]; then
             perf report --stdio --sort comm,dso,symbol --percent-limit 0.1 \
               -i "${OPENFOAM_BUILD_TMPDIR}/perf.data" \
@@ -133,6 +140,7 @@ jobs:
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-stat.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf-report.txt
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/perf.data
+            ${{ env.OPENFOAM_BUILD_TMPDIR }}/pidstat.log
             ${{ env.OPENFOAM_BUILD_TMPDIR }}/resource-usage.log
           if-no-files-found: warn
           compression-level: 1
