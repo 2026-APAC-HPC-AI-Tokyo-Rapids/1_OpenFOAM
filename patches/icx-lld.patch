@@ -5,7 +5,7 @@
  LINK_LIBS   = $(c++DBUG)
  
 +ifneq (,$(findstring +lld,$(WM_COMPILE_CONTROL)))
-+    LINKER_FLAGS = -fuse-ld=lld
++    LINKER_FLAGS = -fuse-ld=lld -Wl,--allow-shlib-undefined
 +else
 +    LINKER_FLAGS = -Xlinker --add-needed
 +endif
