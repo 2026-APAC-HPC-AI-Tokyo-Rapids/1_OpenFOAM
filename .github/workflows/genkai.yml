@@ -2,6 +2,11 @@ name: OpenFOAM on genkai
 
 on:
   workflow_dispatch:
+    inputs:
+      openfoam_build_parallelism:
+        description: OpenFOAM Allwmake parallelism
+        required: false
+        default: '120'
   push:
     paths-ignore:
       - 'research/**'
@@ -20,7 +25,7 @@ jobs:
       OPENFOAM_VERSION: v2412
       ADIOS2_VERSION: 2.12.1
       CGAL_VERSION: 6.1.1
-      OPENFOAM_BUILD_PARALLELISM: 120
+      OPENFOAM_BUILD_PARALLELISM: ${{ github.event.inputs.openfoam_build_parallelism || '120' }}
 
       # 永続化するソースアーカイブ
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
@@ -57,15 +62,12 @@ jobs:
         run: |
           openfoam_build_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           ccache_tmpdir="$(mktemp -d "/dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
-          ccache_log_tmpdir="$(mktemp -d "/dev/shm/ccache-log-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           # サーバー側のキャッシュを使い、ビルドパスだけを正規化する。
           # ccacheの一時ファイルはビルド成果物アーカイブに含めない。
           {
             echo "OPENFOAM_BUILD_TMPDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_BASEDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_TEMPDIR=${ccache_tmpdir}"
-            echo "CCACHE_LOG_TMPDIR=${ccache_log_tmpdir}"
-            echo "CCACHE_LOGFILE=${ccache_log_tmpdir}/ccache.log"
           } >> "${GITHUB_ENV}"
           mkdir -p "${openfoam_build_tmpdir}/logs"
 
@@ -129,9 +131,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
-            ${{ env.CCACHE_LOGFILE }}
+          path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
           if-no-files-found: warn
           compression-level: 1
 
@@ -144,7 +144,4 @@ jobs:
           fi
           if [[ "${CCACHE_TEMPDIR:-}" == /dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
             rm -rf -- "${CCACHE_TEMPDIR}"
-          fi
-          if [[ "${CCACHE_LOG_TMPDIR:-}" == /dev/shm/ccache-log-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
-            rm -rf -- "${CCACHE_LOG_TMPDIR}"
           fi
