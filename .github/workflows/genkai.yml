@@ -2,11 +2,6 @@ name: OpenFOAM on genkai
 
 on:
   workflow_dispatch:
-    inputs:
-      openfoam_build_parallelism:
-        description: OpenFOAM Allwmake parallelism
-        required: false
-        default: '120'
   push:
     paths-ignore:
       - 'research/**'
@@ -25,7 +20,7 @@ jobs:
       OPENFOAM_VERSION: v2412
       ADIOS2_VERSION: 2.12.1
       CGAL_VERSION: 6.1.1
-      OPENFOAM_BUILD_PARALLELISM: ${{ github.event.inputs.openfoam_build_parallelism || '120' }}
+      OPENFOAM_BUILD_PARALLELISM: 120
 
       # 永続化するソースアーカイブ
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
