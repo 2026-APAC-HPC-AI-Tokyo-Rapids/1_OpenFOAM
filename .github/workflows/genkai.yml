@@ -57,12 +57,15 @@ jobs:
         run: |
           openfoam_build_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           ccache_tmpdir="$(mktemp -d "/dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
+          ccache_log_tmpdir="$(mktemp -d "/dev/shm/ccache-log-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           # サーバー側のキャッシュを使い、ビルドパスだけを正規化する。
           # ccacheの一時ファイルはビルド成果物アーカイブに含めない。
           {
             echo "OPENFOAM_BUILD_TMPDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_BASEDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_TEMPDIR=${ccache_tmpdir}"
+            echo "CCACHE_LOG_TMPDIR=${ccache_log_tmpdir}"
+            echo "CCACHE_LOGFILE=${ccache_log_tmpdir}/ccache.log"
           } >> "${GITHUB_ENV}"
           mkdir -p "${openfoam_build_tmpdir}/logs"
 
@@ -119,14 +122,16 @@ jobs:
           ccache --show-stats
 
       - name: Archive OpenFOAM build
-        run: tar -I zstd -cf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ATTEMPT}.tar.zst" -C "${OPENFOAM_BUILD_TMPDIR}" .
+        run: tar -I zstd -cf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${OPENFOAM_BUILD_TMPDIR}" .
 
       - name: Upload OpenFOAM build log
         if: always() && steps.prepare_build_directory.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
+          path: |
+            ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
+            ${{ env.CCACHE_LOGFILE }}
           if-no-files-found: warn
           compression-level: 1
 
@@ -139,4 +144,7 @@ jobs:
           fi
           if [[ "${CCACHE_TEMPDIR:-}" == /dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
             rm -rf -- "${CCACHE_TEMPDIR}"
+          fi
+          if [[ "${CCACHE_LOG_TMPDIR:-}" == /dev/shm/ccache-log-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
+            rm -rf -- "${CCACHE_LOG_TMPDIR}"
           fi
