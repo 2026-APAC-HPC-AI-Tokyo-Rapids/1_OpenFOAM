@@ -56,10 +56,13 @@ jobs:
         id: prepare_build_directory
         run: |
           openfoam_build_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
+          ccache_tmpdir="$(mktemp -d "/dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           # サーバー側のキャッシュを使い、ビルドパスだけを正規化する。
+          # ccacheの一時ファイルはビルド成果物アーカイブに含めない。
           {
             echo "OPENFOAM_BUILD_TMPDIR=${openfoam_build_tmpdir}"
             echo "CCACHE_BASEDIR=${openfoam_build_tmpdir}"
+            echo "CCACHE_TEMPDIR=${ccache_tmpdir}"
           } >> "${GITHUB_ENV}"
           mkdir -p "${openfoam_build_tmpdir}/logs"
 
@@ -133,4 +136,7 @@ jobs:
           # この実行で作成したmktempディレクトリ以外は削除しない。
           if [[ "${OPENFOAM_BUILD_TMPDIR:-}" == /dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
             rm -rf -- "${OPENFOAM_BUILD_TMPDIR}"
+          fi
+          if [[ "${CCACHE_TEMPDIR:-}" == /dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
+            rm -rf -- "${CCACHE_TEMPDIR}"
           fi
