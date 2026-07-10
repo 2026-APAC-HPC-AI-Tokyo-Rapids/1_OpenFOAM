@@ -11,6 +11,7 @@
 - ccache が warm のときは hit 率が約 99.5% まで上がる。しかし Allwmake 全体は依存関係生成、link、install、ファイル走査を続けるため、コンパイル cache だけでは時間を固定できない。
 - `Allwmake -j 120`、queue なし、既定 GNU linker が現在の採用構成である。
 - 同一条件でも全体時間は大きく揺れる。比較対象となる build 部分は約 14 分台から 23 分台まで観測されており、単発の wall time を最適化の根拠にしない。
+- build archive は run number で保存し、手動入力 `skip_build` または push の `[skip-build]` で第一親上の過去成果物を再利用できる。互換性は workflow では判定しない。
 
 構成の詳細は [current-build.md](current-build.md)、試行の記録と判断は [trial-record.md](trial-record.md)、今後の測定方法は [measurement-policy.md](measurement-policy.md) を参照する。
 
