@@ -106,6 +106,8 @@ jobs:
           export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
           export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
           cd "${WM_PROJECT_DIR}"
+          # このAllwmakeのcache hit/missだけを記録する。
+          ccache --zero-stats
           # -log内部のteeでもwmakeの終了コードを保持し、標準出力は破棄する。
           build_status=0
           "${GITHUB_WORKSPACE}/scripts/build-profiler.sh" \
