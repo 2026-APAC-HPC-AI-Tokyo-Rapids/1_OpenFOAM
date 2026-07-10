@@ -17,7 +17,7 @@ jobs:
 
     env:
       # ビルド対象のバージョンと並列数
-      OPENFOAM_VERSION: v2412
+      OPENFOAM_VERSION: v2606
       ADIOS2_VERSION: 2.12.1
       CGAL_VERSION: 6.1.1
       OPENFOAM_BUILD_PARALLELISM: 120
@@ -45,7 +45,7 @@ jobs:
           mkdir -p "${SOURCE_ARCHIVE_CACHE_DIR}"
           for archive_url in \
             "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/OpenFOAM-${OPENFOAM_VERSION}.tgz" \
-            "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tgz" \
+            "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
             "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz" \
             "https://github.com/CGAL/cgal/releases/download/v${CGAL_VERSION}/CGAL-${CGAL_VERSION}.tar.xz"
           do
@@ -68,10 +68,8 @@ jobs:
 
       - name: Extract and patch sources
         run: |
-          for source_package in OpenFOAM ThirdParty
-          do
-            tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/${source_package}-${OPENFOAM_VERSION}.tgz" -C "${OPENFOAM_BUILD_TMPDIR}"
-          done
+          tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VERSION}.tgz" -C "${OPENFOAM_BUILD_TMPDIR}"
+          tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" -C "${OPENFOAM_BUILD_TMPDIR}"
           thirdparty_source_dir="${OPENFOAM_BUILD_TMPDIR}/ThirdParty-${OPENFOAM_VERSION}"
           mkdir -p "${thirdparty_source_dir}/sources/adios" "${thirdparty_source_dir}/sources/cgal"
           tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${thirdparty_source_dir}/sources/adios"
