@@ -37,6 +37,8 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 
 再利用時は現在のコミットから第一親を順に遡り、`genkai.yml` が成功し、かつ `Archive OpenFOAM build` step が成功した run を調べる。対応する archive が残っていれば、現在の run number 名でハードリンクを作る。過去成果物を再利用しただけの run と、archive が削除済みの run は飛ばす。source、patch、compiler設定などの互換性は自動判定せず、`skip_build` または `[skip-build]` を指定する人間かエージェントが判断する。
 
+現在の `run` job は実計算をまだ行わない。現在の run number に対応する archive を `tar -xO` で最後まで展開し、内容を `/dev/null` へ捨てる。これにより、通常ビルドと再利用のどちらでも後続jobが同じ名前の archive を読み出せることと、archiveを正常に展開できることだけを確認する。
+
 ## 実行時の観測点
 
 通常の成功 run では、次を確認する。

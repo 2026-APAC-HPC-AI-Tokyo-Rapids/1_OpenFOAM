@@ -19,6 +19,10 @@ permissions:
 env:
   BUILD_ARCHIVE_DIR: /home/pj26000080/share/openfoam-build/builds
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
 jobs:
   build:
     name: Build OpenFOAM with Intel oneAPI
@@ -45,17 +49,13 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
 
-    defaults:
-      run:
-        shell: bash --noprofile --norc -euo pipefail {0}
-
     steps:
-      - name: Checkout
+      - name: Checkout repository history
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Reuse previous OpenFOAM build
+      - name: Link previous build archive
         if: ${{ fromJSON(env.SKIP_BUILD) }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,9 +93,9 @@ jobs:
             wget --no-verbose --no-clobber --directory-prefix="${SOURCE_ARCHIVE_CACHE_DIR}" "${archive_url}"
           done
 
-      - name: Prepare /dev/shm build directory
+      - name: Prepare build workspace
         if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        id: prepare_build_directory
+        id: prepare_build_workspace
         run: |
           run_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           # ccacheの一時ファイルはビルド成果物アーカイブに含めない。
@@ -165,7 +165,7 @@ jobs:
         run: tar -I zstd -cf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${OPENFOAM_BUILD_TMPDIR}" .
 
       - name: Upload OpenFOAM build log
-        if: always() && steps.prepare_build_directory.outcome == 'success'
+        if: always() && steps.prepare_build_workspace.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
@@ -173,8 +173,8 @@ jobs:
           if-no-files-found: warn
           compression-level: 1
 
-      - name: Cleanup /dev/shm build directory
-        if: always() && steps.prepare_build_directory.outcome == 'success'
+      - name: Cleanup build workspace
+        if: always() && steps.prepare_build_workspace.outcome == 'success'
         run: rm -rf -- "${RUN_TMPDIR:?}"
 
   run:
@@ -183,5 +183,5 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     steps:
-      - name: Placeholder
-        run: "true"
+      - name: Decompress OpenFOAM build archive
+        run: tar -I zstd -xOf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" > /dev/null
