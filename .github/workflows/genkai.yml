@@ -7,7 +7,7 @@ on:
       - 'research/**'
 
 jobs:
-  openfoam:
+  build:
     name: Build OpenFOAM with Intel oneAPI
     runs-on: [self-hosted, genkai]
     # 共有ソースアーカイブキャッシュへの同時書き込みを防ぐ。
@@ -143,3 +143,12 @@ jobs:
           if [[ "${CCACHE_TEMPDIR:-}" == /dev/shm/ccache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.* ]]; then
             rm -rf -- "${CCACHE_TEMPDIR}"
           fi
+
+  run:
+    name: Run OpenFOAM
+    needs: build
+    runs-on: [self-hosted, genkai]
+
+    steps:
+      - name: Placeholder
+        run: "true"
