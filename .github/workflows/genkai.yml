@@ -74,6 +74,9 @@ jobs:
           mkdir -p "${thirdparty_source_dir}/sources/adios" "${thirdparty_source_dir}/sources/cgal"
           tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${thirdparty_source_dir}/sources/adios"
           tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${thirdparty_source_dir}/sources/cgal"
+          mv "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}" "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM"
+          mv "${thirdparty_source_dir}" "${OPENFOAM_BUILD_TMPDIR}/ThirdParty"
+          ln -s ../ThirdParty "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM/ThirdParty"
           # patchesディレクトリ内の全パッチをビルド構成として適用する。
           for patch_file in "${GITHUB_WORKSPACE}"/patches/*.patch
           do
@@ -89,7 +92,7 @@ jobs:
             "${build_tool}" --version
           done
           ccache --show-config
-          openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}"
+          openfoam_source_dir="${OPENFOAM_BUILD_TMPDIR}/OpenFOAM"
           # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
           set +eu
           source "${openfoam_source_dir}/etc/bashrc" \

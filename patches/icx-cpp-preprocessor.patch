@@ -1,5 +1,5 @@
---- OpenFOAM-v2606/wmake/rules/linux64Icx/general
-+++ OpenFOAM-v2606/wmake/rules/linux64Icx/general
+--- OpenFOAM/wmake/rules/linux64Icx/general
++++ OpenFOAM/wmake/rules/linux64Icx/general
 @@ -1,4 +1,4 @@
 -CPP        = /lib/cpp -traditional-cpp $(GFLAGS)
 +CPP        = icx -E -traditional-cpp $(GFLAGS)
