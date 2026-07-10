@@ -3,8 +3,8 @@ name: OpenFOAM on genkai
 on:
   workflow_dispatch:
     inputs:
-      reuse_build:
-        description: Reuse the nearest successful build archive from the first-parent history
+      skip_build:
+        description: Skip the build and reuse the nearest successful archive from the first-parent history
         required: true
         default: false
         type: boolean
@@ -34,6 +34,7 @@ jobs:
       ADIOS2_VERSION: 2.12.1
       CGAL_VERSION: 6.1.1
       OPENFOAM_BUILD_PARALLELISM: 120
+      SKIP_BUILD: ${{ inputs.skip_build || (github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-build]')) }}
 
       # 永続化するソースアーカイブ
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
@@ -55,7 +56,7 @@ jobs:
           fetch-depth: 0
 
       - name: Reuse previous OpenFOAM build
-        if: ${{ inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -80,7 +81,7 @@ jobs:
           exit 1
 
       - name: Download source archives
-        if: ${{ ! inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD != 'true' }}
         run: |
           mkdir -p "${SOURCE_ARCHIVE_CACHE_DIR}"
           for archive_url in \
@@ -93,7 +94,7 @@ jobs:
           done
 
       - name: Prepare /dev/shm build directory
-        if: ${{ ! inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD != 'true' }}
         id: prepare_build_directory
         run: |
           run_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
@@ -107,7 +108,7 @@ jobs:
           mkdir -p "${run_tmpdir}/build/logs" "${run_tmpdir}/ccache"
 
       - name: Extract and patch sources
-        if: ${{ ! inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD != 'true' }}
         run: |
           tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VERSION}.tgz" -C "${OPENFOAM_BUILD_TMPDIR}"
           tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" -C "${OPENFOAM_BUILD_TMPDIR}"
@@ -124,7 +125,7 @@ jobs:
           done
 
       - name: Build OpenFOAM
-        if: ${{ ! inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD != 'true' }}
         run: |
           module purge
           module load intel/2025.1.3 impi
@@ -160,7 +161,7 @@ jobs:
           ccache --show-stats
 
       - name: Archive OpenFOAM build
-        if: ${{ ! inputs.reuse_build }}
+        if: ${{ env.SKIP_BUILD != 'true' }}
         run: tar -I zstd -cf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${OPENFOAM_BUILD_TMPDIR}" .
 
       - name: Upload OpenFOAM build log
