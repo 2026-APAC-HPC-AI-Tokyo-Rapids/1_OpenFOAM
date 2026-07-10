@@ -24,11 +24,18 @@ ADIOS2 と CGAL の source は workflow が明示した version を使う。CGAL
 | source archive | 共有の source cache | download を再利用する |
 | 展開済み source・object・log | 実行ごとの `/dev/shm/openfoam-<run-id>-...` | build tree の大量 I/O を runner のメモリ上へ閉じる |
 | ccache の本体 | runner 既定の cache storage | warm cache を実行間で再利用する |
-| ccache の一時ファイル | 実行ごとの `/dev/shm/ccache-<run-id>-...` | 一時ファイルを build archive から分離する |
+| ccache の一時ファイル | run用一時ディレクトリの `ccache` | 一時ファイルを build archive から分離する |
+| build archive | 共有の builds directory | run number ごとの `tar.zst` を後続jobから利用する |
 
 archive 展開後の version 付きディレクトリは、build root 内の `OpenFOAM` と `ThirdParty` に正規化する。`OpenFOAM/ThirdParty` は後者への symlink とし、OpenFOAM の標準的な探索規則を維持する。さらに `CCACHE_BASEDIR` を build root に設定し、実行ごとの一時パスと OpenFOAM version を cache key に持ち込まない。cleanup は当該 run-id の `mktemp` ディレクトリだけに限定する。
 
 `/dev/shm` は build tree を高速化する手段であって、すべての I/O を隔離するものではない。compiler、標準 header、module、ccache storage は共有ストレージ側に残る。そのため、build root を tmpfs 化しても時間変動は残る。
+
+## build archive の作成と再利用
+
+通常ビルドは `${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst` を作成する。手動実行では既定で無効な `skip_build` を有効にするか、push の先頭コミットメッセージに `[skip-build]` を含めると、通常ビルドを行わず過去の archive を再利用する。
+
+再利用時は現在のコミットから第一親を順に遡り、`genkai.yml` が成功し、かつ `Archive OpenFOAM build` step が成功した run を調べる。対応する archive が残っていれば、現在の run number 名でハードリンクを作る。過去成果物を再利用しただけの run と、archive が削除済みの run は飛ばす。source、patch、compiler設定などの互換性は自動判定せず、`skip_build` または `[skip-build]` を指定する人間かエージェントが判断する。
 
 ## 実行時の観測点
 

@@ -54,3 +54,11 @@ OpenFOAM v2606 は公式 source archive と ThirdParty archive から取得し�
 version 付き source directory をそのまま使うと、`CCACHE_BASEDIR` から見た相対 path に OpenFOAM version が残り、version 更新時に cache key が分離する。そこで展開後の directory を `OpenFOAM` と `ThirdParty` に正規化した。v2606 の `bashrc` と ThirdParty 探索がこの配置で正しく初期化されることを確認したうえで採用した。
 
 統計を累積値と取り違えないよう、Allwmake の直前で `ccache --zero-stats` を実行する。v2606 の warm build `29069152863` は 4,789 cacheable call のうち 4,688 hit、101 miss で、hit 率は 97.89% だった。Allwmake は約27分51秒であり、約16分だった v2412 の速い run より長い。ただし call 数の増加は約0.7%に留まり、v2606 の workload 増加だけでは差を説明できない。ThirdParty の増加に加え、libraries と applications が v2412 の遅い run とほぼ同じ時間になっているため、共有環境の変動を含むと考えるのが妥当である。
+
+## 7. build archive の再利用は明示的に選ぶ
+
+full build の成果物を run number 名の `tar.zst` として共有領域へ保存し、後続の `run` job が常に現在の run number だけを参照できる構成にした。ビルドを省略する判断は、手動実行の `skip_build` または push の先頭コミットメッセージに含める `[skip-build]` で明示する。
+
+workflow は第一親を1コミットずつ遡り、成功済みの実ビルドと対応する archive を探す。互換性を差分から推測しないため、判断基準は単純だが、指定側が source、patch、compiler設定の互換性に責任を持つ。
+
+push run `29077779599` では `[skip-build]` を認識し、再利用だけを行った直前の run を飛ばして実ビルドの run number `85` を選んだ。Download、Prepare、Extract、Build、Archive はすべて skip され、現在の run number 名へのハードリンク作成と後続の `run` job が成功した。
