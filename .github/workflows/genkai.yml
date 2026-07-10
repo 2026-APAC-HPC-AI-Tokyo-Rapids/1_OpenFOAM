@@ -54,14 +54,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install GitHub CLI
-        if: ${{ inputs.reuse_build }}
-        env:
-          GH_CLI_VERSION: 2.96.0
-        run: |
-          wget --no-verbose "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" -O - | tar -xzf - -C "${RUNNER_TEMP}"
-          echo "${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64/bin" >> "${GITHUB_PATH}"
-
       - name: Reuse previous OpenFOAM build
         if: ${{ inputs.reuse_build }}
         env:
