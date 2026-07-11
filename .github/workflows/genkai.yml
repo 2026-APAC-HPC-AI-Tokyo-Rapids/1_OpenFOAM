@@ -251,21 +251,22 @@ jobs:
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"
           log_file="${PROVISION_DIR}/logs/${job_id}.log"
+          while [[ ! -e "${log_file}" ]]; do
+            if ! pjstat "${job_id}" | grep -q "^${job_id}[[:space:]]"; then
+              echo "OpenFOAM job ${job_id} did not create a scheduler log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
           # Follow the scheduler log in the Actions output while the job runs.
-          tail --retry -n +1 -F "${log_file}" &
+          tail -n +1 -F "${log_file}" &
           tail_pid=$!
           stop_log_stream() {
             kill "${tail_pid}" 2>/dev/null || true
             wait "${tail_pid}" 2>/dev/null || true
           }
           trap stop_log_stream EXIT
-          deadline=$((SECONDS + 360))
           while pjstat "${job_id}" | grep -q "^${job_id}[[:space:]]"; do
-            if (( SECONDS >= deadline )); then
-              pjdel "${job_id}" || true
-              echo "OpenFOAM job ${job_id} exceeded workflow wait limit" >&2
-              exit 1
-            fi
             sleep 10
           done
           sleep 1
