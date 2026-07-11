@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   build:
-    name: Build OpenFOAM with Intel oneAPI
+    name: Build OpenFOAM
     runs-on: [self-hosted, genkai]
     # 共有ソースアーカイブキャッシュへの同時書き込みを防ぐ。
     concurrency:
@@ -211,7 +211,8 @@ jobs:
             './OpenFOAM/platforms/*' \
             './OpenFOAM/tutorials/incompressible/simpleFoam/motorBike/*' \
             './OpenFOAM/tutorials/resources/geometry/motorBike.obj.gz' \
-            './ThirdParty/platforms/*'
+            './ThirdParty/platforms/*' \
+            './ThirdParty/platforms/*/kahip-*/lib/libkahip.so*'
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/simpleFoam"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
 
@@ -231,7 +232,6 @@ jobs:
           mkdir -p "${OPENFOAM_RUN_ROOT}"
           job_output="$(pjsub /dev/stdin <<PJM
           #!/usr/bin/env bash
-          #PJM -L rscunit=rscunit_pg01
           #PJM -L rscgrp=a-batch
           #PJM -L node=1
           #PJM -L elapse=00:05:00

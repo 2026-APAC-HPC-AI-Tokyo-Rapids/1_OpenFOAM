@@ -22,7 +22,13 @@ source "${provision_dir}/OpenFOAM/etc/bashrc" \
 set -e
 
 # decomposePar loads KaHIP dynamically when using the scotch decomposition.
-export LD_LIBRARY_PATH="${KAHIP_ARCH_PATH:+${KAHIP_ARCH_PATH}/lib:}${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
+kahip_libraries=("${provision_dir}"/ThirdParty/platforms/*/kahip-*/lib/libkahip.so)
+if [[ ! -e "${kahip_libraries[0]}" ]]; then
+    echo "KaHIP shared library was not provisioned" >&2
+    exit 1
+fi
+kahip_lib_dir="$(dirname -- "${kahip_libraries[0]}")"
+export LD_LIBRARY_PATH="${kahip_lib_dir}:${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
 
 cp -r "${FOAM_TUTORIALS}/incompressible/simpleFoam/motorBike" "${run_dir}/"
 cd "${run_dir}/motorBike"
