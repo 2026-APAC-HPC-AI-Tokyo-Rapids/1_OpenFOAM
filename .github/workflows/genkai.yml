@@ -211,8 +211,7 @@ jobs:
             './OpenFOAM/platforms/*' \
             './OpenFOAM/tutorials/incompressible/simpleFoam/motorBike/*' \
             './OpenFOAM/tutorials/resources/geometry/motorBike.obj.gz' \
-            './ThirdParty/platforms/*' \
-            './ThirdParty/platforms/*/kahip-*/lib/libkahip.so*'
+            './ThirdParty/platforms/*'
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/simpleFoam"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
 
