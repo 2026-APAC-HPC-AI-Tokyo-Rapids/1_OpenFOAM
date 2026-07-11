@@ -21,16 +21,7 @@ source "${provision_dir}/OpenFOAM/etc/bashrc" \
     WM_PRECISION_OPTION=DP
 set -e
 
-# Make every provisioned OpenFOAM and ThirdParty library directory available to
-# the dynamic loader, including KaHIP and PT-Scotch used by parallel utilities.
-shopt -s globstar nullglob
-runtime_library_dirs=("${provision_dir}"/**/lib)
-if [[ "${#runtime_library_dirs[@]}" -eq 0 ]]; then
-    echo "No provisioned library directories were found" >&2
-    exit 1
-fi
-runtime_library_path="$(IFS=:; printf '%s' "${runtime_library_dirs[*]}")"
-export LD_LIBRARY_PATH="${runtime_library_path}:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
 
 cp -r "${FOAM_TUTORIALS}/incompressible/simpleFoam/motorBike" "${run_dir}/"
 cd "${run_dir}/motorBike"
