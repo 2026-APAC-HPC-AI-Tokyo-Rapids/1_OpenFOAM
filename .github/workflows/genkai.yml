@@ -198,7 +198,7 @@ jobs:
         run: |
           mkdir -p "${OPENFOAM_RUNTIME_ROOT}"
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
-          mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs"
+          mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
           cp "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${provision_dir}/scripts/"
           cp "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
           chmod +x "${provision_dir}/scripts/"*.sh
@@ -248,10 +248,12 @@ jobs:
           #PJM --mpi proc=${OPENFOAM_MPI_PROCS}
 
           set -eo pipefail
-          run_dir="\$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-\${PJM_JOBID}.XXXXXXXXXX")"
-          trap 'rm -rf -- "\${run_dir}"' EXIT
-          "${PROVISION_DIR}/scripts/run-openfoam.sh" "${PROVISION_DIR}" "\${run_dir}" "${OPENFOAM_MPI_PROCS}"
-          touch "${PROVISION_DIR}/run-success"
+           run_dir="\$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-\${PJM_JOBID}.XXXXXXXXXX")"
+           trap 'rm -rf -- "\${run_dir}"' EXIT
+           "${PROVISION_DIR}/scripts/run-openfoam.sh" "${PROVISION_DIR}" "\${run_dir}" "${OPENFOAM_MPI_PROCS}"
+           touch "\${run_dir}/motorBike/motorBike.foam"
+           tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-\${PJM_JOBID}.tar.zst" -C "\${run_dir}" motorBike
+           touch "${PROVISION_DIR}/run-success"
           PJM
           )"
           printf '%s\n' "${job_output}"
@@ -281,7 +283,7 @@ jobs:
           trap - EXIT
           test -e "${PROVISION_DIR}/run-success"
 
-      - name: Upload OpenFOAM job log
+      - name: Upload OpenFOAM execution log
         if: ${{ always() && needs.provision.outputs.provision_dir != '' }}
         uses: actions/upload-artifact@v7
         with:
@@ -289,6 +291,15 @@ jobs:
           path: ${{ env.PROVISION_DIR }}/logs
           if-no-files-found: warn
           compression-level: 1
+
+      - name: Upload ParaView case
+        if: ${{ success() && needs.provision.outputs.provision_dir != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-motorbike-case-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PROVISION_DIR }}/results
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Cleanup provisioned runtime
         if: ${{ always() && needs.provision.outputs.provision_dir != '' }}
