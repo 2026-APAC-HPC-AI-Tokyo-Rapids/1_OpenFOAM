@@ -22,8 +22,9 @@ source "${provision_dir}/OpenFOAM/etc/bashrc" \
 set -e
 
 # decomposePar loads KaHIP dynamically when using the scotch decomposition.
-kahip_libraries=("${provision_dir}"/ThirdParty/platforms/*/kahip-*/lib/libkahip.so)
-if [[ ! -e "${kahip_libraries[0]}" ]]; then
+shopt -s globstar nullglob
+kahip_libraries=("${provision_dir}"/**/libkahip.so)
+if [[ "${#kahip_libraries[@]}" -eq 0 ]]; then
     echo "KaHIP shared library was not provisioned" >&2
     exit 1
 fi
