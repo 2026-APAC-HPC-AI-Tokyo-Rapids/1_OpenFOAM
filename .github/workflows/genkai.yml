@@ -169,7 +169,7 @@ jobs:
         if: always() && steps.prepare_build_workspace.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: build-log-${{ github.run_id }}-${{ github.run_attempt }}
+          name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
           if-no-files-found: warn
           compression-level: 1
@@ -287,7 +287,7 @@ jobs:
         if: ${{ always() && needs.provision.outputs.provision_dir != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: run-log-${{ github.run_id }}-${{ github.run_attempt }}
+          name: openfoam-run-log-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PROVISION_DIR }}/logs
           if-no-files-found: warn
           compression-level: 1
