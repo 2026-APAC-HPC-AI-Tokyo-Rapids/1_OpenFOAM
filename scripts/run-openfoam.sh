@@ -21,7 +21,8 @@ source "${provision_dir}/OpenFOAM/etc/bashrc" \
     WM_PRECISION_OPTION=DP
 set -e
 
-export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
+# decomposePar loads KaHIP dynamically when using the scotch decomposition.
+export LD_LIBRARY_PATH="${KAHIP_ARCH_PATH:+${KAHIP_ARCH_PATH}/lib:}${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
 
 cp -r "${FOAM_TUTORIALS}/incompressible/simpleFoam/motorBike" "${run_dir}/"
 cd "${run_dir}/motorBike"
