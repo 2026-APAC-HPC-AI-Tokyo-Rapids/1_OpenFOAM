@@ -33,9 +33,9 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 
 ## build archive の作成と再利用
 
-通常ビルドは `${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst` を作成する。手動実行では既定で無効な `skip_build` を有効にするか、push の先頭コミットメッセージに `[skip-build]` を含めると、通常ビルドを行わず過去の archive を再利用する。
+通常ビルドは `${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst` を作成する。手動実行では `require_build` を有効にするとフルビルドする。push では先頭コミットメッセージに `[require-build]` を含めた場合だけフルビルドし、含めない場合は過去の archive を再利用する。
 
-再利用時は現在のコミットから第一親を順に遡り、`genkai.yml` が成功し、かつ `Archive OpenFOAM build` step が成功した run を調べる。対応する archive が残っていれば、現在の run number 名でハードリンクを作る。過去成果物を再利用しただけの run と、archive が削除済みの run は飛ばす。source、patch、compiler設定などの互換性は自動判定せず、`skip_build` または `[skip-build]` を指定する人間かエージェントが判断する。
+再利用時は現在のコミットから第一親を順に遡り、`genkai.yml` が成功し、かつ `Archive OpenFOAM build` step が成功した run を調べる。対応する archive が残っていれば、現在の run number 名でハードリンクを作る。過去成果物を再利用しただけの run と、archive が削除済みの run は飛ばす。source、patch、compiler設定などの互換性は自動判定しないため、`[require-build]` を付けるか手動実行で `require_build` を選ぶ人間かエージェントが判断する。
 
 現在の `run` job は実計算をまだ行わない。現在の run number に対応する archive を `tar -xO` で最後まで展開し、内容を `/dev/null` へ捨てる。これにより、通常ビルドと再利用のどちらでも後続jobが同じ名前の archive を読み出せることと、archiveを正常に展開できることだけを確認する。
 
