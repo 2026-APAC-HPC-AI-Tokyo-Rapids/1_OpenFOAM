@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       require_build:
-        description: Build from source instead of reusing the nearest successful archive from the first-parent history
+        description: Build from source instead of reusing the nearest build archive from the first-parent history
         required: true
         default: false
         type: boolean
@@ -25,30 +25,13 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
-  build:
-    name: Build OpenFOAM
+  select-build:
+    name: Select OpenFOAM build
     runs-on: [self-hosted, genkai]
-    # 共有ソースアーカイブキャッシュへの同時書き込みを防ぐ。
-    concurrency:
-      group: genkai-openfoam-build
-      cancel-in-progress: false
 
-    env:
-      # ビルド対象のバージョンと並列数
-      OPENFOAM_VERSION: v2606
-      ADIOS2_VERSION: 2.12.1
-      CGAL_VERSION: 6.1.1
-      OPENFOAM_BUILD_PARALLELISM: 120
-      SKIP_BUILD: ${{ (github.event_name == 'push' && !contains(github.event.head_commit.message, '[require-build]')) || (github.event_name == 'workflow_dispatch' && !inputs.require_build) }}
-
-      # 永続化するソースアーカイブ
-      SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
-
-      # OpenFOAMのwmakeとThirdPartyのCMakeビルドで使うコンパイラ設定
-      CC: mpiicx
-      CXX: mpiicpx
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    outputs:
+      action: ${{ steps.select.outputs.action }}
+      source_run_number: ${{ steps.select.outputs.source_run_number }}
 
     steps:
       - name: Checkout repository history
@@ -56,131 +39,98 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Link previous build archive
-        if: ${{ fromJSON(env.SKIP_BUILD) }}
+      - name: Select an existing archive or a new build
+        id: select
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ '${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[require-build]')) || (github.event_name == 'workflow_dispatch' && inputs.require_build) }}' == true ]]; then
+            echo "A new OpenFOAM build was explicitly requested"
+            echo "action=build" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
           commit="${GITHUB_SHA}"
-          # 互換性は呼び出し側が判断し、workflowでは第一親上の実ビルド成果物だけを探す。
           while parent_commit="$(git rev-parse "${commit}^" 2>/dev/null)"
           do
-            run_info="$(gh run list --workflow genkai.yml --commit "${parent_commit}" --status success --limit 1 --json databaseId,number --jq '(.[0] // empty) | [.databaseId, .number] | @tsv')"
-            if [[ -n "${run_info}" ]]; then
-              read -r run_id run_number <<< "${run_info}"
-              archive="${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst"
-              archive_step_count="$(gh run view "${run_id}" --json jobs --jq '[.jobs[].steps[] | select(.name == "Archive OpenFOAM build" and .conclusion == "success")] | length')"
-              if [[ "${archive_step_count}" -gt 0 && -e "${archive}" ]]; then
-                echo "Reusing ${archive}"
-                ln -f "${archive}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
-                exit 0
-              fi
-            fi
+            while IFS=$'\t' read -r run_id run_number
+            do
+              [[ -s "${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst" ]] || continue
+              archive_step_count="$(gh run view "${run_id}" --json jobs --jq '[.jobs[].steps[] | select((.name == "Archive OpenFOAM build" or .name == "Build and publish OpenFOAM") and .conclusion == "success")] | length')"
+              [[ "${archive_step_count}" -gt 0 ]] || continue
+              echo "Selected ${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst"
+              echo "action=reuse" >> "${GITHUB_OUTPUT}"
+              echo "source_run_number=${run_number}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            done < <(gh run list --workflow genkai.yml --commit "${parent_commit}" --limit 20 --json databaseId,number --jq '.[] | [.databaseId, .number] | @tsv')
             commit="${parent_commit}"
           done
-          echo "No reusable OpenFOAM build archive was found in the first-parent history" >&2
-          exit 1
 
-      - name: Download source archives
-        if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        run: |
-          mkdir -p "${SOURCE_ARCHIVE_CACHE_DIR}"
-          for archive_url in \
-            "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/OpenFOAM-${OPENFOAM_VERSION}.tgz" \
-            "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
-            "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz" \
-            "https://github.com/CGAL/cgal/releases/download/v${CGAL_VERSION}/CGAL-${CGAL_VERSION}.tar.xz"
-          do
-            wget --no-verbose --no-clobber --directory-prefix="${SOURCE_ARCHIVE_CACHE_DIR}" "${archive_url}"
-          done
+          echo "No reusable OpenFOAM build archive was found; falling back to a new build"
+          echo "action=build" >> "${GITHUB_OUTPUT}"
 
-      - name: Prepare build workspace
-        if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        id: prepare_build_workspace
-        run: |
-          run_tmpdir="$(mktemp -d "/dev/shm/openfoam-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
-          # ccacheの一時ファイルはビルド成果物アーカイブに含めない。
-          {
-            echo "RUN_TMPDIR=${run_tmpdir}"
-            echo "OPENFOAM_BUILD_TMPDIR=${run_tmpdir}/build"
-            echo "CCACHE_BASEDIR=${run_tmpdir}/build"
-            echo "CCACHE_TEMPDIR=${run_tmpdir}/ccache"
-          } >> "${GITHUB_ENV}"
-          mkdir -p "${run_tmpdir}/build/logs" "${run_tmpdir}/ccache"
+  reuse-build:
+    name: Reuse OpenFOAM build
+    needs: select-build
+    if: needs.select-build.outputs.action == 'reuse'
+    runs-on: [self-hosted, genkai]
 
-      - name: Extract and patch sources
-        if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        run: |
-          tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VERSION}.tgz" -C "${OPENFOAM_BUILD_TMPDIR}"
-          tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" -C "${OPENFOAM_BUILD_TMPDIR}"
-          thirdparty_source_dir="${OPENFOAM_BUILD_TMPDIR}/ThirdParty-${OPENFOAM_VERSION}"
-          mkdir -p "${thirdparty_source_dir}/sources/adios" "${thirdparty_source_dir}/sources/cgal"
-          tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${thirdparty_source_dir}/sources/adios"
-          tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${thirdparty_source_dir}/sources/cgal"
-          mv "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM-${OPENFOAM_VERSION}" "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM"
-          mv "${thirdparty_source_dir}" "${OPENFOAM_BUILD_TMPDIR}/ThirdParty"
-          ln -s ../ThirdParty "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM/ThirdParty"
-          for patch_file in "${GITHUB_WORKSPACE}"/patches/*.patch
-          do
-            patch -d "${OPENFOAM_BUILD_TMPDIR}" -p0 < "${patch_file}"
-          done
+    steps:
+      - name: Hardlink the selected archive
+        run: ln -f -- "${BUILD_ARCHIVE_DIR}/${{ needs.select-build.outputs.source_run_number }}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
 
-      - name: Build OpenFOAM
-        if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        run: |
-          module purge
-          module load intel/2025.1.3 impi
-          for build_tool in "${CC}" "${CXX}" ccache
-          do
-            "${build_tool}" --version
-          done
-          ccache --show-config
-          # OpenFOAMのbashrcは未定義変数や途中コマンドの終了値を許容するため、読み込み中だけ厳格モードを外す。
-          set +eu
-          source "${OPENFOAM_BUILD_TMPDIR}/OpenFOAM/etc/bashrc" \
-            WM_COMPILER=Icx \
-            WM_MPLIB=INTELMPI \
-            WM_LABEL_SIZE=64 \
-            WM_PRECISION_OPTION=DP \
-            WM_COMPILE_CONTROL=+ccache
-          set -eu
-          # OpenFOAMのリンク時にThirdPartyのFFTWライブラリを参照可能にする。
-          export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
-          export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
-          cd "${WM_PROJECT_DIR}"
-          # このAllwmakeのcache hit/missだけを記録する。
-          ccache --zero-stats
-          "${GITHUB_WORKSPACE}/scripts/build-profiler.sh" \
-            bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
-              -log="${OPENFOAM_BUILD_TMPDIR}/logs/allwmake.log" > /dev/null || {
-            build_status=$?
-            grep -Eai -m 200 \
-              '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' \
-              "${OPENFOAM_BUILD_TMPDIR}/logs/allwmake.log" >&2 || true
-            exit "${build_status}"
-          }
-          ccache --show-stats
+  build-openfoam:
+    name: Build OpenFOAM
+    needs: select-build
+    if: needs.select-build.outputs.action == 'build'
+    runs-on: [self-hosted, genkai]
 
-      - name: Archive OpenFOAM build
-        if: ${{ ! fromJSON(env.SKIP_BUILD) }}
-        run: tar -I zstd -cf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${OPENFOAM_BUILD_TMPDIR}" .
+    concurrency:
+      group: genkai-openfoam-build
+
+    env:
+      BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
+      OPENFOAM_VERSION: v2606
+      ADIOS2_VERSION: 2.12.1
+      CGAL_VERSION: 6.1.1
+      OPENFOAM_BUILD_PARALLELISM: 120
+      SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
+      CC: mpiicx
+      CXX: mpiicpx
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+
+    steps:
+      - name: Checkout build inputs
+        uses: actions/checkout@v6
+
+      - name: Build and publish OpenFOAM
+        run: "${GITHUB_WORKSPACE}/scripts/build-openfoam.sh"
 
       - name: Upload OpenFOAM build log
-        if: always() && steps.prepare_build_workspace.outcome == 'success'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.OPENFOAM_BUILD_TMPDIR }}/logs
+          path: ${{ env.BUILD_DIR }}/logs
           if-no-files-found: warn
           compression-level: 1
 
-      - name: Cleanup build workspace
-        if: always() && steps.prepare_build_workspace.outcome == 'success'
-        run: rm -rf -- "${RUN_TMPDIR:?}"
+      - name: Cleanup OpenFOAM build directory
+        if: always()
+        run: |
+          : "${BUILD_DIR:?}"
+          [[ -d "${BUILD_DIR}" ]] || exit 0
+          rm -rf -- "${BUILD_DIR:?}"
 
   provision:
     name: Provision OpenFOAM runtime
-    needs: build
+    needs: [select-build, reuse-build, build-openfoam]
+    if: >-
+      always() &&
+      needs.select-build.result == 'success' &&
+      ((needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success') ||
+       (needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success'))
     runs-on: [self-hosted, genkai]
 
     outputs:
@@ -190,18 +140,17 @@ jobs:
       OPENFOAM_RUNTIME_ROOT: /fast/pj26000080/openfoam-provisioning
 
     steps:
-      - name: Checkout run scripts
+      - name: Checkout runtime files
         uses: actions/checkout@v6
 
       - name: Provision OpenFOAM runtime
         id: provision_runtime
         run: |
-          mkdir -p "${OPENFOAM_RUNTIME_ROOT}"
+          install -d -m 2775 "${OPENFOAM_RUNTIME_ROOT}"
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
+          echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
           mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
-          cp "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${provision_dir}/scripts/"
-          cp "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
-          chmod +x "${provision_dir}/scripts/"*.sh
+          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
           # Keep all installed runtime dependencies, excluding source and build trees.
           tar -I zstd -xf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${provision_dir}" \
             --exclude='*.o' \
@@ -221,11 +170,17 @@ jobs:
             --exclude='install_manifest.txt' \
             --exclude='Makefile'
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/simpleFoam"
-          echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cleanup failed OpenFOAM provisioning
+        if: failure() && steps.provision_runtime.outputs.provision_dir != ''
+        env:
+          PROVISION_DIR: ${{ steps.provision_runtime.outputs.provision_dir }}
+        run: rm -rf -- "${PROVISION_DIR:?}"
 
   run:
     name: Run OpenFOAM
     needs: provision
+    if: always() && needs.provision.result == 'success'
     runs-on: [self-hosted, genkai]
 
     env:
@@ -234,57 +189,51 @@ jobs:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
-      - name: Run and wait for OpenFOAM job
+      - name: Submit OpenFOAM job
         run: |
-          mkdir -p "${OPENFOAM_RUN_ROOT}"
-          job_output="$(pjsub /dev/stdin <<PJM
-          #!/usr/bin/env bash
-          #PJM -L rscgrp=a-batch
-          #PJM -L node=1
-          #PJM -L elapse=00:05:00
-          #PJM -j
-          #PJM -o ${PROVISION_DIR}/logs/%j.log
-          #PJM -N openfoam_run
-          #PJM --mpi proc=${OPENFOAM_MPI_PROCS}
-
-          set -eo pipefail
-           run_dir="\$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-\${PJM_JOBID}.XXXXXXXXXX")"
-           trap 'rm -rf -- "\${run_dir}"' EXIT
-           "${PROVISION_DIR}/scripts/run-openfoam.sh" "${PROVISION_DIR}" "\${run_dir}" "${OPENFOAM_MPI_PROCS}"
-           touch "\${run_dir}/motorBike/motorBike.foam"
-           tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-\${PJM_JOBID}.tar.zst" -C "\${run_dir}" motorBike
-           touch "${PROVISION_DIR}/run-success"
-          PJM
-          )"
+          install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
+          job_output="$(pjsub -x "PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},OPENFOAM_MPI_PROCS=${OPENFOAM_MPI_PROCS}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"
-          log_file="${PROVISION_DIR}/logs/${job_id}.log"
-          while [[ ! -e "${log_file}" ]]; do
-            if ! pjstat "${job_id}" | grep -q "^${job_id}[[:space:]]"; then
-              echo "OpenFOAM job ${job_id} did not create a scheduler log" >&2
+          echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
+
+      - name: Wait for OpenFOAM job to start
+        run: |
+          while [[ ! -e "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" ]]; do
+            wait_status="$(pjwait -w waitnone "${PJM_JOB_ID}")"
+            pjm_code="$(awk 'NR == 1 { print $2 }' <<< "${wait_status}")"
+            if [[ -n "${pjm_code}" && "${pjm_code}" != X ]]; then
+              printf '%s\n' "${wait_status}"
+              echo "PJM job ended before creating ${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" >&2
               exit 1
             fi
-            sleep 1
+            sleep 2
           done
-          # Follow the scheduler log in the Actions output while the job runs.
-          tail -n +1 -F "${log_file}" &
+          echo "PJM job log is ready: ${PROVISION_DIR}/logs/${PJM_JOB_ID}.log"
+
+      - name: Stream OpenFOAM execution log
+        run: |
+          tail --lines=+1 --follow=name "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" &
           tail_pid=$!
-          stop_log_stream() {
+          stop_tail() {
             kill "${tail_pid}" 2>/dev/null || true
             wait "${tail_pid}" 2>/dev/null || true
           }
-          trap stop_log_stream EXIT
-          while pjstat "${job_id}" | grep -q "^${job_id}[[:space:]]"; do
-            sleep 10
-          done
+          trap stop_tail EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
+          pjwait -z "${PJM_JOB_ID}"
           sleep 1
-          stop_log_stream
-          trap - EXIT
+
+      - name: Verify OpenFOAM job completion
+        run: |
+          pjwait "${PJM_JOB_ID}"
           test -e "${PROVISION_DIR}/run-success"
 
       - name: Upload OpenFOAM execution log
-        if: ${{ always() && needs.provision.outputs.provision_dir != '' }}
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-run-log-${{ github.run_id }}-${{ github.run_attempt }}
@@ -293,7 +242,7 @@ jobs:
           compression-level: 1
 
       - name: Upload ParaView case
-        if: ${{ success() && needs.provision.outputs.provision_dir != '' }}
+        if: success()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-motorbike-case-${{ github.run_id }}-${{ github.run_attempt }}
@@ -302,5 +251,10 @@ jobs:
           compression-level: 0
 
       - name: Cleanup provisioned runtime
-        if: ${{ always() && needs.provision.outputs.provision_dir != '' }}
-        run: rm -rf -- "${PROVISION_DIR:?}"
+        if: always()
+        run: |
+          if [[ -n "${PJM_JOB_ID:-}" ]]; then
+            pjdel "${PJM_JOB_ID}" 2>/dev/null || true
+            pjwait -z "${PJM_JOB_ID}" || true
+          fi
+          rm -rf -- "${PROVISION_DIR:?}"

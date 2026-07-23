@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#PJM -L rscgrp=a-batch
+#PJM -L node=1
+#PJM -L elapse=00:05:00
+#PJM --mpi proc=120
+
+# Execute one OpenFOAM motorBike case from a provisioned runtime tree.
+set -euo pipefail
+
+: "${OPENFOAM_MPI_PROCS:?}"
+: "${OPENFOAM_RUN_ROOT:?}"
+: "${PROVISION_DIR:?}"
+
+script_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+run_dir="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
+
+cleanup() {
+  status=$?
+  trap - EXIT INT TERM
+  rm -rf -- "${run_dir:?}"
+  exit "${status}"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+module purge
+module load intel/2025.1.3 impi
+
+# OpenFOAM initialization intentionally tolerates intermediate failures.
+set +eu
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" \
+  WM_COMPILER=Icx \
+  WM_MPLIB=INTELMPI \
+  WM_LABEL_SIZE=64 \
+  WM_PRECISION_OPTION=DP
+set -eu
+
+export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
+
+cp -r "${FOAM_TUTORIALS}/incompressible/simpleFoam/motorBike" "${run_dir}/"
+cd "${run_dir}/motorBike"
+
+# The latest measured run advanced 10 steps in about 0.2 seconds after solver
+# initialization, so 3000 steps keeps the simulation active for roughly a minute.
+sed -i 's/^endTime.*/endTime         3000;/' system/controlDict
+sed -i 's/^writeInterval.*/writeInterval    3000;/' system/controlDict
+foamDictionary -entry numberOfSubdomains -set "${OPENFOAM_MPI_PROCS}" system/decomposeParDict.6
+foamDictionary -entry method -set scotch system/decomposeParDict.6
+
+decompose_args=(-decomposeParDict system/decomposeParDict.6)
+
+mkdir -p constant/triSurface
+cp -f "${FOAM_TUTORIALS}/resources/geometry/motorBike.obj.gz" constant/triSurface/
+surfaceFeatureExtract
+blockMesh
+decomposePar "${decompose_args[@]}" -force
+mpirun -np "${OPENFOAM_MPI_PROCS}" snappyHexMesh -parallel "${decompose_args[@]}" -overwrite
+mpirun -np "${OPENFOAM_MPI_PROCS}" topoSet -parallel "${decompose_args[@]}"
+
+for processor_dir in processor*
+do
+  [[ -d "${processor_dir}" ]] && cp -r 0.orig/* "${processor_dir}/0/"
+done
+
+mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}" -writephi
+"${script_dir}/exec-profiler.sh" \
+  mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel "${decompose_args[@]}"
+
+touch motorBike.foam
+tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-${PJM_JOBID}.tar.zst" -C "${run_dir}" motorBike
+touch "${PROVISION_DIR}/run-success"
