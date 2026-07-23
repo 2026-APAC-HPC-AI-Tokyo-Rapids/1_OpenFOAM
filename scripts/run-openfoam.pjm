@@ -72,12 +72,12 @@ solver_args=(
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
 export OPENFOAM_PROFILE_ANALYSIS=none
-export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-core-scatter
+export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-core-compact
 export OPENFOAM_PROFILE_RANK=0
 export I_MPI_DEBUG=5
 unset I_MPI_FABRICS
 export I_MPI_PIN_DOMAIN=core
-export I_MPI_PIN_ORDER=scatter
+export I_MPI_PIN_ORDER=compact
 unset I_MPI_PIN_PROCESSOR_LIST
 solver_log="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
