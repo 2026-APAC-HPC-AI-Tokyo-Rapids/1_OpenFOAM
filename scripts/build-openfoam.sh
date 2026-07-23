@@ -68,11 +68,10 @@ do
 done
 
 export CCACHE_BASEDIR="${BUILD_TREE}"
+export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
 export CCACHE_DIR="${BUILD_DIR}/ccache-cache"
-export CCACHE_MAXSIZE=50G
-export CCACHE_REMOTE_STORAGE="file:/fast/pj26000080/ccache_cache_dir"
-export CCACHE_RESHARE=true
 export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
+[[ -r "${CCACHE_CONFIGPATH}" ]]
 ccache --show-config
 
 # OpenFOAM's bashrc tolerates unset variables and intermediate command failures.
