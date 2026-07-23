@@ -8,14 +8,6 @@ on:
         required: true
         default: false
         type: boolean
-      profile_mode:
-        description: Collect a multi-run MPI/VTune performance campaign on the compute node
-        required: true
-        default: none
-        type: choice
-        options:
-          - none
-          - campaign
   push:
     paths-ignore:
       - 'research/**'
@@ -190,15 +182,14 @@ jobs:
 
     env:
       OPENFOAM_RUN_ROOT: /fast/pj26000080/openfoam-runs
-      OPENFOAM_MPI_PROCS: 120
-      OPENFOAM_PROFILE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_mode || 'none' }}
+      OPENFOAM_MPI_PROCS: 240
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
       - name: Submit OpenFOAM job
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
-          job_output="$(pjsub -x "PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},OPENFOAM_MPI_PROCS=${OPENFOAM_MPI_PROCS},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE},GITHUB_RUN_ID=${GITHUB_RUN_ID}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
+          job_output="$(pjsub -x "PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},OPENFOAM_MPI_PROCS=${OPENFOAM_MPI_PROCS},GITHUB_RUN_ID=${GITHUB_RUN_ID}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"
