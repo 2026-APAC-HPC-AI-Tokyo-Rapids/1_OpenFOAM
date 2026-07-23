@@ -16,6 +16,7 @@ set -euo pipefail
 : "${SOURCE_ARCHIVE_CACHE_DIR:?}"
 
 BUILD_TREE="${BUILD_DIR}/tree"
+CCACHE_LOCAL_DIR="/dev/shm/ccache-${USER:?}"
 PUBLISH_TMP="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.tar.zst.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
 
 cleanup() {
@@ -33,8 +34,8 @@ install -d -m 2775 \
   "${BUILD_ARCHIVE_DIR}" \
   "${SOURCE_ARCHIVE_CACHE_DIR}" \
   "${BUILD_TREE}" \
+  "${CCACHE_LOCAL_DIR}" \
   "${BUILD_DIR}/logs" \
-  "${BUILD_DIR}/ccache-cache" \
   "${BUILD_DIR}/ccache-tmp"
 
 for archive_url in \
@@ -69,7 +70,7 @@ done
 
 export CCACHE_BASEDIR="${BUILD_TREE}"
 export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
-export CCACHE_DIR="${BUILD_DIR}/ccache-cache"
+export CCACHE_DIR="${CCACHE_LOCAL_DIR}"
 export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 [[ -r "${CCACHE_CONFIGPATH}" ]]
 ccache --show-config
