@@ -46,19 +46,31 @@ case "${analysis}" in
       mpirun -np "${OPENFOAM_MPI_PROCS}" \
         -gtool "vtune ${collect_args[*]} -result-dir ${result_dir}:${OPENFOAM_PROFILE_RANK}" \
         "$@"
+
+    vtune_result_dirs=()
+    for candidate in "${result_dir}".*
+    do
+      [[ -d "${candidate}" ]] && vtune_result_dirs+=("${candidate}")
+    done
+    if [[ "${#vtune_result_dirs[@]}" -ne 1 ]]; then
+      echo "Expected one host-qualified VTune result for ${result_dir}, found ${#vtune_result_dirs[@]}" >&2
+      exit 1
+    fi
+    vtune_result_dir="${vtune_result_dirs[0]}"
+
     vtune -report summary \
-      -result-dir "${result_dir}" \
-      -report-output "${result_dir}/summary.txt"
-    cp "${result_dir}/summary.txt" \
+      -result-dir "${vtune_result_dir}" \
+      -report-output "${vtune_result_dir}/summary.txt"
+    cp "${vtune_result_dir}/summary.txt" \
       "${log_dir}/vtune-${OPENFOAM_PROFILE_LABEL}-${analysis}-summary.txt"
 
     if [[ "${analysis}" == hotspots ]]; then
       vtune -report hotspots \
-        -result-dir "${result_dir}" \
+        -result-dir "${vtune_result_dir}" \
         -group-by function \
         -format csv \
-        -report-output "${result_dir}/hotspots.csv"
-      cp "${result_dir}/hotspots.csv" \
+        -report-output "${vtune_result_dir}/hotspots.csv"
+      cp "${vtune_result_dir}/hotspots.csv" \
         "${log_dir}/vtune-${OPENFOAM_PROFILE_LABEL}-hotspots.csv"
     fi
     ;;
