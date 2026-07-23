@@ -87,6 +87,7 @@ jobs:
 
     concurrency:
       group: genkai-openfoam-build
+      queue: max
 
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
