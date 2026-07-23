@@ -29,7 +29,13 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 rm -rf -- "${BUILD_DIR:?}"
-install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${BUILD_TREE}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache"
+install -d -m 2775 \
+  "${BUILD_ARCHIVE_DIR}" \
+  "${SOURCE_ARCHIVE_CACHE_DIR}" \
+  "${BUILD_TREE}" \
+  "${BUILD_DIR}/logs" \
+  "${BUILD_DIR}/ccache-cache" \
+  "${BUILD_DIR}/ccache-tmp"
 
 for archive_url in \
   "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/OpenFOAM-${OPENFOAM_VERSION}.tgz" \
@@ -62,7 +68,8 @@ do
 done
 
 export CCACHE_BASEDIR="${BUILD_TREE}"
-export CCACHE_TEMPDIR="${BUILD_DIR}/ccache"
+export CCACHE_DIR="${BUILD_DIR}/ccache-cache"
+export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 ccache --show-config
 
 # OpenFOAM's bashrc tolerates unset variables and intermediate command failures.
