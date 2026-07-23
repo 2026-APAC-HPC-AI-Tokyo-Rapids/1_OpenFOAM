@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #PJM -L rscgrp=a-batch
 #PJM -L node=1
-#PJM -L elapse=00:05:00
+#PJM -L elapse=00:25:00
 #PJM --mpi proc=120
 
 # Execute one OpenFOAM motorBike case from a provisioned runtime tree.
@@ -9,6 +9,7 @@ set -euo pipefail
 
 : "${OPENFOAM_MPI_PROCS:?}"
 : "${OPENFOAM_RUN_ROOT:?}"
+: "${OPENFOAM_PROFILE_MODE:=none}"
 : "${PROVISION_DIR:?}"
 
 run_dir="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
@@ -63,8 +64,113 @@ do
 done
 
 mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}" -writephi
-"${PROVISION_DIR}/scripts/exec-profiler.sh" \
-  mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel "${decompose_args[@]}"
+
+solver_args=(simpleFoam -parallel "${decompose_args[@]}")
+
+clear_solver_times() {
+  local processor_dir time_dir
+  for processor_dir in processor*
+  do
+    [[ -d "${processor_dir}" ]] || continue
+    while IFS= read -r -d '' time_dir
+    do
+      rm -rf -- "${time_dir:?}"
+    done < <(
+      find "${processor_dir}" -mindepth 1 -maxdepth 1 -type d \
+        -regextype posix-extended -regex '.*/[0-9]+([.][0-9]+)?' \
+        ! -name 0 -print0
+    )
+  done
+}
+
+run_solver() {
+  local label="${1:?}"
+  local pinning="${2:-}"
+  local profiler="${3:-none}"
+  local solver_log="${PROVISION_DIR}/logs/solver-${label}.log"
+  local timing_log="${PROVISION_DIR}/logs/time-${label}.txt"
+  local -a mpi_args=(-np "${OPENFOAM_MPI_PROCS}")
+
+  clear_solver_times
+  export OPENFOAM_PROFILE_LABEL="${label}"
+  if [[ -n "${pinning}" ]]; then
+    export I_MPI_PIN_PROCESSOR_LIST="${pinning}"
+  else
+    unset I_MPI_PIN_PROCESSOR_LIST
+  fi
+  if [[ "${profiler}" == none ]]; then
+    export I_MPI_DEBUG=4
+  else
+    unset I_MPI_DEBUG
+  fi
+
+  if [[ "${profiler}" == aps ]]; then
+    mpi_args+=(
+      aps
+      --result-dir="${OPENFOAM_PROFILE_DIR}/aps-${label}"
+      --collection-mode=all
+      --stat-level=5
+      --mpi-imbalance=2
+      --storage-format=compact
+    )
+  elif [[ "${profiler}" != none ]]; then
+    mpi_args+=(
+      -gtool
+      "${PROVISION_DIR}/scripts/exec-profiler.sh ${profiler}:0"
+    )
+  fi
+
+  {
+    echo "label=${label}"
+    echo "profile=${profiler}"
+    echo "I_MPI_PIN_PROCESSOR_LIST=${pinning:-<default>}"
+    echo "started_at=$(date --iso-8601=seconds)"
+  } | tee "${solver_log}"
+
+  /usr/bin/time -v -o "${timing_log}" \
+    mpirun "${mpi_args[@]}" "${solver_args[@]}" 2>&1 | tee -a "${solver_log}"
+  echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${solver_log}"
+}
+
+if [[ "${OPENFOAM_PROFILE_MODE}" == campaign ]]; then
+  profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
+  export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
+  install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
+  printf '%s\n' \
+    "PJM_JOBID=${PJM_JOBID}" \
+    "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
+    "host=$(hostname)" \
+    "mpi_procs=${OPENFOAM_MPI_PROCS}" \
+    "created_at=$(date --iso-8601=seconds)" \
+    > "${OPENFOAM_PROFILE_DIR}/campaign.txt"
+  cp system/decomposeParDict.6 system/controlDict \
+    "${OPENFOAM_PROFILE_DIR}/"
+  lscpu > "${OPENFOAM_PROFILE_DIR}/lscpu.txt"
+  env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
+
+  # Uninstrumented runs are the timing baseline. APS and VTune runs are kept
+  # separate so their collection overhead is not mistaken for solver cost.
+  run_solver default "" none
+  run_solver compact "allcores:map=bunch" none
+  run_solver scatter "allcores:map=scatter" none
+  run_solver aps-default "" aps
+  run_solver vtune-hotspots "" hotspots
+  run_solver vtune-hpc "" hpc-performance
+
+  aps-report "${OPENFOAM_PROFILE_DIR}/aps-aps-default" \
+    > "${OPENFOAM_PROFILE_DIR}/aps-report.txt"
+  cp "${OPENFOAM_PROFILE_DIR}/aps-report.txt" \
+    "${PROVISION_DIR}/logs/aps-report.txt"
+  cp "${PROVISION_DIR}"/logs/time-*.txt \
+    "${PROVISION_DIR}"/logs/solver-*.log \
+    "${OPENFOAM_PROFILE_DIR}/"
+  du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
+    "${PROVISION_DIR}/logs/profile-location.txt"
+  printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
+    "${PROVISION_DIR}/logs/profile-location.txt"
+else
+  run_solver default "" none
+fi
 
 touch motorBike.foam
 tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-${PJM_JOBID}.tar.zst" -C "${run_dir}" motorBike
