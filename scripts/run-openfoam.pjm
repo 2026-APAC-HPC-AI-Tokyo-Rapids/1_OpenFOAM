@@ -67,57 +67,15 @@ done
 
 mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}" -writephi
 
-solver_args=(
-  simpleFoam
-  -parallel
-  "${decompose_args[@]}"
-)
-profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
-export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
-export OPENFOAM_PROFILE_ANALYSIS=none
-export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-shm-default
-export OPENFOAM_PROFILE_RANK=0
-unset I_MPI_DEBUG
-unset I_MPI_PIN_DOMAIN
-unset I_MPI_PIN_ORDER
-unset I_MPI_PIN_PROCESSOR_LIST
-unset I_MPI_ADJUST_ALLREDUCE
-unset I_MPI_TUNING_MODE
-unset I_MPI_TUNING_AUTO_SYNC
-unset I_MPI_TUNING_AUTO_ITER_NUM
-unset I_MPI_TUNING_BIN_DUMP
-solver_log="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
-install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
-
-printf '%s\n' \
-  "analysis=${OPENFOAM_PROFILE_ANALYSIS}" \
-  "profile_rank=${OPENFOAM_PROFILE_RANK}" \
-  "PJM_JOBID=${PJM_JOBID}" \
-  "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
-  "launch_host=$(hostname)" \
-  "mpi_procs=${OPENFOAM_MPI_PROCS}" \
-  "created_at=$(date --iso-8601=seconds)" \
-  > "${OPENFOAM_PROFILE_DIR}/run.txt"
-cp system/decomposeParDict.6 system/controlDict "${OPENFOAM_PROFILE_DIR}/"
-env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
-mpirun -np 2 -ppn 1 bash -c \
-  'printf "host=%s\\n" "$(hostname)"; lscpu' \
-  > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
-
+solver_log="${PROVISION_DIR}/logs/solver.log"
 {
-  echo "analysis=${OPENFOAM_PROFILE_ANALYSIS}"
-  echo "profile_rank=${OPENFOAM_PROFILE_RANK}"
   echo "started_at=$(date --iso-8601=seconds)"
-} | tee "${solver_log}"
-"${PROVISION_DIR}/scripts/exec-profiler.sh" \
-  "${solver_args[@]}" 2>&1 | tee -a "${solver_log}"
-echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${solver_log}"
-
-cp "${solver_log}" "${OPENFOAM_PROFILE_DIR}/"
-du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
-  "${PROVISION_DIR}/logs/profile-location.txt"
-printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
-  "${PROVISION_DIR}/logs/profile-location.txt"
+  mpirun -np "${OPENFOAM_MPI_PROCS}" \
+    simpleFoam \
+    -parallel \
+    "${decompose_args[@]}"
+  echo "finished_at=$(date --iso-8601=seconds)"
+} 2>&1 | tee "${solver_log}"
 
 touch motorBike.foam
 tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-${PJM_JOBID}.tar.zst" -C "${run_dir}" motorBike
