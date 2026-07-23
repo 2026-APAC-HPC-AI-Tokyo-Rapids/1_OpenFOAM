@@ -34,9 +34,9 @@ install -d -m 2775 \
   "${BUILD_ARCHIVE_DIR}" \
   "${SOURCE_ARCHIVE_CACHE_DIR}" \
   "${BUILD_TREE}" \
-  "${CCACHE_LOCAL_DIR}" \
   "${BUILD_DIR}/logs" \
   "${BUILD_DIR}/ccache-tmp"
+install -d -m 0700 "${CCACHE_LOCAL_DIR}"
 
 for archive_url in \
   "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/OpenFOAM-${OPENFOAM_VERSION}.tgz" \
