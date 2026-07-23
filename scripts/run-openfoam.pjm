@@ -68,12 +68,12 @@ solver_args=(
   simpleFoam
   -parallel
   "${decompose_args[@]}"
-  -opt-switch topoControl=16
+  -opt-switch nPollProcInterfaces=-1
 )
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
 export OPENFOAM_PROFILE_ANALYSIS=none
-export OPENFOAM_PROFILE_LABEL=pstream-topology-reduce
+export OPENFOAM_PROFILE_LABEL=pstream-poll-interfaces
 export OPENFOAM_PROFILE_RANK=0
 unset I_MPI_DEBUG
 unset I_MPI_PIN_PROCESSOR_LIST
