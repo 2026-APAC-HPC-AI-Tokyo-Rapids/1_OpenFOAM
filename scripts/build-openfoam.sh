@@ -54,25 +54,6 @@ do
   patch -d "${BUILD_TREE}" -p0 < "${patch_file}"
 done
 
-if ! command -v module >/dev/null 2>&1
-then
-  for module_init in \
-    /etc/profile.d/modules.sh \
-    /usr/share/Modules/init/bash \
-    /usr/share/lmod/lmod/init/bash
-  do
-    if [[ -r "${module_init}" ]]
-    then
-      source "${module_init}"
-      break
-    fi
-  done
-fi
-command -v module >/dev/null 2>&1 || {
-  echo "Environment Modules initialization was not found" >&2
-  exit 1
-}
-
 module purge
 module load intel/2025.1.3 impi
 for build_tool in "${CC}" "${CXX}" ccache
