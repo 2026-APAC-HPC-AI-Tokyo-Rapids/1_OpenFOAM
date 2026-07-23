@@ -2,7 +2,7 @@
 #PJM -L rscgrp=a-batch
 #PJM -L node=2
 #PJM -L elapse=00:25:00
-#PJM --mpi proc=120
+#PJM --mpi proc=90
 
 # Execute one OpenFOAM motorBike case from a provisioned runtime tree.
 set -euo pipefail
@@ -72,14 +72,10 @@ solver_args=(
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
 export OPENFOAM_PROFILE_ANALYSIS=none
-export OPENFOAM_PROFILE_LABEL=intel-mpi-autotune-120
+export OPENFOAM_PROFILE_LABEL=mpi-90ranks-default
 export OPENFOAM_PROFILE_RANK=0
 unset I_MPI_DEBUG
 unset I_MPI_PIN_PROCESSOR_LIST
-export I_MPI_TUNING_MODE=auto
-export I_MPI_TUNING_AUTO_SYNC=1
-export I_MPI_TUNING_AUTO_ITER_NUM=5
-export I_MPI_TUNING_BIN_DUMP="${OPENFOAM_PROFILE_DIR}/intel-mpi-tuning.dat"
 solver_log="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 
