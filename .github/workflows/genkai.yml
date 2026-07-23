@@ -151,7 +151,7 @@ jobs:
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
           mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
-          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
+          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${provision_dir}/scripts/"
           # Keep all installed runtime dependencies, excluding source and build trees.
           tar -I zstd -xf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${provision_dir}" \
             --exclude='*.o' \
