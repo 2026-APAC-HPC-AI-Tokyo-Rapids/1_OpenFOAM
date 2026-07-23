@@ -11,7 +11,6 @@ set -euo pipefail
 : "${OPENFOAM_RUN_ROOT:?}"
 : "${PROVISION_DIR:?}"
 
-script_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
 run_dir="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
 
 cleanup() {
@@ -64,7 +63,7 @@ do
 done
 
 mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}" -writephi
-"${script_dir}/exec-profiler.sh" \
+"${PROVISION_DIR}/scripts/exec-profiler.sh" \
   mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel "${decompose_args[@]}"
 
 touch motorBike.foam
