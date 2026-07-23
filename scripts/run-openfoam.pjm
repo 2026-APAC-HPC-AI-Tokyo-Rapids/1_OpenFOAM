@@ -2,7 +2,7 @@
 #PJM -L rscgrp=a-batch
 #PJM -L node=2
 #PJM -L elapse=00:25:00
-#PJM --mpi proc=120
+#PJM --mpi proc=60
 
 # Execute one OpenFOAM motorBike case from a provisioned runtime tree.
 set -euo pipefail
@@ -68,7 +68,7 @@ solver_args=(simpleFoam -parallel "${decompose_args[@]}")
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
 export OPENFOAM_PROFILE_ANALYSIS=none
-export OPENFOAM_PROFILE_LABEL=mpi-120ranks-default
+export OPENFOAM_PROFILE_LABEL=mpi-60ranks-default
 export OPENFOAM_PROFILE_RANK=0
 export I_MPI_DEBUG=4
 unset I_MPI_PIN_PROCESSOR_LIST
