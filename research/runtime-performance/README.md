@@ -14,7 +14,7 @@ Raw APS and VTune results are kept outside GitHub artifacts:
 ```
 
 The profile root and every per-run directory have mode `0700`. At the time of
-this report the profile tree occupies approximately 2.4 GiB.
+this report the profile tree occupies approximately 2.5 GiB.
 
 ## Test configuration
 
@@ -53,14 +53,29 @@ comparisons.
 | #129 | 2 | 240 | `topoControl=16` | 107 s | 127.30 s | OpenFOAM hierarchical reduction is slower |
 | #130 | 2 | 240 | `nPollProcInterfaces=-1` | 114 s | 136.04 s | Readiness polling is about 9% slower |
 | #131 | 2 | 240 | Intel MPI collective autotuner | 103 s | 128.89 s | About 2 s faster, but the gain is small |
-| #135 | 2 | 90 | Default | Pending | Pending | Rank-count refinement |
-| #136 | 2 | 150 | Default | Pending | Pending | Rank-count refinement |
-| #137 | 2 | 180 | Default | Pending | Pending | Rank-count refinement |
+| #134 | 2 | 120 | Intel MPI collective autotuner | 58 s | 64.33 s | Slower than the 120-rank default |
+| #135 | 2 | 90 | Default | 68 s | 73.72 s | Too little compute parallelism |
+| #136 | 2 | 150 | Default | 55 s | 65.31 s | Solver is close to 120 ranks, but launch overhead is higher |
+| #137 | 2 | 180 | Default | 57 s | 71.72 s | Communication overhead is rising |
+| #138 | 2 | 135 | Default | 54 s | 64.88 s | Fast solver, but slower launch-to-finish than 120 ranks |
+| #139 | 2 | 165 | Default | 53 s | 68.10 s | Fast solver, but significantly higher MPI overhead |
+| #140 | 2 | 120 | Final default verification | 56 s | 63.31 s | Reproduced #125 exactly |
 
 The major result is not a pinning tweak: reducing the two-node job from 240 to
 120 total ranks cuts solver time from 105 to 56 seconds, about 47%. Reducing
-further to 60 ranks raises it to 76 seconds. The current optimum is therefore
-near 120 ranks, with 90/150/180-rank runs used to refine it.
+further to 60 ranks raises it to 76 seconds. Higher counts down to 165 can
+slightly reduce the solver-only time, but MPI initialization/finalization grows
+faster. The 120-rank run has the lowest measured launcher wall time and the
+joint-lowest measured end-to-end PJM time. It is therefore the best operational
+default.
+
+The Actions log-stream step, which closely covers the complete PJM execution,
+measured 272 seconds at 240 ranks, 133 seconds at 120 ranks, 133 seconds at 60
+ranks, 138 seconds at 90 ranks, 154 seconds at both 135 and 150 ranks, 171
+seconds at 165 ranks, and 177 seconds at 180 ranks. The 60-rank run only ties
+120 ranks end-to-end because its slower solver is offset by cheaper startup and
+preprocessing; 120 ranks provides much higher solver throughput without
+increasing total job time.
 
 ## APS: why 240 ranks are slow
 
@@ -95,6 +110,13 @@ At 120 ranks the point-to-point call counts are approximately halved and
 inter-node traffic falls by about 64%. Aggregate MPI time falls much more
 sharply. Once MPI pressure is reduced, DRAM bandwidth becomes a meaningful
 secondary constraint.
+
+The corresponding 120-rank aggregate statistics include approximately:
+
+- 96.0 million `MPI_Allreduce` calls.
+- 99.6 million `MPI_Waitall` calls.
+- 1.13 billion `MPI_Isend` calls.
+- 105 GB transferred between the two nodes.
 
 Rank 0 is atypical. In the 240-rank APS run its MPI fraction is about 51%,
 whereas most ranks spend roughly 83-87% in MPI. This makes rank 0 a useful VTune
@@ -157,9 +179,10 @@ locality is the next likely limit after MPI is reduced.
 4. Keep `nPollProcInterfaces=0`. Dispatching completed interfaces with `-1`
    slowed this workload by about 9%.
 5. Intel MPI autotuning is worth testing only after the rank count is correct.
-   The 240-rank improvement was small. Tuning files are topology-specific and
-   should only be reused with the same node count, ranks per node, fabric and
-   MPI version.
+   It improved the poor 240-rank layout by about 2 seconds, but slowed the
+   120-rank layout from 56 to 58 seconds. Tuning files are topology-specific
+   and should only be reused with the same node count, ranks per node, fabric
+   and MPI version.
 6. For a new case, begin with a rank-count sweep based on cells/rank, then use
    APS to quantify MPI time and imbalance. Run VTune on the most compute-heavy
    rank after identifying it from APS.
