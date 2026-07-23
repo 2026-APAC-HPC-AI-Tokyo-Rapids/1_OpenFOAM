@@ -22,7 +22,7 @@ env:
 
 defaults:
   run:
-    shell: bash --noprofile --norc -euo pipefail {0}
+    shell: bash --login -eo pipefail {0}
 
 jobs:
   select-build:
