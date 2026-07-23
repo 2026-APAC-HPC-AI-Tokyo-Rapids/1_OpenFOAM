@@ -186,7 +186,7 @@ jobs:
 
     env:
       OPENFOAM_RUN_ROOT: /fast/pj26000080/openfoam-runs
-      OPENFOAM_MPI_PROCS: 90
+      OPENFOAM_MPI_PROCS: 150
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
