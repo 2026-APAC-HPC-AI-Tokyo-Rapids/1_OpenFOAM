@@ -6,6 +6,7 @@ set -euo pipefail
 : "${OPENFOAM_PROFILE_ANALYSIS:?}"
 : "${OPENFOAM_PROFILE_DIR:?}"
 : "${OPENFOAM_PROFILE_LABEL:?}"
+: "${OPENFOAM_PROFILE_RANK:=0}"
 : "${PROVISION_DIR:?}"
 
 analysis="${OPENFOAM_PROFILE_ANALYSIS}"
@@ -43,7 +44,7 @@ case "${analysis}" in
 
     /usr/bin/time -v -o "${timing_log}" \
       mpirun -np "${OPENFOAM_MPI_PROCS}" \
-        -gtool "vtune ${collect_args[*]} -result-dir ${result_dir}:0" \
+        -gtool "vtune ${collect_args[*]} -result-dir ${result_dir}:${OPENFOAM_PROFILE_RANK}" \
         "$@"
     vtune -report summary \
       -result-dir "${result_dir}" \

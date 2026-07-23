@@ -67,13 +67,15 @@ mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}
 solver_args=(simpleFoam -parallel "${decompose_args[@]}")
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
-export OPENFOAM_PROFILE_ANALYSIS=aps
-export OPENFOAM_PROFILE_LABEL=aps
-solver_log="${PROVISION_DIR}/logs/solver-aps.log"
+export OPENFOAM_PROFILE_ANALYSIS=hotspots
+export OPENFOAM_PROFILE_LABEL=vtune-hotspots-rank0
+export OPENFOAM_PROFILE_RANK=0
+solver_log="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 
 printf '%s\n' \
-  "analysis=aps" \
+  "analysis=${OPENFOAM_PROFILE_ANALYSIS}" \
+  "profile_rank=${OPENFOAM_PROFILE_RANK}" \
   "PJM_JOBID=${PJM_JOBID}" \
   "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
   "launch_host=$(hostname)" \
@@ -87,7 +89,8 @@ mpirun -np 2 -ppn 1 bash -c \
   > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
 
 {
-  echo "analysis=aps"
+  echo "analysis=${OPENFOAM_PROFILE_ANALYSIS}"
+  echo "profile_rank=${OPENFOAM_PROFILE_RANK}"
   echo "started_at=$(date --iso-8601=seconds)"
 } | tee "${solver_log}"
 "${PROVISION_DIR}/scripts/exec-profiler.sh" \
