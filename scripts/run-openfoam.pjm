@@ -71,8 +71,8 @@ solver_args=(
 )
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
-export OPENFOAM_PROFILE_ANALYSIS=hotspots
-export OPENFOAM_PROFILE_LABEL=vtune-hotspots-120-rank0
+export OPENFOAM_PROFILE_ANALYSIS=aps
+export OPENFOAM_PROFILE_LABEL=aps-120
 export OPENFOAM_PROFILE_RANK=0
 unset I_MPI_DEBUG
 unset I_MPI_PIN_PROCESSOR_LIST
