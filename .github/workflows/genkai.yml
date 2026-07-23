@@ -85,6 +85,10 @@ jobs:
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, genkai]
 
+    concurrency:
+      group: genkai-openfoam-build
+      queue: single
+
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
       OPENFOAM_VERSION: v2606
