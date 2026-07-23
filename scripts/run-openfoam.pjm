@@ -67,9 +67,9 @@ mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel "${decompose_args[@]}
 solver_args=(simpleFoam -parallel "${decompose_args[@]}")
 profile_run_id="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${profile_run_id}"
-aps_result="${OPENFOAM_PROFILE_DIR}/aps"
+export OPENFOAM_PROFILE_ANALYSIS=aps
+export OPENFOAM_PROFILE_LABEL=aps
 solver_log="${PROVISION_DIR}/logs/solver-aps.log"
-timing_log="${PROVISION_DIR}/logs/time-aps.txt"
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 
 printf '%s\n' \
@@ -90,21 +90,11 @@ mpirun -np 2 -ppn 1 bash -c \
   echo "analysis=aps"
   echo "started_at=$(date --iso-8601=seconds)"
 } | tee "${solver_log}"
-/usr/bin/time -v -o "${timing_log}" \
-  mpirun -np "${OPENFOAM_MPI_PROCS}" \
-    aps \
-    --result-dir="${aps_result}" \
-    --collection-mode=all \
-    --stat-level=5 \
-    --mpi-imbalance=2 \
-    --storage-format=compact \
-    "${solver_args[@]}" 2>&1 | tee -a "${solver_log}"
+"${PROVISION_DIR}/scripts/exec-profiler.sh" \
+  "${solver_args[@]}" 2>&1 | tee -a "${solver_log}"
 echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${solver_log}"
 
-aps-report "${aps_result}" > "${OPENFOAM_PROFILE_DIR}/aps-report.txt"
-cp "${OPENFOAM_PROFILE_DIR}/aps-report.txt" \
-  "${PROVISION_DIR}/logs/aps-report.txt"
-cp "${solver_log}" "${timing_log}" "${OPENFOAM_PROFILE_DIR}/"
+cp "${solver_log}" "${OPENFOAM_PROFILE_DIR}/"
 du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
   "${PROVISION_DIR}/logs/profile-location.txt"
 printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
