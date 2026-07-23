@@ -19,7 +19,8 @@ this report the profile tree occupies approximately 2.5 GiB.
 ## Test configuration
 
 - OpenFOAM v2606, `simpleFoam`, Intel oneAPI 2025.1.3 and Intel MPI 2021.15.
-- Two Genkai CPU nodes by default.
+- The current default is one Genkai CPU node with 120 MPI ranks. The earlier
+  scaling and profiling campaign below used up to two nodes.
 - Each node: 2 sockets, 60 physical cores/socket, 120 physical cores and 240
   logical CPUs.
 - Inter-node adapter reported by APS: ConnectX-7.
@@ -34,6 +35,56 @@ this report the profile tree occupies approximately 2.5 GiB.
 The mesh is regenerated for every Actions run. Solver comparisons use the same
 case and simulation time, but wall times should still be interpreted with the
 normal run-to-run noise of a shared HPC system.
+
+## One-node 120-rank MPI tuning
+
+The current production constraint is one node and 120 MPI ranks, one rank per
+physical core. Intel MPI 2021.15 did not automatically reduce this job to its
+shared-memory-only transport: the baseline debug log reported the `mlx`
+libfabric provider even though all ranks were on one node. Explicitly setting
+the following in `scripts/run-openfoam.pjm` avoids that unnecessary provider:
+
+```bash
+export I_MPI_FABRICS=shm
+```
+
+The settings were changed and pushed as separate commits, so every row is a
+separate Actions and PJM job. `Launcher wall` includes MPI initialization and
+finalization as well as the solver.
+
+| Run | MPI setting | Solver clock | Launcher wall | Result |
+|---:|---|---:|---:|---|
+| #141 | Intel MPI defaults | 111 s | 120.81 s | Baseline; debug output selected `mlx` |
+| #142 | `I_MPI_FABRICS=shm` | **101 s** | **104.45 s** | Fastest SHM-only trial |
+| #143 | `I_MPI_PIN_DOMAIN=core`, `I_MPI_PIN_ORDER=scatter` | 105 s | 114.60 s | Same effective CPU list as the default |
+| #144 | `I_MPI_PIN_DOMAIN=core`, `I_MPI_PIN_ORDER=compact` | 106 s | 115.96 s | Same effective CPU list as the default |
+| #145 | `I_MPI_ADJUST_ALLREDUCE=1` (recursive doubling) | Did not finish | Did not finish | Reached only Time=943 before the 25-minute PJM limit |
+| #146 | `I_MPI_ADJUST_ALLREDUCE=9` (Knomial) | 112 s | 120.21 s | Slower than automatic selection |
+| #147 | `I_MPI_ADJUST_ALLREDUCE=11` (SHM Knomial preset) | 106 s | 116.53 s | Does not force the transport to SHM |
+| #148 | Intel MPI collective autotuning | 107 s | 115.93 s | Autotuning overhead and result are worse than SHM |
+| #149 | `I_MPI_FABRICS=shm`, repeat | 107 s | 109.30 s | Confirms the benefit with normal run-to-run variation |
+| #150 | SHM plus Knomial Allreduce | 103 s | 105.43 s | Within noise of SHM alone; extra forcing is not justified |
+| #151 | SHM-only solver configuration, debug disabled | **101 s** | **103.46 s** | Successful solver verification |
+| #152 | SHM applied before every MPI phase | **101 s** | **104.06 s** | Final successful end-to-end verification |
+
+The baseline pinned ranks 0-119 to logical CPUs 0-119. Explicit `core` pinning
+produced the same list, so the small timing differences between pinning orders
+are noise rather than a different placement. The useful optimization is
+transport selection, not pinning.
+
+Moving the SHM setting before all MPI preprocessing commands in #152 reduced
+the Actions log-stream interval from 201 seconds in baseline #141 to 165
+seconds. Earlier SHM runs that applied the setting only to `simpleFoam` took
+185-189 seconds over the same interval. The final placement therefore benefits
+`snappyHexMesh`, `topoSet`, and `potentialFoam` as well as the main solver.
+
+For this job, forcing one Allreduce algorithm globally is counterproductive.
+OpenFOAM calls Allreduce with different message sizes and contexts, so Intel
+MPI's size-dependent automatic selection should remain enabled. Recursive
+doubling was especially unsuitable and did not finish within the PJM time
+limit. The final configuration therefore sets only `I_MPI_FABRICS=shm`; it
+leaves pinning, collective algorithm selection, and collective autotuning at
+their defaults.
 
 ## Solver timing results
 
@@ -168,8 +219,11 @@ locality is the next likely limit after MPI is reduced.
 
 ## Runtime tuning guidance
 
-1. Use two nodes and approximately 120 total MPI ranks for this exact 356k-cell
-   case. More ranks are not better; 240 ranks nearly doubles solver time.
+1. When restricted to one node, use 120 MPI ranks and set
+   `I_MPI_FABRICS=shm`. Intel MPI 2021.15 otherwise selected its `mlx`
+   libfabric provider in the measured job. In the earlier unconstrained
+   comparison, two nodes with 120 total ranks were still faster, but that is
+   outside the current one-node constraint.
 2. Keep Intel MPI's default process placement unless repeated measurements show
    a stable scatter advantage. `scatter` improved only about 1 second and
    `bunch` was slower.
@@ -198,6 +252,7 @@ through `mpirun -gtool`, process pinning with
 `I_MPI_PIN_PROCESSOR_LIST`, and collective autotuning with
 `I_MPI_TUNING_MODE=auto`:
 
+- <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-15/communication-fabrics-control.html>
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-16/other-environment-variables.html>
 - <https://www.intel.com/content/www/us/en/docs/vtune-profiler/cookbook/2024-0/profiling-mpi-applications.html>
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-12/environment-variables-for-process-pinning.html>
