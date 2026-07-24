@@ -25,18 +25,8 @@ exec "$@"
 
 # Intel MPI の通信統計を収集する場合は、上の通常実行をコメントアウトして
 # 次の行を有効にする。APS は引数で指定されたプロセスを計測する。
-# exec aps \
-#   --result-dir="${PROFILE_RESULT_DIR}" \
-#   --collection-mode=all \
-#   --stat-level=5 \
-#   --mpi-imbalance=2 \
-#   --storage-format=compact \
-#   "$@"
+# exec aps --result-dir="${PROFILE_RESULT_DIR}" --collection-mode=all --stat-level=5 --mpi-imbalance=2 --storage-format=compact "$@"
 
 # VTune のホットスポットを収集する場合は、上の通常実行をコメントアウトして
 # 次の行を有効にする。VTune は引数で指定されたプロセスを計測する。
-# exec vtune \
-#   -collect hotspots \
-#   -knob enable-stack-collection=true \
-#   -result-dir "${PROFILE_RESULT_DIR}" \
-#   -- "$@"
+# exec vtune -collect hotspots -knob enable-stack-collection=true -result-dir "${PROFILE_RESULT_DIR}" -- "$@"

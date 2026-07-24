@@ -207,13 +207,16 @@ jobs:
 
       - name: Stream OpenFOAM execution log
         run: |
-          tail --lines=+1 --follow=name "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" &
-          tail_pid=$!
-          stop_tail() {
-            kill "${tail_pid}" 2>/dev/null || true
-            wait "${tail_pid}" 2>/dev/null || true
+          # Keep the complete PJM log for the artifact, but only stream solver
+          # progress lines to the Actions console.
+          tail --lines=+1 --follow=name "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" |
+            grep --line-buffered -E '^(Time =|ExecutionTime =)' &
+          stream_pid=$!
+          stop_stream() {
+            kill "${stream_pid}" 2>/dev/null || true
+            wait "${stream_pid}" 2>/dev/null || true
           }
-          trap stop_tail EXIT
+          trap stop_stream EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
 
