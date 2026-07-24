@@ -51,19 +51,20 @@ jobs:
           fi
 
           commit="${GITHUB_SHA}"
-          while parent_commit="$(git rev-parse "${commit}^" 2>/dev/null)"
+          while [[ -n "${commit}" ]]
           do
             while IFS=$'\t' read -r run_id run_number
             do
+              [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
               [[ -s "${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst" ]] || continue
-              archive_step_count="$(gh run view "${run_id}" --json jobs --jq '[.jobs[].steps[] | select((.name == "Archive OpenFOAM build" or .name == "Build and publish OpenFOAM") and .conclusion == "success")] | length')"
+              archive_step_count="$(gh run view "${run_id}" --json jobs --jq '[.jobs[].steps[] | select((.name == "Archive OpenFOAM build" or .name == "Build and publish OpenFOAM" or .name == "Hardlink the selected archive") and .conclusion == "success")] | length')"
               [[ "${archive_step_count}" -gt 0 ]] || continue
               echo "Selected ${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst"
               echo "action=reuse" >> "${GITHUB_OUTPUT}"
               echo "source_run_number=${run_number}" >> "${GITHUB_OUTPUT}"
               exit 0
-            done < <(gh run list --workflow genkai.yml --commit "${parent_commit}" --limit 20 --json databaseId,number --jq '.[] | [.databaseId, .number] | @tsv')
-            commit="${parent_commit}"
+            done < <(gh run list --workflow genkai.yml --commit "${commit}" --limit 20 --json databaseId,number --jq '.[] | [.databaseId, .number] | @tsv')
+            commit="$(git rev-parse "${commit}^" 2>/dev/null || true)"
           done
 
           echo "No reusable OpenFOAM build archive was found; falling back to a new build"
