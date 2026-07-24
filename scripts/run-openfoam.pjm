@@ -18,9 +18,7 @@ set -euo pipefail
 export RUN_DIR="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
 export OPENFOAM_PROFILE_RUN_ID="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${OPENFOAM_PROFILE_RUN_ID}"
-export OPENFOAM_PROFILE_ANALYSIS=none
 export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-shm-default
-export OPENFOAM_PROFILE_RANK=0
 export SOLVER_LOG="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
 export DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 # すべての MPI 処理を1ノード内で実行するため、OFI/MLX のネットワーク経路を
@@ -90,8 +88,7 @@ install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 
 # 実行条件と環境を記録し、実行ノードの CPU 情報も保存する。
 printf '%s\n' \
-  "analysis=${OPENFOAM_PROFILE_ANALYSIS}" \
-  "profile_rank=${OPENFOAM_PROFILE_RANK}" \
+  "profile_label=${OPENFOAM_PROFILE_LABEL}" \
   "PJM_JOBID=${PJM_JOBID}" \
   "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
   "launch_host=$(hostname)" \
@@ -103,14 +100,17 @@ env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
 
 mpirun -np 2 -ppn 1 bash -c 'printf "host=%s\\n" "$(hostname)"; lscpu' > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
 
-# ソルバーの開始・終了時刻を記録し、プロファイラ経由で MPI 並列計算を実行する。
+# ソルバーの開始・終了時刻を記録し、必要に応じてプロファイラを選べる形で
+# MPI 並列計算を実行する。
 {
-  echo "analysis=${OPENFOAM_PROFILE_ANALYSIS}"
-  echo "profile_rank=${OPENFOAM_PROFILE_RANK}"
+  echo "profile_label=${OPENFOAM_PROFILE_LABEL}"
   echo "started_at=$(date --iso-8601=seconds)"
 } | tee "${SOLVER_LOG}"
 
-"${PROVISION_DIR}/scripts/exec-profiler.sh" simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
+"${PROVISION_DIR}/scripts/exec-profiler.sh" \
+  mpirun -np "${OPENFOAM_MPI_PROCS}" \
+  simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" \
+  2>&1 | tee -a "${SOLVER_LOG}"
 
 echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${SOLVER_LOG}"
 
