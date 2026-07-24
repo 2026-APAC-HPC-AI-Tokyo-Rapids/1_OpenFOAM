@@ -260,11 +260,12 @@ through `mpirun -gtool`, process pinning with
 
 ## Profiling implementation
 
-`scripts/exec-profiler.sh` owns the MPI launcher, profiling collection, timing,
-and report generation. `scripts/run-openfoam.pjm` selects one analysis and one
-runtime configuration per commit. Comparisons are intentionally performed as
-separate commits/Actions runs rather than as multiple trials inside one batch
-job.
+`scripts/exec-profiler.sh` observes the process specified in its arguments. The
+caller passes `mpirun ...` as that target, while the profiler script itself does
+not launch MPI. It contains commented alternatives for normal execution,
+`/usr/bin/time`, APS, and VTune; exactly one alternative is enabled manually
+when a profile is needed. Comparisons are intentionally performed as separate
+commits/Actions runs rather than as multiple trials inside one batch job.
 
 VTune and APS results remain under `~/openfoam-profile`. Actions artifacts
 contain only logs, timing files, and generated summaries.
