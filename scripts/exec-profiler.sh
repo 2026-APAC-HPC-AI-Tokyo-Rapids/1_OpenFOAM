@@ -15,18 +15,24 @@ export PROFILE_RESULT_DIR="${OPENFOAM_PROFILE_DIR}/${OPENFOAM_PROFILE_LABEL}"
 export PROFILE_TIMING_LOG="${PROFILE_LOG_DIR}/time-${OPENFOAM_PROFILE_LABEL}.txt"
 install -d -m 0700 "${PROFILE_LOG_DIR}" "${PROFILE_RESULT_DIR}"
 
-# 通常実行: プロファイラを使わず、引数で指定されたプロセスを直接実行する。
-# プロファイリングを行う場合は、この行をコメントアウトする。
-exec "$@"
+# perf stat で引数のプロセスと、その子プロセスの基本的なハードウェア性能を計測する。
+# 比較実験ではこの行を有効にし、通常実行の行をコメントアウトする。
+exec perf stat -x, -o "${PROFILE_TIMING_LOG}" \
+  -e cycles,instructions,branches,branch-misses,cache-misses -- "$@"
 
-# 実行時間・メモリ使用量を計測する場合は、上の通常実行をコメントアウトして
+# 通常実行: プロファイラを使わず、引数で指定されたプロセスを直接実行する。
+# プロファイリングを無効にする場合は、上の perf stat をコメントアウトして
+# この行を有効にする。
+# exec "$@"
+
+# 実行時間・メモリ使用量を計測する場合は、上の perf stat をコメントアウトして
 # 次の行を有効にする。
 # exec /usr/bin/time -v -o "${PROFILE_TIMING_LOG}" "$@"
 
-# Intel MPI の通信統計を収集する場合は、上の通常実行をコメントアウトして
+# Intel MPI の通信統計を収集する場合は、上の perf stat をコメントアウトして
 # 次の行を有効にする。APS は引数で指定されたプロセスを計測する。
 # exec aps --result-dir="${PROFILE_RESULT_DIR}" --collection-mode=all --stat-level=5 --mpi-imbalance=2 --storage-format=compact "$@"
 
-# VTune のホットスポットを収集する場合は、上の通常実行をコメントアウトして
+# VTune のホットスポットを収集する場合は、上の perf stat をコメントアウトして
 # 次の行を有効にする。VTune は引数で指定されたプロセスを計測する。
 # exec vtune -collect hotspots -knob enable-stack-collection=true -result-dir "${PROFILE_RESULT_DIR}" -- "$@"
