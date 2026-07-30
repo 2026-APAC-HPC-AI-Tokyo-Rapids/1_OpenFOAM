@@ -145,6 +145,8 @@ jobs:
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
           mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
+          cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
+          uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
           tar -I zstd -xf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${provision_dir}" \
             --exclude='*.o' \
@@ -183,9 +185,14 @@ jobs:
 
     steps:
       - name: Submit OpenFOAM job
+        env:
+          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
-          job_output="$(pjsub -x "PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},GITHUB_RUN_ID=${GITHUB_RUN_ID}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
+          test -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}"
+          credentials_base64="$(printf '%s' "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}" | base64 --wrap=0)"
+          job_environment="PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},GITHUB_RUN_ID=${GITHUB_RUN_ID},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_REPOSITORY=${GITHUB_REPOSITORY},GITHUB_SHA=${GITHUB_SHA},EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64=${credentials_base64}"
+          job_output="$(pjsub -x "${job_environment}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"
@@ -227,6 +234,15 @@ jobs:
         run: |
           pjwait "${PJM_JOB_ID}"
           test -e "${PROVISION_DIR}/run-success"
+
+      - name: Collect PJM accounting metrics
+        if: always() && env.PJM_JOB_ID != ''
+        env:
+          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            collect scheduler \
+            --job-id "${PJM_JOB_ID}"
 
       - name: Upload OpenFOAM execution log
         if: always()
