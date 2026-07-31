@@ -76,7 +76,7 @@ def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
 def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
     profile_root = tmp_path / "profiles"
     result_dir = profile_root / "rank-zero"
-    (result_dir / "vtune").mkdir(parents=True)
+    (result_dir / "vtune.compute-node").mkdir(parents=True)
     provision = tmp_path / "provision"
     scripts = provision / "scripts"
     scripts.mkdir(parents=True)
