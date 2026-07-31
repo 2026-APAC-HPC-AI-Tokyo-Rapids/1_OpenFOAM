@@ -22,6 +22,11 @@ on:
           - none
           - perf-stat
           - vtune-hotspots
+      existing_profile_run_id:
+        description: Existing Genkai profile run ID to inspect instead of running OpenFOAM
+        required: false
+        default: ''
+        type: string
   push:
     paths-ignore:
       - 'research/**'
@@ -42,6 +47,7 @@ defaults:
 jobs:
   select-build:
     name: Select OpenFOAM build
+    if: github.event_name != 'workflow_dispatch' || inputs.existing_profile_run_id == ''
     runs-on: [self-hosted, genkai]
 
     outputs:
@@ -84,6 +90,82 @@ jobs:
 
           echo "No reusable OpenFOAM build archive was found; falling back to a new build"
           echo "action=build" >> "${GITHUB_OUTPUT}"
+
+  inspect-vtune-timeline:
+    name: Inspect existing VTune timeline
+    if: github.event_name == 'workflow_dispatch' && inputs.existing_profile_run_id != ''
+    runs-on: [self-hosted, genkai]
+
+    steps:
+      - name: Inspect VTune timeline report variants
+        env:
+          PROFILE_RUN_ID: ${{ inputs.existing_profile_run_id }}
+        run: |
+          module purge
+          module load intel/2025.1.3 impi
+
+          profile_dir="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
+          result_parent="${profile_dir}/mpi-1node-120ranks-shm-default"
+          result_dirs=()
+          for candidate in "${result_parent}/vtune" "${result_parent}"/vtune.*; do
+            [[ -d "${candidate}" ]] && result_dirs+=("${candidate}")
+          done
+          [[ "${#result_dirs[@]}" -eq 1 ]]
+          result_dir="${result_dirs[0]}"
+          inspect_dir="$(mktemp -d "/dev/shm/vtune-timeline-${GITHUB_RUN_ID}.XXXXXXXX")"
+          trap 'rm -rf -- "${inspect_dir:?}"' EXIT
+
+          vtune -version
+          vtune -help report timeline > "${inspect_dir}/help.txt" 2>&1 || true
+          sed -n '1,180p' "${inspect_dir}/help.txt"
+
+          vtune -report timeline \
+            -result-dir "${result_dir}" \
+            -report-knob column-by=CPUTime \
+            -report-knob bin-count=20 \
+            -format csv \
+            -csv-delimiter comma \
+            -report-output "${inspect_dir}/timeline-output.csv"
+
+          vtune -report timeline \
+            -result-dir "${result_dir}" \
+            -report-knob column-by=CPUTime \
+            -report-knob bin-count=20 \
+            -format csv \
+            -csv-delimiter comma \
+            > "${inspect_dir}/timeline-stdout.csv" 2>&1 || true
+
+          vtune -report timeline \
+            -result-dir "${result_dir}" \
+            -report-knob query-type=interval \
+            -report-knob column-by=CPUTime \
+            -report-knob bin-count=20 \
+            -format csv \
+            -csv-delimiter comma \
+            > "${inspect_dir}/timeline-interval.csv" 2>&1 || true
+
+          vtune -report timeline \
+            -result-dir "${result_dir}" \
+            -report-knob group-by=Thread \
+            -report-knob column-by=CPUTime \
+            -report-knob bin-count=20 \
+            -format csv \
+            -csv-delimiter comma \
+            > "${inspect_dir}/timeline-thread.csv" 2>&1 || true
+
+          vtune -report hotspots \
+            -result-dir "${result_dir}" \
+            -group-by function,module \
+            -time-filter 0:1 \
+            -format csv \
+            -csv-delimiter comma \
+            > "${inspect_dir}/hotspots-first-second.csv" 2>&1 || true
+
+          for report_path in "${inspect_dir}"/*.csv; do
+            printf '\n==> %s (%s bytes) <==\n' \
+              "$(basename "${report_path}")" "$(stat -c %s "${report_path}")"
+            sed -n '1,50p' "${report_path}"
+          done
 
   reuse-build:
     name: Reuse OpenFOAM build
