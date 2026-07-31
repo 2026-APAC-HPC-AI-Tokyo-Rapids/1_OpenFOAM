@@ -45,9 +45,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Update shared source mirrors
-        run: "${GITHUB_WORKSPACE}/scripts/update-source-mirrors.sh"
-
       - name: Select an existing archive or a new build
         id: select
         env:
