@@ -73,6 +73,9 @@ Intel MPI `-gtool` and observes rank 0 by default instead of the Hydra launcher.
 The release link downloads the JSON directly without a ZIP extraction step.
 The workflow does not upload PJM logs, solver logs, ParaView cases, or VTune
 reports as Actions artifacts. Failure diagnostics are printed into the job log.
+Full VTune results, the solver log, and the ParaView case archive stay under
+`$HOME/openfoam-profile/<run-id>-<pjm-job-id>/` on Genkai; the exact path is
+shown in the Actions run Summary.
 The Actions run Summary also shows the ranked functions and CPU times directly
 in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that

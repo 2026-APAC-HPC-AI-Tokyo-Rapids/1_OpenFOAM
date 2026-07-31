@@ -165,7 +165,6 @@ jobs:
           mkdir -p \
             "${provision_dir}/scripts" \
             "${provision_dir}/logs" \
-            "${provision_dir}/results" \
             "${provision_dir}/browser-summary"
           install -m 0755 \
             "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
@@ -305,6 +304,13 @@ jobs:
             --summary "${PROVISION_DIR}/browser-summary/summary.json" \
             --output "${GITHUB_STEP_SUMMARY}" \
             --trace-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/vtune-latest/openfoam-vtune-trace.json"
+          profile_dir="$(sed -n 's/^profile_dir=//p' "${PROVISION_DIR}/logs/profile-location.txt")"
+          test -d "${profile_dir}"
+          test -f "${profile_dir}/motorBike-${PJM_JOB_ID}.tar.zst"
+          {
+            printf '\nFull VTune data, solver log, and ParaView case remain on Genkai:\n\n'
+            printf -- '- `%s`\n' "${profile_dir}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Print failure diagnostics
         if: failure()

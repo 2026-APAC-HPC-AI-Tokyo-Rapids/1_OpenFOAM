@@ -185,8 +185,8 @@ du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
 printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
   "${PROVISION_DIR}/logs/profile-location.txt"
 
-# ParaView 用のケースファイルを作成し、結果を圧縮して保存する。
+# ParaView 用のケースファイルを作成し、Genkaiの永続プロファイル領域へ保存する。
 touch motorBike.foam
-metrics_cli stage result_archive -- tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-${PJM_JOBID}.tar.zst" -C "${RUN_DIR}" motorBike
+metrics_cli stage result_archive -- tar -I zstd -cf "${OPENFOAM_PROFILE_DIR}/motorBike-${PJM_JOBID}.tar.zst" -C "${RUN_DIR}" motorBike
 # ワークフロー側がジョブ成功を判定できる完了マーカーを作成する。
 touch "${PROVISION_DIR}/run-success"
