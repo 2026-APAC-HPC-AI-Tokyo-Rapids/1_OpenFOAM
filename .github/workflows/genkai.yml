@@ -8,6 +8,11 @@ on:
         required: true
         default: false
         type: boolean
+      reshare_ccache:
+        description: Build from source and republish local ccache hits to remote storage
+        required: true
+        default: false
+        type: boolean
   push:
     paths-ignore:
       - 'research/**'
@@ -44,7 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ '${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[require-build]')) || (github.event_name == 'workflow_dispatch' && inputs.require_build) }}' == true ]]; then
+          if [[ '${{ (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[require-build]')) || (github.event_name == 'workflow_dispatch' && (inputs.require_build || inputs.reshare_ccache)) }}' == true ]]; then
             echo "A new OpenFOAM build was explicitly requested"
             echo "action=build" >> "${GITHUB_OUTPUT}"
             exit 0
@@ -93,6 +98,7 @@ jobs:
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
+      CCACHE_RESHARE: ${{ github.event_name == 'workflow_dispatch' && inputs.reshare_ccache }}
 
     steps:
       - name: Checkout build inputs
