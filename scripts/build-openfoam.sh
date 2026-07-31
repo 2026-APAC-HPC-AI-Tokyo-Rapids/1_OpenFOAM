@@ -16,8 +16,6 @@ set -euo pipefail
 export OPENFOAM_VERSION=v2606
 export OPENFOAM_SOURCE_REF=refs/tags/OpenFOAM-v2606
 export THIRDPARTY_SOURCE_REF=refs/heads/main
-export ADIOS2_VERSION=2.12.1
-export CGAL_VERSION=6.1.1
 export OPENFOAM_BUILD_PARALLELISM=120
 export CC=mpiicx
 export CXX=mpiicpx
@@ -65,27 +63,9 @@ git -C "${BUILD_TREE}/ThirdParty" checkout --detach "${THIRDPARTY_SOURCE_REF}"
 rm -rf -- "${BUILD_TREE}/OpenFOAM/.git" "${BUILD_TREE}/ThirdParty/.git"
 ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
 
-# 追加依存ライブラリの source archive は共有キャッシュから取得する。
-# 既存の archive は再ダウンロードしない。
-for archive_url in \
-  "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
-  "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz" \
-  "https://github.com/CGAL/cgal/releases/download/v${CGAL_VERSION}/CGAL-${CGAL_VERSION}.tar.xz"
-do
-  wget --no-verbose --no-clobber --directory-prefix="${SOURCE_ARCHIVE_CACHE_DIR}" "${archive_url}"
-done
-
-# ThirdParty の Git リポジトリはビルドスクリプトを管理し、配布 archive に
-# 同梱される依存ソースは管理しない。v2606 archive から sources/ だけを重ねる。
-tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
-  -C "${BUILD_TREE}/ThirdParty" \
-  --strip-components=1 \
-  "ThirdParty-${OPENFOAM_VERSION}/sources"
-
-# プロジェクトでバージョンを更新した依存ライブラリを追加する。
-mkdir -p "${BUILD_TREE}/ThirdParty/sources/adios" "${BUILD_TREE}/ThirdParty/sources/cgal"
-tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${BUILD_TREE}/ThirdParty/sources/adios"
-tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${BUILD_TREE}/ThirdParty/sources/cgal"
+# ThirdParty リポジトリが管理するスクリプトで、v2606 ビルドに必要な依存を
+# 共有 archive cache から検証・展開する。
+"${BUILD_TREE}/ThirdParty/download-v2606-sources.sh"
 
 # リポジトリで管理している OpenFOAM の追加 patch を適用する。
 for patch_file in "${GITHUB_WORKSPACE}"/patches/*.patch

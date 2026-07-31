@@ -49,3 +49,8 @@ and prunes both mirrors, retries transient conflicts, and verifies the build
 refs. If all fetch attempts fail but the required refs already exist, the last
 complete mirror state remains usable. Builds then clone from the local mirrors,
 so Git objects are not downloaded again for each build.
+
+The ThirdParty Git repository does not contain unpacked dependency sources. Its
+`download-v2606-sources.sh` script retrieves the required archives through the
+existing shared source cache and expands them into the build tree. The workflow
+does not copy `sources/` from the monolithic ThirdParty release archive.
