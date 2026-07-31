@@ -135,8 +135,8 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
             str(summary),
             "--output",
             str(output),
-            "--actions-url",
-            "https://github.example/actions/runs/123",
+            "--trace-url",
+            "https://github.example/releases/download/vtune-latest/openfoam-vtune-trace.json",
         ],
         check=True,
     )
@@ -145,7 +145,11 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
     assert "## Intel VTune summary" in markdown
     assert "Foam::foo\\|bar" in markdown
     assert "4.379697" in markdown
-    assert "https://github.example/actions/runs/123#artifacts" in markdown
+    assert (
+        "https://github.example/releases/download/vtune-latest/"
+        "openfoam-vtune-trace.json"
+    ) in markdown
+    assert "there is no ZIP to extract" in markdown
     assert "https://ui.perfetto.dev/" in markdown
 
 

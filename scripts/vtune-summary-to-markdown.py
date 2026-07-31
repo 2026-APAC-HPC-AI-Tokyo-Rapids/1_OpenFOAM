@@ -11,7 +11,7 @@ def escape_table(value: object) -> str:
     return str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
 
 
-def render(summary: dict[str, object], actions_url: str) -> str:
+def render(summary: dict[str, object], trace_url: str) -> str:
     hotspots = summary.get("top_hotspots", [])
     if not isinstance(hotspots, list):
         raise ValueError("top_hotspots must be a list")
@@ -41,9 +41,9 @@ def render(summary: dict[str, object], actions_url: str) -> str:
     lines.extend(
         [
             "",
-            f"[Download the run artifact]({actions_url}#artifacts), then drag "
-            "`openfoam-vtune-trace.json` into [Perfetto](https://ui.perfetto.dev/) "
-            "for the Chrome Trace view.",
+            f"[Download `openfoam-vtune-trace.json` directly]({trace_url}), then drag "
+            "it into [Perfetto](https://ui.perfetto.dev/) for the Chrome Trace view. "
+            "The download is a plain JSON file; there is no ZIP to extract.",
             "",
         ]
     )
@@ -54,11 +54,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--actions-url", required=True)
+    parser.add_argument("--trace-url", required=True)
     arguments = parser.parse_args()
 
     summary = json.loads(arguments.summary.read_text(encoding="utf-8"))
-    markdown = render(summary, arguments.actions_url)
+    markdown = render(summary, arguments.trace_url)
     with arguments.output.open("a", encoding="utf-8") as stream:
         stream.write(markdown)
 

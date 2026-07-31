@@ -59,11 +59,10 @@ does not copy `sources/` from the monolithic ThirdParty release archive.
 
 Manual workflow runs accept a `profile_mode` input. Select `vtune-hotspots` to
 collect a VTune Hotspots result for the `simpleFoam` stage. The raw result stays
-under the private profile directory on Genkai. A separate
-`openfoam-vtune-browser-*` artifact receives only:
+under the private profile directory on Genkai. The bounded trace is uploaded as
+a single asset in the rolling `vtune-latest` prerelease:
 
 ```text
-summary.json
 openfoam-vtune-trace.json
 ```
 
@@ -71,8 +70,9 @@ The trace uses the Chrome Trace Event format and can be opened by
 dragging it into <https://ui.perfetto.dev/>. It contains a bounded timeline and
 the hottest functions, not raw samples or call stacks. VTune is inserted with
 Intel MPI `-gtool` and observes rank 0 by default instead of the Hydra launcher.
-Full PJM and solver logs remain in the larger `openfoam-run-log-*` artifact and
-are not bundled with the lightweight browser report.
+The release link downloads the JSON directly without a ZIP extraction step.
+The workflow does not upload PJM logs, solver logs, ParaView cases, or VTune
+reports as Actions artifacts. Failure diagnostics are printed into the job log.
 The Actions run Summary also shows the ranked functions and CPU times directly
 in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that
