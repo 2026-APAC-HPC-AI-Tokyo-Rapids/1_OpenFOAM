@@ -125,10 +125,14 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/vtune-to-trace.py" \
             "${GITHUB_WORKSPACE}/scripts/vtune-summary-to-markdown.py" \
             "${provision_dir}/scripts/"
+          uv sync \
+            --project "${GITHUB_WORKSPACE}/experiment-metrics" \
+            --frozen \
+            --no-dev
 
           OPENFOAM_PROFILE_DIR="${profile_dir}" \
           OPENFOAM_PROFILE_LABEL="${profile_label}" \
-          OPENFOAM_PYTHON="$(command -v python3)" \
+          OPENFOAM_PYTHON="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/python" \
           PROVISION_DIR="${provision_dir}" \
             "${provision_dir}/scripts/export-vtune-summary.sh"
 
