@@ -50,6 +50,12 @@ vtune -report hotspots \
   -csv-delimiter comma \
   -report-output "${SUMMARY_DIR}/hotspots.csv"
 
+# VTuneの版によってCSV schemaが異なる場合も、Actions artifactから入力を
+# 調査できるよう変換前に保存する。
+cp "${SUMMARY_DIR}/timeline.csv" \
+  "${SUMMARY_DIR}/hotspots.csv" \
+  "${PROVISION_DIR}/logs/"
+
 "${OPENFOAM_PYTHON}" "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
   --timeline "${SUMMARY_DIR}/timeline.csv" \
   --hotspots "${SUMMARY_DIR}/hotspots.csv" \

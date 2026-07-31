@@ -127,3 +127,5 @@ esac
 
     assert (result_dir / "browser-summary" / "summary.json").is_file()
     assert (provision / "logs" / "openfoam-vtune-trace.json.gz").is_file()
+    assert (provision / "logs" / "timeline.csv").is_file()
+    assert (provision / "logs" / "hotspots.csv").is_file()
