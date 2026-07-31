@@ -68,13 +68,21 @@ ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
 # 追加依存ライブラリの source archive は共有キャッシュから取得する。
 # 既存の archive は再ダウンロードしない。
 for archive_url in \
+  "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
   "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz" \
   "https://github.com/CGAL/cgal/releases/download/v${CGAL_VERSION}/CGAL-${CGAL_VERSION}.tar.xz"
 do
   wget --no-verbose --no-clobber --directory-prefix="${SOURCE_ARCHIVE_CACHE_DIR}" "${archive_url}"
 done
 
-# 追加依存ライブラリを ThirdParty が参照するディレクトリへ展開する。
+# ThirdParty の Git リポジトリはビルドスクリプトを管理し、配布 archive に
+# 同梱される依存ソースは管理しない。v2606 archive から sources/ だけを重ねる。
+tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
+  -C "${BUILD_TREE}/ThirdParty" \
+  --strip-components=1 \
+  "ThirdParty-${OPENFOAM_VERSION}/sources"
+
+# プロジェクトでバージョンを更新した依存ライブラリを追加する。
 mkdir -p "${BUILD_TREE}/ThirdParty/sources/adios" "${BUILD_TREE}/ThirdParty/sources/cgal"
 tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${BUILD_TREE}/ThirdParty/sources/adios"
 tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${BUILD_TREE}/ThirdParty/sources/cgal"
