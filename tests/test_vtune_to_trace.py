@@ -73,6 +73,39 @@ def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
     assert metadata["compressed_trace_bytes"] < 5000
 
 
+def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
+    timeline = tmp_path / "timeline.csv"
+    timeline.touch()
+    output = tmp_path / "trace.json.gz"
+    summary = tmp_path / "summary.json"
+    subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--timeline",
+            str(timeline),
+            "--hotspots",
+            str(FIXTURES / "vtune-hotspots.csv"),
+            "--output",
+            str(output),
+            "--summary",
+            str(summary),
+            "--top-functions",
+            "2",
+        ],
+        check=True,
+    )
+
+    with gzip.open(output, "rt", encoding="utf-8") as stream:
+        trace = json.load(stream)
+    metadata = json.loads(summary.read_text(encoding="utf-8"))
+
+    assert trace["metadata"]["time_bins"] == 0
+    assert trace["metadata"]["hotspot_count"] == 2
+    assert metadata["timeline_available"] is False
+    assert metadata["elapsed_sec"] is None
+
+
 def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
     profile_root = tmp_path / "profiles"
     result_dir = profile_root / "rank-zero"
@@ -127,5 +160,5 @@ esac
 
     assert (result_dir / "browser-summary" / "summary.json").is_file()
     assert (provision / "logs" / "openfoam-vtune-trace.json.gz").is_file()
-    assert (provision / "logs" / "timeline.csv").is_file()
-    assert (provision / "logs" / "hotspots.csv").is_file()
+    assert not (provision / "logs" / "timeline.csv").exists()
+    assert not (provision / "logs" / "hotspots.csv").exists()

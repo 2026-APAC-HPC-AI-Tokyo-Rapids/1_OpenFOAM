@@ -51,6 +51,8 @@ def _rows(path: Path, required: tuple[str, ...]) -> list[dict[str, str]]:
 
 
 def read_timeline(path: Path) -> list[TimeBin]:
+    if path.stat().st_size == 0:
+        return []
     rows = _rows(path, ("Bin Start Time", "Bin End Time"))
     result: list[TimeBin] = []
     for row in rows:
@@ -66,8 +68,6 @@ def read_timeline(path: Path) -> list[TimeBin]:
             if parsed is not None:
                 metrics[key.strip()] = parsed
         result.append(TimeBin(start, end, metrics))
-    if not result:
-        raise ValueError(f"{path}: no valid timeline rows")
     return result
 
 
@@ -144,7 +144,7 @@ def build_trace(
                 "s": "p",
                 "pid": 1,
                 "tid": 0,
-                "ts": round(bins[-1].end_sec * 1_000_000),
+                "ts": round(bins[-1].end_sec * 1_000_000) if bins else 0,
                 "args": {
                     f"{index + 1}. {item.function}": {
                         "module": item.module,
@@ -225,7 +225,8 @@ def main() -> None:
         "exported_hotspots": top_functions,
         "uncompressed_trace_bytes": len(payload),
         "compressed_trace_bytes": arguments.output.stat().st_size,
-        "elapsed_sec": timeline[-1].end_sec,
+        "timeline_available": bool(timeline),
+        "elapsed_sec": timeline[-1].end_sec if timeline else None,
         "top_hotspots": [
             {
                 "function": item.function,
