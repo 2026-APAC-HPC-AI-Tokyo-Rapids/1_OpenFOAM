@@ -23,7 +23,7 @@ on:
           - perf-stat
           - vtune-hotspots
       existing_profile_run_id:
-        description: Existing Genkai profile run ID to inspect instead of running OpenFOAM
+        description: Existing Genkai profile run ID to re-export instead of running OpenFOAM
         required: false
         default: ''
         type: string
@@ -91,81 +91,61 @@ jobs:
           echo "No reusable OpenFOAM build archive was found; falling back to a new build"
           echo "action=build" >> "${GITHUB_OUTPUT}"
 
-  inspect-vtune-timeline:
-    name: Inspect existing VTune timeline
+  republish-vtune-timeline:
+    name: Republish existing VTune timeline
     if: github.event_name == 'workflow_dispatch' && inputs.existing_profile_run_id != ''
     runs-on: [self-hosted, genkai]
+    permissions:
+      contents: write
 
     steps:
-      - name: Inspect VTune timeline report variants
+      - name: Checkout trace exporter
+        uses: actions/checkout@v6
+
+      - name: Export and publish chronological VTune trace
         env:
+          GH_TOKEN: ${{ github.token }}
           PROFILE_RUN_ID: ${{ inputs.existing_profile_run_id }}
         run: |
           module purge
           module load intel/2025.1.3 impi
 
           profile_dir="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
-          result_parent="${profile_dir}/mpi-1node-120ranks-shm-default"
-          result_dirs=()
-          for candidate in "${result_parent}/vtune" "${result_parent}"/vtune.*; do
-            [[ -d "${candidate}" ]] && result_dirs+=("${candidate}")
-          done
-          [[ "${#result_dirs[@]}" -eq 1 ]]
-          result_dir="${result_dirs[0]}"
-          inspect_dir="$(mktemp -d "/dev/shm/vtune-timeline-${GITHUB_RUN_ID}.XXXXXXXX")"
-          trap 'rm -rf -- "${inspect_dir:?}"' EXIT
+          profile_label="mpi-1node-120ranks-shm-default"
+          test -d "${profile_dir}/${profile_label}"
 
-          vtune -version
-          vtune -help report timeline > "${inspect_dir}/help.txt" 2>&1 || true
-          sed -n '1,180p' "${inspect_dir}/help.txt"
+          provision_dir="$(mktemp -d "/dev/shm/vtune-republish-${GITHUB_RUN_ID}.XXXXXXXX")"
+          trap 'rm -rf -- "${provision_dir:?}"' EXIT
+          mkdir -p \
+            "${provision_dir}/scripts" \
+            "${provision_dir}/logs" \
+            "${provision_dir}/browser-summary"
+          install -m 0755 \
+            "${GITHUB_WORKSPACE}/scripts/export-vtune-summary.sh" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-to-trace.py" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-summary-to-markdown.py" \
+            "${provision_dir}/scripts/"
 
-          vtune -report timeline \
-            -result-dir "${result_dir}" \
-            -report-knob column-by=CPUTime \
-            -report-knob bin-count=20 \
-            -format csv \
-            -csv-delimiter comma \
-            -report-output "${inspect_dir}/timeline-output.csv"
+          OPENFOAM_PROFILE_DIR="${profile_dir}" \
+          OPENFOAM_PROFILE_LABEL="${profile_label}" \
+          OPENFOAM_PYTHON="$(command -v python3)" \
+          PROVISION_DIR="${provision_dir}" \
+            "${provision_dir}/scripts/export-vtune-summary.sh"
 
-          vtune -report timeline \
-            -result-dir "${result_dir}" \
-            -report-knob column-by=CPUTime \
-            -report-knob bin-count=20 \
-            -format csv \
-            -csv-delimiter comma \
-            > "${inspect_dir}/timeline-stdout.csv" 2>&1 || true
+          release_tag="vtune-latest"
+          trace_path="${provision_dir}/browser-summary/openfoam-vtune-trace.json"
+          gh release upload "${release_tag}" "${trace_path}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
 
-          vtune -report timeline \
-            -result-dir "${result_dir}" \
-            -report-knob query-type=interval \
-            -report-knob column-by=CPUTime \
-            -report-knob bin-count=20 \
-            -format csv \
-            -csv-delimiter comma \
-            > "${inspect_dir}/timeline-interval.csv" 2>&1 || true
-
-          vtune -report timeline \
-            -result-dir "${result_dir}" \
-            -report-knob group-by=Thread \
-            -report-knob column-by=CPUTime \
-            -report-knob bin-count=20 \
-            -format csv \
-            -csv-delimiter comma \
-            > "${inspect_dir}/timeline-thread.csv" 2>&1 || true
-
-          vtune -report hotspots \
-            -result-dir "${result_dir}" \
-            -group-by function,module \
-            -time-filter 0:1 \
-            -format csv \
-            -csv-delimiter comma \
-            > "${inspect_dir}/hotspots-first-second.csv" 2>&1 || true
-
-          for report_path in "${inspect_dir}"/*.csv; do
-            printf '\n==> %s (%s bytes) <==\n' \
-              "$(basename "${report_path}")" "$(stat -c %s "${report_path}")"
-            sed -n '1,50p' "${report_path}"
-          done
+          "${provision_dir}/scripts/vtune-summary-to-markdown.py" \
+            --summary "${provision_dir}/browser-summary/summary.json" \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --trace-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/vtune-latest/openfoam-vtune-trace.json"
+          {
+            printf '\nFull VTune data remains on Genkai:\n\n'
+            printf -- '- `%s`\n' "${profile_dir}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
   reuse-build:
     name: Reuse OpenFOAM build

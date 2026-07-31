@@ -37,6 +37,13 @@ def test_reads_vtune_reports() -> None:
 def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     output = tmp_path / "trace.json"
     summary = tmp_path / "summary.json"
+    function_slices = tmp_path / "function-slices"
+    function_slices.mkdir()
+    for index in range(2):
+        (function_slices / f"{index:04d}.csv").write_text(
+            (FIXTURES / "vtune-hotspots.csv").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     subprocess.run(
         [
             sys.executable,
@@ -45,6 +52,8 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             str(FIXTURES / "vtune-timeline.csv"),
             "--hotspots",
             str(FIXTURES / "vtune-hotspots.csv"),
+            "--function-slices-dir",
+            str(function_slices),
             "--output",
             str(output),
             "--summary",
@@ -65,17 +74,30 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     metadata = json.loads(summary.read_text(encoding="utf-8"))
 
     assert trace["metadata"]["time_bins"] == 2
-    assert trace["metadata"]["hotspot_count"] == 2
+    assert trace["metadata"]["aggregate_hotspot_count"] == 2
     assert "test-run" in trace["traceEvents"][0]["args"]["name"]
-    hotspot_events = [
-        event for event in trace["traceEvents"] if event.get("ph") == "X"
+    timeline_events = [
+        event
+        for event in trace["traceEvents"]
+        if event.get("cat") == "vtune-timeline"
     ]
-    assert len(hotspot_events) == 2
-    assert hotspot_events[0]["name"] == "PMPI_Allreduce"
-    assert hotspot_events[0]["args"]["category"] == "MPI"
-    assert hotspot_events[0]["dur"] == 11_360_000
+    assert [(event["ts"], event["dur"]) for event in timeline_events] == [
+        (0, 2_000_000),
+        (2_000_000, 2_000_000),
+    ]
+    function_events = [
+        event
+        for event in trace["traceEvents"]
+        if str(event.get("cat", "")).startswith("vtune-sampled-function")
+    ]
+    assert len(function_events) == 8
+    assert function_events[0]["name"] == "PMPI_Allreduce"
+    assert function_events[0]["args"]["category"] == "MPI"
+    assert function_events[0]["args"]["interval_start_sec"] == 0.0
+    assert function_events[0]["args"]["interval_end_sec"] == 2.0
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
+    assert metadata["exported_function_intervals"] == 8
     assert metadata["top_hotspots"][0]["profile_cpu_percent"] == 52.641
     assert metadata["trace_bytes"] < 5000
 
@@ -107,8 +129,8 @@ def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
     metadata = json.loads(summary.read_text(encoding="utf-8"))
 
     assert trace["metadata"]["time_bins"] == 0
-    assert trace["metadata"]["hotspot_count"] == 2
-    assert len([event for event in trace["traceEvents"] if event.get("ph") == "X"]) == 2
+    assert trace["metadata"]["aggregate_hotspot_count"] == 2
+    assert not [event for event in trace["traceEvents"] if event.get("ph") == "X"]
     assert metadata["timeline_available"] is False
     assert metadata["elapsed_sec"] is None
 
@@ -122,6 +144,8 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
                 "run_label": "rank-zero",
                 "source_hotspots": 601,
                 "exported_hotspots": 1,
+                "exported_time_bins": 300,
+                "exported_function_intervals": 200,
                 "trace_bytes": 2231,
                 "profile_cpu_time_sec": 20.0,
                 "timeline_available": False,
@@ -159,6 +183,8 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
     assert "OpenFOAM" in markdown
     assert "21.898%" in markdown
     assert "4.379697" in markdown
+    assert "Timeline intervals: 300" in markdown
+    assert "Sampled function intervals: 200" in markdown
     assert (
         "https://github.example/releases/download/vtune-latest/"
         "openfoam-vtune-trace.json"
@@ -183,17 +209,15 @@ def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
         """#!/usr/bin/env bash
 set -euo pipefail
 report=
-output=
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -report) report=$2; shift 2 ;;
-    -report-output) output=$2; shift 2 ;;
     *) shift ;;
   esac
 done
 case "$report" in
-  timeline) cp "$VTUNE_TIMELINE_FIXTURE" "$output" ;;
-  hotspots) cp "$VTUNE_HOTSPOTS_FIXTURE" "$output" ;;
+  timeline) cat "$VTUNE_TIMELINE_FIXTURE" ;;
+  hotspots) cat "$VTUNE_HOTSPOTS_FIXTURE" ;;
   *) exit 2 ;;
 esac
 """,
@@ -207,6 +231,7 @@ esac
             "OPENFOAM_PROFILE_DIR": str(profile_root),
             "OPENFOAM_PROFILE_LABEL": "rank-zero",
             "OPENFOAM_PYTHON": sys.executable,
+            "OPENFOAM_VTUNE_FUNCTION_BINS": "2",
             "PROVISION_DIR": str(provision),
             "VTUNE_TIMELINE_FIXTURE": str(FIXTURES / "vtune-timeline.csv"),
             "VTUNE_HOTSPOTS_FIXTURE": str(FIXTURES / "vtune-hotspots.csv"),
@@ -226,3 +251,8 @@ esac
     assert not (provision / "logs" / "openfoam-vtune-trace.json").exists()
     assert not (provision / "logs" / "timeline.csv").exists()
     assert not (provision / "logs" / "hotspots.csv").exists()
+    metadata = json.loads(
+        (provision / "browser-summary" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert metadata["timeline_available"] is True
+    assert metadata["source_function_intervals"] == 8

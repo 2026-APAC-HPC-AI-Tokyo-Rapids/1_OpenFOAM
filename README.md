@@ -79,8 +79,11 @@ shown in the Actions run Summary.
 The Actions run Summary also shows the ranked functions and CPU times directly
 in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that
-case the trace contains 50 ranked function tracks whose bar lengths compare
-accumulated CPU time. These comparison bars are not chronological wall time.
+case the exporter reads the CSV report from standard output instead of
+`-report-output`. The Perfetto trace contains actual VTune elapsed-time interval
+start/end boundaries. Within 40 time slices it shows the five hottest sampled
+functions; those function spans are sampling-bin approximations, not exact call
+boundaries.
 
 The defaults can be overridden in the PJM environment:
 
@@ -88,7 +91,14 @@ The defaults can be overridden in the PJM environment:
 OPENFOAM_VTUNE_RANK=0
 OPENFOAM_VTUNE_TIME_BINS=300
 OPENFOAM_VTUNE_TOP_FUNCTIONS=50
+OPENFOAM_VTUNE_FUNCTION_BINS=40
+OPENFOAM_VTUNE_FUNCTIONS_PER_BIN=5
 OPENFOAM_VTUNE_MAX_TRACE_BYTES=250000
 ```
+
+To regenerate the lightweight JSON from a retained Genkai result without
+rerunning OpenFOAM, set the manual workflow input `existing_profile_run_id` to
+the retained profile directory name. This replaces the same rolling release
+asset and creates no Actions artifact.
 
 `perf-stat` remains the default profile mode for push runs and manual runs.
