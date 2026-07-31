@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import gzip
 import json
 import math
 from dataclasses import dataclass
@@ -214,17 +213,15 @@ def main() -> None:
             )
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(arguments.output, "wb", compresslevel=9) as stream:
-        stream.write(payload)
+    arguments.output.write_bytes(payload)
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_label": arguments.run_label,
         "source_time_bins": len(timeline),
         "exported_time_bins": time_bins,
         "source_hotspots": len(hotspots),
         "exported_hotspots": top_functions,
-        "uncompressed_trace_bytes": len(payload),
-        "compressed_trace_bytes": arguments.output.stat().st_size,
+        "trace_bytes": len(payload),
         "timeline_available": bool(timeline),
         "elapsed_sec": timeline[-1].end_sec if timeline else None,
         "top_hotspots": [

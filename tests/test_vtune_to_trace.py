@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gzip
 import importlib.util
 import json
 import os
@@ -35,8 +34,8 @@ def test_reads_vtune_reports() -> None:
     assert hotspots[0].cpu_time_sec == 11.36
 
 
-def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
-    output = tmp_path / "trace.json.gz"
+def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
+    output = tmp_path / "trace.json"
     summary = tmp_path / "summary.json"
     subprocess.run(
         [
@@ -62,8 +61,7 @@ def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
         check=True,
     )
 
-    with gzip.open(output, "rt", encoding="utf-8") as stream:
-        trace = json.load(stream)
+    trace = json.loads(output.read_text(encoding="utf-8"))
     metadata = json.loads(summary.read_text(encoding="utf-8"))
 
     assert trace["metadata"]["time_bins"] == 2
@@ -71,13 +69,13 @@ def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
     assert trace["traceEvents"][0]["args"]["name"] == "test-run"
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
-    assert metadata["compressed_trace_bytes"] < 5000
+    assert metadata["trace_bytes"] < 5000
 
 
 def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
     timeline = tmp_path / "timeline.csv"
     timeline.touch()
-    output = tmp_path / "trace.json.gz"
+    output = tmp_path / "trace.json"
     summary = tmp_path / "summary.json"
     subprocess.run(
         [
@@ -97,8 +95,7 @@ def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
         check=True,
     )
 
-    with gzip.open(output, "rt", encoding="utf-8") as stream:
-        trace = json.load(stream)
+    trace = json.loads(output.read_text(encoding="utf-8"))
     metadata = json.loads(summary.read_text(encoding="utf-8"))
 
     assert trace["metadata"]["time_bins"] == 0
@@ -116,7 +113,7 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
                 "run_label": "rank-zero",
                 "source_hotspots": 601,
                 "exported_hotspots": 1,
-                "compressed_trace_bytes": 807,
+                "trace_bytes": 2231,
                 "timeline_available": False,
                 "top_hotspots": [
                     {
@@ -205,6 +202,6 @@ esac
     )
 
     assert (result_dir / "browser-summary" / "summary.json").is_file()
-    assert (provision / "logs" / "openfoam-vtune-trace.json.gz").is_file()
+    assert (provision / "logs" / "openfoam-vtune-trace.json").is_file()
     assert not (provision / "logs" / "timeline.csv").exists()
     assert not (provision / "logs" / "hotspots.csv").exists()

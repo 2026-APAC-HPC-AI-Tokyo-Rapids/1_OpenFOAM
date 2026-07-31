@@ -53,7 +53,7 @@ vtune -report hotspots \
 if ! "${OPENFOAM_PYTHON}" "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
   --timeline "${SUMMARY_DIR}/timeline.csv" \
   --hotspots "${SUMMARY_DIR}/hotspots.csv" \
-  --output "${SUMMARY_DIR}/openfoam-vtune-trace.json.gz" \
+  --output "${SUMMARY_DIR}/openfoam-vtune-trace.json" \
   --summary "${SUMMARY_DIR}/summary.json" \
   --top-functions "${TOP_FUNCTIONS}" \
   --max-time-bins "${MAX_TIME_BINS}" \
@@ -69,5 +69,5 @@ then
 fi
 
 cp "${SUMMARY_DIR}/summary.json" \
-  "${SUMMARY_DIR}/openfoam-vtune-trace.json.gz" \
+  "${SUMMARY_DIR}/openfoam-vtune-trace.json" \
   "${PROVISION_DIR}/logs/"

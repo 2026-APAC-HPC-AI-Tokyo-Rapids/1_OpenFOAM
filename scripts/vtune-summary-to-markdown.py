@@ -24,7 +24,7 @@ def render(summary: dict[str, object], actions_url: str) -> str:
         f"- Source hotspots: {summary.get('source_hotspots', 0)}",
         f"- Exported hotspots: {summary.get('exported_hotspots', 0)}",
         f"- Timeline: {timeline}",
-        f"- Compressed Chrome trace: {summary.get('compressed_trace_bytes', 0)} bytes",
+        f"- Chrome trace: {summary.get('trace_bytes', 0)} bytes",
         "",
         "| Rank | Function | Module | CPU time (s) |",
         "| ---: | --- | --- | ---: |",
@@ -42,7 +42,7 @@ def render(summary: dict[str, object], actions_url: str) -> str:
         [
             "",
             f"[Download the run artifact]({actions_url}#artifacts), then drag "
-            "`openfoam-vtune-trace.json.gz` into [Perfetto](https://ui.perfetto.dev/) "
+            "`openfoam-vtune-trace.json` into [Perfetto](https://ui.perfetto.dev/) "
             "for the Chrome Trace view.",
             "",
         ]
