@@ -168,6 +168,7 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-summary.sh" \
             "${GITHUB_WORKSPACE}/scripts/vtune-to-trace.py" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-summary-to-markdown.py" \
             "${provision_dir}/scripts/"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
@@ -268,6 +269,15 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             collect scheduler \
             --job-id "${PJM_JOB_ID}"
+
+      - name: Publish VTune browser summary
+        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        run: |
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" \
+            "${PROVISION_DIR}/scripts/vtune-summary-to-markdown.py" \
+            --summary "${PROVISION_DIR}/logs/summary.json" \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --actions-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Upload OpenFOAM execution log
         if: always()

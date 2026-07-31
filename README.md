@@ -71,6 +71,8 @@ The compressed trace uses the Chrome Trace Event format and can be opened by
 dragging it into <https://ui.perfetto.dev/>. It contains a bounded timeline and
 the hottest functions, not raw samples or call stacks. VTune is inserted with
 Intel MPI `-gtool` and observes rank 0 by default instead of the Hydra launcher.
+The Actions run Summary also shows the ranked functions and CPU times directly
+in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that
 case the trace contains the bounded Hotspots summary without a timeline track.
 

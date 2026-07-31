@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "vtune-to-trace.py"
+MARKDOWN_SCRIPT = ROOT / "scripts" / "vtune-summary-to-markdown.py"
 FIXTURES = ROOT / "tests" / "fixtures"
 
 
@@ -104,6 +105,51 @@ def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
     assert trace["metadata"]["hotspot_count"] == 2
     assert metadata["timeline_available"] is False
     assert metadata["elapsed_sec"] is None
+
+
+def test_renders_actions_summary(tmp_path: Path) -> None:
+    summary = tmp_path / "summary.json"
+    output = tmp_path / "step-summary.md"
+    summary.write_text(
+        json.dumps(
+            {
+                "run_label": "rank-zero",
+                "source_hotspots": 601,
+                "exported_hotspots": 1,
+                "compressed_trace_bytes": 807,
+                "timeline_available": False,
+                "top_hotspots": [
+                    {
+                        "function": "Foam::foo|bar",
+                        "module": "libOpenFOAM.so",
+                        "cpu_time_sec": 4.379697,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(MARKDOWN_SCRIPT),
+            "--summary",
+            str(summary),
+            "--output",
+            str(output),
+            "--actions-url",
+            "https://github.example/actions/runs/123",
+        ],
+        check=True,
+    )
+
+    markdown = output.read_text(encoding="utf-8")
+    assert "## Intel VTune summary" in markdown
+    assert "Foam::foo\\|bar" in markdown
+    assert "4.379697" in markdown
+    assert "https://github.example/actions/runs/123#artifacts" in markdown
+    assert "https://ui.perfetto.dev/" in markdown
 
 
 def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
