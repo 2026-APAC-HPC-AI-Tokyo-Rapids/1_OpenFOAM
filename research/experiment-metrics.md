@@ -218,6 +218,10 @@ solver logへ汎用正規表現を掛けない。collectorは値同士の整合�
 送信先のproject、dataset、tableとlocationは
 [`experiment-metrics/pyproject.toml`](../experiment-metrics/pyproject.toml)の
 `tool.experiment-metrics.bigquery`から読む。
+OpenFOAM用の送信先は
+`apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_metrics`とする。
+datasetとtableの両方に`openfoam_`を付け、別workloadのメトリクスとBigQuery
+Explorer上で区別できるようにする。
 Python側の外部依存は認証用`google-auth`だけとし、HTTPとJSONは標準libraryを使える。
 新規の高throughput用途ではStorage Write APIが推奨されるが、本システムはrun当たり
 少数batchなので、gRPC依存を増やさないこの方式に固定する。認証はApplication Default
