@@ -69,11 +69,13 @@ openfoam-vtune-trace.json.gz
 
 The compressed trace uses the Chrome Trace Event format and can be opened by
 dragging it into <https://ui.perfetto.dev/>. It contains a bounded timeline and
-the hottest functions, not raw samples or call stacks.
+the hottest functions, not raw samples or call stacks. VTune is inserted with
+Intel MPI `-gtool` and observes rank 0 by default instead of the Hydra launcher.
 
 The defaults can be overridden in the PJM environment:
 
 ```text
+OPENFOAM_VTUNE_RANK=0
 OPENFOAM_VTUNE_TIME_BINS=300
 OPENFOAM_VTUNE_TOP_FUNCTIONS=20
 OPENFOAM_VTUNE_MAX_TRACE_BYTES=5000000

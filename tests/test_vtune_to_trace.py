@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -70,3 +71,58 @@ def test_cli_writes_bounded_gzip_trace(tmp_path: Path) -> None:
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
     assert metadata["compressed_trace_bytes"] < 5000
+
+
+def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
+    profile_root = tmp_path / "profiles"
+    result_dir = profile_root / "rank-zero"
+    (result_dir / "vtune").mkdir(parents=True)
+    provision = tmp_path / "provision"
+    scripts = provision / "scripts"
+    scripts.mkdir(parents=True)
+    (provision / "logs").mkdir()
+    (scripts / "vtune-to-trace.py").symlink_to(SCRIPT)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_vtune = fake_bin / "vtune"
+    fake_vtune.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+report=
+output=
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -report) report=$2; shift 2 ;;
+    -report-output) output=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$report" in
+  timeline) cp "$VTUNE_TIMELINE_FIXTURE" "$output" ;;
+  hotspots) cp "$VTUNE_HOTSPOTS_FIXTURE" "$output" ;;
+  *) exit 2 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_vtune.chmod(0o755)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{fake_bin}:{environment['PATH']}",
+            "OPENFOAM_PROFILE_DIR": str(profile_root),
+            "OPENFOAM_PROFILE_LABEL": "rank-zero",
+            "PROVISION_DIR": str(provision),
+            "VTUNE_TIMELINE_FIXTURE": str(FIXTURES / "vtune-timeline.csv"),
+            "VTUNE_HOTSPOTS_FIXTURE": str(FIXTURES / "vtune-hotspots.csv"),
+        }
+    )
+
+    subprocess.run(
+        [str(ROOT / "scripts" / "export-vtune-summary.sh")],
+        env=environment,
+        check=True,
+    )
+
+    assert (result_dir / "browser-summary" / "summary.json").is_file()
+    assert (provision / "logs" / "openfoam-vtune-trace.json.gz").is_file()

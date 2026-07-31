@@ -11,7 +11,9 @@ set -euo pipefail
 export OPENFOAM_MPI_PROCS=120
 export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-shm-default
 : "${OPENFOAM_PROFILE_MODE:=perf-stat}"
+: "${OPENFOAM_VTUNE_RANK:=0}"
 export OPENFOAM_PROFILE_MODE
+export OPENFOAM_VTUNE_RANK
 
 # ジョブ実行に必要な環境変数が設定されていることを確認する。
 : "${OPENFOAM_RUN_ROOT:?}"
@@ -137,8 +139,24 @@ mpirun -np 2 -ppn 1 bash -c 'printf "host=%s\\n" "$(hostname)"; lscpu' > "${OPEN
   echo "started_at=$(date --iso-8601=seconds)"
 } | tee "${SOLVER_LOG}"
 
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  # VTuneをmpirun自体へ掛けるとHydra launcherだけを観測してしまう。
+  # Intel MPIのgtoolで代表rankのsimpleFoamプロセスだけを観測する。
+  solver_command=(
+    mpirun -np "${OPENFOAM_MPI_PROCS}"
+    -gtool "${PROVISION_DIR}/scripts/exec-profiler.sh:${OPENFOAM_VTUNE_RANK}"
+    simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  )
+else
+  solver_command=(
+    "${PROVISION_DIR}/scripts/exec-profiler.sh"
+    mpirun -np "${OPENFOAM_MPI_PROCS}"
+    simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  )
+fi
+
 set +e
-metrics_cli stage simple_foam -- "${PROVISION_DIR}/scripts/exec-profiler.sh" mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
+metrics_cli stage simple_foam -- "${solver_command[@]}" 2>&1 | tee -a "${SOLVER_LOG}"
 solver_status=${PIPESTATUS[0]}
 set -e
 
