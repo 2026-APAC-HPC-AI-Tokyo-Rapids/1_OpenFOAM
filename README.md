@@ -54,3 +54,29 @@ The ThirdParty Git repository does not contain unpacked dependency sources. Its
 `download-v2606-sources.sh` script retrieves the required archives through the
 existing shared source cache and expands them into the build tree. The workflow
 does not copy `sources/` from the monolithic ThirdParty release archive.
+
+## Lightweight VTune browser summary
+
+Manual workflow runs accept a `profile_mode` input. Select `vtune-hotspots` to
+collect a VTune Hotspots result for the `simpleFoam` stage. The raw result stays
+under the private profile directory on Genkai. The workflow artifact receives
+only:
+
+```text
+summary.json
+openfoam-vtune-trace.json.gz
+```
+
+The compressed trace uses the Chrome Trace Event format and can be opened by
+dragging it into <https://ui.perfetto.dev/>. It contains a bounded timeline and
+the hottest functions, not raw samples or call stacks.
+
+The defaults can be overridden in the PJM environment:
+
+```text
+OPENFOAM_VTUNE_TIME_BINS=300
+OPENFOAM_VTUNE_TOP_FUNCTIONS=20
+OPENFOAM_VTUNE_MAX_TRACE_BYTES=5000000
+```
+
+`perf-stat` remains the default profile mode for push runs and manual runs.

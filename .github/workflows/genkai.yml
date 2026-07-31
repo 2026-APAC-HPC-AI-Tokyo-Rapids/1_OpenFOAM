@@ -13,6 +13,15 @@ on:
         required: true
         default: false
         type: boolean
+      profile_mode:
+        description: Profiler used for the simpleFoam stage
+        required: true
+        default: perf-stat
+        type: choice
+        options:
+          - none
+          - perf-stat
+          - vtune-hotspots
   push:
     paths-ignore:
       - 'research/**'
@@ -154,7 +163,12 @@ jobs:
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
           mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
-          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
+          install -m 0755 \
+            "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
+            "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
+            "${GITHUB_WORKSPACE}/scripts/export-vtune-summary.sh" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-to-trace.py" \
+            "${provision_dir}/scripts/"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
@@ -197,11 +211,12 @@ jobs:
       - name: Submit OpenFOAM job
         env:
           EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+          OPENFOAM_PROFILE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_mode || 'perf-stat' }}
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
           test -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}"
           credentials_base64="$(printf '%s' "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}" | base64 --wrap=0)"
-          job_environment="PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},GITHUB_RUN_ID=${GITHUB_RUN_ID},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_REPOSITORY=${GITHUB_REPOSITORY},GITHUB_SHA=${GITHUB_SHA},EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64=${credentials_base64}"
+          job_environment="PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},GITHUB_RUN_ID=${GITHUB_RUN_ID},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_REPOSITORY=${GITHUB_REPOSITORY},GITHUB_SHA=${GITHUB_SHA},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE},EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64=${credentials_base64}"
           job_output="$(pjsub -x "${job_environment}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"

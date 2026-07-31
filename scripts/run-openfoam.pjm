@@ -10,6 +10,8 @@ set -euo pipefail
 # ジョブの実行条件をスクリプト内で固定し、投入元の環境に依存しないようにする。
 export OPENFOAM_MPI_PROCS=120
 export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-shm-default
+: "${OPENFOAM_PROFILE_MODE:=perf-stat}"
+export OPENFOAM_PROFILE_MODE
 
 # ジョブ実行に必要な環境変数が設定されていることを確認する。
 : "${OPENFOAM_RUN_ROOT:?}"
@@ -145,6 +147,14 @@ echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${SOLVER_LOG}"
 metrics_collect solver-status --case-dir . --exit-code "${solver_status}"
 metrics_collect solver-result --case-dir .
 metrics_collect artifact --case-dir .
+
+# VTuneの生データから、ブラウザで確認できる上限付きのサマリーだけを生成する。
+# 変換失敗はsolverの成否を変えず、ログへ警告を残す。
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  "${PROVISION_DIR}/scripts/export-vtune-summary.sh" || {
+    printf 'VTune browser summary export failed\n' >&2
+  }
+fi
 
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
