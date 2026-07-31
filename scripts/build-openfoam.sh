@@ -7,12 +7,15 @@ set -euo pipefail
 : "${GITHUB_RUN_ID:?}"
 : "${GITHUB_RUN_NUMBER:?}"
 : "${GITHUB_WORKSPACE:?}"
+: "${GIT_MIRROR_DIR:?}"
 : "${SOURCE_ARCHIVE_CACHE_DIR:?}"
 
 
 # ビルド仕様はここへ集約し、workflow からは実行ごとのパスと
 # GitHub Actions のメタデータだけを受け取る。
 export OPENFOAM_VERSION=v2606
+export OPENFOAM_SOURCE_REF=refs/tags/OpenFOAM-v2606
+export THIRDPARTY_SOURCE_REF=refs/heads/main
 export ADIOS2_VERSION=2.12.1
 export CGAL_VERSION=6.1.1
 export OPENFOAM_BUILD_PARALLELISM=120
@@ -23,7 +26,6 @@ export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
 # ビルドツリー、ccache、一時 archive の場所を先に決めておく。
 export BUILD_TREE="${BUILD_DIR}/tree"
-export THIRDPARTY_SOURCE_DIR="${BUILD_TREE}/ThirdParty-${OPENFOAM_VERSION}"
 export CCACHE_LOCAL_DIR="/dev/shm/ccache-${USER:?}"
 export PUBLISH_TMP="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.tar.zst.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
 export CCACHE_BASEDIR="${BUILD_TREE}"
@@ -47,26 +49,35 @@ rm -rf -- "${BUILD_DIR:?}"
 install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${BUILD_TREE}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
 install -d -m 0700 "${CCACHE_LOCAL_DIR}"
 
-# OpenFOAM と ThirdParty、および追加依存ライブラリの source archive を
-# 共有キャッシュから取得する。既存の archive は再ダウンロードしない。
+# OpenFOAM v2606 と対応する ThirdParty を、更新済みの共有 mirror から
+# ローカル clone する。初回の GitHub からの mirror 作成は運用時に一度だけ行う。
+git clone --no-checkout \
+  "${GIT_MIRROR_DIR}/3_OpenFOAM_Src.git" \
+  "${BUILD_TREE}/OpenFOAM"
+git -C "${BUILD_TREE}/OpenFOAM" checkout --detach "${OPENFOAM_SOURCE_REF}"
+
+git clone --no-checkout \
+  "${GIT_MIRROR_DIR}/4_OpenFOAM_ThirdParty_Src.git" \
+  "${BUILD_TREE}/ThirdParty"
+git -C "${BUILD_TREE}/ThirdParty" checkout --detach "${THIRDPARTY_SOURCE_REF}"
+
+# ビルドには worktree だけを使うため、成果物へ Git オブジェクトを含めない。
+rm -rf -- "${BUILD_TREE}/OpenFOAM/.git" "${BUILD_TREE}/ThirdParty/.git"
+ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
+
+# 追加依存ライブラリの source archive は共有キャッシュから取得する。
+# 既存の archive は再ダウンロードしない。
 for archive_url in \
-  "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/OpenFOAM-${OPENFOAM_VERSION}.tgz" \
-  "https://dl.openfoam.com/source/${OPENFOAM_VERSION}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" \
   "https://github.com/ornladios/ADIOS2/archive/refs/tags/v${ADIOS2_VERSION}.tar.gz" \
   "https://github.com/CGAL/cgal/releases/download/v${CGAL_VERSION}/CGAL-${CGAL_VERSION}.tar.xz"
 do
   wget --no-verbose --no-clobber --directory-prefix="${SOURCE_ARCHIVE_CACHE_DIR}" "${archive_url}"
 done
 
-# source archive を展開し、OpenFOAM が参照するディレクトリ構成に組み立てる。
-tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/OpenFOAM-${OPENFOAM_VERSION}.tgz" -C "${BUILD_TREE}"
-tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/ThirdParty-${OPENFOAM_VERSION}.tar.gz" -C "${BUILD_TREE}"
-mkdir -p "${THIRDPARTY_SOURCE_DIR}/sources/adios" "${THIRDPARTY_SOURCE_DIR}/sources/cgal"
-tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${THIRDPARTY_SOURCE_DIR}/sources/adios"
-tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${THIRDPARTY_SOURCE_DIR}/sources/cgal"
-mv "${BUILD_TREE}/OpenFOAM-${OPENFOAM_VERSION}" "${BUILD_TREE}/OpenFOAM"
-mv "${THIRDPARTY_SOURCE_DIR}" "${BUILD_TREE}/ThirdParty"
-ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
+# 追加依存ライブラリを ThirdParty が参照するディレクトリへ展開する。
+mkdir -p "${BUILD_TREE}/ThirdParty/sources/adios" "${BUILD_TREE}/ThirdParty/sources/cgal"
+tar -xzf "${SOURCE_ARCHIVE_CACHE_DIR}/v${ADIOS2_VERSION}.tar.gz" -C "${BUILD_TREE}/ThirdParty/sources/adios"
+tar -xJf "${SOURCE_ARCHIVE_CACHE_DIR}/CGAL-${CGAL_VERSION}.tar.xz" -C "${BUILD_TREE}/ThirdParty/sources/cgal"
 
 # リポジトリで管理している OpenFOAM の追加 patch を適用する。
 for patch_file in "${GITHUB_WORKSPACE}"/patches/*.patch
