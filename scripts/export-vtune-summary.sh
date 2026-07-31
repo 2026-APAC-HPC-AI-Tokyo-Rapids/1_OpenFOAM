@@ -8,6 +8,7 @@ set -euo pipefail
 
 PROFILE_RESULT_DIR="${OPENFOAM_PROFILE_DIR}/${OPENFOAM_PROFILE_LABEL}"
 SUMMARY_DIR="${PROFILE_RESULT_DIR}/browser-summary"
+BROWSER_ARTIFACT_DIR="${PROVISION_DIR}/browser-summary"
 MAX_TIME_BINS="${OPENFOAM_VTUNE_TIME_BINS:-300}"
 TOP_FUNCTIONS="${OPENFOAM_VTUNE_TOP_FUNCTIONS:-20}"
 MAX_TRACE_BYTES="${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-5000000}"
@@ -31,7 +32,7 @@ command -v vtune >/dev/null
   printf 'Python interpreter is not executable: %s\n' "${OPENFOAM_PYTHON}" >&2
   exit 2
 }
-install -d -m 0700 "${SUMMARY_DIR}"
+install -d -m 0700 "${SUMMARY_DIR}" "${BROWSER_ARTIFACT_DIR}"
 
 # Timelineはブラウザ表示に必要な時間ビンへ集約してから出力する。Hotspotsは
 # 変換スクリプト側で上位関数だけを残す。
@@ -70,4 +71,4 @@ fi
 
 cp "${SUMMARY_DIR}/summary.json" \
   "${SUMMARY_DIR}/openfoam-vtune-trace.json" \
-  "${PROVISION_DIR}/logs/"
+  "${BROWSER_ARTIFACT_DIR}/"

@@ -202,6 +202,9 @@ esac
     )
 
     assert (result_dir / "browser-summary" / "summary.json").is_file()
-    assert (provision / "logs" / "openfoam-vtune-trace.json").is_file()
+    assert (provision / "browser-summary" / "summary.json").is_file()
+    assert (provision / "browser-summary" / "openfoam-vtune-trace.json").is_file()
+    assert not (provision / "logs" / "summary.json").exists()
+    assert not (provision / "logs" / "openfoam-vtune-trace.json").exists()
     assert not (provision / "logs" / "timeline.csv").exists()
     assert not (provision / "logs" / "hotspots.csv").exists()
