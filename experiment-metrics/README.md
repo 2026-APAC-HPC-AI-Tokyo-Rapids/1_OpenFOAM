@@ -11,8 +11,8 @@ BigQueryの非機密設定は`pyproject.toml`に置く。
 ```toml
 [tool.experiment-metrics.bigquery]
 project = "apac-hpc-ai-tokyo-rapids-26"
-dataset = "experiment_metrics"
-table = "metrics"
+dataset = "openfoam_experiment_metrics"
+table = "openfoam_metrics"
 location = "asia-northeast1"
 ```
 
