@@ -102,14 +102,17 @@ jobs:
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
-      CCACHE_RESHARE: ${{ github.event_name == 'workflow_dispatch' && inputs.reshare_ccache }}
 
     steps:
       - name: Checkout build inputs
         uses: actions/checkout@v6
 
       - name: Build and publish OpenFOAM
-        run: "${GITHUB_WORKSPACE}/scripts/build-openfoam.sh"
+        run: |
+          if [[ '${{ github.event_name == 'workflow_dispatch' && inputs.reshare_ccache }}' == true ]]; then
+            export CCACHE_RESHARE=true
+          fi
+          "${GITHUB_WORKSPACE}/scripts/build-openfoam.sh"
 
       - name: Upload OpenFOAM build log
         if: always()
