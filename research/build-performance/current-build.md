@@ -13,7 +13,7 @@
 | Allwmake | `-j 120 -s`、queue なし |
 | compiler cache | ccache。CMake の C/C++ launcher にも使用 |
 
-ADIOS2 と CGAL の source は workflow が明示した version を使う。CGAL の version 選択、Icx の C preprocessor、Allwmake の timestamp 出力には patch を適用する。適用対象は [patches](../../patches) に置き、workflow は `patches/*.patch` を全件適用する。このため、patch の追加・削除はビルド定義の変更として扱う。
+ADIOS2 と CGAL の source は workflow が明示した version を使う。CGAL の version 選択、Icx の C preprocessor、Allwmake の timestamp 出力は、Org 管理の `3_OpenFOAM_Src` に直接反映している。ビルドは同 repository の `master` を checkout するため、これらの変更はソース履歴の一部として管理される。
 
 ## ディレクトリとキャッシュ
 
@@ -44,7 +44,7 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 通常の成功 run では、次を確認する。
 
 - GitHub Actions の job / step 所要時間。runner の待機と `Build OpenFOAM` の遅延を分ける。
-- artifact の `allwmake.log`。`allwmake-timestamps.patch` により各行に時刻が付くため、遅延した工程を絞れる。
+- artifact の `allwmake.log`。`3_OpenFOAM_Src` の Allwmake ログ処理が各行に時刻を付けるため、遅延した工程を絞れる。
 - `ccache --show-stats`。Allwmake の直前に統計を zero clear するため、その build だけの hit 率、cacheable call 数、miss 数、local / remote storage の状態を確認できる。
 - 失敗時の `allwmake.log` と Actions の失敗ログ。workflow は console へ error の要約を出し、完全な log は artifact として残す。
 

@@ -11,9 +11,10 @@ uses the following read-only bare mirrors as a shared Git object cache:
 └── 4_OpenFOAM_ThirdParty_Src.git
 ```
 
-OpenFOAM is checked out at `OpenFOAM-v2606`. The ThirdParty repository does not
-have a v2606 tag, so the workflow uses its `main` branch as specified by the
-source repository policy.
+OpenFOAM is checked out from the organization-managed `master` branch, whose
+current release line is v2606. The ThirdParty repository does not have a v2606
+tag, so the workflow uses its `main` branch as specified by the source
+repository policy.
 
 ### One-time initialization
 
@@ -44,11 +45,10 @@ to them.
 
 ### Routine operation
 
-Every workflow run invokes `scripts/update-source-mirrors.sh`. The script fetches
-and prunes both mirrors, retries transient conflicts, and verifies the build
-refs. If all fetch attempts fail but the required refs already exist, the last
-complete mirror state remains usable. Builds then clone from the local mirrors,
-so Git objects are not downloaded again for each build.
+Each source repository updates its own bare mirror from a serialized GitHub
+Actions workflow after a push. This repository treats both mirrors as read-only
+and only clones from them when a new build is required, so Git objects are not
+downloaded again for each build.
 
 The ThirdParty Git repository does not contain unpacked dependency sources. Its
 `download-v2606-sources.sh` script retrieves the required archives through the

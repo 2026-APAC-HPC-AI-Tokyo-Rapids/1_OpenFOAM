@@ -14,7 +14,7 @@ set -euo pipefail
 # ビルド仕様はここへ集約し、workflow からは実行ごとのパスと
 # GitHub Actions のメタデータだけを受け取る。
 export OPENFOAM_VERSION=v2606
-export OPENFOAM_SOURCE_REF=refs/tags/OpenFOAM-v2606
+export OPENFOAM_SOURCE_REF=refs/heads/master
 export THIRDPARTY_SOURCE_REF=refs/heads/main
 export OPENFOAM_BUILD_PARALLELISM=120
 export CC=mpiicx
@@ -47,8 +47,8 @@ rm -rf -- "${BUILD_DIR:?}"
 install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${BUILD_TREE}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
 install -d -m 0700 "${CCACHE_LOCAL_DIR}"
 
-# OpenFOAM v2606 と対応する ThirdParty を、更新済みの共有 mirror から
-# ローカル clone する。初回の GitHub からの mirror 作成は運用時に一度だけ行う。
+# OpenFOAM v2606 と対応する ThirdParty を、ソースリポジトリ側で更新される
+# 読み取り専用の共有 mirror からローカル clone する。
 git clone --no-checkout \
   "${GIT_MIRROR_DIR}/3_OpenFOAM_Src.git" \
   "${BUILD_TREE}/OpenFOAM"
@@ -66,12 +66,6 @@ ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
 # ThirdParty リポジトリが管理するスクリプトで、v2606 ビルドに必要な依存を
 # 共有 archive cache から検証・展開する。
 "${BUILD_TREE}/ThirdParty/download-v2606-sources.sh"
-
-# リポジトリで管理している OpenFOAM の追加 patch を適用する。
-for patch_file in "${GITHUB_WORKSPACE}"/patches/*.patch
-do
-  patch -d "${BUILD_TREE}" -p0 < "${patch_file}"
-done
 
 module purge
 module load intel/2025.1.3 impi
