@@ -112,6 +112,7 @@ esac
             "PATH": f"{fake_bin}:{environment['PATH']}",
             "OPENFOAM_PROFILE_DIR": str(profile_root),
             "OPENFOAM_PROFILE_LABEL": "rank-zero",
+            "OPENFOAM_PYTHON": sys.executable,
             "PROVISION_DIR": str(provision),
             "VTUNE_TIMELINE_FIXTURE": str(FIXTURES / "vtune-timeline.csv"),
             "VTUNE_HOTSPOTS_FIXTURE": str(FIXTURES / "vtune-hotspots.csv"),

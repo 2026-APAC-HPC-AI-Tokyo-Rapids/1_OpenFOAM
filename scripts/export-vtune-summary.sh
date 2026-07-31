@@ -11,6 +11,7 @@ SUMMARY_DIR="${PROFILE_RESULT_DIR}/browser-summary"
 MAX_TIME_BINS="${OPENFOAM_VTUNE_TIME_BINS:-300}"
 TOP_FUNCTIONS="${OPENFOAM_VTUNE_TOP_FUNCTIONS:-20}"
 MAX_TRACE_BYTES="${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-5000000}"
+OPENFOAM_PYTHON="${OPENFOAM_PYTHON:-${PROVISION_DIR}/experiment-metrics/.venv/bin/python}"
 
 # Intel MPIのgtool経由では、VTuneが結果名へホスト名を付ける。固定名と
 # vtune.<hostname>の両方を受け付け、別runを誤選択しないよう1件に限定する。
@@ -26,6 +27,10 @@ done
 }
 VTUNE_RESULT_DIR="${vtune_result_dirs[0]}"
 command -v vtune >/dev/null
+[[ -x "${OPENFOAM_PYTHON}" ]] || {
+  printf 'Python interpreter is not executable: %s\n' "${OPENFOAM_PYTHON}" >&2
+  exit 2
+}
 install -d -m 0700 "${SUMMARY_DIR}"
 
 # Timelineはブラウザ表示に必要な時間ビンへ集約してから出力する。Hotspotsは
@@ -45,7 +50,7 @@ vtune -report hotspots \
   -csv-delimiter comma \
   -report-output "${SUMMARY_DIR}/hotspots.csv"
 
-python3 "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
+"${OPENFOAM_PYTHON}" "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
   --timeline "${SUMMARY_DIR}/timeline.csv" \
   --hotspots "${SUMMARY_DIR}/hotspots.csv" \
   --output "${SUMMARY_DIR}/openfoam-vtune-trace.json.gz" \
