@@ -23,19 +23,23 @@ def render(summary: dict[str, object], trace_url: str) -> str:
         f"- Run label: `{escape_table(summary.get('run_label', 'unknown'))}`",
         f"- Source hotspots: {summary.get('source_hotspots', 0)}",
         f"- Exported hotspots: {summary.get('exported_hotspots', 0)}",
+        f"- Profile CPU time: {float(summary.get('profile_cpu_time_sec', 0)):.6f} s",
         f"- Timeline: {timeline}",
         f"- Chrome trace: {summary.get('trace_bytes', 0)} bytes",
+        "- Perfetto hotspot bars compare accumulated CPU time; they are not chronological.",
         "",
-        "| Rank | Function | Module | CPU time (s) |",
-        "| ---: | --- | --- | ---: |",
+        "| Rank | Category | Function | Module | CPU time (s) | Profile CPU |",
+        "| ---: | --- | --- | --- | ---: | ---: |",
     ]
     for rank, item in enumerate(hotspots, 1):
         if not isinstance(item, dict):
             continue
         lines.append(
-            f"| {rank} | `{escape_table(item.get('function', ''))}` "
+            f"| {rank} | {escape_table(item.get('category', 'Other'))} "
+            f"| `{escape_table(item.get('function', ''))}` "
             f"| `{escape_table(item.get('module', ''))}` "
-            f"| {float(item.get('cpu_time_sec', 0)):.6f} |"
+            f"| {float(item.get('cpu_time_sec', 0)):.6f} "
+            f"| {float(item.get('profile_cpu_percent', 0)):.3f}% |"
         )
 
     lines.extend(

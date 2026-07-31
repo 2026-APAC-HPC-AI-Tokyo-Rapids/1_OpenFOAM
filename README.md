@@ -79,15 +79,16 @@ shown in the Actions run Summary.
 The Actions run Summary also shows the ranked functions and CPU times directly
 in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that
-case the trace contains the bounded Hotspots summary without a timeline track.
+case the trace contains 50 ranked function tracks whose bar lengths compare
+accumulated CPU time. These comparison bars are not chronological wall time.
 
 The defaults can be overridden in the PJM environment:
 
 ```text
 OPENFOAM_VTUNE_RANK=0
 OPENFOAM_VTUNE_TIME_BINS=300
-OPENFOAM_VTUNE_TOP_FUNCTIONS=20
-OPENFOAM_VTUNE_MAX_TRACE_BYTES=5000000
+OPENFOAM_VTUNE_TOP_FUNCTIONS=50
+OPENFOAM_VTUNE_MAX_TRACE_BYTES=250000
 ```
 
 `perf-stat` remains the default profile mode for push runs and manual runs.

@@ -101,6 +101,21 @@ def _thin(items: list[TimeBin], limit: int) -> list[TimeBin]:
     return selected
 
 
+def hotspot_category(item: Hotspot) -> str:
+    module = item.module.lower()
+    function = item.function.lower()
+    if "mpi" in module or function.startswith(("pmpi_", "mpi_", "internal_i")):
+        return "MPI"
+    if any(
+        name in module
+        for name in ("openfoam", "finitevolume", "mesh", "simplefoam")
+    ) or function.startswith("foam::"):
+        return "OpenFOAM"
+    if any(name in module for name in ("libc.", "libstdc++", "libdl.", "libpthread")):
+        return "Runtime"
+    return "Other"
+
+
 def build_trace(
     timeline: list[TimeBin],
     hotspots: list[Hotspot],
@@ -111,13 +126,14 @@ def build_trace(
 ) -> dict[str, Any]:
     bins = _thin(timeline, max_time_bins)
     selected_hotspots = hotspots[:top_functions]
+    profile_cpu_time_sec = sum(item.cpu_time_sec for item in hotspots)
     events: list[dict[str, Any]] = [
         {
             "name": "process_name",
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": run_label},
+            "args": {"name": f"{run_label}: hotspot CPU-time comparison"},
         }
     ]
     for item in bins:
@@ -134,10 +150,55 @@ def build_trace(
                     "args": {"value": value},
                 }
             )
+    for rank, item in enumerate(selected_hotspots, 1):
+        category = hotspot_category(item)
+        cpu_percent = (
+            item.cpu_time_sec / profile_cpu_time_sec * 100
+            if profile_cpu_time_sec
+            else 0.0
+        )
+        events.extend(
+            [
+                {
+                    "name": "thread_name",
+                    "ph": "M",
+                    "pid": 1,
+                    "tid": rank,
+                    "args": {"name": f"#{rank} [{category}] {item.function}"},
+                },
+                {
+                    "name": "thread_sort_index",
+                    "ph": "M",
+                    "pid": 1,
+                    "tid": rank,
+                    "args": {"sort_index": rank},
+                },
+                {
+                    "name": item.function,
+                    "cat": f"vtune-hotspot,{category.lower()}",
+                    "ph": "X",
+                    "pid": 1,
+                    "tid": rank,
+                    "ts": 0,
+                    "dur": max(1, round(item.cpu_time_sec * 1_000_000)),
+                    "args": {
+                        "rank": rank,
+                        "category": category,
+                        "module": item.module,
+                        "cpu_time_sec": item.cpu_time_sec,
+                        "profile_cpu_percent": round(cpu_percent, 3),
+                        "interpretation": (
+                            "Bar length compares accumulated CPU time; "
+                            "it is not chronological wall time."
+                        ),
+                    },
+                },
+            ]
+        )
     if selected_hotspots:
         events.append(
             {
-                "name": "VTune hotspots summary",
+                "name": "How to read these tracks",
                 "cat": "vtune-summary",
                 "ph": "I",
                 "s": "p",
@@ -145,11 +206,10 @@ def build_trace(
                 "tid": 0,
                 "ts": round(bins[-1].end_sec * 1_000_000) if bins else 0,
                 "args": {
-                    f"{index + 1}. {item.function}": {
-                        "module": item.module,
-                        "cpu_time_sec": item.cpu_time_sec,
-                    }
-                    for index, item in enumerate(selected_hotspots)
+                    "description": (
+                        "Each function track starts at zero. Bar length is accumulated "
+                        "VTune CPU time and is intended for comparison, not chronology."
+                    )
                 },
             }
         )
@@ -159,6 +219,8 @@ def build_trace(
             "source": "Intel VTune CSV reports",
             "time_bins": len(bins),
             "hotspot_count": len(selected_hotspots),
+            "profile_cpu_time_sec": profile_cpu_time_sec,
+            "hotspot_tracks_are_chronological": False,
         },
         "traceEvents": events,
     }
@@ -177,7 +239,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--run-label", default="openfoam")
-    parser.add_argument("--top-functions", type=int, default=20)
+    parser.add_argument("--top-functions", type=int, default=50)
     parser.add_argument("--max-time-bins", type=int, default=300)
     parser.add_argument("--max-trace-bytes", type=int, default=5_000_000)
     arguments = parser.parse_args()
@@ -215,20 +277,30 @@ def main() -> None:
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_bytes(payload)
     summary = {
-        "schema_version": 2,
+        "schema_version": 3,
         "run_label": arguments.run_label,
         "source_time_bins": len(timeline),
         "exported_time_bins": time_bins,
         "source_hotspots": len(hotspots),
         "exported_hotspots": top_functions,
         "trace_bytes": len(payload),
+        "profile_cpu_time_sec": sum(item.cpu_time_sec for item in hotspots),
         "timeline_available": bool(timeline),
         "elapsed_sec": timeline[-1].end_sec if timeline else None,
         "top_hotspots": [
             {
                 "function": item.function,
                 "module": item.module,
+                "category": hotspot_category(item),
                 "cpu_time_sec": item.cpu_time_sec,
+                "profile_cpu_percent": round(
+                    item.cpu_time_sec
+                    / sum(source.cpu_time_sec for source in hotspots)
+                    * 100,
+                    3,
+                )
+                if hotspots
+                else 0.0,
             }
             for item in hotspots[:top_functions]
         ],

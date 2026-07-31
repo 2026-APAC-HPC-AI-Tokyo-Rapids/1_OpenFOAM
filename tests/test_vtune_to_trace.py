@@ -66,9 +66,17 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
 
     assert trace["metadata"]["time_bins"] == 2
     assert trace["metadata"]["hotspot_count"] == 2
-    assert trace["traceEvents"][0]["args"]["name"] == "test-run"
+    assert "test-run" in trace["traceEvents"][0]["args"]["name"]
+    hotspot_events = [
+        event for event in trace["traceEvents"] if event.get("ph") == "X"
+    ]
+    assert len(hotspot_events) == 2
+    assert hotspot_events[0]["name"] == "PMPI_Allreduce"
+    assert hotspot_events[0]["args"]["category"] == "MPI"
+    assert hotspot_events[0]["dur"] == 11_360_000
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
+    assert metadata["top_hotspots"][0]["profile_cpu_percent"] == 52.641
     assert metadata["trace_bytes"] < 5000
 
 
@@ -100,6 +108,7 @@ def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
 
     assert trace["metadata"]["time_bins"] == 0
     assert trace["metadata"]["hotspot_count"] == 2
+    assert len([event for event in trace["traceEvents"] if event.get("ph") == "X"]) == 2
     assert metadata["timeline_available"] is False
     assert metadata["elapsed_sec"] is None
 
@@ -114,12 +123,15 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
                 "source_hotspots": 601,
                 "exported_hotspots": 1,
                 "trace_bytes": 2231,
+                "profile_cpu_time_sec": 20.0,
                 "timeline_available": False,
                 "top_hotspots": [
                     {
                         "function": "Foam::foo|bar",
                         "module": "libOpenFOAM.so",
+                        "category": "OpenFOAM",
                         "cpu_time_sec": 4.379697,
+                        "profile_cpu_percent": 21.898,
                     }
                 ],
             }
@@ -144,6 +156,8 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
     markdown = output.read_text(encoding="utf-8")
     assert "## Intel VTune summary" in markdown
     assert "Foam::foo\\|bar" in markdown
+    assert "OpenFOAM" in markdown
+    assert "21.898%" in markdown
     assert "4.379697" in markdown
     assert (
         "https://github.example/releases/download/vtune-latest/"
