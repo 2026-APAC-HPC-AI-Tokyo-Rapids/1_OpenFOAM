@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """Install bounded VTune/Chrome-trace task instrumentation into OpenFOAM."""
 
-from __future__ import annotations
-
 import argparse
 import shutil
 from pathlib import Path
 
 
-def replace_once(path: Path, old: str, new: str) -> None:
+def replace_once(path, old, new):
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
     if count != 1:
@@ -17,15 +15,14 @@ def replace_once(path: Path, old: str, new: str) -> None:
 
 
 def add_scope(
-    path: Path,
-    *,
-    function_name: str,
-    task_kind: str,
-    expected_occurrences: int = 1,
-    occurrence: int = 0,
-) -> None:
+    path,
+    function_name,
+    task_kind,
+    expected_occurrences=1,
+    occurrence=0,
+):
     text = path.read_text(encoding="utf-8")
-    positions: list[int] = []
+    positions = []
     position = text.find(function_name)
     while position >= 0:
         positions.append(position)
@@ -46,7 +43,7 @@ def add_scope(
     )
 
 
-def instrument(source: Path, assets: Path) -> None:
+def instrument(source, assets):
     profiling = source / "src/OpenFOAM/global/profiling"
     for name in ("vtuneTaskTrace.H", "vtuneTaskTrace.C"):
         shutil.copy2(assets / name, profiling / name)
@@ -81,9 +78,9 @@ def instrument(source: Path, assets: Path) -> None:
     )
     add_scope(
         gauss_seidel,
-        function_name="void Foam::GaussSeidelSmoother::smooth",
-        task_kind="gaussSeidelSmooth",
-        expected_occurrences=2,
+        "void Foam::GaussSeidelSmoother::smooth",
+        "gaussSeidelSmooth",
+        2,
     )
     matrix_path = (
         source / "src/OpenFOAM/matrices/LduMatrix/LduMatrix/lduMatrixATmul.C"
@@ -95,13 +92,13 @@ def instrument(source: Path, assets: Path) -> None:
     )
     add_scope(
         matrix_path,
-        function_name="void Foam::lduMatrix::Amul",
-        task_kind="lduMatrixAmul",
+        "void Foam::lduMatrix::Amul",
+        "lduMatrixAmul",
     )
     add_scope(
         matrix_path,
-        function_name="void Foam::lduMatrix::residual",
-        task_kind="lduMatrixResidual",
+        "void Foam::lduMatrix::residual",
+        "lduMatrixResidual",
     )
 
     cell_limited = source / (
@@ -115,8 +112,8 @@ def instrument(source: Path, assets: Path) -> None:
     )
     add_scope(
         cell_limited,
-        function_name="void Foam::fv::cellLimitedGrad<Type, Limiter>::calcGrad",
-        task_kind="cellLimitedGradCalcGrad",
+        "void Foam::fv::cellLimitedGrad<Type, Limiter>::calcGrad",
+        "cellLimitedGradCalcGrad",
     )
     gauss_grad = (
         source / "src/finiteVolume/finiteVolume/gradSchemes/gaussGrad/gaussGrad.C"
@@ -128,8 +125,8 @@ def instrument(source: Path, assets: Path) -> None:
     )
     add_scope(
         gauss_grad,
-        function_name="Foam::fv::gaussGrad<Type>::gradf",
-        task_kind="gaussGradGradf",
+        "Foam::fv::gaussGrad<Type>::gradf",
+        "gaussGradGradf",
     )
     linear_upwind = source / (
             "src/finiteVolume/interpolation/surfaceInterpolation/schemes/"
@@ -142,8 +139,8 @@ def instrument(source: Path, assets: Path) -> None:
     )
     add_scope(
         linear_upwind,
-        function_name="Foam::linearUpwindV<Type>::correction",
-        task_kind="linearUpwindVCorrection",
+        "Foam::linearUpwindV<Type>::correction",
+        "linearUpwindVCorrection",
     )
 
 

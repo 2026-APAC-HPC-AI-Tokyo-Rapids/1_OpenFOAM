@@ -432,6 +432,10 @@ jobs:
 
       - name: Copy artifacts to home server
         run: |
+          if [[ ! -d artifacts ]] || [[ -z "$(find artifacts -mindepth 1 -print -quit)" ]]; then
+            echo "No GitHub Actions artifacts to copy"
+            exit 0
+          fi
           ssh tomokazu@tomokazu-ubuntu-server "mkdir -p -- /hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}"
           scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/"
 
