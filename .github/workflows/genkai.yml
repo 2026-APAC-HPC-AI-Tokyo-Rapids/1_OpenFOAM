@@ -142,7 +142,8 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --clobber
 
-          "${provision_dir}/scripts/vtune-summary-to-markdown.py" \
+          "${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/python" \
+            "${provision_dir}/scripts/vtune-summary-to-markdown.py" \
             --summary "${provision_dir}/browser-summary/summary.json" \
             --output "${GITHUB_STEP_SUMMARY}" \
             --trace-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/vtune-latest/openfoam-vtune-trace.json"
