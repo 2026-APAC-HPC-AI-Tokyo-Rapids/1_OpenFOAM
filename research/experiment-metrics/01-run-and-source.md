@@ -40,8 +40,7 @@ run名の生成に必要な構成要素だけは、実行を識別できない�
 | `run.outcome` | enum | 終了時 | pipeline supervisor | 下記の固定語彙へ正規化 |
 | `run.exit_code` | int | 終了時 | pipeline supervisor | 最初に失敗したstageのreturn code。全成功は`0` |
 | `run.signal` | int | signal終了時だけ | Python `subprocess` return code | 負のreturn codeの絶対値 |
-| `run.command.executable` | string | 開始時 | 起動用引数列 | 配列の要素0 |
-| `run.command.arg.<number>` | string | 開始時 | 起動用引数列 | 配列の要素1以降を0始まりで展開 |
+| `run.command` | string | 開始時 | 起動用引数列 | argvを`shlex.join()`したshell表現 |
 | `git.repository` | string | 開始時 | Git | `GITHUB_REPOSITORY`が環境にない場合だけ`git remote get-url origin` |
 | `git.commit` | string | 開始時 | Git | `GITHUB_SHA`が環境にない場合だけ`git rev-parse --verify HEAD` |
 | `git.is_dirty` | bool | 開始時 | Git | `git status --porcelain=v1 --untracked-files=normal` が空か |
@@ -64,7 +63,7 @@ cancelled
 - Gitコマンドは `LC_ALL=C`、対象repositoryを `-C` で明示して実行する。
 - Gitコマンドが値を返した場合、その先頭行を使う。失敗時は対象キーを空文字にする。
 - `git.is_dirty` だけは複数行出力を値へ保存せず、空か否かだけを使う。
-- コマンド引数はシェル文字列から再解析しない。supervisorが実際に渡す配列を使う。
+- supervisorが実際に渡す配列を使い、`shlex.join()`で復元可能なshell表現にする。
 - 日時のwall clockと経過時間用のmonotonic clockを混用しない。
 
 ## 採用しない値
