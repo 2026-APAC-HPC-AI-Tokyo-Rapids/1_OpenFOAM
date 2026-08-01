@@ -70,11 +70,25 @@ ln -s ../ThirdParty "${BUILD_TREE}/OpenFOAM/ThirdParty"
 module purge
 module load intel/2025.1.3 impi
 
-# 使用するコンパイラと ccache が利用可能であることを確認する。
+# 使用するコンパイラとccacheが利用可能であることを確認する。
 for build_tool in "${CC}" "${CXX}" ccache
 do
   "${build_tool}" --version
 done
+command -v vtune >/dev/null
+
+# Intel ITT Task APIのヘッダとライブラリ位置をwmakeへ渡し、既存のVTune
+# Hotspots結果と同じ時計上で選択したOpenFOAM関数の開始・終了を記録する。
+if [[ -z "${VTUNE_PROFILER_DIR:-}" ]]; then
+  vtune_executable="$(readlink -f "$(command -v vtune)")"
+  export VTUNE_PROFILER_DIR="$(cd "$(dirname "${vtune_executable}")/.." && pwd)"
+fi
+test -f "${VTUNE_PROFILER_DIR}/include/ittnotify.h"
+test -f "${VTUNE_PROFILER_DIR}/lib64/libittnotify.a" \
+  || test -f "${VTUNE_PROFILER_DIR}/lib64/libittnotify.so"
+python3 "${GITHUB_WORKSPACE}/scripts/instrument-openfoam-vtune.py" \
+  --source "${BUILD_TREE}/OpenFOAM" \
+  --assets "${GITHUB_WORKSPACE}/instrumentation/openfoam-vtune"
 
 # ccache の設定を確認し、ビルドツリー専用の統計・一時領域を使う。
 [[ -r "${CCACHE_CONFIGPATH}" ]]

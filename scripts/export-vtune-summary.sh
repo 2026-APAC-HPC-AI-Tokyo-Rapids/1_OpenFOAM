@@ -15,10 +15,12 @@ FUNCTION_BINS="${OPENFOAM_VTUNE_FUNCTION_BINS:-40}"
 FUNCTION_REPORT_LIMIT="${OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT:-0}"
 FUNCTIONS_PER_WINDOW="${OPENFOAM_VTUNE_FUNCTIONS_PER_WINDOW:-8}"
 TIME_SERIES_FUNCTIONS="${OPENFOAM_VTUNE_TIME_SERIES_FUNCTIONS:-12}"
+MAX_TASK_EVENTS="${OPENFOAM_VTUNE_MAX_TASK_EVENTS:-1500}"
+TASK_OCCUPANCY_BINS="${OPENFOAM_VTUNE_TASK_OCCUPANCY_BINS:-60}"
 MAX_TRACE_BYTES="${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-500000}"
 OPENFOAM_PYTHON="${OPENFOAM_PYTHON:-${PROVISION_DIR}/experiment-metrics/.venv/bin/python}"
 
-for value_name in MAX_TIME_BINS TOP_FUNCTIONS FUNCTION_BINS FUNCTIONS_PER_WINDOW TIME_SERIES_FUNCTIONS MAX_TRACE_BYTES
+for value_name in MAX_TIME_BINS TOP_FUNCTIONS FUNCTION_BINS FUNCTIONS_PER_WINDOW TIME_SERIES_FUNCTIONS MAX_TASK_EVENTS TASK_OCCUPANCY_BINS MAX_TRACE_BYTES
 do
   value="${!value_name}"
   [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
@@ -124,9 +126,19 @@ converter_args=(
   --functions-per-window "${FUNCTIONS_PER_WINDOW}"
   --function-report-limit "${FUNCTION_REPORT_LIMIT}"
   --max-time-bins "${MAX_TIME_BINS}"
+  --max-task-events "${MAX_TASK_EVENTS}"
+  --task-occupancy-bins "${TASK_OCCUPANCY_BINS}"
   --max-trace-bytes "${MAX_TRACE_BYTES}"
   --run-label "${OPENFOAM_PROFILE_LABEL:-openfoam}"
 )
+task_trace_path="${PROFILE_RESULT_DIR}/openfoam-task-trace.csv"
+if [[ -s "${task_trace_path}" ]]; then
+  converter_args+=(--task-trace "${task_trace_path}")
+  # CLOCK_MONOTONIC_RAWの境界列をVTune自身でもサンプルと相関できるよう、
+  # Intelの外部interval CSV命名規則で完全な原本を結果ディレクトリに置く。
+  cp "${task_trace_path}" \
+    "${VTUNE_RESULT_DIR}/openfoam-tasks-hostname-$(hostname).csv"
+fi
 if [[ -f "${solver_log_path}" ]]; then
   converter_args+=(--solver-log "${solver_log_path}")
 fi

@@ -85,8 +85,21 @@ start/end boundaries. It also parses the retained OpenFOAM solver log into
 continuous `ClockTime` intervals with iteration ranges, residuals, linear-solver
 iteration counts, and continuity errors. Forty measured VTune windows contain
 ranked function details. Stable function and MPI/OpenFOAM category tracks use
-sampled CPU-time counters instead of pretending that sampled functions have
-exact call boundaries.
+sampled CPU-time counters. A profiling build additionally instruments six
+OpenFOAM regions selected from the preceding Hotspots result with Intel ITT
+Task scopes. Their real entry and exit timestamps come from
+`CLOCK_MONOTONIC_RAW` and appear as exact function lanes in Perfetto. A
+continuous occupancy series is derived from the same boundaries. Per-function
+call count, inclusive wall time, p50/p95/p99/max duration, gap percentiles,
+call rate, and the fraction of calls shorter than 100 microseconds distinguish
+sustained bottlenecks from temporally fragmented work.
+
+The release JSON contains one chronologically contiguous, bounded window of
+exact calls plus whole-run statistics and occupancy series. The complete task
+interval CSV remains next to the full VTune result on Genkai and is also stored
+inside that result using VTune's external interval format. Nested instrumented
+regions can overlap, so inclusive times across functions must not be added
+together.
 
 The defaults can be overridden in the PJM environment:
 
@@ -98,7 +111,10 @@ OPENFOAM_VTUNE_FUNCTION_BINS=40
 OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT=0
 OPENFOAM_VTUNE_FUNCTIONS_PER_WINDOW=8
 OPENFOAM_VTUNE_TIME_SERIES_FUNCTIONS=12
+OPENFOAM_VTUNE_MAX_TASK_EVENTS=1500
+OPENFOAM_VTUNE_TASK_OCCUPANCY_BINS=60
 OPENFOAM_VTUNE_MAX_TRACE_BYTES=500000
+OPENFOAM_TASK_TRACE_MAX_EVENTS=500000
 ```
 
 `OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT=0` keeps every function reported in each

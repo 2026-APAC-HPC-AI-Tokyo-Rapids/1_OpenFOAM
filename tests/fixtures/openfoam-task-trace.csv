@@ -1,0 +1,7 @@
+name,start_tsc.CLOCK_MONOTONIC_RAW,end_tsc,pid,tid
+OpenFOAM process lifetime,1000000000,5000000000,123,123
+Foam::GaussSeidelSmoother::smooth,1100000000,1300000000,123,123
+Foam::lduMatrix::Amul,1200000000,1250000000,123,123
+Foam::GaussSeidelSmoother::smooth,1500000000,1600000000,123,123
+Foam::lduMatrix::Amul,2000000000,2100000000,123,123
+Foam::GaussSeidelSmoother::smooth,3000000000,3400000000,123,123

@@ -34,6 +34,25 @@ def test_reads_vtune_reports() -> None:
     assert hotspots[0].cpu_time_sec == 11.36
 
 
+def test_reads_exact_task_boundaries_and_fragmentation_statistics() -> None:
+    converter = load_converter()
+    trace = converter.read_task_trace(
+        FIXTURES / "openfoam-task-trace.csv"
+    )
+    summaries = converter.task_summaries(trace)
+
+    assert trace.process_elapsed_sec == 4.0
+    assert trace.dropped_events == 0
+    assert len(trace.intervals) == 5
+    assert trace.intervals[0].start_sec == 0.1
+    assert trace.intervals[0].end_sec == 0.3
+    assert summaries[0]["function"] == "Foam::GaussSeidelSmoother::smooth"
+    assert summaries[0]["calls"] == 3
+    assert summaries[0]["inclusive_wall_time_sec"] == 0.7
+    assert summaries[0]["call_duration_p50_us"] == 200_000
+    assert summaries[0]["gap_p50_us"] == 800_000
+
+
 def test_reads_solver_log_as_continuous_clock_intervals() -> None:
     converter = load_converter()
     iterations = converter.read_solver_iterations(
@@ -82,6 +101,8 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             str(function_slices),
             "--solver-log",
             str(FIXTURES / "openfoam-solver.log"),
+            "--task-trace",
+            str(FIXTURES / "openfoam-task-trace.csv"),
             "--output",
             str(output),
             "--summary",
@@ -96,6 +117,10 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             "3",
             "--max-trace-bytes",
             "20000",
+            "--max-task-events",
+            "3",
+            "--task-occupancy-bins",
+            "2",
             "--run-label",
             "test-run",
         ],
@@ -111,6 +136,12 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     assert trace["metadata"]["sample_windows_contiguous"] is True
     assert trace["metadata"]["solver_intervals_contiguous"] is True
     assert trace["metadata"]["function_reports_are_complete"] is True
+    assert trace["metadata"]["function_call_boundaries_available"] is True
+    assert trace["metadata"]["source_exact_task_events"] == 5
+    assert trace["metadata"]["exported_exact_task_events"] == 3
+    assert trace["metadata"]["exact_task_events_are_complete"] is False
+    assert trace["metadata"]["exact_task_recorder_dropped_events"] == 0
+    assert trace["metadata"]["exact_task_source_is_complete"] is True
     assert "test-run" in trace["traceEvents"][0]["args"]["name"]
     timeline_events = [
         event
@@ -152,6 +183,20 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     assert len(function_counters) == 4
     assert function_counters[0]["ph"] == "C"
     assert function_counters[0]["args"]["sampled_cpu_time_sec"] == 11.36
+    exact_function_events = [
+        event
+        for event in trace["traceEvents"]
+        if event.get("cat") == "openfoam-exact-function"
+    ]
+    assert len(exact_function_events) == 3
+    assert all(event["ph"] == "X" for event in exact_function_events)
+    assert all(event["dur"] > 0 for event in exact_function_events)
+    exact_occupancy = [
+        event
+        for event in trace["traceEvents"]
+        if event.get("cat") == "openfoam-exact-occupancy"
+    ]
+    assert len(exact_occupancy) == 4
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
     assert metadata["exported_sample_windows"] == 2
@@ -160,6 +205,9 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     assert metadata["exported_functions_per_window"] == 3
     assert metadata["solver_iterations"] == 3
     assert metadata["solver_intervals"] == 2
+    assert metadata["source_exact_task_events"] == 5
+    assert metadata["exported_exact_task_events"] == 3
+    assert len(metadata["exact_task_function_summaries"]) == 2
     assert metadata["function_reports_are_complete"] is True
     assert metadata["top_hotspots"][0]["profile_cpu_percent"] == 52.641
     assert metadata["trace_bytes"] < 20000
@@ -280,6 +328,10 @@ def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
         (FIXTURES / "openfoam-solver.log").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (result_dir / "openfoam-task-trace.csv").write_text(
+        (FIXTURES / "openfoam-task-trace.csv").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     provision = tmp_path / "provision"
     scripts = provision / "scripts"
     scripts.mkdir(parents=True)
@@ -341,3 +393,12 @@ esac
     assert metadata["source_sample_windows"] == 2
     assert metadata["source_function_values"] == 8
     assert metadata["solver_iterations"] == 3
+    assert metadata["source_exact_task_events"] == 5
+    assert metadata["exported_exact_task_events"] == 5
+    assert metadata["exact_task_events_are_complete"] is True
+    imported_task_traces = list(
+        (result_dir / "vtune.compute-node").glob(
+            "openfoam-tasks-hostname-*.csv"
+        )
+    )
+    assert len(imported_task_traces) == 1

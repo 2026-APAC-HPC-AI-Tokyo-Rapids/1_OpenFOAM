@@ -35,6 +35,22 @@ class FunctionWindow:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskInterval:
+    name: str
+    start_sec: float
+    end_sec: float
+    pid: int
+    tid: int
+
+
+@dataclass(frozen=True, slots=True)
+class TaskTrace:
+    intervals: tuple[TaskInterval, ...]
+    process_elapsed_sec: float
+    dropped_events: int
+
+
+@dataclass(frozen=True, slots=True)
 class SolverIteration:
     simulation_time: str
     execution_time_sec: float
@@ -151,6 +167,60 @@ def read_function_windows(
             FunctionWindow(start, end, tuple(read_hotspots(path)))
         )
     return result
+
+
+def read_task_trace(path: Path) -> TaskTrace:
+    rows = _rows(path, ("name", "start_tsc.CLOCK_MONOTONIC_RAW", "end_tsc"))
+    raw: list[tuple[str, int, int, int, int]] = []
+    for row in rows:
+        name = (row.get("name") or "").strip()
+        try:
+            start_ns = int(row.get("start_tsc.CLOCK_MONOTONIC_RAW", ""))
+            end_ns = int(row.get("end_tsc", ""))
+            pid = int(row.get("pid", "0") or 0)
+            tid = int(row.get("tid", "0") or 0)
+        except ValueError:
+            continue
+        if name and start_ns >= 0 and end_ns >= start_ns:
+            raw.append((name, start_ns, end_ns, pid, tid))
+    if not raw:
+        return TaskTrace((), 0.0, 0)
+
+    lifetime = next(
+        (item for item in raw if item[0] == "OpenFOAM process lifetime"),
+        None,
+    )
+    zero_ns = lifetime[1] if lifetime else min(item[1] for item in raw)
+    process_end_ns = lifetime[2] if lifetime else max(item[2] for item in raw)
+    dropped_events = sum(
+        int(item[0].partition("=")[2])
+        for item in raw
+        if item[0].startswith("OpenFOAM dropped task events=")
+        and item[0].partition("=")[2].isdigit()
+    )
+    intervals = tuple(
+        sorted(
+            (
+                TaskInterval(
+                    name,
+                    (start_ns - zero_ns) / 1_000_000_000,
+                    (end_ns - zero_ns) / 1_000_000_000,
+                    pid,
+                    tid,
+                )
+                for name, start_ns, end_ns, pid, tid in raw
+                if name != "OpenFOAM process lifetime"
+                and not name.startswith("OpenFOAM dropped task events=")
+                and start_ns >= zero_ns
+            ),
+            key=lambda item: (item.start_sec, item.end_sec, item.name),
+        )
+    )
+    return TaskTrace(
+        intervals,
+        max(0.0, (process_end_ns - zero_ns) / 1_000_000_000),
+        dropped_events,
+    )
 
 
 _SOLVER_RE = re.compile(
@@ -367,11 +437,145 @@ def _contiguous(intervals: list[tuple[float, float]]) -> bool:
     )
 
 
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    return (
+        ordered[lower] * (upper - position)
+        + ordered[upper] * (position - lower)
+    )
+
+
+def _union_duration(intervals: list[TaskInterval]) -> float:
+    if not intervals:
+        return 0.0
+    merged_start = intervals[0].start_sec
+    merged_end = intervals[0].end_sec
+    total = 0.0
+    for item in intervals[1:]:
+        if item.start_sec <= merged_end:
+            merged_end = max(merged_end, item.end_sec)
+        else:
+            total += merged_end - merged_start
+            merged_start = item.start_sec
+            merged_end = item.end_sec
+    return total + merged_end - merged_start
+
+
+def task_summaries(task_trace: TaskTrace) -> list[dict[str, Any]]:
+    grouped: dict[str, list[TaskInterval]] = {}
+    for item in task_trace.intervals:
+        grouped.setdefault(item.name, []).append(item)
+    summaries: list[dict[str, Any]] = []
+    for name, intervals in grouped.items():
+        durations = [item.end_sec - item.start_sec for item in intervals]
+        gaps = [
+            max(0.0, right.start_sec - left.end_sec)
+            for left, right in zip(intervals, intervals[1:])
+        ]
+        occupied = _union_duration(intervals)
+        active_span = intervals[-1].end_sec - intervals[0].start_sec
+        summaries.append(
+            {
+                "function": name,
+                "calls": len(intervals),
+                "inclusive_wall_time_sec": round(sum(durations), 9),
+                "occupied_wall_time_sec": round(occupied, 9),
+                "process_occupancy_percent": round(
+                    occupied / task_trace.process_elapsed_sec * 100, 3
+                )
+                if task_trace.process_elapsed_sec
+                else 0.0,
+                "active_span_occupancy_percent": round(
+                    occupied / active_span * 100, 3
+                )
+                if active_span > 0
+                else 0.0,
+                "call_duration_p50_us": round(
+                    (_percentile(durations, 0.50) or 0.0) * 1_000_000, 3
+                ),
+                "call_duration_p95_us": round(
+                    (_percentile(durations, 0.95) or 0.0) * 1_000_000, 3
+                ),
+                "call_duration_p99_us": round(
+                    (_percentile(durations, 0.99) or 0.0) * 1_000_000, 3
+                ),
+                "call_duration_max_us": round(max(durations) * 1_000_000, 3),
+                "gap_p50_us": (
+                    round((_percentile(gaps, 0.50) or 0.0) * 1_000_000, 3)
+                    if gaps
+                    else None
+                ),
+                "gap_p95_us": (
+                    round((_percentile(gaps, 0.95) or 0.0) * 1_000_000, 3)
+                    if gaps
+                    else None
+                ),
+                "calls_per_active_second": round(
+                    len(intervals) / active_span, 3
+                )
+                if active_span > 0
+                else None,
+                "calls_below_100us_percent": round(
+                    sum(duration < 0.0001 for duration in durations)
+                    / len(durations)
+                    * 100,
+                    3,
+                ),
+            }
+        )
+    return sorted(
+        summaries,
+        key=lambda item: item["inclusive_wall_time_sec"],
+        reverse=True,
+    )
+
+
+def _select_task_intervals(
+    task_trace: TaskTrace, limit: int
+) -> list[TaskInterval]:
+    intervals = list(task_trace.intervals)
+    if len(intervals) <= limit:
+        return intervals
+    midpoint = task_trace.process_elapsed_sec / 2
+    center = min(
+        range(len(intervals)),
+        key=lambda index: abs(intervals[index].start_sec - midpoint),
+    )
+    start = max(0, center - limit // 2)
+    start = min(start, len(intervals) - limit)
+    return intervals[start : start + limit]
+
+
+def _task_occupancy(
+    intervals: list[TaskInterval], start: float, end: float
+) -> float:
+    clipped = [
+        TaskInterval(
+            item.name,
+            max(start, item.start_sec),
+            min(end, item.end_sec),
+            item.pid,
+            item.tid,
+        )
+        for item in intervals
+        if item.start_sec < end and item.end_sec > start
+    ]
+    return _union_duration(clipped)
+
+
 def build_trace(
     timeline: list[TimeBin],
     hotspots: list[Hotspot],
     function_windows: list[FunctionWindow],
     solver_intervals: list[SolverInterval],
+    task_trace: TaskTrace | None,
     *,
     run_label: str,
     max_time_bins: int,
@@ -379,6 +583,8 @@ def build_trace(
     time_series_functions: int,
     functions_per_window: int,
     function_report_limit: int,
+    max_task_events: int,
+    task_occupancy_bins: int,
 ) -> dict[str, Any]:
     bins = _thin(timeline, max_time_bins)
     series_functions = _series_functions(
@@ -386,6 +592,12 @@ def build_trace(
     )
     profile_cpu_time_sec = sum(item.cpu_time_sec for item in hotspots)
     timeline_end = bins[-1].end_sec if bins else 0.0
+    exact_intervals = (
+        _select_task_intervals(task_trace, max_task_events)
+        if task_trace
+        else []
+    )
+    exact_summaries = task_summaries(task_trace) if task_trace else []
     events: list[dict[str, Any]] = [
         {
             "name": "process_name",
@@ -423,6 +635,94 @@ def build_trace(
             "args": {"name": "VTune sampled CPU-time series"},
         },
     ]
+    if task_trace and task_trace.intervals:
+        events.extend(
+            [
+                {
+                    "name": "process_name",
+                    "ph": "M",
+                    "pid": 3,
+                    "tid": 0,
+                    "args": {"name": "Exact OpenFOAM function boundaries"},
+                },
+                {
+                    "name": "process_name",
+                    "ph": "M",
+                    "pid": 4,
+                    "tid": 0,
+                    "args": {"name": "Exact function occupancy over time"},
+                },
+            ]
+        )
+        task_names = list(
+            dict.fromkeys(item.name for item in task_trace.intervals)
+        )
+        task_lanes = {name: index for index, name in enumerate(task_names, 1)}
+        for name, lane in task_lanes.items():
+            events.append(
+                {
+                    "name": "thread_name",
+                    "ph": "M",
+                    "pid": 3,
+                    "tid": lane,
+                    "args": {"name": name},
+                }
+            )
+        call_indices: dict[str, int] = {}
+        for item in exact_intervals:
+            call_indices[item.name] = call_indices.get(item.name, 0) + 1
+            duration = item.end_sec - item.start_sec
+            events.append(
+                {
+                    "name": item.name,
+                    "cat": "openfoam-exact-function",
+                    "ph": "X",
+                    "pid": 3,
+                    "tid": task_lanes[item.name],
+                    "ts": round(item.start_sec * 1_000_000),
+                    "dur": max(1, round(duration * 1_000_000)),
+                    "args": {
+                        "window_call_index": call_indices[item.name],
+                        "duration_us": round(duration * 1_000_000, 3),
+                        "boundary_source": "CLOCK_MONOTONIC_RAW + Intel ITT Task",
+                    },
+                }
+            )
+        occupancy_functions = [
+            item["function"] for item in exact_summaries[:6]
+        ]
+        grouped = {
+            name: [
+                item for item in task_trace.intervals if item.name == name
+            ]
+            for name in occupancy_functions
+        }
+        bin_duration = (
+            task_trace.process_elapsed_sec / task_occupancy_bins
+            if task_occupancy_bins
+            else 0.0
+        )
+        if bin_duration > 0:
+            for lane, name in enumerate(occupancy_functions, 1):
+                for index in range(task_occupancy_bins):
+                    start = index * bin_duration
+                    end = (index + 1) * bin_duration
+                    occupied = _task_occupancy(grouped[name], start, end)
+                    events.append(
+                        {
+                            "name": name,
+                            "cat": "openfoam-exact-occupancy",
+                            "ph": "C",
+                            "pid": 4,
+                            "tid": lane,
+                            "ts": round(start * 1_000_000),
+                            "args": {
+                                "wall_time_occupancy_percent": round(
+                                    occupied / bin_duration * 100, 3
+                                )
+                            },
+                        }
+                    )
     for item in solver_intervals:
         events.append(
             {
@@ -598,7 +898,10 @@ def build_trace(
     return {
         "displayTimeUnit": "ms",
         "metadata": {
-            "source": "Intel VTune CSV reports and OpenFOAM solver log",
+            "source": (
+                "Intel VTune CSV reports, OpenFOAM solver log, and direct "
+                "CLOCK_MONOTONIC_RAW task intervals"
+            ),
             "time_bins": len(bins),
             "aggregate_hotspot_count": min(top_functions, len(hotspots)),
             "sample_windows": len(function_windows),
@@ -613,7 +916,54 @@ def build_trace(
             "profile_cpu_time_sec": profile_cpu_time_sec,
             "timeline_start_sec": bins[0].start_sec if bins else None,
             "timeline_end_sec": bins[-1].end_sec if bins else None,
-            "function_call_boundaries_available": False,
+            "function_call_boundaries_available": bool(
+                task_trace and task_trace.intervals
+            ),
+            "exact_task_clock": (
+                "CLOCK_MONOTONIC_RAW normalized to libOpenFOAM load"
+                if task_trace and task_trace.intervals
+                else None
+            ),
+            "source_exact_task_events": (
+                len(task_trace.intervals) if task_trace else 0
+            ),
+            "exported_exact_task_events": len(exact_intervals),
+            "exact_task_events_are_complete": bool(
+                task_trace
+                and len(exact_intervals) == len(task_trace.intervals)
+                and task_trace.dropped_events == 0
+            ),
+            "exact_task_recorder_dropped_events": (
+                task_trace.dropped_events if task_trace else 0
+            ),
+            "exact_task_source_is_complete": bool(
+                task_trace and task_trace.dropped_events == 0
+            ),
+            "exact_task_export_window_start_sec": (
+                exact_intervals[0].start_sec if exact_intervals else None
+            ),
+            "exact_task_export_window_end_sec": (
+                max(item.end_sec for item in exact_intervals)
+                if exact_intervals
+                else None
+            ),
+            "exact_task_export_selection": (
+                (
+                    "all recorded calls"
+                    if len(exact_intervals) == len(task_trace.intervals)
+                    else (
+                        "one consecutive event-record slice centered at "
+                        "process midpoint"
+                    )
+                )
+                if task_trace and task_trace.intervals
+                else None
+            ),
+            "exact_task_function_summaries": exact_summaries,
+            "exact_task_statistics_semantics": (
+                "Inclusive per-function wall time; nested functions can overlap. "
+                "Gap and call-rate fields quantify temporal fragmentation."
+            ),
             "sample_window_boundaries_are_measured": True,
             "solver_intervals_use_logged_clock_time": True,
             "timeline_bins_contiguous": _contiguous(
@@ -654,6 +1004,7 @@ def main() -> None:
     parser.add_argument("--hotspots", type=Path, required=True)
     parser.add_argument("--function-slices-dir", type=Path)
     parser.add_argument("--solver-log", type=Path)
+    parser.add_argument("--task-trace", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--run-label", default="openfoam")
@@ -662,6 +1013,8 @@ def main() -> None:
     parser.add_argument("--functions-per-window", type=int, default=8)
     parser.add_argument("--function-report-limit", type=int, default=0)
     parser.add_argument("--max-time-bins", type=int, default=300)
+    parser.add_argument("--max-task-events", type=int, default=1500)
+    parser.add_argument("--task-occupancy-bins", type=int, default=60)
     parser.add_argument("--max-trace-bytes", type=int, default=5_000_000)
     arguments = parser.parse_args()
     if min(
@@ -669,6 +1022,8 @@ def main() -> None:
         arguments.time_series_functions,
         arguments.functions_per_window,
         arguments.max_time_bins,
+        arguments.max_task_events,
+        arguments.task_occupancy_bins,
         arguments.max_trace_bytes,
     ) <= 0:
         parser.error("limits must be positive")
@@ -688,22 +1043,36 @@ def main() -> None:
         else []
     )
     solver_intervals = build_solver_intervals(solver_iterations)
+    task_trace = (
+        read_task_trace(arguments.task_trace)
+        if arguments.task_trace and arguments.task_trace.is_file()
+        else None
+    )
     time_bins = min(arguments.max_time_bins, len(timeline))
     top_functions = min(arguments.top_functions, len(hotspots))
     time_series_functions = arguments.time_series_functions
     functions_per_window = arguments.functions_per_window
+    max_task_events = (
+        min(arguments.max_task_events, len(task_trace.intervals))
+        if task_trace and task_trace.intervals
+        else arguments.max_task_events
+    )
+    task_occupancy_bins = arguments.task_occupancy_bins
     while True:
         document = build_trace(
             timeline,
             hotspots,
             function_windows,
             solver_intervals,
+            task_trace,
             run_label=arguments.run_label,
             max_time_bins=time_bins,
             top_functions=top_functions,
             time_series_functions=time_series_functions,
             functions_per_window=functions_per_window,
             function_report_limit=arguments.function_report_limit,
+            max_task_events=max_task_events,
+            task_occupancy_bins=task_occupancy_bins,
         )
         payload = _encoded(document)
         if len(payload) <= arguments.max_trace_bytes:
@@ -714,6 +1083,10 @@ def main() -> None:
             time_bins = max(50, time_bins // 2)
         elif functions_per_window > 2:
             functions_per_window = max(2, functions_per_window // 2)
+        elif task_occupancy_bins > 20:
+            task_occupancy_bins = max(20, task_occupancy_bins // 2)
+        elif max_task_events > 100:
+            max_task_events = max(100, max_task_events * 3 // 4)
         elif top_functions > 1:
             top_functions //= 2
         else:
@@ -724,7 +1097,7 @@ def main() -> None:
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_bytes(payload)
     summary = {
-        "schema_version": 5,
+        "schema_version": 6,
         "run_label": arguments.run_label,
         "source_time_bins": len(timeline),
         "exported_time_bins": time_bins,
@@ -741,6 +1114,24 @@ def main() -> None:
         "exported_functions_per_window": functions_per_window,
         "solver_iterations": len(solver_iterations),
         "solver_intervals": len(solver_intervals),
+        "source_exact_task_events": (
+            len(task_trace.intervals) if task_trace else 0
+        ),
+        "exported_exact_task_events": document["metadata"][
+            "exported_exact_task_events"
+        ],
+        "exact_task_events_are_complete": document["metadata"][
+            "exact_task_events_are_complete"
+        ],
+        "exact_task_recorder_dropped_events": document["metadata"][
+            "exact_task_recorder_dropped_events"
+        ],
+        "exact_task_source_is_complete": document["metadata"][
+            "exact_task_source_is_complete"
+        ],
+        "exact_task_function_summaries": document["metadata"][
+            "exact_task_function_summaries"
+        ],
         "function_report_limit": arguments.function_report_limit,
         "function_reports_are_complete": arguments.function_report_limit == 0,
         "timeline_bins_contiguous": document["metadata"][
