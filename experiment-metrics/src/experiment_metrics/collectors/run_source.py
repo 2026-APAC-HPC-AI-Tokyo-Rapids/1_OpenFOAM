@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,11 +13,7 @@ from ..model import Metric
 def collect_start(context: Context, command: list[str]) -> list[Metric]:
     result = [Metric("run.started_at", datetime.now(UTC).isoformat())]
     if command:
-        result.append(Metric("run.command.executable", command[0]))
-        result.extend(
-            Metric(f"run.command.arg.{index}", argument)
-            for index, argument in enumerate(command[1:])
-        )
+        result.append(Metric("run.command", shlex.join(command)))
 
     repository = Path(os.environ.get("GITHUB_WORKSPACE", context.case_dir))
     if "GITHUB_REPOSITORY" not in os.environ:
