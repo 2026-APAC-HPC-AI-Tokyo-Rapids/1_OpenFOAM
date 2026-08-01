@@ -105,9 +105,11 @@ migrate_artifact() {
 export -f migrate_artifact
 export repository remote remote_root download_segments github_token
 
-printf '%s\0' "${artifacts[@]}" |
-  xargs --null --max-args=1 --max-procs="${parallelism}" \
-    bash -c 'migrate_artifact "$1"' _
+if (( ${#artifacts[@]} > 0 )); then
+  printf '%s\0' "${artifacts[@]}" |
+    xargs --null --max-args=1 --max-procs="${parallelism}" \
+      bash -c 'migrate_artifact "$1"' _
+fi
 
 remaining="$({
   gh api --paginate \
@@ -116,3 +118,25 @@ remaining="$({
 } | wc -l)"
 test "${remaining}" -eq 0
 echo "Migration complete; no unexpired GitHub Actions artifacts remain"
+
+gh api --paginate \
+  "/repos/${repository}/actions/runs?per_page=100" \
+  --jq '.workflow_runs[] | [.id, .updated_at] | @tsv' |
+  ssh "${remote}" '
+    updated_count=0
+    while read -r run_id updated_at
+    do
+      case "${run_id}" in
+        ""|*[!0-9]*)
+          echo "Invalid workflow run ID: ${run_id}" >&2
+          exit 1
+          ;;
+      esac
+      run_dir="/hdd_raid/samba/net_share/openfoam-artifacts/${run_id}"
+      if test -d "${run_dir}"; then
+        touch --date="${updated_at}" -- "${run_dir}"
+        updated_count=$((updated_count + 1))
+      fi
+    done
+    echo "Synchronized ${updated_count} run directory mtimes"
+  '
