@@ -34,6 +34,26 @@ def test_reads_vtune_reports() -> None:
     assert hotspots[0].cpu_time_sec == 11.36
 
 
+def test_reads_solver_log_as_continuous_clock_intervals() -> None:
+    converter = load_converter()
+    iterations = converter.read_solver_iterations(
+        FIXTURES / "openfoam-solver.log"
+    )
+    intervals = converter.build_solver_intervals(iterations)
+
+    assert len(iterations) == 3
+    assert [(item.start_sec, item.end_sec) for item in intervals] == [
+        (0.0, 1.0),
+        (1.0, 2.0),
+    ]
+    assert intervals[0].completed_iterations == 2
+    assert intervals[0].first_simulation_time == "1"
+    assert intervals[0].last_simulation_time == "2"
+    assert intervals[0].initial_residual_max == {"Ux": 0.1, "Uy": 0.2}
+    assert intervals[0].linear_iterations_total == {"Ux": 3, "Uy": 3}
+    assert intervals[0].continuity_global_max_abs == 2e-06
+
+
 def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
     output = tmp_path / "trace.json"
     summary = tmp_path / "summary.json"
@@ -44,6 +64,12 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             (FIXTURES / "vtune-hotspots.csv").read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+    (function_slices / "windows.csv").write_text(
+        "file,start_sec,end_sec\n"
+        "0000.csv,0.0,1.5\n"
+        "0001.csv,1.5,4.0\n",
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             sys.executable,
@@ -54,6 +80,8 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             str(FIXTURES / "vtune-hotspots.csv"),
             "--function-slices-dir",
             str(function_slices),
+            "--solver-log",
+            str(FIXTURES / "openfoam-solver.log"),
             "--output",
             str(output),
             "--summary",
@@ -62,8 +90,12 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
             "2",
             "--top-functions",
             "2",
+            "--time-series-functions",
+            "2",
+            "--functions-per-window",
+            "3",
             "--max-trace-bytes",
-            "5000",
+            "20000",
             "--run-label",
             "test-run",
         ],
@@ -75,6 +107,10 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
 
     assert trace["metadata"]["time_bins"] == 2
     assert trace["metadata"]["aggregate_hotspot_count"] == 2
+    assert trace["metadata"]["timeline_bins_contiguous"] is True
+    assert trace["metadata"]["sample_windows_contiguous"] is True
+    assert trace["metadata"]["solver_intervals_contiguous"] is True
+    assert trace["metadata"]["function_reports_are_complete"] is True
     assert "test-run" in trace["traceEvents"][0]["args"]["name"]
     timeline_events = [
         event
@@ -85,21 +121,48 @@ def test_cli_writes_bounded_json_trace(tmp_path: Path) -> None:
         (0, 2_000_000),
         (2_000_000, 2_000_000),
     ]
-    function_events = [
+    sample_windows = [
         event
         for event in trace["traceEvents"]
-        if str(event.get("cat", "")).startswith("vtune-sampled-function")
+        if event.get("cat") == "vtune-sample-window"
     ]
-    assert len(function_events) == 8
-    assert function_events[0]["name"] == "PMPI_Allreduce"
-    assert function_events[0]["args"]["category"] == "MPI"
-    assert function_events[0]["args"]["interval_start_sec"] == 0.0
-    assert function_events[0]["args"]["interval_end_sec"] == 2.0
+    assert len(sample_windows) == 2
+    assert sample_windows[0]["ts"] == 0
+    assert sample_windows[0]["dur"] == 1_500_000
+    assert sample_windows[0]["args"]["reported_function_count"] == 4
+    assert (
+        sample_windows[0]["args"]["hottest_sampled_functions"][0]["function"]
+        == "PMPI_Allreduce"
+    )
+    solver_events = [
+        event
+        for event in trace["traceEvents"]
+        if event.get("cat") == "openfoam-solver-clock"
+    ]
+    assert [(event["ts"], event["dur"]) for event in solver_events] == [
+        (0, 1_000_000),
+        (1_000_000, 1_000_000),
+        (2_000_000, 2_000_000),
+    ]
+    function_counters = [
+        event
+        for event in trace["traceEvents"]
+        if event.get("cat") == "vtune-function-time-series"
+    ]
+    assert len(function_counters) == 4
+    assert function_counters[0]["ph"] == "C"
+    assert function_counters[0]["args"]["sampled_cpu_time_sec"] == 11.36
     assert metadata["exported_time_bins"] == 2
     assert metadata["exported_hotspots"] == 2
-    assert metadata["exported_function_intervals"] == 8
+    assert metadata["exported_sample_windows"] == 2
+    assert metadata["source_function_values"] == 8
+    assert metadata["exported_time_series_functions"] == 2
+    assert metadata["exported_functions_per_window"] == 3
+    assert metadata["solver_iterations"] == 3
+    assert metadata["solver_intervals"] == 2
+    assert metadata["function_reports_are_complete"] is True
     assert metadata["top_hotspots"][0]["profile_cpu_percent"] == 52.641
-    assert metadata["trace_bytes"] < 5000
+    assert metadata["trace_bytes"] < 20000
 
 
 def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
@@ -145,7 +208,15 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
                 "source_hotspots": 601,
                 "exported_hotspots": 1,
                 "exported_time_bins": 300,
-                "exported_function_intervals": 200,
+                "exported_sample_windows": 40,
+                "source_function_values": 724,
+                "exported_time_series_functions": 12,
+                "exported_functions_per_window": 8,
+                "solver_iterations": 3000,
+                "solver_intervals": 97,
+                "timeline_bins_contiguous": True,
+                "sample_windows_contiguous": True,
+                "function_reports_are_complete": True,
                 "trace_bytes": 2231,
                 "profile_cpu_time_sec": 20.0,
                 "timeline_available": False,
@@ -184,7 +255,15 @@ def test_renders_actions_summary(tmp_path: Path) -> None:
     assert "21.898%" in markdown
     assert "4.379697" in markdown
     assert "Timeline intervals: 300" in markdown
-    assert "Sampled function intervals: 200" in markdown
+    assert "Sample windows: 40" in markdown
+    assert "Function values: 724" in markdown
+    assert "Function time series: 12" in markdown
+    assert "Functions shown per window: 8" in markdown
+    assert "Solver iterations: 3000" in markdown
+    assert "Solver clock intervals: 97" in markdown
+    assert "Timeline bins contiguous: True" in markdown
+    assert "Sample windows contiguous: True" in markdown
+    assert "Function reports complete: True" in markdown
     assert (
         "https://github.example/releases/download/vtune-latest/"
         "openfoam-vtune-trace.json"
@@ -197,6 +276,10 @@ def test_exporter_derives_profile_result_directory(tmp_path: Path) -> None:
     profile_root = tmp_path / "profiles"
     result_dir = profile_root / "rank-zero"
     (result_dir / "vtune.compute-node").mkdir(parents=True)
+    (profile_root / "solver-rank-zero.log").write_text(
+        (FIXTURES / "openfoam-solver.log").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     provision = tmp_path / "provision"
     scripts = provision / "scripts"
     scripts.mkdir(parents=True)
@@ -255,4 +338,6 @@ esac
         (provision / "browser-summary" / "summary.json").read_text(encoding="utf-8")
     )
     assert metadata["timeline_available"] is True
-    assert metadata["source_function_intervals"] == 8
+    assert metadata["source_sample_windows"] == 2
+    assert metadata["source_function_values"] == 8
+    assert metadata["solver_iterations"] == 3

@@ -12,11 +12,13 @@ BROWSER_ARTIFACT_DIR="${PROVISION_DIR}/browser-summary"
 MAX_TIME_BINS="${OPENFOAM_VTUNE_TIME_BINS:-300}"
 TOP_FUNCTIONS="${OPENFOAM_VTUNE_TOP_FUNCTIONS:-50}"
 FUNCTION_BINS="${OPENFOAM_VTUNE_FUNCTION_BINS:-40}"
-FUNCTIONS_PER_BIN="${OPENFOAM_VTUNE_FUNCTIONS_PER_BIN:-5}"
-MAX_TRACE_BYTES="${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-250000}"
+FUNCTION_REPORT_LIMIT="${OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT:-0}"
+FUNCTIONS_PER_WINDOW="${OPENFOAM_VTUNE_FUNCTIONS_PER_WINDOW:-8}"
+TIME_SERIES_FUNCTIONS="${OPENFOAM_VTUNE_TIME_SERIES_FUNCTIONS:-12}"
+MAX_TRACE_BYTES="${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-500000}"
 OPENFOAM_PYTHON="${OPENFOAM_PYTHON:-${PROVISION_DIR}/experiment-metrics/.venv/bin/python}"
 
-for value_name in MAX_TIME_BINS TOP_FUNCTIONS FUNCTION_BINS FUNCTIONS_PER_BIN MAX_TRACE_BYTES
+for value_name in MAX_TIME_BINS TOP_FUNCTIONS FUNCTION_BINS FUNCTIONS_PER_WINDOW TIME_SERIES_FUNCTIONS MAX_TRACE_BYTES
 do
   value="${!value_name}"
   [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
@@ -24,6 +26,11 @@ do
     exit 2
   }
 done
+[[ "${FUNCTION_REPORT_LIMIT}" =~ ^[0-9]+$ ]] || {
+  printf 'FUNCTION_REPORT_LIMIT must be a non-negative integer, got %s\n' \
+    "${FUNCTION_REPORT_LIMIT}" >&2
+  exit 2
+}
 
 # Intel MPIのgtool経由では、VTuneが結果名へホスト名を付ける。固定名と
 # vtune.<hostname>の両方を受け付け、別runを誤選択しないよう1件に限定する。
@@ -67,6 +74,7 @@ timeline_start="$(awk -F, '/^[0-9]+,/ { print $2; exit }' "${SUMMARY_DIR}/timeli
 timeline_end="$(awk -F, '/^[0-9]+,/ { end=$3 } END { print end }' "${SUMMARY_DIR}/timeline.csv")"
 [[ -n "${timeline_start}" && -n "${timeline_end}" ]]
 
+printf 'file,start_sec,end_sec\n' > "${SUMMARY_DIR}/function-slices/windows.csv"
 for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do
   read -r slice_start slice_end < <(
     awk -v start="${timeline_start}" -v end="${timeline_end}" \
@@ -79,26 +87,52 @@ for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do
       }'
   )
   printf -v slice_name '%04d.csv' "${slice_index}"
-  vtune -quiet -report hotspots \
-    -result-dir "${VTUNE_RESULT_DIR}" \
-    -group-by function,module \
-    -time-filter "${slice_start}:${slice_end}" \
-    -limit "${FUNCTIONS_PER_BIN}" \
-    -format csv \
-    -csv-delimiter comma \
-    > "${SUMMARY_DIR}/function-slices/${slice_name}"
+  printf '%s,%s,%s\n' "${slice_name}" "${slice_start}" "${slice_end}" \
+    >> "${SUMMARY_DIR}/function-slices/windows.csv"
+  if (( FUNCTION_REPORT_LIMIT > 0 )); then
+    vtune -quiet -report hotspots \
+      -result-dir "${VTUNE_RESULT_DIR}" \
+      -group-by function,module \
+      -time-filter "${slice_start}:${slice_end}" \
+      -limit "${FUNCTION_REPORT_LIMIT}" \
+      -format csv \
+      -csv-delimiter comma \
+      > "${SUMMARY_DIR}/function-slices/${slice_name}"
+  else
+    vtune -quiet -report hotspots \
+      -result-dir "${VTUNE_RESULT_DIR}" \
+      -group-by function,module \
+      -time-filter "${slice_start}:${slice_end}" \
+      -format csv \
+      -csv-delimiter comma \
+      > "${SUMMARY_DIR}/function-slices/${slice_name}"
+  fi
 done
 
-if ! "${OPENFOAM_PYTHON}" "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
-  --timeline "${SUMMARY_DIR}/timeline.csv" \
-  --hotspots "${SUMMARY_DIR}/hotspots.csv" \
-  --function-slices-dir "${SUMMARY_DIR}/function-slices" \
-  --output "${SUMMARY_DIR}/openfoam-vtune-trace.json" \
-  --summary "${SUMMARY_DIR}/summary.json" \
-  --top-functions "${TOP_FUNCTIONS}" \
-  --max-time-bins "${MAX_TIME_BINS}" \
-  --max-trace-bytes "${MAX_TRACE_BYTES}" \
+solver_log_path="${SOLVER_LOG:-}"
+if [[ ! -f "${solver_log_path}" ]]; then
+  solver_log_path="${OPENFOAM_PROFILE_DIR}/solver-${OPENFOAM_PROFILE_LABEL}.log"
+fi
+converter_args=(
+  --timeline "${SUMMARY_DIR}/timeline.csv"
+  --hotspots "${SUMMARY_DIR}/hotspots.csv"
+  --function-slices-dir "${SUMMARY_DIR}/function-slices"
+  --output "${SUMMARY_DIR}/openfoam-vtune-trace.json"
+  --summary "${SUMMARY_DIR}/summary.json"
+  --top-functions "${TOP_FUNCTIONS}"
+  --time-series-functions "${TIME_SERIES_FUNCTIONS}"
+  --functions-per-window "${FUNCTIONS_PER_WINDOW}"
+  --function-report-limit "${FUNCTION_REPORT_LIMIT}"
+  --max-time-bins "${MAX_TIME_BINS}"
+  --max-trace-bytes "${MAX_TRACE_BYTES}"
   --run-label "${OPENFOAM_PROFILE_LABEL:-openfoam}"
+)
+if [[ -f "${solver_log_path}" ]]; then
+  converter_args+=(--solver-log "${solver_log_path}")
+fi
+
+if ! "${OPENFOAM_PYTHON}" "${PROVISION_DIR}/scripts/vtune-to-trace.py" \
+  "${converter_args[@]}"
 then
   # VTuneの版によってCSV schemaが異なる場合だけ、Actions artifactへ入力を
   # 残して診断できるようにする。成功時は軽量な2ファイルだけを公開する。

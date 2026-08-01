@@ -81,9 +81,12 @@ in the browser, so downloading the trace is only needed for the Perfetto view.
 Some VTune versions produce no Timeline rows for a Hotspots result. In that
 case the exporter reads the CSV report from standard output instead of
 `-report-output`. The Perfetto trace contains actual VTune elapsed-time interval
-start/end boundaries. Within 40 time slices it shows the five hottest sampled
-functions; those function spans are sampling-bin approximations, not exact call
-boundaries.
+start/end boundaries. It also parses the retained OpenFOAM solver log into
+continuous `ClockTime` intervals with iteration ranges, residuals, linear-solver
+iteration counts, and continuity errors. Forty measured VTune windows contain
+ranked function details. Stable function and MPI/OpenFOAM category tracks use
+sampled CPU-time counters instead of pretending that sampled functions have
+exact call boundaries.
 
 The defaults can be overridden in the PJM environment:
 
@@ -92,9 +95,15 @@ OPENFOAM_VTUNE_RANK=0
 OPENFOAM_VTUNE_TIME_BINS=300
 OPENFOAM_VTUNE_TOP_FUNCTIONS=50
 OPENFOAM_VTUNE_FUNCTION_BINS=40
-OPENFOAM_VTUNE_FUNCTIONS_PER_BIN=5
-OPENFOAM_VTUNE_MAX_TRACE_BYTES=250000
+OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT=0
+OPENFOAM_VTUNE_FUNCTIONS_PER_WINDOW=8
+OPENFOAM_VTUNE_TIME_SERIES_FUNCTIONS=12
+OPENFOAM_VTUNE_MAX_TRACE_BYTES=500000
 ```
+
+`OPENFOAM_VTUNE_FUNCTION_REPORT_LIMIT=0` keeps every function reported in each
+time window on Genkai. Only the bounded window details and selected time series
+are copied into the release JSON.
 
 To regenerate the lightweight JSON from a retained Genkai result without
 rerunning OpenFOAM, set the manual workflow input `existing_profile_run_id` to
