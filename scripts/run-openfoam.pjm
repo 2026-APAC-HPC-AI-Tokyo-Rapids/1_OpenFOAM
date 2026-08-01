@@ -9,7 +9,6 @@ set -euo pipefail
 
 # ジョブの実行条件をスクリプト内で固定し、投入元の環境に依存しないようにする。
 export OPENFOAM_MPI_PROCS=120
-export OPENFOAM_PROFILE_LABEL=mpi-1node-120ranks-shm-default
 
 # ジョブ実行に必要な環境変数が設定されていることを確認する。
 : "${OPENFOAM_RUN_ROOT:?}"
@@ -25,7 +24,7 @@ unset EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64
 export RUN_DIR="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
 export OPENFOAM_PROFILE_RUN_ID="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${OPENFOAM_PROFILE_RUN_ID}"
-export SOLVER_LOG="${PROVISION_DIR}/logs/solver-${OPENFOAM_PROFILE_LABEL}.log"
+export SOLVER_LOG="${OPENFOAM_PROFILE_DIR}/solver.log"
 export DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 export EXPERIMENT_METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 PIPELINE_STARTED_SECONDS=${SECONDS}
@@ -116,7 +115,6 @@ install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 
 # 実行条件と環境を記録し、実行ノードの CPU 情報も保存する。
 printf '%s\n' \
-  "profile_label=${OPENFOAM_PROFILE_LABEL}" \
   "PJM_JOBID=${PJM_JOBID}" \
   "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
   "launch_host=$(hostname)" \
@@ -130,10 +128,7 @@ mpirun -np 2 -ppn 1 bash -c 'printf "host=%s\\n" "$(hostname)"; lscpu' > "${OPEN
 
 # ソルバーの開始・終了時刻を記録し、必要に応じてプロファイラを選べる形で
 # MPI 並列計算を実行する。
-{
-  echo "profile_label=${OPENFOAM_PROFILE_LABEL}"
-  echo "started_at=$(date --iso-8601=seconds)"
-} | tee "${SOLVER_LOG}"
+echo "started_at=$(date --iso-8601=seconds)" | tee "${SOLVER_LOG}"
 
 set +e
 metrics_cli stage simple_foam -- "${PROVISION_DIR}/scripts/exec-profiler.sh" mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
@@ -151,7 +146,6 @@ if [[ "${solver_status}" -ne 0 ]]; then
 fi
 
 # プロファイルと実行ログを保存する場所を記録する。
-cp "${SOLVER_LOG}" "${OPENFOAM_PROFILE_DIR}/"
 du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
   "${PROVISION_DIR}/logs/profile-location.txt"
 printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
