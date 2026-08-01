@@ -68,7 +68,7 @@ def instrument(source, assets):
     )
 
     gauss_seidel = source / (
-            "src/OpenFOAM/matrices/LduMatrix/Smoothers/GaussSeidel/"
+            "src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/"
             "GaussSeidelSmoother.C"
         )
     replace_once(
@@ -83,7 +83,7 @@ def instrument(source, assets):
         2,
     )
     matrix_path = (
-        source / "src/OpenFOAM/matrices/LduMatrix/LduMatrix/lduMatrixATmul.C"
+        source / "src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrixATmul.C"
     )
     replace_once(
         matrix_path,
