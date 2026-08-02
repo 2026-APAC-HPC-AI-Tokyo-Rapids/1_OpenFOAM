@@ -313,8 +313,8 @@ jobs:
 
       - name: Stream OpenFOAM execution log
         run: |
-          # Keep the complete PJM log for the artifact, but only stream solver
-          # progress lines to the Actions console.
+          # Keep the complete PJM log on Genkai, but only stream solver progress
+          # lines to the Actions console.
           tail --lines=+1 --follow=name "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" |
             grep --line-buffered -E '^(Time =|ExecutionTime =)' &
           stream_pid=$!
@@ -396,56 +396,3 @@ jobs:
             pjwait -z "${PJM_JOB_ID}" || true
           fi
           rm -rf -- "${PROVISION_DIR:?}"
-
-  archive-artifacts:
-    name: Archive artifacts on home server
-    needs: run
-    if: always()
-    runs-on: ubuntu-latest
-
-    permissions:
-      actions: write
-      contents: read
-
-    steps:
-      - name: Download workflow artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Connect to home server through Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:apac-hpc-ai-actions
-          ping: tomokazu-ubuntu-server
-
-      - name: Configure SSH
-        env:
-          ARTIFACT_SERVER_SSH_PRIVATE_KEY: ${{ secrets.ARTIFACT_SERVER_SSH_PRIVATE_KEY }}
-        run: |
-          install -d -m 0700 "${HOME}/.ssh"
-          printf '%s\n' "${ARTIFACT_SERVER_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
-          chmod 0600 "${HOME}/.ssh/id_ed25519"
-          ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
-
-      - name: Copy artifacts to home server
-        run: |
-          if [[ ! -d artifacts ]] || [[ -z "$(find artifacts -mindepth 1 -print -quit)" ]]; then
-            echo "No GitHub Actions artifacts to copy"
-            exit 0
-          fi
-          ssh tomokazu@tomokazu-ubuntu-server "mkdir -p -- /hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}"
-          scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/"
-
-      - name: Delete copied GitHub artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
-            --jq '.artifacts[].id' |
-          while read -r artifact_id
-          do
-            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
-          done

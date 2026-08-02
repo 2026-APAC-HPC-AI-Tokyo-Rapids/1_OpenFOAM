@@ -40,7 +40,6 @@ case "${OPENFOAM_PROFILE_MODE:-perf-stat}" in
     export OPENFOAM_TASK_TRACE_MAX_EVENTS
     exec vtune -collect hotspots \
       -knob enable-stack-collection=true \
-      -knob enable-user-tasks=true \
       -result-dir "${PROFILE_RESULT_DIR}/vtune" -- "$@"
     ;;
   *)
