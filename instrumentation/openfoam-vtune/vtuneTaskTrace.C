@@ -63,7 +63,7 @@ long currentThreadId() noexcept
 
 std::size_t configuredEventLimit() noexcept
 {
-    constexpr std::size_t defaultLimit = 500'000;
+    constexpr std::size_t defaultLimit = 1'000'000;
     const char* value = std::getenv("OPENFOAM_TASK_TRACE_MAX_EVENTS");
     if (!value || !*value)
     {

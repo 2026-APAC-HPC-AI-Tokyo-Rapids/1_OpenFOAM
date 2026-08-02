@@ -36,7 +36,7 @@ case "${OPENFOAM_PROFILE_MODE:-perf-stat}" in
   vtune-hotspots)
     command -v vtune >/dev/null
     export OPENFOAM_TASK_TRACE_PATH="${PROFILE_RESULT_DIR}/openfoam-task-trace.csv"
-    : "${OPENFOAM_TASK_TRACE_MAX_EVENTS:=500000}"
+    : "${OPENFOAM_TASK_TRACE_MAX_EVENTS:=1000000}"
     export OPENFOAM_TASK_TRACE_MAX_EVENTS
     exec vtune -collect hotspots \
       -knob enable-stack-collection=true \
