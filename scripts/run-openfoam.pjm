@@ -4,7 +4,7 @@
 #PJM -L elapse=00:25:00
 #PJM --mpi proc=120
 
-# プロビジョニング済みの実行環境から、OpenFOAM の motorBike ケースを実行する。
+# 競技タスクの cavity3D 64M-cell ケースを1ノードで実行する。
 set -euo pipefail
 
 # ジョブの実行条件をスクリプト内で固定し、投入元の環境に依存しないようにする。
@@ -22,9 +22,10 @@ unset EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64
 
 # ジョブ専用の作業ディレクトリとプロファイルの保存先を先に決めておく。
 export RUN_DIR="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
+export CASE_DIR="${RUN_DIR}/cavity3D-64M"
 export OPENFOAM_PROFILE_RUN_ID="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${OPENFOAM_PROFILE_RUN_ID}"
-export SOLVER_LOG="${OPENFOAM_PROFILE_DIR}/solver.log"
+export SOLVER_LOG="${PROVISION_DIR}/logs/log.icoFoam"
 export DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 export EXPERIMENT_METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 PIPELINE_STARTED_SECONDS=${SECONDS}
@@ -46,7 +47,7 @@ cleanup() {
   status=$?
   trap - EXIT INT TERM
   run_elapsed_sec="$((SECONDS - PIPELINE_STARTED_SECONDS))"
-  metrics_collect run-end --case-dir "${RUN_DIR}/motorBike" --exit-code "${status}" --elapsed-sec "${run_elapsed_sec}"
+  metrics_collect run-end --case-dir "${CASE_DIR}" --exit-code "${status}" --elapsed-sec "${run_elapsed_sec}"
   rm -rf -- "${RUN_DIR:?}"
   exit "${status}"
 }
@@ -62,53 +63,35 @@ set +eu
 source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
 set -eu
 
-# OpenFOAM が使用する FFTW のライブラリを実行時の検索パスへ追加する。
-export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
-
 # 提出元の環境から継承した Intel MPI の設定を無効化する。ホスト固有の
 # ピンニング、診断、自動チューニングによって MPI 処理の挙動が変わらないようにする。
 unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
 
-# チュートリアルケースを作業ディレクトリへコピーして実行場所を移動する。
-cp -r "${FOAM_TUTORIALS}/incompressible/simpleFoam/motorBike" "${RUN_DIR}/"
-cd "${RUN_DIR}/motorBike"
+# submodule で固定した競技ケースをジョブ専用領域へコピーする。
+cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_DIR}"
+cd "${CASE_DIR}"
 
-# ソルバー初期化後は約0.2秒で10ステップ進むという直近の計測結果に基づき、
-# 約1分間実行されるように3000ステップへ設定する。
-sed -i 's/^endTime.*/endTime         3000;/' system/controlDict
-sed -i 's/^writeInterval.*/writeInterval    3000;/' system/controlDict
-sed -i 's/^writePrecision.*/writePrecision  17;/' system/controlDict
-# MPI プロセス数と分割方式を設定する。
-foamDictionary -entry numberOfSubdomains -set "${OPENFOAM_MPI_PROCS}" system/decomposeParDict.6
-foamDictionary -entry method -set scotch system/decomposeParDict.6
+# Genkai の1ノード120ランク向けに、可変である分割数だけを追加する。
+cat > "${DECOMPOSE_PAR_DICT}" <<EOF
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object decomposeParDict;
+}
 
-metrics_cli prepare-case --case-dir .
+numberOfSubdomains ${OPENFOAM_MPI_PROCS};
+method scotch;
+EOF
 
-# メッシュ生成に必要な形状を配置し、メッシュ生成・領域分割を行う。
-mkdir -p constant/triSurface
-cp -f "${FOAM_TUTORIALS}/resources/geometry/motorBike.obj.gz" constant/triSurface/
-
-metrics_collect run-start --case-dir . --command "${PROVISION_DIR}/scripts/run-openfoam.pjm"
+metrics_collect run-start --case-dir . --command mpirun -np "${OPENFOAM_MPI_PROCS}" icoFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 metrics_collect platform --case-dir .
-metrics_collect case --case-dir .
 metrics_collect parallel --case-dir .
 
 PIPELINE_STARTED_SECONDS=${SECONDS}
-metrics_cli stage surface_feature_extract -- surfaceFeatureExtract
 metrics_cli stage block_mesh -- blockMesh
 metrics_cli stage decompose_par -- decomposePar -decomposeParDict "${DECOMPOSE_PAR_DICT}" -force
-metrics_cli stage snappy_hex_mesh -- mpirun -np "${OPENFOAM_MPI_PROCS}" snappyHexMesh -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" -overwrite
-metrics_cli stage topo_set -- mpirun -np "${OPENFOAM_MPI_PROCS}" topoSet -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}"
-
-for processor_dir in processor*
-do
-  [[ -d "${processor_dir}" ]] && cp -r 0.orig/* "${processor_dir}/0/"
-done
-
-# 初期速度場を MPI 並列で計算する。
-metrics_cli stage potential_foam -- mpirun -np "${OPENFOAM_MPI_PROCS}" potentialFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" -writephi
-
-metrics_collect mesh --case-dir .
 
 # プロファイルの保存先は冒頭で決めた設定を使い、必要なディレクトリを作成する。
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
@@ -124,35 +107,40 @@ printf '%s\n' \
 cp system/decomposeParDict.6 system/controlDict "${OPENFOAM_PROFILE_DIR}/"
 env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
 
-mpirun -np 2 -ppn 1 bash -c 'printf "host=%s\\n" "$(hostname)"; lscpu' > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
+{
+  printf 'host=%s\n' "$(hostname)"
+  lscpu
+} > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
 
 # ソルバーの開始・終了時刻を記録し、必要に応じてプロファイラを選べる形で
 # MPI 並列計算を実行する。
 echo "started_at=$(date --iso-8601=seconds)" | tee "${SOLVER_LOG}"
 
 set +e
-metrics_cli stage simple_foam -- "${PROVISION_DIR}/scripts/exec-profiler.sh" mpirun -np "${OPENFOAM_MPI_PROCS}" simpleFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
+metrics_cli stage ico_foam -- "${PROVISION_DIR}/scripts/exec-profiler.sh" mpirun -np "${OPENFOAM_MPI_PROCS}" icoFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
 solver_status=${PIPESTATUS[0]}
 set -e
 
 echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${SOLVER_LOG}"
 
 metrics_collect solver-status --case-dir . --exit-code "${solver_status}"
-metrics_collect solver-result --case-dir .
-metrics_collect artifact --case-dir .
 
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
 
+# 競技付属の検証器で固定 workload の完走を確認し、提出可能な小さい成果物を残す。
+"${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" | tee "${PROVISION_DIR}/results/result.txt"
+grep -qx 'STATUS: VALID' "${PROVISION_DIR}/results/result.txt"
+grep -q '^RESULT:' "${PROVISION_DIR}/results/result.txt"
+cp "${SOLVER_LOG}" "${PROVISION_DIR}/results/log.icoFoam"
+
 # プロファイルと実行ログを保存する場所を記録する。
+cp "${SOLVER_LOG}" "${OPENFOAM_PROFILE_DIR}/"
 du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
   "${PROVISION_DIR}/logs/profile-location.txt"
 printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
   "${PROVISION_DIR}/logs/profile-location.txt"
 
-# ParaView 用のケースファイルを作成し、結果を圧縮して保存する。
-touch motorBike.foam
-metrics_cli stage result_archive -- tar -I zstd -cf "${PROVISION_DIR}/results/motorBike-${PJM_JOBID}.tar.zst" -C "${RUN_DIR}" motorBike
 # ワークフロー側がジョブ成功を判定できる完了マーカーを作成する。
 touch "${PROVISION_DIR}/run-success"

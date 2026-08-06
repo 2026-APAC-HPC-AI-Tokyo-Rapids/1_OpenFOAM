@@ -1,5 +1,18 @@
 # 1_OpenFOAM_HPC_Task
 
+## Competition workload
+
+The Genkai workflow runs the `cavity3D` 64-million-cell case fixed by the
+[`tasks`](https://github.com/hpcac/2026-APAC-HPC-AI) submodule. A run creates
+the mesh with `blockMesh`, partitions it into 120 Scotch subdomains, executes
+the required five `icoFoam` time steps on one node, and validates the complete
+solver log with the task's `parse_result.sh`.
+
+The result artifact contains `log.icoFoam` and `result.txt`. The decomposed
+case remains available during the batch job for profiling or ParaView-related
+processing, but is not uploaded by default because a 64-million-cell case is
+far larger than the validation evidence.
+
 ## OpenFOAM source mirror
 
 The Genkai workflow builds OpenFOAM from organization-managed repositories. It
@@ -15,6 +28,11 @@ OpenFOAM is checked out from the organization-managed `master` branch, whose
 current release line is v2606. The ThirdParty repository does not have a v2606
 tag, so the workflow uses its `main` branch as specified by the source
 repository policy.
+
+Only the components used by this workload are built: `blockMesh`,
+`decomposePar` with the serial Scotch backend, `icoFoam`, and their library
+dependencies. Optional OpenFOAM modules and unrelated solvers, utilities, and
+ThirdParty packages are excluded from the build.
 
 ### One-time initialization
 
