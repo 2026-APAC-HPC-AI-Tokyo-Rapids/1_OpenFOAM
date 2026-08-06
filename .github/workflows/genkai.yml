@@ -146,6 +146,8 @@ jobs:
     steps:
       - name: Checkout runtime files
         uses: actions/checkout@v7
+        with:
+          submodules: true
 
       - name: Provision OpenFOAM runtime
         id: provision_runtime
@@ -153,8 +155,10 @@ jobs:
           install -d -m 2775 "${OPENFOAM_RUNTIME_ROOT}"
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
-          mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
+          mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results" "${provision_dir}/task"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
+          install -m 0755 "${GITHUB_WORKSPACE}/tasks/parse_result.sh" "${provision_dir}/task/"
+          cp -a "${GITHUB_WORKSPACE}/tasks/case/cavity3D-64M" "${provision_dir}/task/"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
@@ -175,7 +179,7 @@ jobs:
             --exclude='compile_commands.json' \
             --exclude='install_manifest.txt' \
             --exclude='Makefile'
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/simpleFoam"
+          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/icoFoam"
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
@@ -263,11 +267,11 @@ jobs:
           if-no-files-found: warn
           compression-level: 1
 
-      - name: Upload ParaView case
+      - name: Upload cavity3D result
         if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-motorbike-case-${{ github.run_id }}-${{ github.run_attempt }}
+          name: openfoam-cavity3d-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.PROVISION_DIR }}/results
           if-no-files-found: error
           compression-level: 0

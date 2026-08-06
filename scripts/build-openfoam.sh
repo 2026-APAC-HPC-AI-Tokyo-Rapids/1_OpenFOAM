@@ -86,16 +86,15 @@ set +eu
 source "${BUILD_TREE}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_CONTROL=+ccache
 set -eu
 
-# OpenFOAM のビルドに必要なライブラリ検索パスを設定し、実行場所を移動する。
-export LD_LIBRARY_PATH="${FFTW_ARCH_PATH}/lib:${LD_LIBRARY_PATH:-}"
-export FOAM_EXTRA_LDFLAGS="-Wl,-rpath-link,${FFTW_ARCH_PATH}/lib"
+# タスク専用ビルドスクリプトが参照するプロジェクトへ移動する。
 cd "${WM_PROJECT_DIR}"
 
-# ccache の統計をリセットしてから、指定した並列度で OpenFOAM をビルドする。
+# ccache の統計をリセットしてから、cavity3D の前処理と実行に必要な
+# blockMesh、decomposePar、icoFoam とその依存だけをビルドする。
 ccache --zero-stats
 "${GITHUB_WORKSPACE}/scripts/build-profiler.sh" \
-  bash -o pipefail ./Allwmake -j "${OPENFOAM_BUILD_PARALLELISM}" -s \
-    -log="${BUILD_DIR}/logs/allwmake.log" > /dev/null || {
+  "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" \
+    > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
   build_status=$?
   grep -Eai -m 200 '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' "${BUILD_DIR}/logs/allwmake.log" >&2 || true
   exit "${build_status}"

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+# Build only the OpenFOAM components used by the cavity3D task pipeline:
+# blockMesh, decomposePar with Scotch, and icoFoam.
+set -euo pipefail
+
+: "${OPENFOAM_BUILD_PARALLELISM:?}"
+: "${WM_PROJECT_DIR:?}"
+: "${WM_THIRD_PARTY_DIR:?}"
+
+export WM_NCOMPPROCS="${OPENFOAM_BUILD_PARALLELISM}"
+cd "${WM_PROJECT_DIR}"
+
+# Bootstrap wmake and the sole external library used by this task.
+"${WM_DIR}/src/Allmake"
+"${WM_THIRD_PARTY_DIR}/makeSCOTCH" -no-mpi
+
+# OpenFOAM and Pstream form the base of every parallel executable.
+wmakeLnInclude -u src/OpenFOAM
+wmakeLnInclude -u "src/OSspecific/${WM_OSTYPE:-POSIX}"
+src/OpenFOAM/Alltouch -check 2>/dev/null || true
+src/OSspecific/"${WM_OSTYPE:-POSIX}"/Allwmake
+src/Pstream/Allwmake
+wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/OpenFOAM
+
+# Shared mesh and finite-volume libraries required by all three commands.
+for library in \
+  src/fileFormats \
+  src/surfMesh \
+  src/meshTools \
+  src/finiteArea \
+  src/finiteVolume \
+  src/mesh/blockMesh \
+  src/mesh/extrudeModel \
+  src/dynamicMesh \
+  src/genericPatchFields \
+  src/parallel/decompose/decompositionMethods \
+  src/lagrangian/basic \
+  src/parallel/decompose/decompose \
+  src/parallel/decompose/faDecompose
+do
+  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${library}"
+done
+
+# decomposePar links generic placeholders and loads the available Scotch
+# implementation at runtime. Build only Scotch among the real decomposition
+# backends; KaHIP, METIS and parallel Scotch are not used by this pipeline.
+src/parallel/decompose/AllwmakeLnInclude
+for backend in kahipDecomp metisDecomp scotchDecomp
+do
+  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "src/dummyThirdParty/${backend}"
+done
+wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/parallel/decompose/scotchDecomp
+
+for application in \
+  applications/utilities/mesh/generation/blockMesh \
+  applications/utilities/parallelProcessing/decomposePar \
+  applications/solvers/incompressible/icoFoam
+do
+  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${application}"
+done
+
+# Fail the build here instead of discovering a missing binary during runtime
+# provisioning. Also ensure all shared-library dependencies resolve.
+for application in blockMesh decomposePar icoFoam
+do
+  executable="${FOAM_APPBIN}/${application}"
+  test -x "${executable}"
+  if ldd "${executable}" | grep -q 'not found'; then
+    ldd "${executable}" >&2
+    exit 1
+  fi
+done
