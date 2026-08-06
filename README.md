@@ -13,6 +13,11 @@ case remains available during the batch job for profiling or ParaView-related
 processing, but is not uploaded by default because a 64-million-cell case is
 far larger than the validation evidence.
 
+Normal scoring runs launch MPI directly so hardware-counter collection cannot
+perturb the result. A manual workflow dispatch can select `profile_mode:
+perf-stat` when a profile is needed; `direct` is the default for both pushes
+and manual runs. The selected mode is recorded with the run metadata.
+
 ## OpenFOAM source mirror
 
 The Genkai workflow builds OpenFOAM from organization-managed repositories. It
