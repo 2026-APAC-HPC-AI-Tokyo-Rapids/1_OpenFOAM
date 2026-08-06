@@ -25,6 +25,7 @@ export RUN_DIR="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
 export CASE_DIR="${RUN_DIR}/cavity3D-64M"
 export OPENFOAM_PROFILE_RUN_ID="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
 export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${OPENFOAM_PROFILE_RUN_ID}"
+export OPENFOAM_PROFILE_MODE="${OPENFOAM_PROFILE_MODE:-direct}"
 export SOLVER_LOG="${PROVISION_DIR}/logs/log.icoFoam"
 export DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 export EXPERIMENT_METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
@@ -102,6 +103,7 @@ printf '%s\n' \
   "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
   "launch_host=$(hostname)" \
   "mpi_procs=${OPENFOAM_MPI_PROCS}" \
+  "profile_mode=${OPENFOAM_PROFILE_MODE}" \
   "created_at=$(date --iso-8601=seconds)" \
   > "${OPENFOAM_PROFILE_DIR}/run.txt"
 cp system/decomposeParDict.6 system/controlDict "${OPENFOAM_PROFILE_DIR}/"

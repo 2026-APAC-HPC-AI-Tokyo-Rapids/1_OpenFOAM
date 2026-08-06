@@ -10,24 +10,19 @@ set -euo pipefail
 # 実行結果とログの保存先を準備する。
 install -d -m 0700 "${OPENFOAM_PROFILE_DIR}"
 
-# perf stat で引数のプロセスと、その子プロセスの基本的なハードウェア性能を計測する。
-# 比較実験ではこの行を有効にし、通常実行の行をコメントアウトする。
-exec perf stat -x, -o "${OPENFOAM_PROFILE_DIR}/perf-stat.csv" \
-  -e cycles,instructions,branches,branch-misses,cache-misses -- "$@"
-
-# 通常実行: プロファイラを使わず、引数で指定されたプロセスを直接実行する。
-# プロファイリングを無効にする場合は、上の perf stat をコメントアウトして
-# この行を有効にする。
-# exec "$@"
-
-# 実行時間・メモリ使用量を計測する場合は、上の perf stat をコメントアウトして
-# 次の行を有効にする。
-# exec /usr/bin/time -v -o "${OPENFOAM_PROFILE_DIR}/resource-usage.txt" "$@"
-
-# Intel MPI の通信統計を収集する場合は、上の perf stat をコメントアウトして
-# 次の行を有効にする。APS は引数で指定されたプロセスを計測する。
-# exec aps --result-dir="${OPENFOAM_PROFILE_DIR}/aps" --collection-mode=all --stat-level=5 --mpi-imbalance=2 --storage-format=compact "$@"
-
-# VTune のホットスポットを収集する場合は、上の perf stat をコメントアウトして
-# 次の行を有効にする。VTune は引数で指定されたプロセスを計測する。
-# exec vtune -collect hotspots -knob enable-stack-collection=true -result-dir "${OPENFOAM_PROFILE_DIR}/vtune" -- "$@"
+# 提出用の通常実行はプロファイラを付けず、計測時だけ環境変数で明示的に選ぶ。
+# これにより、ソースを編集せず同じ起動経路で通常実行とプロファイルを切り替えられる。
+case "${OPENFOAM_PROFILE_MODE:-direct}" in
+  direct)
+    exec "$@"
+    ;;
+  perf-stat)
+    exec perf stat -x, -o "${OPENFOAM_PROFILE_DIR}/perf-stat.csv" \
+      -e cycles,instructions,branches,branch-misses,cache-misses -- "$@"
+    ;;
+  *)
+    printf 'Unknown OPENFOAM_PROFILE_MODE: %s\n' \
+      "${OPENFOAM_PROFILE_MODE}" >&2
+    exit 2
+    ;;
+esac

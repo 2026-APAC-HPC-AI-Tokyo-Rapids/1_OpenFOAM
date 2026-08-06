@@ -262,10 +262,9 @@ through `mpirun -gtool`, process pinning with
 
 `scripts/exec-profiler.sh` observes the process specified in its arguments. The
 caller passes `mpirun ...` as that target, while the profiler script itself does
-not launch MPI. It contains commented alternatives for normal execution,
-`/usr/bin/time`, APS, and VTune; exactly one alternative is enabled manually
-when a profile is needed. Comparisons are intentionally performed as separate
-commits/Actions runs rather than as multiple trials inside one batch job.
+not launch MPI. Normal scoring runs use `OPENFOAM_PROFILE_MODE=direct`; manual
+workflow dispatches can select `perf-stat` without changing the source or the
+build. Comparisons can therefore use the same commit and build archive.
 
 VTune and APS results remain under `~/openfoam-profile`. Actions artifacts
 contain only logs, timing files, and generated summaries.
