@@ -35,22 +35,21 @@ for library in \
   src/dynamicMesh \
   src/genericPatchFields \
   src/parallel/decompose/decompositionMethods \
-  src/lagrangian/basic \
-  src/parallel/decompose/decompose \
-  src/parallel/decompose/faDecompose
+  src/lagrangian/basic
 do
   wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${library}"
 done
 
-# decomposePar links generic placeholders and loads the available Scotch
-# implementation at runtime. Build only Scotch among the real decomposition
-# backends; KaHIP, METIS and parallel Scotch are not used by this pipeline.
+# decomposePar links generic placeholders and loads the available backend at
+# runtime. Its upstream Allwmake performs the required backend discovery and
+# exports the detected Scotch include and library paths to wmake. Since only
+# serial Scotch was installed above, the other real backends remain skipped.
 src/parallel/decompose/AllwmakeLnInclude
 for backend in kahipDecomp metisDecomp scotchDecomp
 do
   wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "src/dummyThirdParty/${backend}"
 done
-wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/parallel/decompose/scotchDecomp
+src/parallel/decompose/Allwmake
 
 for application in \
   applications/utilities/mesh/generation/blockMesh \
