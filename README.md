@@ -1,79 +1,10 @@
-# 1_OpenFOAM_HPC_Task
+# OpenFOAM on Genkai
 
-## Competition workload
+Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法や実行性能の改善による影響を比較するためのリポジトリです。
 
-The Genkai workflow runs the `cavity3D` 64-million-cell case fixed by the
-[`tasks`](https://github.com/hpcac/2026-APAC-HPC-AI) submodule. A run creates
-the mesh with `blockMesh`, partitions it into 120 Scotch subdomains, executes
-the required five `icoFoam` time steps on one node, and validates the complete
-solver log with the task's `parse_result.sh`.
+調査内容と現行構成は以下に分けて記録しています。
 
-The result artifact contains `log.icoFoam` and `result.txt`. The decomposed
-case remains available during the batch job for profiling or ParaView-related
-processing, but is not uploaded by default because a 64-million-cell case is
-far larger than the validation evidence.
+- [OpenFOAM のビルド](research/build-performance/README.md)
+- [OpenFOAM の実行](research/runtime-performance/README.md)
 
-Normal scoring runs launch MPI directly so hardware-counter collection cannot
-perturb the result. A manual workflow dispatch can select `profile_mode:
-perf-stat` when a profile is needed; `direct` is the default for both pushes
-and manual runs. The selected mode is recorded with the run metadata.
-
-## OpenFOAM source mirror
-
-The Genkai workflow builds OpenFOAM from organization-managed repositories. It
-uses the following read-only bare mirrors as a shared Git object cache:
-
-```text
-/fast/pj26000080/git-mirror/
-├── 3_OpenFOAM_Src.git
-└── 4_OpenFOAM_ThirdParty_Src.git
-```
-
-OpenFOAM is checked out from the organization-managed `master` branch, whose
-current release line is v2606. The ThirdParty repository does not have a v2606
-tag, so the workflow uses its `main` branch as specified by the source
-repository policy.
-
-Only the components used by this workload are built: `blockMesh`,
-`decomposePar` with the serial Scotch backend, `icoFoam`, and their library
-dependencies. Optional OpenFOAM modules and unrelated solvers, utilities, and
-ThirdParty packages are excluded from the build.
-
-### One-time initialization
-
-Run the initial download once from an SSH session on a Genkai login node. This
-is intentionally not part of the GitHub Actions workflow.
-
-```bash
-install -d -m 2775 /fast/pj26000080/git-mirror
-
-git clone --mirror \
-  https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src.git \
-  /fast/pj26000080/git-mirror/3_OpenFOAM_Src.git
-git clone --mirror \
-  https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src.git \
-  /fast/pj26000080/git-mirror/4_OpenFOAM_ThirdParty_Src.git
-
-chgrp -R pj26000080 /fast/pj26000080/git-mirror
-chmod -R g+rwX /fast/pj26000080/git-mirror
-git -C /fast/pj26000080/git-mirror/3_OpenFOAM_Src.git \
-  config core.sharedRepository group
-git -C /fast/pj26000080/git-mirror/4_OpenFOAM_ThirdParty_Src.git \
-  config core.sharedRepository group
-```
-
-The project group owns the directory, and setgid mode on its parent keeps new
-entries in that group. Both repositories are caches only; no build job pushes
-to them.
-
-### Routine operation
-
-Each source repository updates its own bare mirror from a serialized GitHub
-Actions workflow after a push. This repository treats both mirrors as read-only
-and only clones from them when a new build is required, so Git objects are not
-downloaded again for each build.
-
-The ThirdParty Git repository does not contain unpacked dependency sources. Its
-`download-v2606-sources.sh` script retrieves the required archives through the
-existing shared source cache and expands them into the build tree. The workflow
-does not copy `sources/` from the monolithic ThirdParty release archive.
+実装は [Genkai workflow](.github/workflows/genkai.yml)、[ビルドスクリプト](scripts/build-openfoam.sh)、[実行スクリプト](scripts/run-openfoam.pjm)を参照してください。
