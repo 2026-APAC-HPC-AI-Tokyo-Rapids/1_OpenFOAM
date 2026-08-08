@@ -95,7 +95,7 @@ consumerでNULLを返すだけで、raw key、family status、Evidence、reason�
 | qualification allocation | Git管理paired scheduleとrunnerが一度作るparent manifest | `runner.manifest` / pair submit前、`pjm.supervisor` / entry、`runner.postrun` / terminal後 | allocation ID、scheduler binding/accounting、job-entry env、minimal hardware、pair/ordered child IDs、OFF/ON order、common binding | 一allocation一pair、二childの独立manifest/log/metrics、child parent ref、block ID=allocation ID、同じartifact set、pair間は別allocation | arm間crash/未起動/未完成は回収できたfileだけ保存しpair不適格。片armを別allocationへ再pairしない |
 | OpenFOAM/ThirdParty source | checkout直後、`.git`削除前の各`git rev-parse HEAD` | `build.packager` / build開始前 | `control/build-sidecar.json`、比較用source commit索引 | moving branch名でなくfull commit。完成buildとsidecarを対応付ける | build artifactを公開しない |
 | toolchain/build | `mpiicx --version`、`mpiicpx --version`、`mpirun --version`、`readelf --dynamic <icoFoam>`、`ldd <icoFoam>`、完成binary/archive | `build.packager` / archive完成時 | immutable build sidecarとartifact identity索引、各command raw output | LC_ALL=C、DT_NEEDED、resolved path/hash、binary/archive hash、sidecar schema | build不完全としてreuse禁止 |
-| actual workload identity | setup後にsolverが読む実caseのworkload-defining memberとsolver executable/argv | `pjm.supervisor` / setup完了後、blockMesh前 | `case.workload_identity`、`source/workload-manifest.json` | `0/`、`constant/transportProperties`、`system/controlDict`、`fvSchemes`、`fvSolution`、`blockMeshDict`等のcontract列挙memberをpath、size、SHA-256でsealしprotocol workload identityと照合。generated `decomposeParDict`はpartition factだけが所有 | 欠損・member差・hash不一致はcomparison不適格 |
+| actual workload identity | setup後にsolverが読む実caseのworkload-defining memberとsolver executable/argv | `pjm.supervisor` / setup完了後、blockMesh前 | `case.workload_identity`、`source/workload-manifest.json` | exact allowlistは`0/U`、`0/p`、`constant/transportProperties`、`system/controlDict`、`system/fvSchemes`、`system/fvSolution`、`system/blockMeshDict`。path、size、SHA-256でsealしprotocol workload identityと照合。generated `decomposeParDict`はpartition factだけが所有 | 欠損・member差・hash不一致はcomparison不適格 |
 | full job-entry environment | `env -0`相当のNUL区切りprocess environment | `pjm.supervisor` / script entry直後、module/unset前 | regularは`env.job_entry.*`と`source/env/job-entry.snapshot`、qualificationはparent snapshotとallocation env projection | byte-exact name escapeと全value Base64、entry count fixture。child rawへ複写せずEnvironmentがblock/allocation join | applicable snapshot collector failed |
 | full exec environment | supervisor baselineと各solver wrapperのbyte environment | applicable score bundle/profile/qualification ONの`pjm.supervisor` + `exec.wrapper`、runner reducer / mpirun直前、各rank exec直前、terminal後 | `env.host_exec.common.*`、`source/env/host-exec.snapshot`、`source/env/rank-<rank>.delta.json` | rank別source file、`os.environb`相当、common+delta full復元、expected全rank | applicable variantではconfiguration incomplete。qualification OFFは非適用でNULLだけ |
 | scheduler request | Git管理lane、PJM script identity、runnerが実行するexact `pjsub` argv | `runner.submission` / submit直前 | regularは`run`の`scheduler.request`、qualificationはparent evidence artifact/allocation projection | lane.nodes/ranks/rscgrp/transportとscript/argv overrideを照合。child rawへ複写しない | invalid protocol assignment |
@@ -104,11 +104,11 @@ consumerでNULLを返すだけで、raw key、family status、Evidence、reason�
 | actual argv | stage wrapperが`subprocess`へ渡すargv配列 | `StageRunner` / spawn直前 | stage別launch argv、solverは`run.launch_argv` | shell再構成文字列ではなく配列。spawnしたargvとbyte単位で一致 | stage未開始またはconfiguration incomplete |
 | run timing/outcome | supervisorのUTC clock、monotonic clock、最終status | `pjm.supervisor` / entry時とpost-run回収後 | `run.started_at`、`run.finished_at`、`run.elapsed_sec`、outcome/exit | wall timestamp pairとmonotonic elapsedを別clockとして保持、solver validityと分離 | 保存できたterminationとstage outcomeから中断を表す |
 | stage outcomes | supervisorの同じmonotonic clockとraw child wait status | `StageRunner` / spawn直前とwait直後 | `perf.stage.<name>.wall_time_sec`、`run.stage.<name>.termination` | exit/signal/spawn_errorをJSONで区別し、BigQuery時間を含めない | termination objectで中断を表現 |
-| minimal hardware identity | scheduler/node queryのnode class、CPU model/stepping | `pjm.supervisor` / regularはrun前、qualificationはallocation内でarm 1前に一度、allocated nodeごと | regularは`hardware.identity_min`、qualificationはparent `source/hardware/identity-min.*`とallocation projection | observed host集合、全node consensus、one-shot capture。qualification childはparent sourceをjoinしrawへ複写しない | applicable hardware identity incomplete |
+| minimal hardware identity | allocated nodeごとの`LC_ALL=C lscpu --json` | `pjm.supervisor` / regularはrun前、qualificationはallocation内でarm 1前に一度 | `source/hardware/node-<node>.lscpu.json`、`source/hardware/identity-min.json`、`hardware.identity_min` | hostnameとArchitecture/Vendor ID/CPU family/Model/Stepping/Model nameの固定schema、observed host集合、全node consensus。resource classはlane/request source | applicable hardware identity incomplete |
 | full hardware topology（profile only） | `LC_ALL=C lscpu --json`、`/sys/devices/system/cpu/online`、`/sys/devices/system/node/online`、各nodeの`cpulist`/`meminfo`、`/proc/meminfo` | `postrun.auditor` / profile solver終了後、allocated nodeごと | `hardware.topology_full`とcommand/file raw artifact | observed hostname集合、exact file membership/parser fixture | profileではhardware incomplete。bench consumerはNULLだけを返す |
 | mesh topology | exact buildにlinkした`mesh-facts` probeの`fvMesh::nCells/nFaces/nPoints/nInternalFaces`と`LC_ALL=C checkMesh` raw log | `postrun.auditor` / regularはsolver後、qualificationはarm 2終了後だけ | `mesh.topology`、probe JSON、complete checkMesh log | native method値、probe/checkMesh exit、schema completeness | official scoreとは分離しcomparison不適格 |
 | requested partition | 実際に使用したgenerated `decomposeParDict` | `pjm.supervisor` / decomposePar直前 | `mesh.partition.requested`、dict artifact | argvが指すfileとartifact identity一致 | preparation failure |
-| observed partition | serial mesh/order、processor addressing、decompose/check output | `postrun.auditor` / regularはsolver後、qualificationはarm 2終了後だけ | `mesh.partition.observed` | rank/local-index順保持、global cell一回、signed face addressing、expected subdomain集合 | partition incomplete |
+| observed partition | serial mesh/order、processor addressing、decompose/check output | `postrun.auditor` / regularはsolver後、qualificationはarm 2終了後だけ | `source/mesh/partition-observed.json`、`logs/checkMesh.log`、`mesh.partition.observed` | fixed `schema_version/global/subdomains/interfaces` object、rank/local-index順、global cell一回、addressing path/size/hash、signed face addressing、expected subdomain集合 | partition incomplete |
 | runtime header | OpenFOAM startupが出すBuild/Arch/Exec/nProcs/Hosts | `runner.log_parser` / PJM terminal後、`logs/log.icoFoam`があれば | `solver.runtime_header` | `argList.C` symbol/format golden、host sum=nProcs。Exec stringをargvへ逆変換しない | configuration incomplete |
 | Pstream startup-applied | `UPstream::init()`、node comm state、`attachOurBuffers()`後の実buffer | applicable score bundle/profile/qualification ONの`openfoam.startup` -> rank別JSONL、`runner.pstream_parser` / attach完了後emit、terminal後reduce | `solver.pstream.startup_applied.rank.<rank>` | configured/clamped/attached byte、node control、expected全rank、banner非依存 | applicable variantで欠損ならreason/Evidenceあり。qualification OFFは非適用でNULLだけ |
 | Pstream runtime-current | `Time::setControls()`でcase override済みの登録switch | applicable score bundle/profile/qualification ONの`openfoam.runtime_config` -> rank別JSONL、`runner.pstream_parser` / time loop前emit、terminal後reduce | `solver.pstream.runtime_current.rank.<rank>` | floatTransfer、node controls、usingNodeComms等をsymbol対応、false/0明示、expected全rank | applicable variantで欠損ならreason/Evidenceあり。qualification OFFは非適用でNULLだけ |
@@ -117,7 +117,7 @@ consumerでNULLを返すだけで、raw key、family status、Evidence、reason�
 | pressure solves | 保存済みsolver logの各`Solving for p` record | `runner.log_parser` / PJM terminal後 | `solver.pressure_solves` | initial/final residual/iterationsを同じrecordに保持、match数と公式期待数を照合 | 部分配列を保存しinvalid reasonを出す |
 | official markers | complete solver logとcanonical official evaluator | `runner.log_parser` / PJM terminal後 | `solver.log_markers`、official validityはview | shell validity semanticsのgolden parity後、固定locale/decimal evaluatorを共有 | parse failureとofficial invalidとscore算出不能を区別 |
 | primary score inputs | `solver.step_timings`の先頭/末尾ExecutionTimeと公式固定定数 | BigQuery view / query時 | rawへscoreを重複保存しない | fixed decimal/roundingのcanonical evaluatorと`64,000,000 * 4 / trim`をgolden照合 | source record不足ならNULLと理由 |
-| artifact identity | localで作ったrun bundle、profileだけのraw tar、build sidecar | `runner.packager` / GitHub Artifact upload前 | artifact URI、bundle/profile hash、build source/hash、`artifact-manifest.json` | build/workload/env/placement/PJM raw+version/`logs/pjm-job.log`/`logs/log.icoFoam`/`results/result.txt`を列挙し、profileは`<runtime>/runs/<run>/profile/raw`のperf/APS/VTune raw、tool metadata、exact profiler argvも回収。benchではprofile artifact/placeholder/absence recordを作らない | uploadできなければrun-level archive failure。benchのprofile consumerは理由なしNULLだけ |
+| artifact identity | localで作ったrun bundle、profileだけのraw tar、build sidecar | `runner.packager` / GitHub Artifact upload前 | artifact URI、bundle/profile hash、build source/hash、`artifact-manifest.json` | build/workload/env/placement/PJM raw+version/`logs/pjm-job.log`/`logs/log.icoFoam`/`results/result.txt`を列挙し、初版profileは`<runtime>/runs/<run>/profile/raw`のperf stat raw、tool version、exact profiler argvも回収。benchではprofile artifact/placeholder/absence recordを作らない | uploadできなければrun-level archive failure。benchのprofile consumerは理由なしNULLだけ |
 | audit subject binding | 元runのimmutable mesh/build artifact manifestとcontent identity | `runner.audit_manifest` / 別audit job投入前 | audit runの`audit.subject_artifact_identity` | remote hashを再検証し、registryでtransfer可としたartifact-derived familyだけjoin | 欠損時はstandalone auditで元runへjoinしない |
 | archive/publish result | GitHub Artifact upload結果、SCP結果、BigQuery response | workflow archive job/`Publisher` / upload・転送・送信後 | workflow logとData Status | SCP成功後だけGitHub Artifactを削除。失敗はArtifactを残してjob failure | scientific familyへ理由を伝播せず、run-level状態だけにする |
 
@@ -162,9 +162,9 @@ symbolとfull commitをregistry source欄へ固定し、line番号だけを契�
 
 ## laneとsidecar契約
 
-`experiments/lanes/openfoam-genkai-{1,2,4}.toml`はnode数だけでなく、rank数、resource group、
-transport policy、required logical producer、instrumentation modeを明示する。rank数をcore数から
-暗黙推定しない。runnerはlane、PJM script identity、exact `pjsub` argvを一つのrequest recordへ
+D-003未回答中は実証済みの`experiments/lanes/openfoam-genkai-1.toml`だけをcanary候補とする。追加laneは
+D-003とcluster実測後に作る。各laneはnode数だけでなく、rank数、resource group、transport policy、required
+logical producer、instrumentation modeを明示する。rank数をcore数から暗黙推定しない。runnerはlane、PJM script identity、exact `pjsub` argvを一つのrequest recordへ
 sealする。validationは次の独立sourceを照合する。
 
 ```text
@@ -174,7 +174,7 @@ lane.ranks = decomposeParDict.numberOfSubdomains = runtime_header.nProcs
            = runtime_header.host_rank_sum = placement record count
 ```
 
-accounting commandが返さないhost/rank/resource-group fieldはaccounting factに含めない。2/4 nodeで
+accounting commandが返さないhost/rank/resource-group fieldはaccounting factに含めない。multi-node laneで
 launch-effective environmentに`I_MPI_FABRICS=shm`があればlaunchを拒否する。
 
 各rank wrapperは衝突しない`source/placement/rank-<rank>.json`とrank environment sourceへ一度書いてsolverを
@@ -190,7 +190,7 @@ post-run validatorがexpected rank cardinalityを検査する。
 - ExecutionTime非単調、ClockTime同値、scientific notation、`1.2.3`、trim zero、score算出不能
 - `bannerEnabled=false`、`writeHosts` 0/1/2、hostsum欠損、複数nProcs/Hosts block
 - 一行に複数NaN/Inf、`End`で始まる別行、official INVALIDだがprocess exit 0
-- 1/2/4 nodeのruntime headerとrank placement、host sum不一致
+- 各in-scope laneのruntime headerとrank placement、host sum不一致
 - Pstreamのstartup/runtime override、false、0、default、明示値、runtime change、banner無効event
 - protocol workload fixtureと、setup後のcase member一つを変えた不一致fixture
 - variant applicability grid：profile-only collectorのprofile失敗はreasonあり、benchは理由/status/EvidenceなしNULL、qualification OFFのON専用列は同じNULL、qualification ONの同collector失敗はreasonあり
@@ -208,6 +208,8 @@ post-run validatorがexpected rank cardinalityを検査する。
 ## 未決定事項
 
 bench/profile分離と、benchのprofile-only metricは値をNULLにするだけで原因/status/Evidenceを作らないことは
-ユーザー確定済みである。score runに許す最小bench bundleの統計上限D-001はユーザー確認待ちである。決まるまでは
+ユーザー確定済みである。現行Genkaiで実証済みなのは1 node/120 ranksだけなので、2/4 nodeを今回実装するかを
+決めるlane scope D-003が最上流のユーザー確認待ちである。プロジェクト全体では次にQwen profiler D-004、
+最後に確定laneごとの最小bench bundleの統計上限D-001を決める。決まるまでは
 profiler、polling、verbose MPI/Pstream trace、full placement診断はprofile-only、未qualificationのinline eventは
-audit-onlyとする。閾値を文書へ仮置きしてscore/qualification eligibleへ混入させない。
+audit-onlyとする。未実証のGenkai 2/4 node laneや閾値を文書へ仮置きしてscore/qualification eligibleへ混入させない。

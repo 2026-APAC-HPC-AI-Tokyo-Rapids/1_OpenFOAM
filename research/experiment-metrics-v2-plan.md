@@ -307,7 +307,10 @@ median、MAD、ratio、不確実性を分ける。
   spawn errorを区別するJSON objectで、shellの`128+signal`へ潰さない
 - `scheduler.request`: runner submit boundaryのlane、PJM script identity、exact `pjsub` argv
 - `scheduler.accounting`: 固定した`pjstat --history -S --choose ... --data --delimiter`の結果
-- `hardware.identity_min`: regularはrunごと、qualificationはallocation内でarm 1前に一度だけ取るnode class、CPU model/stepping等のhost-invariant identity。childはparent sourceをjoinしrawへ複写しない
+- `hardware.identity_min`: regularはrunごと、qualificationはallocation内でarm 1前に一度だけ、各allocated nodeで
+  `LC_ALL=C lscpu --json`を実行する。node別rawを保存し、`Architecture`、`Vendor ID`、`CPU family`、`Model`、
+  `Stepping`、`Model name`とhostnameを固定fieldのaggregateへ変換する。resource classはlane/requestを参照し、
+  qualification childはparent sourceをjoinしてrawへ複写しない
 - `hardware.topology_full`: profileで取るNUMA、CPU topology、memory詳細。bench consumerは理由なしのNULL
 
 started/finishedはUTC wall clock、elapsedは同じsupervisor境界のmonotonic clockで取得するため、
@@ -334,7 +337,8 @@ archive hash一致の組だけをreuseし、任意のcrash境界から二fileを
 
 - `mesh.topology`: cells、faces、points、internal facesのJSON object
 - `mesh.partition.requested`: 実使用dictのmethod、subdomains、renumbering等のJSON object
-- `mesh.partition.observed`: partition balance、processor interface、ordering identities等のJSON object
+- `mesh.partition.observed`: `source/mesh/partition-observed.json`のJSON object。global cell数、rank別cell数、
+  min/max/mean/imbalance、rank順のcell/face addressing SHA-256、rank pair順のprocessor-interface face数を持つ
 - `solver.runtime_header`: solver logのbuild、arch、nProcs、Hostsを一つのJSON object
 - `solver.pstream.startup_applied.rank.<rank>`: `UPstream::init()`が実際に適用したstartup state
 - `solver.pstream.runtime_current.rank.<rank>`: `Time`構築とcase override後、time loop前のcurrent state
@@ -347,6 +351,9 @@ archive hash一致の組だけをreuseし、任意のcrash境界から二fileを
 partition identityはserial mesh/order、partition membership、rank順・local index順を保った
 `cellProcAddressing`、必要なsigned `faceProcAddressing`を分ける。headerだけを除外し、global cellが
 全rankでちょうど一回、rank集合が連続であることを検査する。
+`partition-observed.json`は`schema_version/global/subdomains/interfaces`の固定objectとし、`subdomains`はrank昇順、
+`interfaces`は`(owner_rank,neighbor_rank)`昇順にする。source addressing全体をrun artifactへ複写せず、path、size、
+content hashと上記summaryを保存し、complete `checkMesh` outputを`logs/checkMesh.log`へ残す。
 大容量mesh scan、`checkMesh`、partition hashはregularではsolver終了後または別audit job、qualificationでは
 必ずarm 2終了後に実施し、
 scored solverのcacheを乱さない。generated `decomposeParDict`と各stage logはartifactへ残す。
@@ -431,18 +438,21 @@ MPI teardown後の非zero exitでもsolver workloadがofficial validになり得
 comparison reasonであり、canonical official evaluatorが定めない限りofficial invalid reasonへ
 混ぜない。`official_log_valid=true`でもscoreを算出不能ならscoreはNULLと別reasonにする。
 
-## 1/2/4 node laneと計測擾乱
+## lane scopeと計測擾乱
 
-1/2/4 node条件を`experiments/lanes/openfoam-genkai-{1,2,4}.toml`の別laneとして定義する。
-各fileはnode/rank/resource group/transport policy、required producer、instrumentation modeを持ち、
-runnerがexact `pjsub` argvとPJM script identityへ解決してmanifestへsealする。各runで次を照合する。
+D-003未回答中は、現行scriptで実証済みの1 node条件だけを`experiments/lanes/openfoam-genkai-1.toml`の
+canary lane候補とする。D-003でGenkai 2/4 nodeも今回のscopeに含めるなら、実測でresource group、rank数、
+transport、walltimeを確定してから別laneを追加する。推奨どおり競技clusterを後続scopeにする場合は、対象cluster
+確定後にcluster固有の1/2/4 node contractを作り、Genkai laneと同一視しない。各lane fileはnode/rank/resource
+group/transport policy、required producer、instrumentation modeを持ち、runnerがexact `pjsub` argvとPJM script
+identityへ解決してmanifestへsealする。各runで次を照合する。
 
 ```text
 claimed lane == requested nodes == allocated nodes
              == distinct solver hosts == distinct placement hosts
 ```
 
-rank ID、header nProcs、Hosts合計、placement件数も一致させる。2/4 node laneで
+rank ID、header nProcs、Hosts合計、placement件数も一致させる。multi-node laneで
 `I_MPI_FABRICS=shm`のようなnode内限定transportを拒否する。
 
 scored solver直前にはBigQuery通信、profiler、MPI debug、`checkMesh`、大容量hashを実行しない。
@@ -828,7 +838,7 @@ slotへ両armを新しいpair IDで再投入できる。一方のsolver開始後
 - `perturbing`: 数値差、instrumentation-attributable failure、またはCIが許容域から明確に分離。
 - `inconclusive`: CIが境界を跨ぐ、eligible pair不足、または必要Nがcampaign上限超過。
 
-1/2/4 nodeをpoolしない。全laneへ一括enableするなら三laneすべて`adopt`、lane別enableならpassしたlaneだけを
+異なるlaneをpoolしない。複数laneへ一括enableするなら全対象laneで`adopt`、lane別enableならpassしたlaneだけを
 score用途へ許す。全attempt/pair pointはraw sourceから残すが、log-ratio、SD、ratio、CI、decisionは
 protocolとpoint viewから導出し、rawへ保存しない。
 
@@ -849,7 +859,22 @@ instrumented runはaudit-only、profile runは常にaudit-onlyとする。
 採用し、文書から調べられる事実を先に閉じた後、結果を変える未決定事項だけを一回に一問聞く。各回答は
 `decision_id/question/recommended option/alternatives/user answer/decided_at/affected contract fields and
 views/reopen trigger`をGit管理decision recordへ残す。未回答を推奨値で埋めず、依存するviewのdecisionはNULL、
-release gateは未通過のままにする。現在の未決定質問はinstrumentation overhead criterionだけである。
+release gateは未通過のままにする。
+
+コード監査で、D-001より上流にlane scope D-003が残っていることが分かった。現行
+`scripts/run-openfoam.pjm`が実証するGenkai条件は1 node、120 ranks、`a-batch`、
+`I_MPI_FABRICS=shm`だけであり、64M cavity3DのGenkai 2/4 node設定はコードやrun recordから一意に
+決められない。OpenFOAM内の依存順は次とする。
+
+1. D-003: Genkai 1/2/4 nodeを今回のv2 scopeにするか、Genkai 1 nodeをcanaryに限定して競技clusterの
+   1/2/4 laneは対象cluster確定後に別contractとして追加するか。推奨は後者。
+2. D-001: D-003で確定した各score laneに許すinstrumentation overhead criterion。
+
+プロジェクト全体の質問順は`D-003 -> D-004（Qwen初版profiler） -> D-001`とする。D-004はOpenFOAMの
+contractをblockしないが、両repository共通のD-001を最後に一度だけ扱うため、その前に閉じる。
+
+D-003が未回答の間、未実証の`openfoam-genkai-{2,4}.toml`を作ったことにせず、1/2/4 nodeを完了条件や
+D-001 campaign対象として数えない。
 
 ## 決定状態
 
@@ -863,6 +888,7 @@ release gateは未通過のままにする。現在の未決定質問はinstrume
 | 確定 | bench/profileを分離し、profile専用familyはbenchで値だけNULL、原因/status/Evidenceなしとする。profile runはscore比較へ混ぜない |
 | 確定 | artifact移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する |
 | 確定 | home artifactは自動expireせず、容量が実際に問題になった時だけ手動整理する。専用quarantineは作らない |
+| 未決定 | D-003: OpenFOAM v2のlane scope。推奨は現行Genkai 1 nodeをcanaryとし、競技cluster 1/2/4は対象確定後に別contract化 |
 | 未決定 | score runへ許すinstrumentation overheadの統計的上限 |
 
 ## 実装ハンドオフ
@@ -1017,6 +1043,10 @@ runとsubmission subjectを分け、run側は次の固定layoutにする。任�
   metrics/fragments/<producer>.jsonl         # 正常close後のrename先
   domain/pstream/rank-<rank>.jsonl
   source/workload-manifest.json
+  source/hardware/identity-min.json
+  source/hardware/node-<node>.lscpu.json
+  source/mesh/mesh-topology.json
+  source/mesh/partition-observed.json
   source/env/job-entry.snapshot
   source/env/host-exec.snapshot
   source/env/rank-<rank>.delta.json
@@ -1029,6 +1059,7 @@ runとsubmission subjectを分け、run側は次の固定layoutにする。任�
   logs/log.icoFoam                           # solver combined log
   logs/<preparation-stage>.stdout
   logs/<preparation-stage>.stderr
+  logs/checkMesh.log
   results/result.txt                         # canonical official evaluator output
   control/scheduler-terminal.json
   merge/collection-validation.json
@@ -1059,7 +1090,7 @@ qualification parentは次の固定layoutを所有する。
   source/scheduler/pjstat.stderr
   source/scheduler/pjstat-version.txt
   source/hardware/identity-min.json
-  source/hardware/identity-min.raw
+  source/hardware/node-<node>.lscpu.json
   logs/pjm-job.log
   control/collection-status.json
   control/scheduler-terminal.json
@@ -1080,8 +1111,9 @@ artifact-manifest.json  # file path、size、SHA-256、contract
 
 bundle memberはrun variant別のmanifest駆動exact allowlistとする。regularは`control/`のmanifest、contract、
 protocol、submission raw stdout/stderr、実在するresult/failed outcome、binding、job-entry、scheduler-terminalを
-含む。さらに全runでbuild sidecar、workload manifest、該当するenvironment/placement、PJM accounting raw/version、
-PJM batch log、solver combined log、official resultをexpected fileとして列挙する。qualification childは
+含む。さらに全runでbuild sidecar、workload manifest、minimal hardware、mesh/partition summary、該当する
+environment/placement、PJM accounting raw/version、PJM batch log、solver combined log、preparation/checkMesh log、
+official resultをexpected fileとして列挙する。qualification childは
 parent-owned memberを含めず、`qualification-parent-ref.json`だけを含む。
 いずれも`control/collection-status.json`、expected producerの完成および残っていれば途中fragment、
 `domain/`、`source/`、`logs/`、`merge/collection-validation.json`、自己を除くmember path/hash/sizeを持つ
@@ -1128,8 +1160,9 @@ remote再読取checksum、temporary transaction、`renameat2`、directory fsync�
 ledger、quota pool、全命令境界のcrash recovery、独立backupをrelease条件にしない。runtimeは現行どおり
 Artifact upload成功後にcleanupしてよく、uploadとGitHub側保持が同時に壊れる稀なcaseは許容する。
 
-profile runは`OPENFOAM_PROFILE_DIR`を`<runtime>/runs/<run>/profile/raw`へ固定し、そのperf/APS/VTune raw、
-tool metadata、exact profiler argv、solver logを`profile-raw.tar.zst`へ
+OpenFOAMの初版profile protocolは現行実装にある`perf-stat`へ固定する。`OPENFOAM_PROFILE_DIR`を
+`<runtime>/runs/<run>/profile/raw`へ固定し、perf stat raw、tool version、exact profiler argv、solver logを
+`profile-raw.tar.zst`へ
 収録する。benchではprofile artifact、placeholder、absence recordを作らず、対応consumer値は
 原因/status/Evidenceなしの`NULL`だけである。build archiveは現行Genkai cacheを使い、runにはbuild sidecarの
 source commitとcontent hashを記録する。同じbuild byteをhomeへ再複写することはD-002の必須要件にしない。
@@ -1200,7 +1233,7 @@ allocation manifest -> submit result/job-entry -> child OFF source/log/metrics
 2. 専用canary protocolだけでpre-submit manifestとlocal metrics exportを導入し、legacy runの送信経路は触らない。
 3. canaryでrunner finalize/archive/publishの正常系と代表的なmissing-file failureを通す。
 4. OpenFOAM固有のnative probe、complete solver record、Pstream/placement sidecarをprofile purposeへ追加する。
-5. benchへ必要な最小subsetだけD-001へ掛け、全laneで意味・数値同等性・非擾乱gateを通したbundleだけbenchへ追加する。
+5. benchへ必要な最小subsetだけD-001へ掛け、D-003で確定した各score laneで意味・数値同等性・非擾乱gateを通したbundleだけbenchへ追加する。
 6. v2 viewとSheetを切り替え、legacy-only consumerがゼロになってから旧senderとsubset keyを削除する。
 
 rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入する。既存runのmanifestやrowを
@@ -1220,8 +1253,8 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
 5. cavity3Dのactual workload manifest、complete solver record、mesh、provenanceをlegacy collectorと並行追加する。意味が
    変わる既存keyをv2で再利用しない。
 6. canonical official evaluatorを作り、旧shell validityと全baseline golden logを照合する。
-7. 1/2/4 node lane、同一rank wrapper sidecar、二段階Pstream/partition auditを追加し、最終
-   instrumentationを含む全laneでbaselineと比較適格性を再検証する。各laneでunmodified OFFと
+7. D-003で確定したlane、同一rank wrapper sidecar、二段階Pstream/partition auditを追加し、最終
+   instrumentationを含む全対象laneでbaselineと比較適格性を再検証する。各laneでunmodified OFFと
    exact final ONを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
    lexeme一致を数値同等性ゲートにする。
 8. Connected SheetsのRuns/Replicates/Evidence/Config Diff/Environment/Data Statusをbounded consumerへ
@@ -1248,7 +1281,7 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
 - truncated、NaN/Inf、step/solve/iteration/mesh/rank/trim異常を理由別に判定できる。
 - `solver.step_timings`と`solver.pressure_solves`から派生値を一意に計算でき、subset keyがない。
 - ExecutionTime、ClockTime、launcher wallの異なるscopeが保存される。
-- 1/2/4 laneでrequested、allocated、solver Hosts、placementが一致する。
+- D-003で確定した各laneでrequested、allocated、solver Hosts、placementが一致する。
 - setup後の実case workload memberがprotocol manifestと一致し、1 byte差をcomparison不適格にできる。
 - bench/profileが分離され、profile-only列はbenchで理由なしのNULLになり、bench bundleの計測影響はD-001内である。
 - unmodified OFFとexact final ONの同一条件でpressure solve軌跡と公式markersが一致し、数値結果を
