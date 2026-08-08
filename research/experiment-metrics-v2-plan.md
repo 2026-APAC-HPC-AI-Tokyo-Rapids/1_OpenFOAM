@@ -75,12 +75,13 @@ key    STRING NOT NULL
 value  STRING NOT NULL
 ```
 
-`run`は全producerが共有するglobally uniqueでimmutableなIDである。Actions経路ではjob投入前に
-repository、Actions run ID、attemptと各submissionで必須の128-bit random nonceから固定する。nonceは
-OS CSPRNGの16 byteを32文字のlowercase hexで表す。manual経路では
-clusterを含むUUIDをjob投入前に生成する。`pjsub`返却後にしか分からないPJM job IDはrun IDへ
+`run`は一childの全producerが共有するglobally uniqueでimmutableなIDである。各submission subjectにはjob投入前に
+OS CSPRNGの16 byteを32文字のlowercase hexで表す128-bit `subject_nonce`を一つ生成する。regularでは
+`submission_subject_id=run_id`、qualificationではglobally uniqueなallocation IDをsubject IDとし、二child run IDは
+allocation ID、arm ordinal、各child用CSPRNG nonceから別々に固定する。manual経路でも同じsubject/child規則を使う。
+`pjsub`返却後にしか分からないPJM job IDはrun/allocation IDへ
 含めず、immutableなsubmission bindingと`scheduler.job_id`で結ぶ。初期run manifestを書き換えない。
-run IDはUTF-8で`^[a-z0-9][a-z0-9._-]{0,199}$`を満たすよう生成し、同じ値を安全なruntime path
+run IDとallocation IDはUTF-8で`^[a-z0-9][a-z0-9._-]{0,199}$`を満たすよう生成し、同じ値を安全なruntime path
 componentとして使う。任意のrepository名やuser入力を未escapeで連結しない。
 raw relationは次のfunctional dependencyを満たす。
 
@@ -255,9 +256,11 @@ icoFoam rank process wallと呼ばない。結果を見て指標を
 - `experiment.planned_replicate_group_id`: submit前に割り当てる非NULL arm/group ID
 - `experiment.planned_comparison_set_id`: submit前に割り当てる非NULL比較集合ID
 
-既定は各条件5 attemptとし、同じ時間block内でA/Bを交互または事前乱数化順に投入する。
-有効runが3未満なら環境差を確定しない。invalid/failed runを遅かったという理由で除外・
-置換せず、最大attempt数と置換規則も事前にcommitする。
+探索比較の既定は各条件5 attemptとし、記述統計だけに使う。同じ時間block内でA/Bを
+事前乱数化し、順序を均衡させる。5 attemptや有効run 3件を、equivalence、non-inferiority、
+release gateの根拠へ流用しない。意思決定を伴うprotocolは、estimand、margin、想定効果、
+分散、alpha、powerからplanned attempt数を事前dimensioningする。invalid/failed runを遅かった
+という理由で除外・置換せず、最大attempt数と置換規則も事前にcommitする。
 
 比較次元はGit管理SQLで次へ分類する。
 
@@ -287,6 +290,10 @@ commit、artifact、cluster等がtreatmentならcomparison set内では差を許
 必ず分離する。nuisanceとoutcomeはどちらにも含めない。競技提出用bestと、環境比較用の全点、
 median、MAD、ratio、不確実性を分ける。
 
+上記は通常の性能比較policyである。計測擾乱専用protocolだけは、`instrumentation_mode`、
+`instrumentation_bundle_hash`、およびinstrumentation patchだけが異なるbuild artifactをtreatmentへ
+再分類する。これを行わずにon/offを同じcomparison setへ入れたり、通常比較でmode差を許したりしない。
+
 ## OpenFOAMで保存する原始事実
 
 ### run、stage、allocation
@@ -298,7 +305,8 @@ median、MAD、ratio、不確実性を分ける。
   spawn errorを区別するJSON objectで、shellの`128+signal`へ潰さない
 - `scheduler.request`: runner submit boundaryのlane、PJM script identity、exact `pjsub` argv
 - `scheduler.accounting`: 固定した`pjstat --history -S --choose ... --data --delimiter`の結果
-- `hardware.nodes`: hostnameごとのhost-invariantなCPU、NUMA、memory等のJSON配列
+- `hardware.identity_min`: regularはrunごと、qualificationはallocation内でarm 1前に一度だけ取るnode class、CPU model/stepping等のhost-invariant identity。childはparent sourceをjoinしrawへ複写しない
+- `hardware.topology_full`: profileで取るNUMA、CPU topology、memory詳細。bench consumerは理由なしのNULL
 
 started/finishedはUTC wall clock、elapsedは同じsupervisor境界のmonotonic clockで取得するため、
 wall-clock jumpとtimestamp精度の影響を受けず厳密な派生関係ではない間だけ残す。同一scope、clock、
@@ -338,7 +346,8 @@ hash一致の組だけをreuseする。
 partition identityはserial mesh/order、partition membership、rank順・local index順を保った
 `cellProcAddressing`、必要なsigned `faceProcAddressing`を分ける。headerだけを除外し、global cellが
 全rankでちょうど一回、rank集合が連続であることを検査する。
-大容量mesh scan、`checkMesh`、partition hashはsolver終了後または別audit jobで実施し、
+大容量mesh scan、`checkMesh`、partition hashはregularではsolver終了後または別audit job、qualificationでは
+必ずarm 2終了後に実施し、
 scored solverのcacheを乱さない。generated `decomposeParDict`と各stage logはartifactへ残す。
 
 同じallocation内のinline post-run auditだけが元runへfactを追加できる。別audit jobは別run IDで
@@ -388,7 +397,8 @@ viewは次を分離する。
 
 - `official_log_valid`: `tasks/parse_result.sh`と完全に同じlog判定
 - `official_fvops_trim_m`: 公式式によるscore
-- `comparison_eligible`: 科学的な環境比較へ使えるか
+- `score_comparison_eligible`: benchの科学的な環境比較へ使えるか
+- `qualification_arm_eligible`: D-001の一childとしてcommon sourceとarm固有required familyが妥当か。profileではNULL
 - `run_outcome`: pipelineとschedulerの運用上の成否
 
 公式FVOPSの分子は観測cell数ではなく常に`64,000,000 * 4`である。分母は
@@ -398,7 +408,7 @@ baseline ratioはcluster identityが公表baselineとexact matchする時だけ�
 `9.778M FVOPS`、ASPIRE-2Aでは`5.717M FVOPS`を使うが、Genkai runへ流用せず、承認済みGenkai
 baselineがprotocolにない限りratioをNULLにする。
 
-`comparison_eligible`はofficial validに加え、次を要求する。
+`score_comparison_eligible`はofficial validに加え、次を要求する。
 
 - meshが64,000,000 cells、192,480,000 faces、64,481,201 points
 - ExecutionTimeは有限かつ狭義単調、ClockTimeは整数秒の同値を許して有限かつ単調非減少、
@@ -407,6 +417,13 @@ baselineがprotocolにない限りratioをNULLにする。
 - DP、許可されたworkload、`floatTransfer=false`
 - build provenance、required collector、artifactがcomplete
 - score runはdirect modeで、比較run同士のinstrumentation modeが一致
+
+`run_purpose`はplanned/observed双方の必須比較次元で、planned group/set IDのhash入力にも必ず含める。
+`score_comparison_eligible`は`run_purpose=bench`かつexact D-001 qualification tupleがadopt済みの場合だけ
+trueになり、`qualification_arm_eligible`は`run_purpose=qualification`の一runだけから導出する。
+`qualification_pair_eligible`はrun列やraw factへ複写せず、両arm、parent allocation binding、common-source一致を
+joinしたpair grainで一度だけ導出する。
+profile/qualificationは公式FVOPSを算出・表示してもscore stats、best、rankingへ入れない。
 
 MPI teardown後の非zero exitでもsolver workloadがofficial validになり得る。原始結果は必ず
 収集し、official validityとrun outcomeを混同しない。非単調、ClockTime異常、trim非正は
@@ -431,8 +448,90 @@ scored solver直前にはBigQuery通信、profiler、MPI debug、`checkMesh`、�
 同一runに必須なのはrank、hostname、local rank、affinityとenvironment deltaの最小recordだけで、
 rankはnode-local collectorへ送り、collectorがnodeごと一つのshared durable sidecarへfsyncしてから
 ACKする。full topology dumpやverbose diagnosticsはaudit modeへ分ける。最小probeも
-probeあり/なしの反復A/Bで事前閾値を超えるなら、そのrunはofficial-validでもcomparison-ineligible
+probeあり/なしの反復A/Bで事前閾値を超えるなら、そのrunはofficial-validでもscore-comparison-ineligible
 とし、別audit runのplacementを元runへ移植しない。
+
+`instrumentation_bundle_hash`は、score pathで有効なhook、probe、journal、ACK、sample interval、sink、
+buffer、timeout、wrapper/collector executable hash、observation contract version、env capture scope、build
+patch identityを列挙したcanonical manifestのcontent hashである。`lightweight`等の
+labelだけでは同一視しない。D-001が未回答、またはそのexact bundle/laneのqualificationが未通過なら、
+最小probeを含むinstrumented runはすべてaudit-onlyとし、自動的にscore-runへ昇格させない。
+
+## bench/profile trackの分離
+
+重いprofilerを挟むrunと公式性能を測るrunは、protocolだけでなくsource trackも分離する。
+
+- `bench`: score、環境比較、qualificationの基点。profiler、polling、verbose traceを入れず、対象pathの
+  観測はqualification済みscore bundleだけにする。
+- `profile`: `bench`のexact commitへprofile専用overlayを載せる診断track。値は原因探索に使うが、
+  score、replicate統計、環境ランキングへ混ぜない。
+- `qualification`: unmodified `bench`と最終score bundleを直接比較する専用protocol。profile trackの
+  結果で非擾乱を代用しない。
+
+ユーザー判断により、benchでprofile専用metricを取得できないことは許容する。contractの各family/consumer列は
+`applicable_run_variants`（`bench`、`profile`、`qualification:off`、`qualification:on`の集合）、
+`missing_policy_when_applicable=reasoned_missing`、
+`projection_policy_when_inapplicable=silent_null`を別fieldとして持つ。expected producer graphは
+run variantごとに作る。同じ列でもapplicable variantでcollectorが失敗した時は通常どおり
+status/Evidence/reasonを生成し、非適用variantではRuns projectionを`NULL`にするだけでraw key、family status、
+Evidence行、理由を生成しない。
+
+| family | bench | profile | benchで取らない時の意味 |
+|---|---|---|---|
+| source/build/workload、exact argv/cwd、runner/submit/job-shell env、scheduler、termination、公式solver log/FVOPS、minimal hardware identity | required | required | 欠損ならbench不適格 |
+| solver-rank env、rank/local-rank/affinity、Pstream runtime event/journal/ACK | D-001通過bundleだけrequired | required | 未採用bundleならbench protocol自体から除外 |
+| mesh/partition/workloadの重いidentity scan | pair/run終了後required | required | target timer外で取得 |
+| perf counter、sampling profiler、call stack、verbose MPI/Pstream trace、full topology dump | not expected | protocol指定時required | Runsでは`NULL` |
+
+benchで取得しないprofile専用familyはexpected producer graphから外し、raw key、family status、Evidence行、
+NULL理由、reason codeを一切作らず、typed/Sheet値だけを`NULL`にする。benchの`score_comparison_eligible`や
+completeness分母へ含めない。反対にbench/profileそれぞれでrequiredと宣言したfamilyのcollector failureは
+run全体の通常の品質判定として扱う。profile値を同じprofile baseのbench runへ移植しない。
+
+qualificationは同じpurpose内でもarmごとにgraphが異なるため、expected graphを
+`(run_purpose, qualification_arm)`で解決する。`qualification_arm`はplanned treatment tupleの一fieldである。
+
+- `qualification/OFF`: 両arm共通のsource/build/workload、argv、runner/job-shell env、scheduler、termination、
+  公式log/result、外側timerだけをrequiredにする。
+- `qualification/ON`: OFFのcommon familyに加え、D-001対象のexact minimal score bundleだけをrequiredにする。
+
+両armともprofile-only列は非適用variantなので`silent_null`でNULLだけを返す。OFFでON専用列も同じく
+NULLだけとし、理由/status/Evidenceを作らない。最終benchは、実`instrumentation_bundle_hash`がadopt済み
+D-001 decision内の`instrumentation_bundle_hash`と一致し、現在runから再構成したqualification tuple全体が
+decision内の`qualified_candidate_tuple`と一致し、profile-only producer IDを一つも含まない時だけそのbundleを選べる。
+decision identityはdecision record全体のcanonical hashであり、bundle hashとは比較しない。
+
+Git運用はlong-livedな相互mergeではなく、`bench -> profile`を基本方向にする。profile側はbenchの更新を
+merge/rebaseして追従する。profileで見つけた最適化はprofile hookを含まない独立commitとしてbenchへ実装し、
+その後benchからprofileへ取り込む。profile branch全体をbenchへmergeしない。必要なら二つのworktreeを使う。
+branch名はmoving labelなのでidentityにせず、run manifestは次のtagged-union canonical source-track recordをsealする。
+
+```text
+bench:
+  {run_purpose, repository_identity, score_reference_commit, bench_head_commit}
+profile:
+  {run_purpose, repository_identity, profile_base_commit, profile_head_commit}
+qualification:
+  {run_purpose, qualification_arm, repository_identity,
+   score_reference_commit, source_head_commit}
+```
+
+`source_track_manifest_hash = SHA-256(canonical source-track record)`をindexにする。hashをrecord自身へ入れて
+再帰させない。benchでは無計測bundleならreference=head、採用済みscore bundleならscore referenceがbench headの
+ancestor、profileではprofile baseがprofile headのancestor、qualification OFFではhead=score referenceを要求する。
+qualification ONではscore referenceがsource headのancestorであり、bench/qualification ONのbaseからheadへ
+manifest/build validation時に計算したcanonical tree diffがproposed build manifestとinstrumentation bundleの
+`instrumentation_patch_identity`へexact一致し、profile-only overlay、profiler flag、workload変更を含まないことを
+required gateにする。algorithm/version、base/head、expected patch identity、pass/failをcontent-addressedな
+`control/source-track-validation.json`へsealし、query時にGit treeを再取得しない。clean checkoutのHEAD/treeと
+proposed buildのsource head/treeがrecordと一致することを検査し、
+submodule pointer、file mode、symlink、LFS object identityもtree/diff検証対象にする。全variantのhead/base commitは
+remote reachableまたは耐久source archive済みでなければ投入しない。base/headから決定的に計算できるdiff hashは
+rawへ重複保存しない。
+
+`source_track_head_commit`、`score_reference_commit`、`profile_base_commit`等のconsumer列はこのrecordから導出し、同じcommit tupleを別raw keyへ
+複写しない。profile runはprofile baseが同じでもinstrumentation bundle、build artifact、argv、environmentを
+独立に保存し、「profileで速かった」をbenchの性能値へ読み替えない。
 
 ## BigQuery viewとスプレッドシート
 
@@ -452,13 +551,16 @@ Git管理SQLは次の非二乗relationを作る。
 | `run_key_conflicts` | `(run,key,value)` | 異値が二つ以上あるkeyの各distinct valueを一行ずつ保持し、値を選ばない |
 | `openfoam_run_reason_items_v2` | `(run,reason_item_id)` | class/code/subject/canonical detail JSONを持つ全理由の唯一のlong relation |
 | `openfoam_run_facts_v2` | one row per run | conflict-free factだけをtyped固定列へpivot |
+| `openfoam_run_commits_v2` | `(run,repository,commit_role,commit)` | source-trackとbuild manifestからrole付きcommitを導出し、Git subject/body/URLをjoin |
 | `openfoam_run_evidence_items_v2` | `(run,family,evidence_item_id)` | producer/capture/scope/raw key/artifact member/valueごとの決定的evidence |
 | `openfoam_run_family_status_v2` | `(run,family)` | evidence itemsからexpected/observed/status/reasonを集約 |
+| `openfoam_qualification_allocations_v2` | `(allocation_id)` | durable parent-evidence indexからordered child IDs、binding、scheduler request/accounting/terminal、job-entry env locator/status、minimal hardware consensus/reason、parent archive identityを一度だけ投影 |
 | `openfoam_comparison_dimensions_v2` | `(run,dimension)` | `must_match/treatment/nuisance/outcome`とcanonical value |
-| `openfoam_replicate_points_v2` | `(run,estimand_id)` | protocol、group/treatment、attempt/order/value、eligible/reasonsを全点表示 |
-| `openfoam_replicate_stats_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_replicate_group_id,estimand_id)` | attempted全件とobserved一致済みeligible n、median、MAD、CV。bestとは別 |
-| `openfoam_paired_points_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,pair_id,estimand_id,baseline_treatment_id,candidate_treatment_id)` | protocol指定pairの左右run/value/eligibility |
-| `openfoam_paired_comparisons_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,estimand_id,baseline_treatment_id,candidate_treatment_id,estimator_id)` | ratio方向、pair数、interval、decision、reason。未決定基準はNULL |
+| `openfoam_estimand_points_v2` | `(analysis_purpose,run,estimand_id)` | bench/qualificationのpurpose-awareな基底point。profileは行を出さない |
+| `openfoam_replicate_points_v2` | `(run,estimand_id)` | `estimand_points`のscoreだけを取り、benchのprotocol、group/treatment、attempt/order/value、eligible/reasonsを全点表示 |
+| `openfoam_replicate_stats_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_replicate_group_id,estimand_id)` | bench attempted全件とobserved一致済みeligible n、median、MAD、CV。bestとは別 |
+| `openfoam_paired_points_v2` | `(analysis_purpose,contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,pair_id,estimand_id,baseline_treatment_id,candidate_treatment_id)` | bench通常比較またはqualificationのprotocol指定pair。profileは行を出さない |
+| `openfoam_paired_comparisons_v2` | `(analysis_purpose,contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,estimand_id,baseline_treatment_id,candidate_treatment_id,estimator_id)` | ratio方向、pair数、interval、decision、reason。未決定基準はNULL |
 | `openfoam_env_facts_v2` | `(run,scope_kind,scope_instance,escaped_name)` | common/deltaから復元したfull snapshotのbyte-exact valueと由来 |
 | `openfoam_run_diff_v2(left_run,right_run)` | table function、一expected dimensionまたはsentinel一行 | 二runのvalue/equality/class/blocking reason |
 | `openfoam_env_diff_v2(left_run,right_run)` | table function、一scope/nameまたはsentinel一行 | full outer diffのadded/removed/changed/sameと左右値 |
@@ -497,15 +599,22 @@ observed countはdistinct source instance IDを数えて水増ししない。全
 
 `openfoam-v2.toml`にはraw contractと同じcommitで`[[consumer.run_column]]`を置く。各固定列は少なくとも
 `name/type/unit/source_family/raw_pattern|artifact_field/scope_cardinality/json_path/reducer/
-conflict_rule/transform_id/null_reason/dimension_name/allowed_classes`を宣言し、複数sourceを使う派生列はordered source
-listを持つ。生成SQL、Evidence lineage、Sheet headerだけが
+conflict_rule/transform_id/applicable_run_variants/missing_policy_when_applicable/
+projection_policy_when_inapplicable/dimension_name/allowed_classes`を宣言する。
+applicable variantの`reasoned_missing`列だけ`null_reason`を必須にする。`silent_null`はsource種別でなく
+当該run variantで非適用と宣言されたRuns列へ作用し、RunsをNULLにするだけでraw key、family status、Evidence、
+reason item/codeを生成せず、NULL reason検査からも外す。複数sourceを使う
+派生列はordered source listを持つ。生成SQL、Evidence lineage、Sheet headerだけが
 これを読み、手書きpivotを許さない。contract testは各consumer列についてexactly one column definition、
-sourceの存在、type/transform、NULL reasonを検査する。これにより列名からraw key patternまたはartifact/
+sourceの存在、type/transform、variant applicability、applicable missing policy、inapplicable projection policyを検査する。これにより列名からraw key patternまたはartifact/
 Git dimensionへ機械的に一意に遡れる。
 
 同じcontract/protocolに`[[consumer.estimand]]`を置き、`estimand_id`、source/transform、logical type、unit、
-改善方向、eligibility rule ID、許すstatistic/estimator/intervalを固定する。point viewはrunとprotocolが
-宣言した全estimandの直積を展開し、source欠損も行を落とさずNULL value+reasonにする。protocolは一次・二次
+改善方向、eligibility rule ID、許すstatistic/estimator/interval、`applicable_run_variants`を固定する。
+comparison dimensionとestimandはsource列のapplicabilityと二つのmissing/projection policyを継承する。当該variantで
+silent NULLとなる列をdimension/estimand、observed fingerprint、completeness count、config diff expected gridへ
+入れない。point viewはprofile runを展開せず、bench/qualification runとそのpurposeにapplicableなestimandの
+直積だけを展開する。applicable source欠損は行を落とさずNULL value+reasonにする。protocolは一次・二次
 estimandとdecision対象を事前指定し、view実装者が結果を見て選ばない。
 
 全run pairのdiffを通常viewとしてmaterializeしない。agent/SQL利用者とConnected Sheetsは二つのcell
@@ -529,13 +638,13 @@ pivotだけで二run制約を実現しない。Sheetのfilterなしでfull envir
 
 | group | columns |
 |---|---|
-| identity/protocol | `run_id`、`contract_id`、`contract_hash`、`protocol_id`、`protocol_hash`、`dimension_policy_hash`、`planned_replicate_group_id`、`planned_comparison_set_id`、`planned_attempts`、`max_attempts`、`stopping_rule_id`、`block_id`、`block_order`、`pair_id`、`replicate_index`、`lane_id`、`instrumentation_mode`、`started_at`、`finished_at` |
-| source/artifact | `experiment_commit`、`openfoam_commit`、`thirdparty_commit`、Git joinのsubject/body/URL、`build_manifest_sha256`、`bundle_uri`、`bundle_hash`、`solver_log_member`。別のfull log URIは保存しない |
-| quality | `required_families_complete`、`missing_family_count`、`incomplete_family_count`、`conflicting_key_count`、`cast_failure_count`、sorted `reason_codes`、`official_log_valid`、`official_score_status`、`comparison_eligible` |
+| identity/protocol | `run_id`、`contract_id`、`contract_hash`、`protocol_id`、`protocol_hash`、`dimension_policy_hash`、`planned_replicate_group_id`、`planned_comparison_set_id`、`planned_attempts`、`max_attempts`、`stopping_rule_id`、`block_id`、`block_order`、`pair_id`、`replicate_index`、`lane_id`、`run_purpose`、`qualification_arm`、`instrumentation_mode`、`instrumentation_bundle_hash`、`instrumentation_qualification_decision_hash`、`instrumentation_qualification_status`、`started_at`、`finished_at`。qualificationでは`block_id=allocation_id`なので別列を作らない |
+| source/artifact | `source_track_head_commit`、`score_reference_commit`、`profile_base_commit`、`source_track_manifest_hash`、`openfoam_commit`、`thirdparty_commit`、`build_manifest_sha256`、`qualification_parent_archive_hash`、`bundle_uri`、`bundle_hash`、`solver_log_member`。role別commit metadataは`openfoam_run_commits_v2`だけに置き、別のfull log URIは保存しない |
+| quality | `required_families_complete`、`missing_family_count`、`incomplete_family_count`、`conflicting_key_count`、`cast_failure_count`、sorted `reason_codes`、`official_log_valid`、`official_score_status`、`score_comparison_eligible`、`qualification_arm_eligible` |
 | termination | `run_outcome`、`run_exit_code`、`solver_termination_kind`、`solver_exit_code`、`solver_signal`、`scheduler_terminal_state`、`scheduler_exit_code` |
 | workload/build | `workload_id`、`workload_manifest_identity`、`workload_match`、`precision`、`build_artifact_sha256`、`compiler_identity`、`mpi_identity` |
 | topology/placement | `requested_nodes`、`requested_ranks`、`allocated_nodes`、`allocated_ranks`、`solver_host_count`、`solver_nprocs`、`solver_host_rank_sum`、`placement_host_count`、`placement_rank_count`、`placement_rank_set_valid`、`resource_group`、`transport_policy`、`effective_transport`、`transport_valid`、`placement_affinity_signature`、`placement_policy_valid` |
-| hardware | `cpu_model_consensus`、`physical_cores_per_node_consensus`、`numa_nodes_per_node_consensus`、`memory_bytes_per_node_consensus`、`hardware_consensus_reason_codes` |
+| hardware | bench coreの`cpu_model_consensus`、`hardware_identity_min_reason_codes`と、profile-onlyの`physical_cores_per_node_consensus`、`numa_nodes_per_node_consensus`、`memory_bytes_per_node_consensus`、`hardware_topology_full_reason_codes`。profile-only列はbenchで理由なしのNULL |
 | mesh | `mesh_cells`、`mesh_faces`、`mesh_points`、`mesh_internal_faces`、`requested_partition_identity`、`observed_partition_identity`、`partition_valid` |
 | Pstream | `pstream_startup_all_ranks_present`、`pstream_startup_consensus`、`pstream_runtime_all_ranks_present`、`pstream_runtime_consensus`、`pstream_change_event_count`、`pstream_unchanged`、`float_transfer`、`default_comms_type`、`pstream_buffers_algorithm`、`using_node_comms`、`node_comms_control`、`node_comms_min`、`topology_control`、`configured_mpi_buffer_bytes`、`attached_mpi_buffer_bytes`、`nprocs_simple_sum`、`nprocs_nonblocking_exchange`、`tuning_nbx`、`n_poll_proc_interfaces`、`max_comms_size` |
 | outcome | `official_fvops`、`official_trim_sec`、`solver_outer_wall_sec`、`block_mesh_wall_sec`、`decompose_par_wall_sec`、`pipeline_end_to_end_wall_sec` |
@@ -545,23 +654,37 @@ cardinality、rank間overlap、NUMA binding、pinning shapeをcanonical JSONに�
 `placement_policy_valid`はその実値とlane要求の照合結果であり、異なる二つのvalid policyを同一視しない。
 rank別のfull CPU set/hostはEvidenceに残す。
 
-typed columnは`run_key_singletons`だけを入力にしてcontract typeから`SAFE_CAST`/JSON validationし、cast
+applicableなtyped columnは`run_key_singletons`だけを入力にしてcontract typeから`SAFE_CAST`/JSON validationし、cast
 失敗をNULLと`run_reason_items`へ出す。複数値を`MAX`、`ANY_VALUE`等で隠さず、conflict keyはwide列をNULL、
-runをcomparison-ineligibleにする。missing/conflict/cast-invalidを同じNULLだけへ潰さない。reason itemsは
+runをpurposeに対応するcomparison-ineligibleにする。applicable列のmissing/conflict/cast-invalidを同じNULLだけへ潰さない。
+当該variantで`silent_null`となる列はこの処理へ入れない。reason itemsは
 fact issue、family status、official score status、comparison evaluator、protocol/dimension validatorを
 UNIONする。Sheet用`reason_codes`はこのrelationだけをlexicographic sortして`;`区切りSTRINGへ投影し、code
-自体に`;`を禁止する。`comparison_eligible=false`でblocking reasonが0件のrunをcontract testで拒否する。
-commit dimensionはGitから生成してjoinし、subject、body、URLを表示するが、commit messageをrun metricへ
-複製しない。
+自体に`;`を禁止する。applicableなeligibilityがfalseでblocking reasonが0件のrunをcontract testで拒否する。
+commit metadataはGitから`openfoam_run_commits_v2`へrole付きでjoinし、commit messageをrun metricやRunsの
+曖昧な単数列へ複製しない。
 
-replicate pointsはfailed/invalidも削除せずreason付きで全件残し、protocol、planned/max attempt、stopping
+qualification parentはprogram runではないので`run/key/value`へ擬似runとして入れない。runnerがverified parent
+archiveからcontent-addressedなimmutable allocation-evidence eventをrunner-only durable storeへappendし、
+`openfoam_qualification_allocations_v2`がそれをexact dedupe/conflict検査して投影する。qualification childの
+Runs/paired viewはqualification childの`block_id`でjoinし、同じscheduler request/accounting/terminalを二childの
+raw keyへ複写しない。Environmentは同じjoinからparent job-entry snapshotをdecodeし、Runsはminimal hardwareと
+reasonをjoinする。regular runのscheduler/env/hardware factは従来どおり自身のrawへ置く。
+
+`openfoam_estimand_points_v2`はbenchとqualificationの基底pointを`analysis_purpose`付きで表し、profileには
+行を出さない。replicate pointsはそのscore subsetとしてbenchのfailed/invalidも削除せずreason付きで全件残し、protocol、planned/max attempt、stopping
 rule、planned group/set ID、pair/block ID、estimand ID、nullable observed fingerprintを持つ。statsはplanned
 groupでattempted nを数え、事前protocolのeligible ruleとobserved fingerprint一致を満たす点だけをeligible nへ
 数える。treatment IDは宣言した全treatment dimensionのname/type/canonical value sorted tupleのhashで、
-canonical JSONを表示属性にする。paired pointsはprotocolが割り当てたpair IDだけを対応付け、欠損・置換後に
-block/orderから推測しない。paired comparisonはbaseline/candidateを順序付きで保持しratioを
-`candidate / baseline`と定義し、attempted/eligible pair count、interval method/level、decision criterion
-ID/reasonを併記する。estimator/intervalはprotocolが事前指定した方法だけを使い、
+canonical JSONを表示属性にする。paired pointsはestimand pointsから
+`analysis_purpose=score|qualification`を持ち、protocolが割り当てたpair IDだけを対応付け、欠損・置換後に
+block/orderから推測しない。scoreは`score_comparison_eligible`、qualificationは
+両armの`qualification_arm_eligible`、parent binding、common-source equalityからpair grainで導出した
+`qualification_pair_eligible`だけを使い、purposeを跨いでpairにしない。paired comparisonはbaseline/candidateを順序付きで保持しratioを
+`candidate / baseline`と定義し、planned/attempted/eligible pair count、interval method/level、decision
+criterion ID、equivalence bounds、alpha、target power、pilot evidence identity、estimate/CI、decision
+class/reasonを併記する。これらはpoint rowとversioned protocolからquery時に導出し、rawへaggregateの
+第二正本を作らない。estimator/intervalはprotocolが事前指定した方法だけを使い、
 `instrumentation_overhead_decision`は現在未決定のcriterionを確定するまでNULLにする。暫定式を埋めない。
 breakingなcolumn/type/meaning変更は
 既存v2 viewを書き換えずv3 objectを作る。
@@ -596,6 +719,138 @@ consumer relationはまずlogical viewとtable functionだけで実装し、同�
 [Connected Sheetsのrefreshとresult制約](https://support.google.com/docs/answer/9703214)、
 [cell parameter付きcustom query](https://support.google.com/docs/answer/9703000)を前提にする。
 
+## D-001: bench側計測の非擾乱qualification
+
+### 調査結果
+
+profilerをprofile trackへ分離しても、benchに残すconfig hook、rank sidecar、journal、ACKにも負荷はある。
+したがって「profile branchを使った」こと自体を非擾乱の証明にはしない。一方、profile専用のperf/profiler、
+polling、verbose traceはscore bundleへ含めず、このgateの対象をbenchで本当に有効にする最小bundleへ限定する。
+
+公式baseline logの`ExecutionTime[last] - ExecutionTime[first]`を同じ式で再計算すると、独立job間のtrim時間は
+次のように揺れる。これはinstrumentation on/offのpaired分散ではないためsample-size計算へ直接使えないが、
+全lane共通の固定5 pairに根拠がないことは示す。
+
+| cluster | 1 node CV | 2 node CV | 4 node CV | run数 |
+|---|---:|---:|---:|---|
+| Gadi | 0.68% | 0.16% | 0.72% | 3 / 3 / 8 |
+| ASPIRE-2A | 1.99% | 7.45% | 4.47% | 3 / 8 / 8 |
+| Iris | 0.39% | 0.46% | 0.38% | 2 / 2 / 2 |
+
+再計算sourceは[`tasks/baseline_logs`](../tasks/baseline_logs/README.md)である。paired-tの90% CIを5 pairで
+ratioの約±1%へ収めるには、平均差が0でも観測paired log-ratio SDが約1.04%未満でなければならない。
+よって5 pairはscreen/pilotにはなっても、未知分散のformal qualificationにはならない。
+
+### 推奨option R（ユーザー回答待ち）
+
+判定単位は次のtupleとし、どれか一つでも変わればdecisionを再openする。branch名や最新commitは使わない。
+
+```text
+(repo, lane_id, score_reference_commit, reference_build_manifest,
+ proposed_build_manifest, protocol_hash, workload_manifest_identity,
+ instrumentation_bundle_hash, toolchain/mpi identity)
+```
+
+採用時のGit管理immutable decision recordは`decision_id`、`decision=adopt|reject`、`qualification_protocol_hash`、reference tuple、
+`qualified_candidate_tuple`（repo/lane/source-track head/base、proposed build、workload、bundle、toolchain/MPI）と
+判定evidenceを持つ。通常bench manifestは`instrumentation_qualification_decision_hash`をsealし、自身の通常
+protocol hashをqualification protocolへ一致させるのではなく、実runから再構成したcandidate fieldsをdecision内の
+`qualified_candidate_tuple`へ一致させる。source、build、workload、toolchain、MPI、bundleのどれかが変われば
+decisionを再openする。同じbundle hashのまま他fieldだけ変えたrunを採用しない。runnerはsubmit前にdecision
+canonical bytes/hash、`decision=adopt`、candidate一致を検証し、参照したrecordを
+`control/instrumentation-qualification-decision.json`へimmutable copyする。Runsは
+`instrumentation_qualification_decision_hash`と
+`instrumentation_qualification_status=not_required|pending|adopted|rejected|invalid`を持つ。無計測benchは
+`not_required`、未回答中のinstrumented benchはhash NULLかつ`pending`でscore不適格、adoptedだけがscore候補である。
+
+専用comparison policyでだけinstrumentation/build variantをtreatmentにする。primary armは次である。
+
+- `OFF`: unmodified bench solverと、両arm共通の外側timer/log保存だけ。
+- `ON`: release予定binaryと、bench score runで有効にするhook、journal、ACKをすべて含む最終bundle。
+
+同一binaryのdisabled/enabled比較はactive costの原因分解には使えるが、compiled hookの配置効果を消すため
+release gateを代用しない。必要時は`unmodified / final-build-disabled / final-build-enabled`をprofile診断で
+比較し、採用判定は常にunmodified OFF対final ONを直接見る。
+
+各laneで、まずconfirmatoryへ混ぜない8 planned pilot pair slotを事前commitする。一pairの二armだけを同じ
+allocationで隣接実行し、pair間は別allocationにしてallocationを統計上の独立単位にする。`allocation_id`と
+`pair_id`は一対一であり、一allocationに0または2以上のpairが属した場合は全pairをprotocol-invalidとして
+attempted pointだけを保持し、estimate/SD/CIへ入れない。effective N、mean、SDは一つのeligible pairを持つ
+distinct allocationだけから計算する。二つのarmは独立case directoryを
+使うが、同じnode、rank mapping、cpuset、transport、mesh、既存decompositionを使い、間にbuild/copy/
+decompose/checkMesh/full audit/archiveを挟まない。commit済みseedで4 slotをOFF→ON、4 slotをON→OFFへ割り当てる。
+
+submission subjectを`regular_run(run_id)`と
+`qualification_allocation(allocation_id,pair_id,ordered_child_run_ids)`のtagged unionにする。
+qualificationでは通常run manifestの親にimmutable qualification-allocation manifestを一つ置き、
+`qualification_allocation_id/scheduler submission-binding identity/pair_id/ordered child run IDs/OFF-ON assignment/
+common lane-node-rank-binding policy`を最初のarm開始前にsealする。submission bindingとjob-entry receiptは
+allocation IDとordered child run IDsを所有し、各child runは独立したsource/build/argv/timer/log/WAL/bundleを
+持つ。各childはparent manifest hash、job ID、arm ordinalをimmutable parent refで参照し、scheduler request/
+accounting/terminalを複写しない。各childの`block_id=qualification_allocation_id`とする。
+
+両case/buildと全common inputはarm 1前に準備し、qualificationではheavy mesh/partition/hardware auditとarchiveを
+arm 2終了後だけに行う。child solver outer timer終了とchild WAL sealを分け、arm間にはbuild/copy/decompose/
+checkMesh/full audit/archiveを一切挟まない。scheduler terminal後、finalizerはparent binding/entry/terminalを一度
+検証してparent evidence archiveを先にremote verifyし、そのcontent-hash refを使って両childを別bundleとして
+finalizeする。arm間crash、一方だけ未起動、一方だけWAL未sealでも両child manifestと回収済みsourceを保全し、
+pairをineligibleにして別allocationのrunと再pairしない。
+
+全8 planned slot終了後、eligible subsetからpaired log差のSDの片側80%上限を求める。eligible=8になるまで
+追加せず、推奨option Rの`minimum_eligible_allocations=8`を下回れば`pilot_insufficient`とする。不足時は結果を
+見てreplacementを足さず、原因修正後に新しい固定pilot protocolを事前commitする。同じlaneについて事前登録済みの過去paired SDがあれば
+その大きい方を`sigma_plan`にする。次のunknown-variance paired TOSTでpower 80%以上となる最小の偶数Nを
+求め、confirmatory protocolへ一度だけcommitする。planning上の真値は0.3% slowdown、最小Nは10 pair、
+推奨campaign上限は32 pairとする。必要Nが上限を超えたlaneはmarginを緩めず`criterion_infeasible`である。
+pilot、sample-size code/version、入力、出力、乱数seed identityをartifactとして保存する。
+
+primary estimandは各eligible pairの正の公式scoreについて
+
+```text
+d_i = ln(FVOPS_ON_i / FVOPS_OFF_i)
+estimate = exp(mean(d_i))
+CI90 = exp(mean(d) +/- t(0.95, N - 1) * sd(d) / sqrt(N))
+```
+
+とする。候補marginはratio scaleのexact `[0.99, 1.01]`、各片側alphaは0.05である。
+`official_trim_sec`はFVOPSと固定分子のもとで単調な代数的再表現なので、独立したgateとして重複させない。
+FVOPSが含まないsolver起動・終了周辺の負荷は、非冗長な`solver_outer_wall_sec`について
+`wall_OFF / wall_ON`を同じ方法・marginでco-gateにする。両方が通ることを要求するintersection-union gateであり、
+各CIを「同時90% CI」とは呼ばない。
+
+各complete pairでは性能値より先に適格性と数値同等性を判定する。両arm共通で、allocation/node set、
+mesh/decomposition/workload byte、exact launcher/binding policy、rank数、OpenFOAM Hosts/runtime header、
+公式marker、time-step/pressure solve順、solver名、residual lexeme、iteration countを一致させ、timing lexemeは
+除く。OFFへrank wrapperを足して「観測一致」を作らず、actual affinity/Pstreamは同一allocationとsealed
+launcher/binding policyで制御する。ONだけはfinal bundleのrank placement/env、Pstream startup/runtime/change、
+journal/ACK completenessとsealed expected configの一致を要求する。OFFのON専用consumer列は理由なしのNULLである。
+protocolが最終fieldを書き出す場合はpayload hashも一致させる。
+ON側だけのrequired event/journal/ACK欠損、数値差、crashは`qualification_pair_eligible=false`かつ計測bundleのreliability failureであり、遅い値と
+同様にpairを捨てない。treatment activation前の外部scheduler/node failureだけ、事前確保したreplacement
+slotへ両armを新しいpair IDで再投入できる。一方のsolver開始後に片armを別runと再pairしない。
+
+固定Nの全planned slotが終了するまでCIを判定に使わず、通常CIを見て追加・pass時停止・outlier削除をしない。
+最終classは次のclosed enumとする。
+
+- `adopt`: distinct eligible allocation数=N、全pairの意味/reliability gate、FVOPSとouter-wall TOST、当該laneの全条件を通過。
+- `perturbing`: 数値差、instrumentation-attributable failure、またはCIが許容域から明確に分離。
+- `inconclusive`: CIが境界を跨ぐ、eligible pair不足、または必要Nがcampaign上限超過。
+
+1/2/4 nodeをpoolしない。全laneへ一括enableするなら三laneすべて`adopt`、lane別enableならpassしたlaneだけを
+score用途へ許す。全attempt/pair pointはraw sourceから残すが、log-ratio、SD、ratio、CI、decisionは
+protocolとpoint viewから導出し、rawへ保存しない。
+
+これはTOSTでalpha 0.05と90% CI内包が対応するという[equivalence testingの原理](https://doi.org/10.1177/1948550617697177)、
+software benchmarkではvariance levelをpilotでdimensioningすべきという
+[Kalibera/Jones](https://doi.org/10.1145/2491894.2464160)、通常CIの反復peekを避けるべきという
+[optional-stoppingの知見](https://www.kdd.org/kdd2017/papers/view/peeking-at-ab-tests-why-it-matters-and-what-to-do-about-it)
+に基づく。
+
+代替は、(A) 5 pairを一度だけ解析する低cost screen、(B) slowdownだけを禁じるratio下側95% bound > 0.99の
+non-inferiority、(C) alpha-spendingを事前設計したsequential equivalenceである。非擾乱を目的とするため
+推奨は双方向のoption Rである。ユーザー回答までは`instrumentation_overhead_decision=NULL`、benchの
+instrumented runはaudit-only、profile runは常にaudit-onlyとする。
+
 ## 未決定事項と質問protocol
 
 [Grill with Docs](https://github.com/mattpocock/skills/blob/main/docs/engineering/grill-with-docs.md)の進め方を
@@ -614,6 +869,7 @@ retention/quarantineを次に聞く。
 | 確定 | native object/structured sourceを優先し、log regexはfixture付きの最終手段 |
 | 確定 | compute側はlocal WALだけ、archive/verify/publish/replayはrunner側 |
 | 確定 | complete recordのsubsetであるfirst/last/count/average等をrawへ重複保存しない |
+| 確定 | bench/profileを分離し、profile専用familyはbenchで値だけNULL、原因/status/Evidenceなしとする。profile runはscore比較へ混ぜない |
 | 未決定 | score runへ許すinstrumentation overheadの統計的上限 |
 | 未決定 | durable archiveの最終保存先、retention期間、quarantineの容量上限 |
 
@@ -642,7 +898,7 @@ surfaceは次で足りる。
 
 ```python
 Fact(key: str, logical_value: LogicalValue)
-init_run(protocol_path, contract_path, runtime_root, identity) -> ManifestPath
+init_subject(kind, protocol_path, contract_path, runtime_root, identities) -> SubjectManifestPath
 Recorder.open(manifest_path, registry_path, producer_id, runtime_dir)
 Recorder.append_many(facts)
 Recorder.seal()
@@ -650,11 +906,11 @@ LifecycleJournal.open(manifest_path, producer_id, runtime_dir)
 LifecycleJournal.append_started()
 LifecycleJournal.append_final(status, error_count)
 collect_once(manifest_path, runtime_dir, producer_id, probe) -> CollectorOutcome
-submit_run(manifest_path, runtime_dir, lane_adapter, pjsub_argv) -> SubmissionOutcome
+submit_subject(subject_manifest_path, runtime_dir, lane_adapter, pjsub_argv) -> SubmissionOutcome
 run_stage(stage_name, argv, *, cwd, stderr_mode, recorder, lifecycle) -> Termination
-finalize_run(manifest_path, runtime_dir, archive_target) -> ArchiveReceipt
+finalize_subject(subject_manifest_path, runtime_dir, archive_target) -> tuple[ArchiveReceipt, ...]
 publish_run(archive_receipt_path, destination) -> PublishReceipt
-reconcile_run(manifest_path, runtime_dir, archive_target, delivery_store) -> ReconcileOutcome
+reconcile_subject(subject_manifest_path, runtime_dir, archive_target, delivery_store) -> ReconcileOutcome
 ```
 
 `Recorder.open`はpersist済みmanifestとregistryをread-onlyで検証し、runを生成・推測しない。
@@ -680,8 +936,8 @@ privateなpre-bundle merge、bundle作成/検証、finalizer fact、final merge�
 `schema/run/contract/input manifest hash/row counts/conflicts/completeness/output hash`を持ち、いずれも
 process再起動後にfileから再構成できる。
 
-`init_run`と`collect_once`は`journal.py`、`submit_run`は`submission.py`、`run_stage`は
-`stage_runner.py`、`finalize_run`と`reconcile_run`は`artifact_store.py`、`publish_run`は`publish.py`が
+`init_subject`と`collect_once`は`journal.py`、`submit_subject`は`submission.py`、`run_stage`は
+`stage_runner.py`、`finalize_subject`と`reconcile_subject`は`artifact_store.py`、`publish_run`は`publish.py`が
 所有する。`cli.py`はargument parseとhandler dispatchだけを行い、manifest生成、scheduler subprocess、
 probe lifecycle、quarantine探索を実装しない。
 
@@ -714,11 +970,12 @@ wrapperは第一段階で検証済みglobal/local rank、local size、placement�
 ACKする。ACKはbounded timeoutとし、expected collector ready/ACKがない時はsolverを開始せず
 configuration failureにする。
 
-wrapperはstartup ACK後、collector IPC FDを継承させてsolverを`exec`する。第二段階ではOpenFOAM hookが
+wrapperはstartup ACK後、collector IPC FDを継承させてsolverを`exec`する。第二段階のOpenFOAM hookは
+まずprofile purposeだけで有効にする。D-001を通したexact bundleだけbench expected graphへ追加できる。hookが
 startup/runtime/change source recordを同じFDへ送り、collectorだけが
 `domain/pstream/rank-<rank>.jsonl`へcomplete lineをappend/fsyncしてdurable ACKを返す。hookはboundedにACKを
 待つが、write/ACK失敗を数値pathやsolver exit codeへ伝播させず、runをconfiguration incompleteにする。
-collectorはsolver process group終了とIPC drainまで存続してからjournalをsealする。timing影響はG8で
+collectorはsolver process group終了とIPC drainまで存続してからjournalをsealする。timing影響はG9で
 判定する。
 
 機械可読正本は`experiment-metrics/contracts/openfoam-v2.toml`一fileにする。contract ID、producer
@@ -734,23 +991,24 @@ CLIは次の七orchestration use caseだけを持つ。behaviorを環境変数�
 明示引数、比較条件はGit管理protocol、BigQuery宛先はrunner側のGit管理設定から読む。
 
 ```text
-init-run       runnerがnonce、protocol、expected producerをrun-manifest.jsonへseal
-submit         intentをsealしてexact pjsub argvを実行し、result/bindingを耐久化
+init-subject   regular runまたはqualification parent+二childをtagged manifestへseal
+submit         subject intentをsealしてexact pjsub argvを実行し、result/bindingをsubjectへ耐久化
 collect        compute producerを一度実行しlifecycle/data fragmentへ記録
 stage          target argvをspawnしterminationと時間を記録
-finalize       terminal後にdurable sourceを回収/reduceし、merge、archive、remote verifyまで実行
+finalize       terminal後にsubjectを検証し、regular一runまたはqualification parent+二childをarchive/remote verify
 publish        verify済みarchiveのmetrics sidecarだけをBigQueryへ送達
 reconcile      invalid監査、archive-retry、replay-pendingをreason別に冪等処理
 ```
 
-`init-run`以外は`--manifest`を必須にし、`EXPERIMENT_METRICS_RUN`、PID、PJM IDからrunを再構成しない。
+`init-subject`以外は`--subject-manifest`を必須にし、compute内部の`collect`/`stage`だけはparentが指定した
+`--run-manifest`を必須にする。`EXPERIMENT_METRICS_RUN`、PID、PJM IDからsubject/runを再構成しない。
 `collect`と`stage`はBigQuery設定やcredentialをimportしない。`finalize`と`publish`を分けることで、
 送信障害を理由にcomputeやarchiveを再実行しない。
 
-`submit`は`pjsub`前にexact argvとrun nonceを`submission-intent.json`へfsyncし、stdout/stderrを耐久fileへ
-直接redirectする。nonceはlane adapterが保証するscheduler検索可能なjob name/comment/request fieldにも
+`submit`は`pjsub`前にexact argv、submission subject ID、subject nonceを`submission-intent.json`へfsyncし、stdout/stderrを耐久fileへ
+直接redirectする。subject nonceはlane adapterが保証するscheduler検索可能なjob name/comment/request fieldにも
 入れる。明示rejectは`submission-failed.json`、成功はresultとbindingをsealする。応答を確定できない
-crashではblind retryせず、nonceでscheduler/accountingを検索する。exact 1 jobだけをbinding化し、0件で
+crashではblind retryせず、subject nonceでscheduler/accountingを検索する。exact 1 jobだけをbinding化し、0件で
 検索完了または複数件、検索不能なら`submission-unknown.json`をsealして人手確認まで停止する。後に
 exact 1 jobへ解決した場合もunknownを消さず、`submission-recovery.json`とbindingを追加sealする。この
 検索fieldと照合commandを提供できないlaneはunattended v2 submitをreleaseしない。
@@ -763,13 +1021,15 @@ affinity、mesh/hardware auditはPJM scriptが終了する前に耐久化する�
 
 ### runtimeとarchive layout
 
-一runのruntimeは次の固定layoutにする。任意file探索や「最後に見つかったJSON」を禁止する。
+runとsubmission subjectを分け、run側は次の固定layoutにする。任意file探索や「最後に見つかったJSON」を禁止する。
 
 ```text
-<runtime>/<run>/
+<runtime>/runs/<run>/
   control/run-manifest.json                 # pre-submit immutable
   control/contract.toml                     # 実使用contractのimmutable copy
   control/protocol.toml                     # 実使用protocol/laneのimmutable copy
+  control/source-track-validation.json      # diff algorithm/base/head/patch/pass
+  control/instrumentation-qualification-decision.json # decisionを参照するbenchだけ
   control/submission-intent.json
   control/submission.stdout
   control/submission.stderr
@@ -789,6 +1049,7 @@ affinity、mesh/hardware auditはPJM scriptが終了する前に耐久化する�
   logs/<stage>.stdout
   logs/<stage>.stderr
   receipts/scheduler-terminal.json
+  receipts/qualification-parent-archive-ref.json # qualification childだけ
   receipts/archive-verified.json
   merge/metrics.pre-finalizer.jsonl
   merge/pre-bundle-report.json
@@ -797,6 +1058,39 @@ affinity、mesh/hardware auditはPJM scriptが終了する前に耐久化する�
   archive-staging/bundle.outer.json
   archive-staging/metrics.outer.json
 ```
+
+regular runだけが上記`control/submission-*`、binding、job-entry、`receipts/scheduler-terminal.json`を所有する。
+qualification childではそれらを作らず、代わりに
+`control/qualification-parent-ref.json`（allocation ID、parent manifest hash、job ID、arm ordinal）を置く。
+parent remote verify後かつchild pre-bundle前に、finalizerが
+`receipts/qualification-parent-archive-ref.json`（allocation ID、parent manifest hash、outer URI/hash/size）を
+no-replace sealする。
+qualification parentは次の固定layoutを所有する。
+
+```text
+<runtime>/allocations/<allocation>/
+  control/qualification-allocation-manifest.json
+  control/protocol.toml
+  control/child-source-validation-index.json # child source validationsのcontent-addressed index
+  control/submission-intent.json
+  control/submission.stdout
+  control/submission.stderr
+  control/submission-result.json | submission-failed.json | submission-unknown.json
+  control/submission-recovery.json                 # 後で解決した場合だけ
+  control/submission-binding.json
+  control/job-entry-receipt.json                   # allocation ID/job ID/ordered child IDs
+  source/env/job-entry.snapshot                    # NUL区切りbyte-exact parent source
+  source/hardware/identity-min.json
+  source/hardware/identity-min.raw
+  metrics/lifecycle/<parent-producer>.jsonl
+  receipts/scheduler-terminal.json
+  archive-staging/allocation-evidence.tar.zst
+  archive-staging/allocation-evidence.outer.json
+```
+
+parent evidence archiveは上記immutable control/source/lifecycle/receiptを決定的に収録する二objectで、run metricsを持たない。
+remote verify済みouter hash/URIを各child finalizerが参照し、child bundleは小さなcontent-hash refだけを収録する。
+parent archiveとchild archiveの間にhash cycleを作らず、parent receiptを各child raw keyへ複写しない。
 
 archiveは次の四objectを同じrun prefixへ置く。
 
@@ -810,10 +1104,12 @@ metrics.outer.json   # metrics sidecarのhash、size、contract
 `bundle.outer.json`はbundle外、`metrics.outer.json`はmetrics外に置くため自己参照しない。remoteで
 四objectの存在、hash、sizeを再読取検証して初めてarchive済みとする。
 
-bundle memberはmanifest駆動のexact allowlistとし、`control/`のmanifest、contract、protocol、submission
-intent、raw stdout/stderr、実在するresult/failed/unknown/recovery outcome、binding、job-entry receipt、
+bundle memberはrun variant別のmanifest駆動exact allowlistとする。regularは`control/`のmanifest、contract、
+protocol、submission intent、raw stdout/stderr、実在するresult/failed/unknown/recovery outcome、binding、
+job-entry receipt、scheduler-terminalを含む。qualification childはそれらのparent-owned memberを含めず、
+`qualification-parent-ref.json`と`qualification-parent-archive-ref.json`を含む。いずれも
 pre-bundle expected producerの`metrics/lifecycle/`、sealedおよびpartial producer fragment、
-`domain/`、`source/`、`logs/`、scheduler-terminal receipt、`merge/pre-bundle-report.json`、自己を除く
+`domain/`、`source/`、`logs/`、`merge/pre-bundle-report.json`、自己を除く
 member path/hash/sizeを持つ`bundle.manifest.json`を含める。最終`metrics.jsonl`、outer manifest、
 archive/delivery receipt、`runner-finalizer` fragment/lifecycle、一時`metrics.pre-finalizer.jsonl`は含めない。
 producer fragmentとはpre-bundle mergeが消費したcompute/runner source fragmentの固定集合を指す。
@@ -845,13 +1141,15 @@ runのruntimeをcleanupしたりworkflowを成功扱いしたりしない。
 ### 状態と失敗規則
 
 `pjsub`成功応答とjob開始には順序保証がない。PJM supervisorはsubmission bindingを待たず、entry直後に
-manifest run IDと自身の`PJM_JOBID`を`job-entry-receipt.json`へO_EXCL相当でsealしてcomputeを続ける。
-runnerは`pjsub`返却後または曖昧応答の照合後にbindingをsealし、terminal後のmergeが両receiptの
-run/job IDを照合する。bindingをjob entryの前提条件にしない。
+subject kind/ID、自身の`PJM_JOBID`、qualificationならordered child IDsを`job-entry-receipt.json`へ
+O_EXCL相当でsealしてcomputeを続ける。runnerは`pjsub`返却後または曖昧応答の照合後にsubject bindingをsealし、
+terminal後にregularならrun/job ID、qualificationならallocation/job/ordered child IDsを照合する。
+bindingをjob entryの前提条件にしない。
 
 mutableな`status.json`は作らず、次のimmutable evidence DAGから状態を導出する。
 
 ```text
+regular:
 run-manifest -> submission-intent -> submit outcome -> submission-binding
                          |                    \-> failed/unknown -> optional recovery/binding
                          +-> job-entry -> compute lifecycle/source/fragments ---\
@@ -861,6 +1159,14 @@ submission-binding -> scheduler-terminal ---------------------+-> post-terminal 
                                                               -> finalizer fragment/final merge
                                                               -> metrics verify/archive receipt
                                                               -> durable delivery receipt
+
+qualification:
+allocation-manifest -> submission-intent -> outcome/binding -> scheduler-terminal
+                 \-> job-entry -> child-1 manifest/lifecycle/source/fragments
+                              \-> child-2 manifest/lifecycle/source/fragments
+scheduler-terminal + binding/job-entry
+                 -> parent evidence archive verify
+                 -> each child post-terminal reduce/merge/bundle/final merge/archive/delivery
 ```
 
 - lifecycle、metric `.partial`、Pstream/domain journalの各validatorはcomplete JSON lineのvalid prefixを
@@ -872,8 +1178,9 @@ submission-binding -> scheduler-terminal ---------------------+-> post-terminal 
   metrics sidecarを作らず`invalid-quarantine`へ送る。
 - process timeout、signal、spawn errorでもrunnerはscheduler terminal後にpost-run parserとfinalizeを
   実行する。再実行は既存receiptを検証し、同じbyte列なら成功、異なれば競合として止める。
-- terminal後にもsubmission bindingとjob-entry receiptの片方が欠ける、またはjob IDが異なるrunは、
-  compute結果をbundleへ保全するがpublishせずtracking failureとして`invalid-quarantine`へ送る。
+- terminal後にもsubject bindingとjob-entry receiptの片方が欠ける、またはsubject/job/ordered child IDsが
+  異なるsubjectは、compute結果を保全するがchild metricsをpublishせずtracking failureとして
+  `invalid-quarantine`へ送る。qualification child自身にparent-owned receiptがないことはfailureにしない。
 - cleanupはverified archive receiptの後だけ許し、publish失敗は`replay-pending`であってcompute失敗に
   戻さない。
 
@@ -883,14 +1190,14 @@ submission-binding -> scheduler-terminal ---------------------+-> post-terminal 
 |---|---|---|
 | G0 依存境界 | `test_dependency_boundaries.py`、CLI subprocess import trace | domain/probe/journal/collect/stageのtransitive importにpublisher、credential、networkがない |
 | G1 値契約 | `test_domain.py`、RFC 8785/decimal/env byte fixture | 空、zero、欠損、非有限拒否、単射escape、canonical byte |
-| G2 submit/binding | `test_submission.py`、binding前job-entry/crash fixture | intent先行、曖昧成功でblind retryなし、0/1/複数job照合、entry/binding join |
+| G2 submit/binding | `test_submission.py`、regular/qualificationのbinding前job-entry/crash fixture | tagged subject、intent先行、曖昧成功でblind retryなし、0/1/複数job照合、allocation/job/ordered child join |
 | G3 local durability | `test_journal.py`、全journalの各byte crash matrix | lifecycle/metric partial/Pstream valid prefix、seal/no-replace/directory fsyncの冪等性 |
-| G4 ownership/merge | `test_merge.py`、全producer graph fixture | owner一意性、exact dedupe、異値conflict、required欠損 |
+| G4 ownership/merge | `test_merge.py`、variant別producer graph fixture | owner一意性、exact dedupe、異値conflict、required欠損、qualification parentのjob env/minimal hardwareを二childへjoinしてraw複写しない。profileでprofile-only collector失敗はreasonあり、benchの同列とqualification OFFのON専用列は理由なしNULL、qualification ONの同collector失敗はreasonあり |
 | G5 process観測 | `test_stage_runner.py` | actual argv/cwd、combined log、process-group signal forwarding、exit/signal/spawn error、monotonic境界 |
-| G6 archive/送達 | `test_artifact_store.py`、`test_publish.py`、各PUT/verify/BQ accept直後crash matrix | exact bundle allowlist、deterministic bundle、put-if-absent、receipt再開、remote verify前cleanup禁止、二重replay同値 |
-| G7 OpenFOAM意味 | `test_observation_contract.py`、baseline log/mesh/Pstream/rank ACK fixture | contract source/時点/owner、sentinel/`[]`、rank欠損、ACK timeout、PJM timeout salvage |
-| G8 consumer contract | contract生成SQL fixture、BigQuery golden rows、Sheet parameter/refresh smoke test | 全列lineage、reason detail/evidence、失敗attempt残存、protocol分離、pair/estimand、definition非互換・片側env欠損TVF、delivery FSM/freshness/size |
-| G9 非擾乱 | lane別hook on/off paired run | 数値同等性と、未決定のoverhead採用基準を同時に満たすこと |
+| G6 archive/送達 | `test_artifact_store.py`、`test_publish.py`、parent/childと各PUT/verify/BQ accept直後crash matrix | parent-first verify、arm間crash/片child未起動・未seal、child別exact allowlist/deterministic bundle、put-if-absent、receipt再開、remote verify前cleanup禁止、二重replay同値 |
+| G7 OpenFOAM意味 | `test_observation_contract.py`、baseline log/mesh/Pstream/rank ACK/source-diff fixture | contract source/時点/owner、sentinel/`[]`、rank欠損、ACK timeout、PJM timeout salvage、qualification ONの差分がinstrumentation patchだけであること |
+| G8 consumer contract | contract生成SQL fixture、variant別BigQuery golden rows、Sheet parameter/refresh smoke test | 全列lineage、profile attemptのscore統計除外、非適用列がreason/EvidenceなしのNULL、pair-grain eligibility、同bundleでbase/workload/toolchainだけ変えたbench拒否、失敗attempt残存、protocol分離、estimand、definition非互換・片側env欠損TVF、delivery FSM/freshness/size |
+| G9 非擾乱 | D-001のlane別unmodified OFF/final ON paired run | 数値同等性、bundle reliability、事前dimensioningしたoverhead採用基準を同時に満たすこと |
 
 `test_observation_contract.py`はcontractのschemaとowner/source/capture/absenceの完全性を検査し、
 生成した観測マップ表がcommit済み表とbyte一致することを検査する。これが「この値はどこから取るか」
@@ -903,8 +1210,8 @@ submission-binding -> scheduler-terminal ---------------------+-> post-terminal 
 1. legacyの出力、shell evaluator、baseline logをgolden fixtureとして凍結する。
 2. 専用canary protocolだけでpre-submit manifestとlocal WALを導入し、legacy runの送信経路は触らない。
 3. canaryでrunner finalize/archive/publish/reconcileとfault injectionを通す。
-4. OpenFOAM固有のnative probe、complete solver record、Pstream/placement sidecarをv2へ追加する。
-5. 全laneで意味・数値同等性・非擾乱gateを通してから、run単位でv2を既定にする。
+4. OpenFOAM固有のnative probe、complete solver record、Pstream/placement sidecarをprofile purposeへ追加する。
+5. benchへ必要な最小subsetだけD-001へ掛け、全laneで意味・数値同等性・非擾乱gateを通したbundleだけbenchへ追加する。
 6. v2 viewとSheetを切り替え、legacy-only consumerがゼロになってから旧senderとsubset keyを削除する。
 
 rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入する。既存runのmanifestやrowを
@@ -925,8 +1232,8 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
    変わる既存keyをv2で再利用しない。
 6. canonical official evaluatorを作り、旧shell validityと全baseline golden logを照合する。
 7. 1/2/4 node lane、同一rank wrapper sidecar、二段階Pstream/partition auditを追加し、最終
-   instrumentationを含む全laneでbaselineと比較適格性を再検証する。各laneでunmodified buildと
-   hook-only buildを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
+   instrumentationを含む全laneでbaselineと比較適格性を再検証する。各laneでunmodified OFFと
+   exact final ONを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
    lexeme一致を数値同等性ゲートにする。
 8. Connected SheetsのRuns/Replicates/Evidence/Config Diff/Environment/Data Statusをbounded consumerへ
    切り替え、freshness/result-size smoke testを通す。旧key consumerがなくなってから派生・部分集合keyの
@@ -951,8 +1258,8 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
 - ExecutionTime、ClockTime、launcher wallの異なるscopeが保存される。
 - 1/2/4 laneでrequested、allocated、solver Hosts、placementが一致する。
 - setup後の実case workload memberがprotocol manifestと一致し、1 byte差をcomparison不適格にできる。
-- direct/profileやplacement probeの計測影響が事前閾値内、またはscore runから分離される。
-- unmodified buildとhook-only buildの同一条件でpressure solve軌跡と公式markersが一致し、数値結果を
+- bench/profileが分離され、profile-only列はbenchで理由なしのNULLになり、bench bundleの計測影響はD-001内である。
+- unmodified OFFとexact final ONの同一条件でpressure solve軌跡と公式markersが一致し、数値結果を
   hookが変えていない。
 - 同一protocolの反復がpair ID、実行順、blockを含め復元でき、全estimand点、median、MADがSheetに表示される。
 - treatment値を含む同一条件だけが同じreplicate groupへ入り、宣言したtreatment差だけが同じ
