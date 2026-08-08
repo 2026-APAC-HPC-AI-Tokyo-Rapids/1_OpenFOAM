@@ -75,8 +75,11 @@ key    STRING NOT NULL
 value  STRING NOT NULL
 ```
 
-`run`は全producerが共有するglobally uniqueでimmutableなIDである。Actions経路では
-repository、run ID、attempt、PJM job IDを含め、manual経路ではclusterを含むUUIDを使う。
+`run`は全producerが共有するglobally uniqueでimmutableなIDである。Actions経路ではjob投入前に
+repository、Actions run ID、attemptと各submissionで必須の128-bit random nonceから固定する。nonceは
+OS CSPRNGの16 byteを32文字のlowercase hexで表す。manual経路では
+clusterを含むUUIDをjob投入前に生成する。`pjsub`返却後にしか分からないPJM job IDはrun IDへ
+含めず、immutableなsubmission bindingと`scheduler.job_id`で結ぶ。初期run manifestを書き換えない。
 raw relationは次のfunctional dependencyを満たす。
 
 ```text
@@ -89,9 +92,11 @@ raw relationは次のfunctional dependencyを満たす。
 - 既存runの値を訂正しない。訂正測定は新しいrunとして残す。
 - row不在は未観測、`value=""`は実際に観測した空文字、`"0"`は真のゼロを表す。
 - 取得不能や非該当をplaceholder空文字にしない。
-- collector lifecycle keyはsupervisorだけが所有する。collector呼出し前に
-  `collector.<name>.started`を耐久appendし、呼出しから戻った後にstatusとerror countを持つ
-  `collector.<name>.final`を一度だけappendする。どちらのkeyも更新しない。
+- collector lifecycle keyはsupervisorだけが所有する。collector data fragmentとは独立した
+  `lifecycle/<producer>.jsonl`へ、呼出し前に`collector.<name>.started`を耐久appendし、呼出しから
+  戻った後にstatusとerror countを持つ`collector.<name>.final`を一度だけappendする。どちらのkeyも
+  更新しない。lifecycle journalはatomic sealを要求せず、mergeはvalidなcomplete JSON lineを必ず
+  回収し、末尾のpartial lineだけを破棄して`fragment_complete=false`をrunner fragmentへ記録する。
 - startedなしは未到達、startedあり/finalなしは中断、finalのfailedは処理済み失敗とする。
   finalがあってもrequired keyがなければ別理由のincompleteとし、viewで混同しない。
 
@@ -145,45 +150,94 @@ registryの`justification`へ理由と検証式を書く。
 `metrics.jsonl`はBigQueryと同じ`run/key/value`を持つwrite-ahead logである。別event
 envelope、型別value列、ack queueは作らない。
 
+target programの薄いhookが出すversion付きdomain recordは、local adapterへの入力または
+diagnostic/source logであって第二の送達queueではない。単発factはadapterが直ちにregistryで検証して
+WAL化する。反復eventを最終的に一arrayへするfamilyは、fsync済みappend-only domain journalを
+artifactとして残し、terminal後のpure reducerが一度だけFactへ変換する。registryはどちらか一方を
+familyごとに固定し、BigQueryへの耐久送達の正本は`run/key/value` WALだけにする。
+
 ```text
 compute producer
-  -> logs/metrics/node-<node_rank>.jsonlへ耐久append
+  -> logical producer別のmetrics fragmentへ耐久append
   -> 完了fragmentをatomic rename
-  -> runnerが全fragmentを検証・merge
-  -> runnerがBigQueryへ全行をat-least-once送信
-  -> producer fragment、merged JSONL、全logをarchive
-  -> remote保存を検証してからruntimeを削除
+  -> runnerが全fragmentを検証し、log/fragmentのrun bundleを作成
+  -> bundle identityをfinalizer fragmentへappendして最終merge
+  -> run bundleとmerged JSONL sidecarをarchiveしchecksum/manifestで検証
+  -> runnerがBigQueryへ全行をat-least-once送信またはreplay待ちに登録
+  -> archive検証後にruntimeを削除
 ```
 
 - 一つの完全なJSON lineを`O_APPEND`またはlock下で書き、flush/fsync後に完了とする。
-- expected producer集合はscheduler allocationから固定する。
+- expected producer集合はGit管理protocolとrun manifestからjob投入前に固定する。scheduler
+  accountingとobserved placementは、その期待集合が実際に成立したかを後から検証するsourceである。
 - mergeはrun ID、JSON、owner、expected node、一意性を検査し、欠損や異値競合を隠さない。
 - BigQuery `insertId`はbest-effortの補助にすぎない。logical viewが完全一致rowをdeduplicate
   し、異値競合を隔離する。
 - replayは常に同じrowを全件送ってよい。送信成功後もJSONLをtruncateしない。
 - archive/upload失敗時はruntimeをquarantineし、後続reconcilerが回収する。
+- publish失敗時は検証済みarchiveをreplay pendingにし、raw JSONLから再送する。
 - remote checksumとmanifest確認前に唯一のlocal copyやGitHub artifactを削除しない。
+
+artifact identityの自己参照を避ける。まずlogとproducer fragmentからrun bundleを作ってhashし、
+そのdeterministic URI、bundle hash、manifest identityをrunner finalizer fragmentへappendする。
+その後に最終mergeした`metrics.jsonl`をbundleとは別のsidecarとして同じarchive prefixへ保存する。
+bundleとsidecarの両方をremoteで検証してからpublish/cleanupする。metrics sidecar自身のhashを
+sidecar内のmetricにはしない。
 
 計算nodeではBigQueryへ接続しない。したがって送信用credentialをPJM processへ渡す必要も
 ない。各snapshotはそのscopeに実在する環境をfilterなしで保存し、機密値も例外扱いしない。
+
+## 最小の実装境界
+
+対象programへ計測システムの都合を持ち込まないため、責務を次の六境界へ固定する。
+
+1. domain probe/parserは`Fact(key, logical_value)`だけを返すpure functionとする。run ID、文字列化、
+   filesystem、BigQueryを知らない。
+2. `Recorder`だけがpersist済みrun manifest、registry、canonical encoder、fact/lifecycleの
+   append/fsync、data fragmentのatomic completionを所有する。producerはこの一つの出力境界だけを見る。
+3. `StageRunner`だけがspawnするactual argv、monotonic timer、signal、child wait statusを所有し、
+   観測したfactを`Recorder`へ渡す。
+4. runner側`merge`がexpected producer、run ID、owner、一意性、required key、fragment完了を検証し、
+   archive対象のmerged JSONLを作る。
+5. `ArtifactStore/RunFinalizer`がrun bundle/outer manifestのfsync、seal、put/remote verify、quarantine、reconcileを
+   所有する。delivery receiptはrun WALへ戻さず外側のdelivery ledgerへappendする。
+6. runner側`publish`だけがBigQuery credential、retry、replayを所有する。collector、solver、PJM
+   processはnetwork送信をしない。
+
+OpenFOAM本体へ必要なhookは、version付きlocal structured eventを定義済み境界でだけ書く薄いadapterとする。
+metrics packageやBigQuery clientをlinkせず、送達、再試行、key展開を知らない。実装上は
+`domain.py`、`journal.py`、`stage_runner.py`、`merge.py`、`artifact_store.py`、`publish.py`とdomain別
+probe/parserを深いmodule境界にし、CLIはそのcomposition rootに限定する。
+
+OpenFOAM用とQwen用を直ちに第三の共通packageへ統合しない。まず同じcontractとconformance
+fixtureを両repositoryで満たし、interfaceが安定してから、canonical encoder、registry validator、
+merge validatorだけを抽出する。domain collectorやpipeline固有の失敗処理は共通化しない。
+
+各factの権威source、producer、取得時点、raw key/artifact、validation、欠損時の扱いは
+[観測マップ](./experiment-metrics-v2-observation-map.md)を正本とする。sourceと取得時点をそこへ
+特定できない候補はkey registryへ追加しない。
 
 ## 環境snapshot
 
 同じ名前でも時点とprocessが違えば意味が異なるため、次を分ける。
 
 - `env.job_entry.*`: PJM entry直後、module操作やunsetより前の全環境
-- `env.host_exec.*`: moduleとOpenFOAM設定後、benchmark exec直前の全環境
+- `env.host_exec.common.*`: `mpirun`直前のsupervisor full environment
+- `env.host_exec.rank.<rank>.delta.*`と`removed_names`: 同じrank wrapperのexec環境とcommonの
+  byte-exact差分。両者から各rankの全環境をlosslessに復元する
 
 名前と値はbyte-exactに取得する。nameの各byteは`[A-Za-z0-9_]`だけをそのまま使い、それ以外は
 `~HH`の大文字hexでescapeするため単射になる。valueはUTF-8可否にかかわらず全件をRFC 4648の
 padding付きBase64にし、registryで`bytes/base64`と宣言する。これにより通常文字列とBase64の
-曖昧性を作らない。snapshot間で同じ値が重複しても取得時点が異なる独立観測である。標準の
+曖昧性を作らない。rank deltaは追加・変更値と削除nameを持ち、commonとの和がfull snapshotに
+一致しなければならない。snapshot間で同じ値が重複してもscopeが異なる独立観測である。標準の
 二run差分はGit管理された比較関連keyだけを表示し、全env差分は別viewでdecodeして提供する。
 
 ## 実験protocolと比較条件
 
-「速い」の一次estimandを公式trimmed FVOPSとする。二次estimandはicoFoam processの
-wall time、blockMesh/decomposeParを含むend-to-end timeとする。結果を見て指標を
+「速い」の一次estimandを公式trimmed FVOPSとする。二次estimandは`StageRunner`が観測する
+solver outer-launch wall time、blockMesh/decomposeParを含むend-to-end timeとする。個々の
+icoFoam rank process wallと呼ばない。結果を見て指標を
 選び直さない。
 
 実験protocol、予定試行数、停止規則、A/B順序はGitへcommitする。実行時に割り当てられた
@@ -220,13 +274,16 @@ median、MAD、ratio、不確実性を分ける。
 
 - `run.started_at`、`run.finished_at`、`run.elapsed_sec`
 - `run.outcome`、`run.exit_code`
-- `run.launch_argv`: 実solver argvを一つのcanonical JSON配列で保存
-- 各`perf.stage.<name>.wall_time_sec`と`run.stage.<name>.exit_code`
-- `scheduler.allocation`: requested/allocated node、host、rank、resource groupのJSON object
-- `hardware.nodes`: hostnameごとのCPU、NUMA、memory、cpuset等のJSON配列
+- `run.launch_argv`: `StageRunner`がspawnしたprofiler/mpirunを含むexact outer argvのcanonical JSON配列
+- 各`perf.stage.<name>.wall_time_sec`と`run.stage.<name>.termination`。terminationはexit、signal、
+  spawn errorを区別するJSON objectで、shellの`128+signal`へ潰さない
+- `scheduler.request`: runner submit boundaryのlane、PJM script identity、exact `pjsub` argv
+- `scheduler.accounting`: 固定した`pjstat --history -S --choose ... --data --delimiter`の結果
+- `hardware.nodes`: hostnameごとのhost-invariantなCPU、NUMA、memory等のJSON配列
 
-started/finishedとelapsedは、現実装ではclockと範囲が一致せず厳密な派生関係ではないため
-残す。timer範囲を統一した後も、運用・Sheets用の意図的な索引として扱う。
+started/finishedはUTC wall clock、elapsedは同じsupervisor境界のmonotonic clockで取得するため、
+wall-clock jumpとtimestamp精度の影響を受けず厳密な派生関係ではない間だけ残す。同一scope、clock、
+precisionへ統一した時点でelapsedまたはtimestamp pairの一方をview派生へ移す。
 
 ### build provenance
 
@@ -236,31 +293,49 @@ build sidecar manifestに次を固定する。
 - OpenFOAMとThirdPartyのresolved commit
 - compiler、MPI、toolchain、compile flags
 - precision、label size、original build workflow/run
-- build archive、`icoFoam` binary、実際にlinkされた`libmpi`のcontent identity
+- build archive、`icoFoam` binary、ELF `DT_NEEDED`、build/provision時に解決した`libmpi`の
+  path/content identity、MPI version
 
 raw tableは比較groupとartifact到達に必要なcommit、manifest identity、artifact URIだけを
 索引化する。archive hashはbuild時に一度計算し、各benchmark runで再計算しない。
+archiveとsidecarは二file同時にatomicにはならないため、version directoryへarchiveをrenameし、
+hashを含むsidecarを最後にcommit markerとしてatomic renameする。consumerはsidecar存在とarchive
+hash一致の組だけをreuseする。
 
 ### mesh、partition、配置
 
 - `mesh.topology`: cells、faces、points、internal facesのJSON object
-- `mesh.partition`: method、subdomains、renumbering、partition balance、processor interface、
-  semantic partition identityのJSON object
+- `mesh.partition.requested`: 実使用dictのmethod、subdomains、renumbering等のJSON object
+- `mesh.partition.observed`: partition balance、processor interface、ordering identities等のJSON object
 - `solver.runtime_header`: solver logのbuild、arch、nProcs、Hostsを一つのJSON object
-- `solver.pstream`: OpenFOAM初期化後に取得した実効Pstream設定を一つのJSON object
+- `solver.pstream.startup_applied.rank.<rank>`: `UPstream::init()`が実際に適用したstartup state
+- `solver.pstream.runtime_current.rank.<rank>`: `Time`構築とcase override後、time loop前のcurrent state
+- `solver.pstream.change_events.rank.<rank>`: runtime中にcontrol再読込で変わった場合だけの順序付きrecord
 - `parallel.rank_placement`: rank、hostname、local rank、CPU affinity、NUMA affinityのJSON配列
 
-`solver.runtime_header`、scheduler allocation、launcher placementは取得源の異なる独立観測で
+`solver.runtime_header`、scheduler request/accounting、launcher placementは取得源の異なる独立観測で
 あり、互いのprojectionとして削除しない。requested値の別名は作らない。
 
-`mesh.partition`のsemantic identityはheader文字列を除く正規化済みaddressingから作る。
+partition identityはserial mesh/order、partition membership、rank順・local index順を保った
+`cellProcAddressing`、必要なsigned `faceProcAddressing`を分ける。headerだけを除外し、global cellが
+全rankでちょうど一回、rank集合が連続であることを検査する。
 大容量mesh scan、`checkMesh`、partition hashはsolver終了後または別audit jobで実施し、
 scored solverのcacheを乱さない。generated `decomposeParDict`と各stage logはartifactへ残す。
 
-`solver.pstream`には少なくともnode communication、topology control、`floatTransfer`、
-`nProcsSimpleSum`、exchange、`commsType`、polling、`maxCommsSize`、`mpiBufferSize`を含める。
-通常logに出ない値は、OpenFOAM初期化が実効値を解決した後、time loop開始前のin-process
-producerから出す。未確認値をdefaultから推測せず`null`とし、そのrunを比較不適格にする。
+同じallocation内のinline post-run auditだけが元runへfactを追加できる。別audit jobは別run IDで
+`audit.subject_artifact_identity`によりjoinし、immutable mesh/build artifactから得られるfactだけを
+移送可能とする。placement、hardware、runtime stateを元runへ移植せず、sealed WALへ追記しない。
+
+startup recordはcommunicator構築時のnode communicator control/threshold、実際のnode communication、topology control、
+configured MPI bufferとclamp/attach後のbuffer byteを持つ。runtime-current recordはcaseの
+`OptimisationSwitches`適用後の`floatTransfer`、`nProcsSimpleSum`、exchange/tuning、`commsType`、
+polling、`maxCommsSize`に加え、current `nodeCommsControl`、`nodeCommsMin`、`topologyControl`、
+`usingNodeComms`を持つ。全rankが出し、viewはexpected全rankの存在と一致を検証する。
+`runTimeModifiable`による再読込で値が変わればrank別append-only domain event logへ残す。runnerは
+terminal後にcomplete lineとproducer event countを検証し、期待rankごとに一つのordered
+`solver.pstream.change_events.rank.<rank>` arrayを必ず一度だけWALへ出す。`[]`は観測済み変更0件、
+key不在はreducer/hook失敗を表す。score protocolで変更があった
+runはcomparison不適格にする。未確認値をdefaultから推測せず`null`にする。
 
 `parallel.rank_placement`は別の`mpirun`で測らない。同じrank processのwrapperがaffinity等を
 記録してから`exec icoFoam`し、solverを実行したrankそのものの配置を証明する。
@@ -268,7 +343,8 @@ producerから出す。未確認値をdefaultから推測せず`null`とし、�
 ### solver logの完全record
 
 - `solver.step_timings`: 公式`ExecutionTime` regex match一件につき一要素を作り、直前の
-  simulation time、同じtiming行のcumulative ExecutionTimeとClockTimeを持つ順序付きJSON配列。
+  simulation time、同じtiming行のExecutionTime/ClockTimeの原lexemeとnullable parsed numericを
+  持つ順序付きJSON配列。
   simulation timeまたは同一行のClockTimeがなければ、そのfieldだけを`null`にする。
 - `solver.pressure_solves`: `Solving for p`一件につき一要素を作り、initial residual、final
   residual、iterationsを持つ順序付きJSON配列。iterationsは公式の行末regexに一致しなければ
@@ -283,6 +359,12 @@ pressure solveの残差は、source変更時に未変更buildと同じpartition/
 
 ## 公式判定と比較適格性
 
+公式判定関数と科学比較関数を別module、別fixtureにする。v2 cutover前に、現在のshell固有の
+regex、BADNUMのline count、missing host許容、invalidでもexit 0というvalidity semanticsを保つ
+canonical evaluatorを作り、`tasks/parse_result.sh`をその薄いCLIにする。数値parse、trim計算、
+4桁丸めは固定locale/decimal規則へ一本化し、全公表baseline logを再golden化する。旧AWKの中間丸めを
+暗黙にSQLで模倣しない。
+
 viewは次を分離する。
 
 - `official_log_valid`: `tasks/parse_result.sh`と完全に同じlog判定
@@ -293,8 +375,9 @@ viewは次を分離する。
 公式FVOPSの分子は観測cell数ではなく常に`64,000,000 * 4`である。分母は
 `ExecutionTime[last] - ExecutionTime[first]`とし、ClockTimeやlauncher wallへ置換しない。
 meshが不正ならcomparison対象外にするが、公式式の分子を観測cell数へ変更しない。
-baseline ratioの分母にはbaseline logから再計算した値ではなく、規則の公表値であるGadi
-`9.778M FVOPS`、ASPIRE-2A `5.717M FVOPS`を使う。
+baseline ratioはcluster identityが公表baselineとexact matchする時だけ作る。Gadiでは
+`9.778M FVOPS`、ASPIRE-2Aでは`5.717M FVOPS`を使うが、Genkai runへ流用せず、承認済みGenkai
+baselineがprotocolにない限りratioをNULLにする。
 
 `comparison_eligible`はofficial validに加え、次を要求する。
 
@@ -307,11 +390,15 @@ baseline ratioの分母にはbaseline logから再計算した値ではなく、
 - score runはdirect modeで、比較run同士のinstrumentation modeが一致
 
 MPI teardown後の非zero exitでもsolver workloadがofficial validになり得る。原始結果は必ず
-収集し、official validityとrun outcomeを混同しない。
+収集し、official validityとrun outcomeを混同しない。非単調、ClockTime異常、trim非正は
+comparison reasonであり、canonical official evaluatorが定めない限りofficial invalid reasonへ
+混ぜない。`official_log_valid=true`でもscoreを算出不能ならscoreはNULLと別reasonにする。
 
 ## 1/2/4 node laneと計測擾乱
 
-1/2/4 node条件をGit管理された別laneとして定義し、各runで次を照合する。
+1/2/4 node条件を`experiments/lanes/openfoam-genkai-{1,2,4}.toml`の別laneとして定義する。
+各fileはnode/rank/resource group/transport policy、required producer、instrumentation modeを持ち、
+runnerがexact `pjsub` argvとPJM script identityへ解決してmanifestへsealする。各runで次を照合する。
 
 ```text
 claimed lane == requested nodes == allocated nodes
@@ -322,9 +409,11 @@ rank ID、header nProcs、Hosts合計、placement件数も一致させる。2/4 
 `I_MPI_FABRICS=shm`のようなnode内限定transportを拒否する。
 
 scored solver直前にはBigQuery通信、profiler、MPI debug、`checkMesh`、大容量hashを実行しない。
-同一rank wrapperのplacement probeはOpenFOAM timer開始前に一度だけ取得し、probeあり/なしの
-反復A/Bで影響がnoise floorより十分小さいことを確認する。影響が大きければplacementは別audit
-runで測る。
+同一runに必須なのはrank、hostname、local rank、affinityとenvironment deltaの最小recordだけで、
+rankはnode-local collectorへ送り、collectorがnodeごと一つのshared durable sidecarへfsyncしてから
+ACKする。full topology dumpやverbose diagnosticsはaudit modeへ分ける。最小probeも
+probeあり/なしの反復A/Bで事前閾値を超えるなら、そのrunはofficial-validでもcomparison-ineligible
+とし、別audit runのplacementを元runへ移植しない。
 
 ## BigQuery viewとスプレッドシート
 
@@ -345,18 +434,35 @@ viewだけを見る。
 build/mesh/placement、official validity、comparison eligibility、FVOPS、stage時間、反復数、
 median、MAD、CV、baseline ratioを固定列で表示する。full env差分は別tabにする。
 
+## 決定状態
+
+| 状態 | 決定 |
+|---|---|
+| 確定 | raw relationは`run/key/value`の三列、compound valueはcanonical JSON |
+| 確定 | 定義した各process scopeの環境変数は機密値を含めfilterせずbyte-exactに全件保存 |
+| 確定 | native object/structured sourceを優先し、log regexはfixture付きの最終手段 |
+| 確定 | compute側はlocal WALだけ、archive/verify/publish/replayはrunner側 |
+| 確定 | complete recordのsubsetであるfirst/last/count/average等をrawへ重複保存しない |
+| 未決定 | score runへ許すinstrumentation overheadの統計的上限 |
+| 未決定 | durable archiveの最終保存先、retention期間、quarantineの容量上限 |
+
 ## 実装順序
 
-1. 現行key、producer、consumer、artifact保存先をinventory化し、key registryと
-   `run.metrics_contract`を作る。
+1. 現行key、producer、consumer、artifact保存先をinventory化し、key registry、expected producer
+   graph、`run.metrics_contract`を作る。contractなしはlegacy、run内のproducer contract混在はinvalid、
+   v2 viewはexact contractだけを読む。
 2. clean checkout、remote到達性、build sidecar manifest、manual provenance gateを作る。
-3. BigQuery credentialをrunnerだけへ移したうえで、現行metric集合のままJSONL WAL、node
-   merge、runner replay、archive/reconcilerを導入する。
-4. `raw_distinct`、conflict、completeness、v2 comparison viewを旧collectorと並行して作る。
-5. motorBike用collectorをcavity3Dのcomplete solver record、mesh、provenanceへ置換する。
-6. 公式parserとのgolden parityと1 node baselineを確認する。
-7. 2/4 node lane、同一rank wrapperのplacement、Pstream/partition auditを追加し、各laneで
-   比較適格性を検証する。
+3. BigQuery credentialをrunnerだけへ移したうえで、現行metric集合のまま`Fact`、`Recorder`、
+   JSONL WAL、runner merge/publish、archive/reconcilerを導入する。
+4. `raw_distinct`、conflict、completeness、exact-contract v2 comparison viewを旧collectorと
+   並行して作る。
+5. cavity3Dのcomplete solver record、mesh、provenanceをlegacy collectorと並行追加する。意味が
+   変わる既存keyをv2で再利用しない。
+6. canonical official evaluatorを作り、旧shell validityと全baseline golden logを照合する。
+7. 1/2/4 node lane、同一rank wrapper sidecar、二段階Pstream/partition auditを追加し、最終
+   instrumentationを含む全laneでbaselineと比較適格性を再検証する。各laneでunmodified buildと
+   hook-only buildを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
+   lexeme一致を数値同等性ゲートにする。
 8. Connected Sheetsをv2 viewへ切り替え、旧key consumerがなくなってから派生・部分集合keyの
    新規生成を止める。
 9. retention期間後もarchive済みJSONLだけから空tableへ完全replayできることを確認して旧viewを
@@ -379,6 +485,8 @@ median、MAD、CV、baseline ratioを固定列で表示する。full env差分�
 - ExecutionTime、ClockTime、launcher wallの異なるscopeが保存される。
 - 1/2/4 laneでrequested、allocated、solver Hosts、placementが一致する。
 - direct/profileやplacement probeの計測影響が事前閾値内、またはscore runから分離される。
+- unmodified buildとhook-only buildの同一条件でpressure solve軌跡と公式markersが一致し、数値結果を
+  hookが変えていない。
 - 同一protocolの反復が実行順とblockを含め復元でき、全点、median、MADがSheetに表示される。
 - treatment値を含む同一条件だけが同じreplicate groupへ入り、宣言したtreatment差だけが同じ
   comparison set内で許される。
