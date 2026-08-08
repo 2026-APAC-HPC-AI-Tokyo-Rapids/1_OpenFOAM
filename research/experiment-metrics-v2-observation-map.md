@@ -40,24 +40,26 @@ subsetなのでraw keyを作らない。
 Actions runner
   create and fsync run-manifest.json
   verify clean/reachable Git state and build sidecar
+  fsync submission intent containing exact pjsub argv and searchable run nonce
   submit PJM without BigQuery credentials
-  fsync immutable run-to-PJM submission binding
+  after a definite response or nonce recovery, fsync immutable binding/outcome
 
 PJM supervisor
   snapshot job-entry environment
+  seal run ID and PJM_JOBID in job-entry-receipt without waiting for binding
   record requested scheduler shape and actual outer argv
   start one node-local rank-record collector per allocated node
   run preparation stages
   launch same-rank wrapper -> OpenFOAM
 
 same-rank wrapper (each rank)
-  send placement/environment delta to the node-local collector and await durable ACK
-  exec solver without an extra MPI launch
+  send placement/environment delta to the node-local collector and await startup durable ACK
+  inherit the collector IPC FD and exec solver without an extra MPI launch
 
 OpenFOAM shared startup hook
-  emit startup-applied state after UPstream initialization
-  emit runtime-current state after Time/controlDict resolution, before the time loop
-  emit only actual runtime control changes thereafter
+  send startup-applied state after UPstream initialization and await bounded durable ACK
+  send runtime-current state after Time/controlDict resolution and await bounded durable ACK
+  send only actual runtime control changes thereafter; observation failure never changes solver exit/numerics
 
 allocation-local post-run auditor
   inspect mesh/partition only after the scored solver
@@ -80,9 +82,9 @@ completeness reasonで説明する。
 | fact family | authoritative source | producer / capture moment | raw keyまたはartifact | validation | 欠損時の扱い |
 |---|---|---|---|---|---|
 | run identity | runnerが一度生成してfsyncした`run-manifest.json` | `runner.manifest` / provision前 | raw tableの`run`列、manifest artifact | repository、Actions run/attempt、submissionごとの128-bit nonceと全fragmentのrun一致。PJM job IDを含めない | manifestなしでは投入しない |
-| metrics contract | Git管理registry/schema version | `runner.manifest` / provision前 | `run.metrics_contract` | registry/view compatibility | comparison不適格 |
-| scheduler binding | `pjsub`の成功応答とPJM job ID | `runner.submission` / submit直後 | `scheduler.job_id`、immutable submission-binding artifact | run ID、submit response、job entryの`PJM_JOBID`一致 | jobを追跡不能として停止 |
-| producer lifecycle | supervisorのcollector/child境界 | `pjm.supervisor`または`StageRunner` / 呼出し前とreturn後、`Recorder`が永続化 | 独立`lifecycle/<producer>.jsonl`のstarted/final | complete line salvage、末尾partial破棄、data fragmentと別owner | startedのみを中断、journalなしを未到達 |
+| metrics contract | Git管理`openfoam-v2.toml`とlaneが選んだexpected producer graph | `runner.manifest` / provision前 | `run.metrics_contract`、contract/protocol artifact | contract ID/content hash、exact producer version、view compatibility、mixed contract禁止 | comparison不適格 |
+| scheduler binding | pre-submit intent、`pjsub`応答またはnonce検索、PJM側の独立job-entry receipt | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後 | `scheduler.job_id`、submission intent/result/binding、`control/job-entry-receipt.json` artifact | jobはbindingを待たない。曖昧応答をblind retryせず検索し、terminal後finalizerがrun ID、submit response、entry receiptの`PJM_JOBID`一致を要求 | reject/unknownを別receipt化。片方欠損または不一致はartifactを保全して`invalid-quarantine` |
+| producer lifecycle | supervisorのcollector/child境界 | `pjm.supervisor`または`StageRunner` / 呼出し前とreturn後、`LifecycleJournal`が永続化 | 独立`lifecycle/<producer>.jsonl`のstarted/final | complete line salvage、末尾partial破棄、data fragmentと別owner | startedのみを中断、journalなしを未到達 |
 | protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | `experiment.block_id`、`block_order`、`replicate_index` | protocol commit、予定attempt、laneへのmembership | comparison不適格、推測しない |
 | experiment source | checkout済み`1_OpenFOAM`の`git rev-parse HEAD`とclean/reachability check | `runner.manifest` / provision前 | repository/full commit | dirty tree拒否、remote到達または耐久bundleを要求 | jobを投入しない |
 | OpenFOAM/ThirdParty source | checkout直後、`.git`削除前の各`git rev-parse HEAD` | `build.finalizer` / build開始前 | build sidecar、比較用source commit索引 | moving branch名でなくfull commit。archive後にsidecarをcommit markerとしてrename | build artifactを公開しない |
@@ -100,16 +102,16 @@ completeness reasonで説明する。
 | requested partition | 実際に使用したgenerated `decomposeParDict` | `pjm.supervisor` / decomposePar直前 | `mesh.partition.requested`、dict artifact | argvが指すfileとartifact identity一致 | preparation failure |
 | observed partition | serial mesh/order、processor addressing、decompose/check output | `postrun.auditor` / solver終了後 | `mesh.partition.observed` | rank/local-index順保持、global cell一回、signed face addressing、expected subdomain集合 | partition incomplete |
 | runtime header | OpenFOAM startupが出すBuild/Arch/Exec/nProcs/Hosts | `runner.log_parser` / PJM terminal後、保存logがあれば | `solver.runtime_header` | `argList.C` symbol/format golden、host sum=nProcs。Exec stringをargvへ逆変換しない | configuration incomplete |
-| Pstream startup-applied | `UPstream::init()`、node comm state、`attachOurBuffers()`後の実buffer | `openfoam.startup` / attach完了後、各rank | `solver.pstream.startup_applied.rank.<rank>` | configured/clamped/attached byte、node control、expected全rank。banner非依存 | expected structured event missing |
-| Pstream runtime-current | `Time::setControls()`でcase override済みの登録switch | `openfoam.runtime_config` / `Time`構築後time loop前、各rank | `solver.pstream.runtime_current.rank.<rank>` | floatTransfer、node controls、usingNodeComms等をsymbol対応、false/0明示、expected全rank | expected structured event missing |
-| Pstream runtime changes | `Time::readModifiedObjects()`からの実control変更 | `openfoam.runtime_config`がrank別event logへappend、`runner.pstream_parser`がterminal後に一度reduce | `solver.pstream.change_events.rank.<rank>` ordered array | expected全rankへ常に出力、`[]`=観測済み0件、complete-line/event count/sequence/old/new一致 | key不在またはevent不整合ならconfiguration incomplete |
+| Pstream startup-applied | `UPstream::init()`、node comm state、`attachOurBuffers()`後の実buffer | `openfoam.startup` -> node collector journal、`runner.pstream_parser` / attach完了後emit、terminal後reduce | `solver.pstream.startup_applied.rank.<rank>` | configured/clamped/attached byte、node control、expected全rank、bounded durable ACK。banner非依存 | expected structured event missing |
+| Pstream runtime-current | `Time::setControls()`でcase override済みの登録switch | `openfoam.runtime_config` -> node collector journal、`runner.pstream_parser` / time loop前emit、terminal後reduce | `solver.pstream.runtime_current.rank.<rank>` | floatTransfer、node controls、usingNodeComms等をsymbol対応、false/0明示、expected全rank、bounded durable ACK | expected structured event missing |
+| Pstream runtime changes | `Time::readModifiedObjects()`からの実control変更 | `openfoam.runtime_config` -> node collector rank journal、`runner.pstream_parser`がterminal後に一度reduce | `solver.pstream.change_events.rank.<rank>` ordered array | expected全rankへ常に出力、startup/runtime sentinelが揃いchange 0件だけ`[]`、complete-line/event count/sequence/old/new一致 | key不在またはevent不整合ならconfiguration incomplete |
 | time-step timing | 保存済みsolver logの`Time =`と同一stepの`ExecutionTime = ... ClockTime = ...` | `runner.log_parser` / PJM terminal後 | `solver.step_timings` | 原lexemeとnullable numeric、全match順序。単調性/有限性はcomparison evaluator | 得られたcomplete recordだけ保存しofficial/comparison理由を分離 |
 | pressure solves | 保存済みsolver logの各`Solving for p` record | `runner.log_parser` / PJM terminal後 | `solver.pressure_solves` | initial/final residual/iterationsを同じrecordに保持、match数と公式期待数を照合 | 部分配列を保存しinvalid reasonを出す |
 | official markers | complete solver logとcanonical official evaluator | `runner.log_parser` / PJM terminal後 | `solver.log_markers`、official validityはview | shell validity semanticsのgolden parity後、固定locale/decimal evaluatorを共有 | parse failureとofficial invalidとscore算出不能を区別 |
 | primary score inputs | `solver.step_timings`の先頭/末尾ExecutionTimeと公式固定定数 | BigQuery view / query時 | rawへscoreを重複保存しない | fixed decimal/roundingのcanonical evaluatorと`64,000,000 * 4 / trim`をgolden照合 | source record不足ならNULLと理由 |
-| artifact identity | localでsealしたrun bundleとdeterministic archive URI | `runner.finalizer` / final merge前 | artifact URI、bundle hash、manifest identity | bundle対象を固定してhashし、metrics sidecar自身を含めない | bundleをsealせずquarantine |
+| artifact identity | localでsealしたrun bundleとdeterministic archive URI | `runner.finalizer` / final merge前 | artifact URI、bundle hash、manifest identity | bundle対象を固定してhashし、metrics sidecar自身を含めない | bundleをsealできなければ`archive-retry-pending` |
 | audit subject binding | 元runのimmutable mesh/build artifact manifestとcontent identity | `runner.audit_manifest` / 別audit job投入前 | audit runの`audit.subject_artifact_identity` | remote hashを再検証し、registryでtransfer可としたartifact-derived familyだけjoin | 欠損時はstandalone auditで元runへjoinしない |
-| delivery receipt | remote PUT/checksum verify、BigQuery publish response | `ArtifactStore`/`Publisher` / run WAL seal後 | run WAL外のappend-only delivery ledger/outer manifest | run/bundle hash/attempt一致、replay冪等 | retry pending。run WALへ書き戻さない |
+| delivery receipt | remote PUT/checksum verify、BigQuery publish response | `ArtifactStore`/`Publisher` / run WAL seal後 | run WAL外かつrunner workspace外のdurable append-only delivery store/outer manifest | run/bundle hash/attempt一致、put-if-absent、replay冪等 | retry pending。run WALへ書き戻さない |
 
 ## OpenFOAM内hookの位置
 
@@ -146,7 +148,7 @@ symbolとfull commitをregistry source欄へ固定し、line番号だけを契�
 | `scripts/build-openfoam.sh` | moving branchをcheckoutしcommit記録前に`.git`を削除する | resolved commitsを先にsidecarへfsyncし、artifactとatomic publish |
 | `scripts/run-openfoam.pjm`の`run-start` | 記録argvと実際のprofiler-wrapper付きargvが違う | `StageRunner`のspawn地点のargv配列を唯一のlaunch sourceにする |
 | 同PJM scriptのsolver non-zero分岐 | official parser前にexitし失敗runの原始結果を失う | `finally`相当でcomplete log parserを常に実行 |
-| 同PJM scriptのcleanup | archive検証前にcaseを削除する | runnerのremote verify後だけ削除、失敗時quarantine |
+| 同PJM scriptのcleanup | archive検証前にcaseを削除する | runnerのremote verify後だけ削除、失敗時`archive-retry-pending` |
 | 現行case/result/mesh collector | motorBike前提や未呼出し経路が混在し、compute timeoutではparserが走らない | runner/reconcilerのcavity3D pure log parserとallocation-local mesh auditorへ分離 |
 | `tasks/parse_result.sh` | 現公式semanticsの正本だがshell parse/丸めが暗黙でcomplete recordではない | v2 canonical evaluatorとgolden parity後、その薄いCLIへ置換 |
 

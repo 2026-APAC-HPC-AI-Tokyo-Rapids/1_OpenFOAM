@@ -80,6 +80,8 @@ repository、Actions run ID、attemptと各submissionで必須の128-bit random 
 OS CSPRNGの16 byteを32文字のlowercase hexで表す。manual経路では
 clusterを含むUUIDをjob投入前に生成する。`pjsub`返却後にしか分からないPJM job IDはrun IDへ
 含めず、immutableなsubmission bindingと`scheduler.job_id`で結ぶ。初期run manifestを書き換えない。
+run IDはUTF-8で`^[a-z0-9][a-z0-9._-]{0,199}$`を満たすよう生成し、同じ値を安全なruntime path
+componentとして使う。任意のrepository名やuser入力を未escapeで連結しない。
 raw relationは次のfunctional dependencyを満たす。
 
 ```text
@@ -174,7 +176,7 @@ compute producer
 - BigQuery `insertId`はbest-effortの補助にすぎない。logical viewが完全一致rowをdeduplicate
   し、異値競合を隔離する。
 - replayは常に同じrowを全件送ってよい。送信成功後もJSONLをtruncateしない。
-- archive/upload失敗時はruntimeをquarantineし、後続reconcilerが回収する。
+- archive/upload失敗時はruntimeを`archive-retry-pending`とし、後続reconcilerが回収する。
 - publish失敗時は検証済みarchiveをreplay pendingにし、raw JSONLから再送する。
 - remote checksumとmanifest確認前に唯一のlocal copyやGitHub artifactを削除しない。
 
@@ -193,8 +195,9 @@ sidecar内のmetricにはしない。
 
 1. domain probe/parserは`Fact(key, logical_value)`だけを返すpure functionとする。run ID、文字列化、
    filesystem、BigQueryを知らない。
-2. `Recorder`だけがpersist済みrun manifest、registry、canonical encoder、fact/lifecycleの
-   append/fsync、data fragmentのatomic completionを所有する。producerはこの一つの出力境界だけを見る。
+2. `journal.py`の`Recorder`と`LifecycleJournal`だけがpersist済みrun manifest、registry、canonical
+   encoder、fact/lifecycleのappend/fsync、data fragmentのatomic completionを所有する。probeは
+   `Recorder`、その外側のsupervisorは`LifecycleJournal`だけを見る。
 3. `StageRunner`だけがspawnするactual argv、monotonic timer、signal、child wait statusを所有し、
    観測したfactを`Recorder`へ渡す。
 4. runner側`merge`がexpected producer、run ID、owner、一意性、required key、fragment完了を検証し、
@@ -202,20 +205,22 @@ sidecar内のmetricにはしない。
 5. `ArtifactStore/RunFinalizer`がrun bundle/outer manifestのfsync、seal、put/remote verify、quarantine、reconcileを
    所有する。delivery receiptはrun WALへ戻さず外側のdelivery ledgerへappendする。
 6. runner側`publish`だけがBigQuery credential、retry、replayを所有する。collector、solver、PJM
-   processはnetwork送信をしない。
+   processはBigQuery、artifact upload、HTTP/cloud client等の外部メトリクス送達networkを使わない。
+   solver本来のMPI communicationとnode-local observation IPCはこの禁止対象ではない。
 
 OpenFOAM本体へ必要なhookは、version付きlocal structured eventを定義済み境界でだけ書く薄いadapterとする。
 metrics packageやBigQuery clientをlinkせず、送達、再試行、key展開を知らない。実装上は
-`domain.py`、`journal.py`、`stage_runner.py`、`merge.py`、`artifact_store.py`、`publish.py`とdomain別
+`domain.py`、`journal.py`、`submission.py`、`stage_runner.py`、`merge.py`、`artifact_store.py`、`publish.py`とdomain別
 probe/parserを深いmodule境界にし、CLIはそのcomposition rootに限定する。
 
 OpenFOAM用とQwen用を直ちに第三の共通packageへ統合しない。まず同じcontractとconformance
 fixtureを両repositoryで満たし、interfaceが安定してから、canonical encoder、registry validator、
 merge validatorだけを抽出する。domain collectorやpipeline固有の失敗処理は共通化しない。
 
-各factの権威source、producer、取得時点、raw key/artifact、validation、欠損時の扱いは
-[観測マップ](./experiment-metrics-v2-observation-map.md)を正本とする。sourceと取得時点をそこへ
-特定できない候補はkey registryへ追加しない。
+実装開始前の設計正本として、各factの権威source、producer、取得時点、raw key/artifact、validation、
+欠損時の扱いは[観測マップ](./experiment-metrics-v2-observation-map.md)に置く。最初の実装sliceでこれらを
+一つの機械可読contractへ移し、以後は観測マップの表をcontractから生成する。sourceと取得時点を
+contractへ特定できない候補は追加しない。
 
 ## 環境snapshot
 
@@ -445,6 +450,298 @@ median、MAD、CV、baseline ratioを固定列で表示する。full env差分�
 | 確定 | complete recordのsubsetであるfirst/last/count/average等をrawへ重複保存しない |
 | 未決定 | score runへ許すinstrumentation overheadの統計的上限 |
 | 未決定 | durable archiveの最終保存先、retention期間、quarantineの容量上限 |
+
+## 実装ハンドオフ
+
+### 公開面とfile境界
+
+実装者が新しい抽象を増やさないよう、package内部の依存方向を次に固定する。
+
+```text
+OpenFOAM hook -> version付きsource record -> durable rank journal
+                                             -> pure reducer ----\
+I/O probe ------> structured source value ---> pure parser ------+-> Fact -> Recorder
+StageRunner -----------------------------------------------------/
+
+runner: merge -> ArtifactStore/RunFinalizer -> publish
+```
+
+hookはmetric keyや`Fact`を知らず、`run/rank/sequence/kind/version`を持つsource recordだけを書く。
+startup/runtime各recordをrank観測のsentinelとし、両方が揃ってchange recordが0件の時だけreducerが
+change array `[]`を作る。journal自体がない時は`[]`を作らない。
+
+公開するdomain型はimmutableな`Fact`と`Termination`だけにする。`Fact`はrun ID、owner、encoded
+stringを持たず、`Termination`は`exit`、`signal`、`spawn_error`をunionとして表す。最低限のcall
+surfaceは次で足りる。
+
+```python
+Fact(key: str, logical_value: LogicalValue)
+init_run(protocol_path, contract_path, runtime_root, identity) -> ManifestPath
+Recorder.open(manifest_path, registry_path, producer_id, runtime_dir)
+Recorder.append_many(facts)
+Recorder.seal()
+LifecycleJournal.open(manifest_path, producer_id, runtime_dir)
+LifecycleJournal.append_started()
+LifecycleJournal.append_final(status, error_count)
+collect_once(manifest_path, runtime_dir, producer_id, probe) -> CollectorOutcome
+submit_run(manifest_path, runtime_dir, lane_adapter, pjsub_argv) -> SubmissionOutcome
+run_stage(stage_name, argv, *, cwd, stderr_mode, recorder, lifecycle) -> Termination
+finalize_run(manifest_path, runtime_dir, archive_target) -> ArchiveReceipt
+publish_run(archive_receipt_path, destination) -> PublishReceipt
+reconcile_run(manifest_path, runtime_dir, archive_target, delivery_store) -> ReconcileOutcome
+```
+
+`Recorder.open`はpersist済みmanifestとregistryをread-onlyで検証し、runを生成・推測しない。
+`LogicalValue`はstring、bytes、bool、int、finite float、Decimal、UTC timestamp、またはJSON treeに
+限定する。top-level `None`は禁止し、bytes/Decimal/timestampとcompound JSONのencodingはregistryの
+logical typeが決める。
+`append_many`だけがlogical valueをcanonical stringへ変換し、一行ずつ`run/key/value`へfsyncする。
+`seal`だけがdata fragmentをatomic renameして親directoryもfsyncする。`LifecycleJournal`はcanonical
+append/fsyncだけを行い、semantic ownerはprobe外側のsupervisorまたは`StageRunner`である。data
+fragmentのappend/sealが失敗しても`append_final`を試せる構造にし、lifecycleはsealを待たず回収する。
+registry loading、canonical encoding、manifest validationは
+`journal.py`のprivate collaboratorとし、それぞれを薄いpublic moduleへ分割しない。
+
+`stderr_mode`は`separate`または`stdout`のclosed enumとし、solverは現行公式logとのparityを保つため
+`stdout`へcombined logを作る。log pathはstage nameとruntimeから内部導出し、signalはchild process
+groupへforwardしてraw wait statusを保存する。`finalize_run`は唯一のrunner orchestratorであり、
+privateなpre-bundle merge、bundle作成/検証、finalizer fact、final merge、metrics sidecar検証を順に
+行う。別のpublic `merge_run`と二重にorchestrationしない。
+
+`ArchiveReceipt`はmemory上だけの値ではなく`receipts/archive-verified.json`へsealする。最低限
+`schema/run/contract/bundle URI/hash/size/metrics URI/hash/size/target/attempt/started_at/finished_at/outcome/error`を持つ。`PublishReceipt`は
+`schema/run/contract/metrics hash/destination/attempt/outcome/response digest`、内部`MergeReport`は
+`schema/run/contract/input manifest hash/row counts/conflicts/completeness/output hash`を持ち、いずれも
+process再起動後にfileから再構成できる。
+
+`init_run`と`collect_once`は`journal.py`、`submit_run`は`submission.py`、`run_stage`は
+`stage_runner.py`、`finalize_run`と`reconcile_run`は`artifact_store.py`、`publish_run`は`publish.py`が
+所有する。`cli.py`はargument parseとhandler dispatchだけを行い、manifest生成、scheduler subprocess、
+probe lifecycle、quarantine探索を実装しない。
+
+use-case outcomeもclosed schemaにする。`CollectorOutcome`は`status/error_count/fragment_path/complete`、
+`SubmissionOutcome`は`bound|failed|unknown|recovered`、receipt path、nullable job ID、`ReconcileOutcome`はreason class、
+input receipt、実行action、output receiptを持つ。これらはraw metricではなく、対応するimmutable evidenceを
+指すcontrol-plane return valueである。
+
+現行fileからの移行先は次の通りとする。
+
+| 現行 | 移行後の責務 |
+|---|---|
+| `model.py` | `domain.py`の`Fact`へ置換。`None`/非有限値を空文字へ変える処理を廃止 |
+| `context.py` | run生成を廃止し、`journal.py`経由でimmutable manifestを読むだけにする |
+| `sender.py`、`credentials.py` | compute packageのcall pathから外し、runner-only `publish.py`へ移す |
+| `cli.py` | 下記use caseを配線するcomposition rootだけにする |
+| `collectors/`、`readers/` | I/O probeとpure parserを分け、どちらも最後は`Fact`列を返す |
+| `command.py`と現行`_stage` | `stage_runner.py`へ集約し、exact argv、同一clock、raw wait statusを一度だけ所有 |
+| `prepare.py`、assets、`prepare-case` | canary中はlegacy互換として凍結。v2 cutover時にcase preparation scriptへ移しmetrics packageから外す |
+| `scripts/run-openfoam.pjm` | manifest/runtime pathを明示してcompute collectorとstageだけを呼ぶ |
+| `.github/workflows/genkai.yml` | pre-submit manifest、submission binding、terminal後finalize/archive/publishを所有 |
+
+実装fileは計画済みの`domain.py`、`journal.py`、`submission.py`、`stage_runner.py`、`merge.py`、
+`artifact_store.py`、`publish.py`とdomain別probe/parserに限定する。`manager`、`service`、汎用event
+bus、DI frameworkは追加しない。`submission.py`はintent、scheduler adapter、曖昧結果照合を隠す一つの
+深いmoduleであり、collectorやpublisherをimportしない。OpenFOAM固有adapterとしてだけ`rank_wrapper.py`と
+`node_collector.py`を許可する。PJM supervisorはallocated nodeごとにcollectorを一つ起動し、same-rank
+wrapperは第一段階で検証済みglobal/local rank、local size、placement、env deltaだけをnode-local IPCへ
+送る。collectorはshared runtimeのplacement fragmentをfsync、rename、親directory fsyncした後だけstartup
+ACKする。ACKはbounded timeoutとし、expected collector ready/ACKがない時はsolverを開始せず
+configuration failureにする。
+
+wrapperはstartup ACK後、collector IPC FDを継承させてsolverを`exec`する。第二段階ではOpenFOAM hookが
+startup/runtime/change source recordを同じFDへ送り、collectorだけが
+`domain/pstream/rank-<rank>.jsonl`へcomplete lineをappend/fsyncしてdurable ACKを返す。hookはboundedにACKを
+待つが、write/ACK失敗を数値pathやsolver exit codeへ伝播させず、runをconfiguration incompleteにする。
+collectorはsolver process group終了とIPC drainまで存続してからjournalをsealする。timing影響はG8で
+判定する。
+
+機械可読正本は`experiment-metrics/contracts/openfoam-v2.toml`一fileにする。contract ID、producer
+定義、key pattern、owner、logical type、unit、cardinality、source、scope、capture、required、
+missing、validation、正当な重複のjustificationを同じentryに置く。lane/protocolはこのcontractに
+定義済みのproducer IDからexpected graphを選ぶ。runtime manifestにはcontract IDとcontent hashを
+sealし、raw tableにはroutingに必要なcontract IDだけを索引化する。観測マップの表はこのTOMLから
+生成し、手書きproseだけを別に保つ。したがってregistryとMarkdown表の二つを正本にしない。
+
+### CLIと設定境界
+
+CLIは次の七orchestration use caseだけを持つ。behaviorを環境変数で切り替えず、manifest、runtime、archiveは
+明示引数、比較条件はGit管理protocol、BigQuery宛先はrunner側のGit管理設定から読む。
+
+```text
+init-run       runnerがnonce、protocol、expected producerをrun-manifest.jsonへseal
+submit         intentをsealしてexact pjsub argvを実行し、result/bindingを耐久化
+collect        compute producerを一度実行しlifecycle/data fragmentへ記録
+stage          target argvをspawnしterminationと時間を記録
+finalize       terminal後にdurable sourceを回収/reduceし、merge、archive、remote verifyまで実行
+publish        verify済みarchiveのmetrics sidecarだけをBigQueryへ送達
+reconcile      invalid監査、archive-retry、replay-pendingをreason別に冪等処理
+```
+
+`init-run`以外は`--manifest`を必須にし、`EXPERIMENT_METRICS_RUN`、PID、PJM IDからrunを再構成しない。
+`collect`と`stage`はBigQuery設定やcredentialをimportしない。`finalize`と`publish`を分けることで、
+送信障害を理由にcomputeやarchiveを再実行しない。
+
+`submit`は`pjsub`前にexact argvとrun nonceを`submission-intent.json`へfsyncし、stdout/stderrを耐久fileへ
+直接redirectする。nonceはlane adapterが保証するscheduler検索可能なjob name/comment/request fieldにも
+入れる。明示rejectは`submission-failed.json`、成功はresultとbindingをsealする。応答を確定できない
+crashではblind retryせず、nonceでscheduler/accountingを検索する。exact 1 jobだけをbinding化し、0件で
+検索完了または複数件、検索不能なら`submission-unknown.json`をsealして人手確認まで停止する。後に
+exact 1 jobへ解決した場合もunknownを消さず、`submission-recovery.json`とbindingを追加sealする。この
+検索fieldと照合commandを提供できないlaneはunattended v2 submitをreleaseしない。
+
+`node-collector`と`rank-wrapper`は上記七use caseへ数えないOpenFOAM固有internal entrypointである。
+`scripts/run-openfoam.pjm`とsolver argvだけが呼び、一般利用者向け設定面にはしない。allocationのnode、
+affinity、mesh/hardware auditはPJM scriptが終了する前に耐久化する。runnerの`finalize`はallocationへ
+再接続してcollectorを再実行せず、terminal accountingと既存log/journal/artifactのpure parser/reducer
+だけを実行する。
+
+### runtimeとarchive layout
+
+一runのruntimeは次の固定layoutにする。任意file探索や「最後に見つかったJSON」を禁止する。
+
+```text
+<runtime>/<run>/
+  control/run-manifest.json                 # pre-submit immutable
+  control/contract.toml                     # 実使用contractのimmutable copy
+  control/protocol.toml                     # 実使用protocol/laneのimmutable copy
+  control/submission-intent.json
+  control/submission.stdout
+  control/submission.stderr
+  control/submission-result.json            # raw subprocess outcome when available
+  control/submission-failed.json            # explicit rejectionの場合だけ
+  control/submission-unknown.json           # ambiguous outcomeの場合だけ
+  control/submission-recovery.json          # ambiguous outcomeを後で解決した場合だけ
+  control/submission-binding.json           # post-submit immutable
+  control/job-entry-receipt.json            # PJM側がbindingを待たずにseal
+  metrics/lifecycle/<producer>.jsonl         # partial末尾も回収
+  metrics/fragments/<producer>.partial       # append中
+  metrics/fragments/<producer>.jsonl         # seal済みrename先
+  metrics/fragments/runner-finalizer.partial
+  metrics/fragments/runner-finalizer.jsonl
+  domain/pstream/rank-<rank>.jsonl
+  source/placement/node-<node>.jsonl
+  logs/<stage>.stdout
+  logs/<stage>.stderr
+  receipts/scheduler-terminal.json
+  receipts/archive-verified.json
+  merge/metrics.pre-finalizer.jsonl
+  merge/pre-bundle-report.json
+  merge/metrics.jsonl
+  archive-staging/bundle.tar.zst
+  archive-staging/bundle.outer.json
+  archive-staging/metrics.outer.json
+```
+
+archiveは次の四objectを同じrun prefixへ置く。
+
+```text
+bundle.tar.zst       # 下記exact allowlistの事故証拠とsource
+bundle.outer.json    # bundleのhash、size、manifest identity
+metrics.jsonl        # bundle identityを含む最終raw sidecar
+metrics.outer.json   # metrics sidecarのhash、size、contract
+```
+
+`bundle.outer.json`はbundle外、`metrics.outer.json`はmetrics外に置くため自己参照しない。remoteで
+四objectの存在、hash、sizeを再読取検証して初めてarchive済みとする。
+
+bundle memberはmanifest駆動のexact allowlistとし、`control/`のmanifest、contract、protocol、submission
+intent、raw stdout/stderr、実在するresult/failed/unknown/recovery outcome、binding、job-entry receipt、
+pre-bundle expected producerの`metrics/lifecycle/`、sealedおよびpartial producer fragment、
+`domain/`、`source/`、`logs/`、scheduler-terminal receipt、`merge/pre-bundle-report.json`、自己を除く
+member path/hash/sizeを持つ`bundle.manifest.json`を含める。最終`metrics.jsonl`、outer manifest、
+archive/delivery receipt、`runner-finalizer` fragment/lifecycle、一時`metrics.pre-finalizer.jsonl`は含めない。
+producer fragmentとはpre-bundle mergeが消費したcompute/runner source fragmentの固定集合を指す。
+これによりcleanup後もrun identity、
+expected graph、partial failure、replay根拠を失わず、finalizer factとのhash cycleも作らない。
+
+runner finalizerはcollector lifecycle keyを作らず、そのstarted/outcome/errorは外側の
+`archive-verified`または`archive-retry-pending` receiptだけを正本にする。これによりbundle seal後に
+bundle memberが増えない。
+
+`bundle.tar.zst`はpathをbyte順に並べ、tar headerのuid/gid/owner/mtime/modeとzstd parameterを固定して
+決定的に作る。保存が必要な元metadataはbundle manifestの値として記録する。同じ入力集合のretryが
+同じbundle byte/hashになることをfixtureで保証し、compressor versionもouter manifestへ残す。
+最終`metrics.jsonl`は完全一致rowを一件へし、異値conflictは全rowを残したまま`(run,key,value)`の
+UTF-8 byte順にsortする。各lineはobject member順`run`,`key`,`value`、空白なし、UTF-8、LF終端へ固定する。
+
+localのmanifest、report、outer、receiptはすべて同directoryの`.partial`へwrite/fsyncし、no-replace
+rename後に親directoryをfsyncする。remote四objectは`put-if-absent`とし、既存objectはremote bytes/hash/
+sizeがexact一致する時だけ成功扱いにする。異値objectをoverwriteせずcollision quarantineへ送る。
+
+BigQuery attemptはrun archiveとは別namespaceのdurable append-only delivery storeへ
+`archive-verified`、`publish-attempt`、`succeeded`、`replay-pending`をimmutable receiptとして保存する。
+local `archive-verified.json`はこのreceiptのstaging copyであり、durable copyの確認前にcleanupしない。
+runner workspaceはstagingにすぎず正本にしない。invalid inputは`invalid-quarantine`、通信・archive障害は
+`archive-retry-pending`に分け、reason classをreceiptへ持たせる。durable delivery/quarantine backend、
+retention、容量上限が確定していない間はproduction cutoverのrelease blockerとし、そこへ退避できない
+runのruntimeをcleanupしたりworkflowを成功扱いしたりしない。
+
+### 状態と失敗規則
+
+`pjsub`成功応答とjob開始には順序保証がない。PJM supervisorはsubmission bindingを待たず、entry直後に
+manifest run IDと自身の`PJM_JOBID`を`job-entry-receipt.json`へO_EXCL相当でsealしてcomputeを続ける。
+runnerは`pjsub`返却後または曖昧応答の照合後にbindingをsealし、terminal後のmergeが両receiptの
+run/job IDを照合する。bindingをjob entryの前提条件にしない。
+
+mutableな`status.json`は作らず、次のimmutable evidence DAGから状態を導出する。
+
+```text
+run-manifest -> submission-intent -> submit outcome -> submission-binding
+                         |                    \-> failed/unknown -> optional recovery/binding
+                         +-> job-entry -> compute lifecycle/source/fragments ---\
+submission-binding -> scheduler-terminal ---------------------+-> post-terminal reducers
+                                                              -> pre-bundle merge
+                                                              -> bundle verify
+                                                              -> finalizer fragment/final merge
+                                                              -> metrics verify/archive receipt
+                                                              -> durable delivery receipt
+```
+
+- lifecycle、metric `.partial`、Pstream/domain journalの各validatorはcomplete JSON lineのvalid prefixを
+  回収し、末尾の不完全lineだけを破棄する。partialからfactを回収してもfragment completenessはtrueに
+  戻さない。required key欠損、expected producer欠損は、回収できたvalid factを保持して
+  completeness reasonを付ける。空文字やzeroで補わない。
+- 同一run/keyの異値は両方を保持し、conflictとしてpublishしてcomparisonから隔離する。
+- foreign run、unknown key、owner違反、canonical encoding違反は入力をbundleへ保全するが、信頼できる
+  metrics sidecarを作らず`invalid-quarantine`へ送る。
+- process timeout、signal、spawn errorでもrunnerはscheduler terminal後にpost-run parserとfinalizeを
+  実行する。再実行は既存receiptを検証し、同じbyte列なら成功、異なれば競合として止める。
+- terminal後にもsubmission bindingとjob-entry receiptの片方が欠ける、またはjob IDが異なるrunは、
+  compute結果をbundleへ保全するがpublishせずtracking failureとして`invalid-quarantine`へ送る。
+- cleanupはverified archive receiptの後だけ許し、publish失敗は`replay-pending`であってcompute失敗に
+  戻さない。
+
+### gateを証明するtest
+
+| gate | 必須test/fixture | 証明すること |
+|---|---|---|
+| G0 依存境界 | `test_dependency_boundaries.py`、CLI subprocess import trace | domain/probe/journal/collect/stageのtransitive importにpublisher、credential、networkがない |
+| G1 値契約 | `test_domain.py`、RFC 8785/decimal/env byte fixture | 空、zero、欠損、非有限拒否、単射escape、canonical byte |
+| G2 submit/binding | `test_submission.py`、binding前job-entry/crash fixture | intent先行、曖昧成功でblind retryなし、0/1/複数job照合、entry/binding join |
+| G3 local durability | `test_journal.py`、全journalの各byte crash matrix | lifecycle/metric partial/Pstream valid prefix、seal/no-replace/directory fsyncの冪等性 |
+| G4 ownership/merge | `test_merge.py`、全producer graph fixture | owner一意性、exact dedupe、異値conflict、required欠損 |
+| G5 process観測 | `test_stage_runner.py` | actual argv/cwd、combined log、process-group signal forwarding、exit/signal/spawn error、monotonic境界 |
+| G6 archive/送達 | `test_artifact_store.py`、`test_publish.py`、各PUT/verify/BQ accept直後crash matrix | exact bundle allowlist、deterministic bundle、put-if-absent、receipt再開、remote verify前cleanup禁止、二重replay同値 |
+| G7 OpenFOAM意味 | `test_observation_contract.py`、baseline log/mesh/Pstream/rank ACK fixture | contract source/時点/owner、sentinel/`[]`、rank欠損、ACK timeout、PJM timeout salvage |
+| G8 非擾乱 | lane別hook on/off paired run | 数値同等性と、未決定のoverhead採用基準を同時に満たすこと |
+
+`test_observation_contract.py`はcontractのschemaとowner/source/capture/absenceの完全性を検査し、
+生成した観測マップ表がcommit済み表とbyte一致することを検査する。これが「この値はどこから取るか」
+を、一つの正本から人間向け表と実行時validationの双方へ機械的に保証する。
+
+### release単位
+
+移行はkeyごとに二重化せず、run contract単位で行う。
+
+1. legacyの出力、shell evaluator、baseline logをgolden fixtureとして凍結する。
+2. 専用canary protocolだけでpre-submit manifestとlocal WALを導入し、legacy runの送信経路は触らない。
+3. canaryでrunner finalize/archive/publish/reconcileとfault injectionを通す。
+4. OpenFOAM固有のnative probe、complete solver record、Pstream/placement sidecarをv2へ追加する。
+5. 全laneで意味・数値同等性・非擾乱gateを通してから、run単位でv2を既定にする。
+6. v2 viewとSheetを切り替え、legacy-only consumerがゼロになってから旧senderとsubset keyを削除する。
+
+rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入する。既存runのmanifestやrowを
+書き換えず、一run内でlegacy producerとv2 producerを混在させない。
 
 ## 実装順序
 
