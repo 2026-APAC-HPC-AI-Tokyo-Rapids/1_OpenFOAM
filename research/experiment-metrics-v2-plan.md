@@ -251,6 +251,9 @@ icoFoam rank process wallと呼ばない。結果を見て指標を
 - `experiment.block_id`
 - `experiment.block_order`
 - `experiment.replicate_index`
+- `experiment.pair_id`: 欠損・置換後もA/B対応を推測しないprotocol割当ID
+- `experiment.planned_replicate_group_id`: submit前に割り当てる非NULL arm/group ID
+- `experiment.planned_comparison_set_id`: submit前に割り当てる非NULL比較集合ID
 
 既定は各条件5 attemptとし、同じ時間block内でA/Bを交互または事前乱数化順に投入する。
 有効runが3未満なら環境差を確定しない。invalid/failed runを遅かったという理由で除外・
@@ -258,16 +261,27 @@ icoFoam rank process wallと呼ばない。結果を見て指標を
 
 比較次元はGit管理SQLで次へ分類する。
 
-- 一致必須: workload、source/build artifact、resource lane、precision、instrumentation mode
+- 一致必須: 実caseから観測したworkload identity、source/build artifact、resource lane、precision、
+  正規化したplacement/affinity policy、instrumentation mode
 - 意図的に変えるtreatment: 対象commit、cluster、node type等
 - nuisance: hostname、開始日時、queue待ち、個別node identity
 - outcome: score、各stage時間、resource値
 
-protocol commitはtreatmentにするkey集合と一致必須key集合を事前宣言する。viewは次の二つを
-導出し、fingerprint自体はrawへ保存しない。
+protocol commitはtreatmentにするkey集合と一致必須key集合を事前宣言し、runner manifestがexact policyと
+`dimension_policy_hash`をsealする。contractはdimensionごとのallowed classだけを制約し、protocolごとに
+変わり得るclassを固定しない。viewは次の二つを導出し、fingerprint自体はrawへ保存しない。hash入力は
+contract ID/hash、protocol commit/hash、dimension policy hash、dimension name、logical type、canonical
+valueのsorted tupleである。required dimensionがmissing/conflictingならfingerprintを作らずreasonを返す。
 
-- `replicate_fingerprint`: 一致必須条件とtreatment値を含み、同一条件の反復統計に使う。
-- `comparison_set_fingerprint`: 宣言済みtreatment次元だけを除き、A/B ratioの候補を束ねる。
+- `observed_replicate_fingerprint`: 実観測した一致必須条件とtreatment値を含むnullable検証結果。
+- `observed_comparison_set_fingerprint`: 実観測値から宣言済みtreatment次元だけを除いたnullable検証結果。
+
+attempted countのgroupにはnullableなobserved fingerprintを使わない。pre-run protocol assignmentが必ず
+非NULLのplanned group/set IDをsealし、failed/invalid runもそこへ残す。eligible countだけが、実観測
+fingerprintとplanned policyの一致を要求する。
+`planned_replicate_group_id`はcontract hash、protocol hash、dimension policy hash、planned must-matchと
+planned treatment dimensionのcanonical tupleから生成する。`planned_comparison_set_id`は同じnamespaceで
+宣言treatmentだけを除いたplanned tupleから生成する。`group-1`等の任意labelは表示属性にすぎない。
 
 commit、artifact、cluster等がtreatmentならcomparison set内では差を許すが、replicate groupは
 必ず分離する。nuisanceとoutcomeはどちらにも含めない。競技提出用bestと、環境比較用の全点、
@@ -422,22 +436,174 @@ probeあり/なしの反復A/Bで事前閾値を超えるなら、そのrunはof
 
 ## BigQuery viewとスプレッドシート
 
-Git管理SQLは次の順でviewを作る。
+logical schemaを増やさず、raw tableはdaily ingestion-time partition、cluster順`run,key`で作り、
+`require_partition_filter=false`とする。`_PARTITIONTIME`はUTC delivery partition bucketであってrun時刻にも
+exact publish時刻にもならず、replayで変わり、streaming write-optimized storageでは一時的にNULLにも
+なり得るためcomparison/freshness factへ使わない。partition expirationはdurable retention決定まで
+設定しない。recent delivery監査だけ`(_PARTITIONDATE >= ... OR _PARTITIONTIME IS NULL)`を使い、run lookupは
+cluster filterを使う。semanticなdedupe/conflict/comparisonは正しさのため全partitionを対象にする。
 
-1. `raw_distinct`: 完全一致rowをdeduplicate
-2. `run_key_conflicts`: 同じrun/keyの異値を隔離
-3. `run_completeness`: contract、collector、parse、artifact欠損を理由別に表示
-4. `openfoam_run_facts_v2`: 固定列のrun比較表
-5. `openfoam_run_diff_v2`: 二run間の比較関連差分
-6. `openfoam_env_diff_v2`: 全環境変数差分
+Git管理SQLは次の非二乗relationを作る。
 
-Gitから生成するcommit dimensionをjoinし、subject、body、commit URLを表示できるようにする。
-commit messageをrun metricへ複製しない。Connected Sheetsはraw tableではなくversioned consumer
-viewだけを見る。
+| object | row grain | 役割 |
+|---|---|---|
+| `raw_distinct` | unique `(run,key,value)` | 完全一致retryだけをdeduplicate |
+| `run_key_singletons` | `(run,key)` | distinct valueが一つだけのtyped pivot入力。異値keyを通さない |
+| `run_key_conflicts` | `(run,key,value)` | 異値が二つ以上あるkeyの各distinct valueを一行ずつ保持し、値を選ばない |
+| `openfoam_run_reason_items_v2` | `(run,reason_item_id)` | class/code/subject/canonical detail JSONを持つ全理由の唯一のlong relation |
+| `openfoam_run_facts_v2` | one row per run | conflict-free factだけをtyped固定列へpivot |
+| `openfoam_run_evidence_items_v2` | `(run,family,evidence_item_id)` | producer/capture/scope/raw key/artifact member/valueごとの決定的evidence |
+| `openfoam_run_family_status_v2` | `(run,family)` | evidence itemsからexpected/observed/status/reasonを集約 |
+| `openfoam_comparison_dimensions_v2` | `(run,dimension)` | `must_match/treatment/nuisance/outcome`とcanonical value |
+| `openfoam_replicate_points_v2` | `(run,estimand_id)` | protocol、group/treatment、attempt/order/value、eligible/reasonsを全点表示 |
+| `openfoam_replicate_stats_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_replicate_group_id,estimand_id)` | attempted全件とobserved一致済みeligible n、median、MAD、CV。bestとは別 |
+| `openfoam_paired_points_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,pair_id,estimand_id,baseline_treatment_id,candidate_treatment_id)` | protocol指定pairの左右run/value/eligibility |
+| `openfoam_paired_comparisons_v2` | `(contract_hash,protocol_hash,dimension_policy_hash,planned_comparison_set_id,estimand_id,baseline_treatment_id,candidate_treatment_id,estimator_id)` | ratio方向、pair数、interval、decision、reason。未決定基準はNULL |
+| `openfoam_env_facts_v2` | `(run,scope_kind,scope_instance,escaped_name)` | common/deltaから復元したfull snapshotのbyte-exact valueと由来 |
+| `openfoam_run_diff_v2(left_run,right_run)` | table function、一expected dimensionまたはsentinel一行 | 二runのvalue/equality/class/blocking reason |
+| `openfoam_env_diff_v2(left_run,right_run)` | table function、一scope/nameまたはsentinel一行 | full outer diffのadded/removed/changed/sameと左右値 |
+| `openfoam_delivery_events_v2` | `(event_id)` | receipt URIとhash-chain順を持つdurable storeのimmutable event projection |
+| `openfoam_delivery_run_status_v2` | `(run,destination)` | eventから導出する最新operational state。科学的eligibilityを変えない |
+| `openfoam_sheet_status_v2(delivery_destination)` | table function、one row | SQL/contract identity、query時刻、delivery sync/high-watermark/latest publish、issue件数 |
 
-標準Sheetは少なくともrun、時刻、outcome、completeness、commit、artifact/log link、lane、
-build/mesh/placement、official validity、comparison eligibility、FVOPS、stage時間、反復数、
-median、MAD、CV、baseline ratioを固定列で表示する。full env差分は別tabにする。
+environmentの`scope_kind`はcontract enum `job_entry|host_exec_rank`、`scope_instance`はnullable node/global rank等を
+field名付きcanonical JSONにしたinjective IDで、Sheetにはtyped scope列も出す。display hostnameだけをjoin keyに
+しない。`escaped_name`はbyte nameの単射表現であり、同名でもscopeが違えば別rowである。
+
+delivery relationはraw metric tableではなく、durable delivery storeから同期するoperational relationで
+ある。immutable eventは`event_id/previous_event_id/event_kind/event_sequence/run/destination/receipt URI/
+metrics hash/attempt/outcome/timestamp`だけを持つ。同run/destinationではattemptを単調増加、各attemptの
+sequenceを0始まり連続、previous linkを一本のchainにし、destination別FSMの許可transitionを検証する。
+branch/gap/duplicate sequenceならstatusをinvalidにし、timestampの`MAX`や`ANY_VALUE`でlatestを選ばない。
+run statusは検証済みchainから導出し、性能/config factを複製しない。sync receiptは
+`projection_synced_at`、`event_high_watermark_id`、`event_high_watermark_at`を持ち、
+`event_high_watermark_at`、`latest_publish_succeeded_at`を別々に表示し、同期停止を最新publishと誤認させない。
+family statusはevidence itemのaggregateであって同じgrainのsubsetではない。別の保存表やproducerを作らず、
+run facts/statusのmissing/incomplete countも同じaggregateを使う。
+`reason_item_id`はreason class/code、`subject_kind=raw_key|consumer_column|family|contract|dimension|evaluator`、
+subject ID、nullable raw key、`detail_sha256`から決定的に作る。`detail_json`はexpected/actual、evaluator、
+source locator等を持つcanonical typed JSONで、hashだけで内容を捨てない。blocking booleanも持つ。
+
+上表は独立した保存メトリクス集合ではなく、rawを唯一の正本とするlogical query interfaceである。
+相互に列が重なるprojectionも別のraw producerやscheduled copyを作らない。非NULL`expected_locator`は
+contract field/key patternまたはartifact fieldとexpected scope instanceを一意に表す。`source_instance_id`は
+contract hash、expected locator、producer、capture、expected scope instanceだけから作る観測非依存IDである。
+`evidence_item_id`はsource instance ID、evidence kind、nullable concrete raw keyまたはartifact content
+identity/member、nullable value hashまたはmissing sentinelから決定的に作る。mirror URIは表示locatorであり
+IDへ入れない。contractの
+expected rank/source graphからmissing instanceも行として展開し、artifact-only証拠はraw keyをNULLにする。
+同一source instanceの異値はvalue hashごとに別itemとしstatusをconflictingにするが、familyのexpected/
+observed countはdistinct source instance IDを数えて水増ししない。全valueは`run_key_conflicts`へ戻せる。
+
+`openfoam-v2.toml`にはraw contractと同じcommitで`[[consumer.run_column]]`を置く。各固定列は少なくとも
+`name/type/unit/source_family/raw_pattern|artifact_field/scope_cardinality/json_path/reducer/
+conflict_rule/transform_id/null_reason/dimension_name/allowed_classes`を宣言し、複数sourceを使う派生列はordered source
+listを持つ。生成SQL、Evidence lineage、Sheet headerだけが
+これを読み、手書きpivotを許さない。contract testは各consumer列についてexactly one column definition、
+sourceの存在、type/transform、NULL reasonを検査する。これにより列名からraw key patternまたはartifact/
+Git dimensionへ機械的に一意に遡れる。
+
+同じcontract/protocolに`[[consumer.estimand]]`を置き、`estimand_id`、source/transform、logical type、unit、
+改善方向、eligibility rule ID、許すstatistic/estimator/intervalを固定する。point viewはrunとprotocolが
+宣言した全estimandの直積を展開し、source欠損も行を落とさずNULL value+reasonにする。protocolは一次・二次
+estimandとdecision対象を事前指定し、view実装者が結果を見て選ばない。
+
+全run pairのdiffを通常viewとしてmaterializeしない。agent/SQL利用者とConnected Sheetsは二つのcell
+parameterを持つcustom query `SELECT * FROM dataset.openfoam_run_diff_v2(@LEFT_RUN,@RIGHT_RUN)`、同env diffを
+直接呼ぶ。table functionはNULL、同一、存在しないrunを`selection_status`で拒否し、full outer joinで
+片側欠損を落とさない。invalid selectionはzero rowにせず、`row_kind=selection_error`のsentinelを必ず一行
+返す。valid config diffは左右contract/protocolのdeclared dimension gridのunionから始め、左右のdefinition
+hash、logical type/unit/transform、policy classを表示する。definition/policy互換性を別判定し、互換な行だけ
+equalityを計算する。非互換、片側undeclared、観測missingも固有`value_status`で残す。
+
+env diffは左右manifestのexpected scope gridとscope-level family statusを先にjoinする。同scopeの両snapshotが
+completeな場合だけvariableを`added/removed/changed/same`とし、片側collector/snapshot欠損は
+`unknown_left|unknown_right|unknown_both`、片側でscope非該当なら`not_expected_left|not_expected_right`の
+scope sentinelを返す。absence、未観測、非該当を混同しない。UI filter/
+pivotだけで二run制約を実現しない。Sheetのfilterなしでfull environment extractを作らない。値はユーザー
+指示どおり内部利用者へmask/redactせず表示するが、Sheetとdatasetの共有先を
+同じ内部ACLへ限定する。
+
+`openfoam_run_facts_v2`は少なくとも次の固定列を持つ。ここで挙げる名前をcontractのconsumer projectionへ
+個別登録し、概念名だけの列を作らない。aggregate統計をrun rowへ複写せず、replicate viewを別tabにする。
+
+| group | columns |
+|---|---|
+| identity/protocol | `run_id`、`contract_id`、`contract_hash`、`protocol_id`、`protocol_hash`、`dimension_policy_hash`、`planned_replicate_group_id`、`planned_comparison_set_id`、`planned_attempts`、`max_attempts`、`stopping_rule_id`、`block_id`、`block_order`、`pair_id`、`replicate_index`、`lane_id`、`instrumentation_mode`、`started_at`、`finished_at` |
+| source/artifact | `experiment_commit`、`openfoam_commit`、`thirdparty_commit`、Git joinのsubject/body/URL、`build_manifest_sha256`、`bundle_uri`、`bundle_hash`、`solver_log_member`。別のfull log URIは保存しない |
+| quality | `required_families_complete`、`missing_family_count`、`incomplete_family_count`、`conflicting_key_count`、`cast_failure_count`、sorted `reason_codes`、`official_log_valid`、`official_score_status`、`comparison_eligible` |
+| termination | `run_outcome`、`run_exit_code`、`solver_termination_kind`、`solver_exit_code`、`solver_signal`、`scheduler_terminal_state`、`scheduler_exit_code` |
+| workload/build | `workload_id`、`workload_manifest_identity`、`workload_match`、`precision`、`build_artifact_sha256`、`compiler_identity`、`mpi_identity` |
+| topology/placement | `requested_nodes`、`requested_ranks`、`allocated_nodes`、`allocated_ranks`、`solver_host_count`、`solver_nprocs`、`solver_host_rank_sum`、`placement_host_count`、`placement_rank_count`、`placement_rank_set_valid`、`resource_group`、`transport_policy`、`effective_transport`、`transport_valid`、`placement_affinity_signature`、`placement_policy_valid` |
+| hardware | `cpu_model_consensus`、`physical_cores_per_node_consensus`、`numa_nodes_per_node_consensus`、`memory_bytes_per_node_consensus`、`hardware_consensus_reason_codes` |
+| mesh | `mesh_cells`、`mesh_faces`、`mesh_points`、`mesh_internal_faces`、`requested_partition_identity`、`observed_partition_identity`、`partition_valid` |
+| Pstream | `pstream_startup_all_ranks_present`、`pstream_startup_consensus`、`pstream_runtime_all_ranks_present`、`pstream_runtime_consensus`、`pstream_change_event_count`、`pstream_unchanged`、`float_transfer`、`default_comms_type`、`pstream_buffers_algorithm`、`using_node_comms`、`node_comms_control`、`node_comms_min`、`topology_control`、`configured_mpi_buffer_bytes`、`attached_mpi_buffer_bytes`、`nprocs_simple_sum`、`nprocs_nonblocking_exchange`、`tuning_nbx`、`n_poll_proc_interfaces`、`max_comms_size` |
+| outcome | `official_fvops`、`official_trim_sec`、`solver_outer_wall_sec`、`block_mesh_wall_sec`、`decompose_par_wall_sec`、`pipeline_end_to_end_wall_sec` |
+
+`placement_affinity_signature`はhostnameや物理CPU番号を直接hashせず、rank/local-rank順のCPU-set
+cardinality、rank間overlap、NUMA binding、pinning shapeをcanonical JSONにした実値である。
+`placement_policy_valid`はその実値とlane要求の照合結果であり、異なる二つのvalid policyを同一視しない。
+rank別のfull CPU set/hostはEvidenceに残す。
+
+typed columnは`run_key_singletons`だけを入力にしてcontract typeから`SAFE_CAST`/JSON validationし、cast
+失敗をNULLと`run_reason_items`へ出す。複数値を`MAX`、`ANY_VALUE`等で隠さず、conflict keyはwide列をNULL、
+runをcomparison-ineligibleにする。missing/conflict/cast-invalidを同じNULLだけへ潰さない。reason itemsは
+fact issue、family status、official score status、comparison evaluator、protocol/dimension validatorを
+UNIONする。Sheet用`reason_codes`はこのrelationだけをlexicographic sortして`;`区切りSTRINGへ投影し、code
+自体に`;`を禁止する。`comparison_eligible=false`でblocking reasonが0件のrunをcontract testで拒否する。
+commit dimensionはGitから生成してjoinし、subject、body、URLを表示するが、commit messageをrun metricへ
+複製しない。
+
+replicate pointsはfailed/invalidも削除せずreason付きで全件残し、protocol、planned/max attempt、stopping
+rule、planned group/set ID、pair/block ID、estimand ID、nullable observed fingerprintを持つ。statsはplanned
+groupでattempted nを数え、事前protocolのeligible ruleとobserved fingerprint一致を満たす点だけをeligible nへ
+数える。treatment IDは宣言した全treatment dimensionのname/type/canonical value sorted tupleのhashで、
+canonical JSONを表示属性にする。paired pointsはprotocolが割り当てたpair IDだけを対応付け、欠損・置換後に
+block/orderから推測しない。paired comparisonはbaseline/candidateを順序付きで保持しratioを
+`candidate / baseline`と定義し、attempted/eligible pair count、interval method/level、decision criterion
+ID/reasonを併記する。estimator/intervalはprotocolが事前指定した方法だけを使い、
+`instrumentation_overhead_decision`は現在未決定のcriterionを確定するまでNULLにする。暫定式を埋めない。
+breakingなcolumn/type/meaning変更は
+既存v2 viewを書き換えずv3 objectを作る。
+
+Connected Sheetsは次のtabだけをversioned consumer objectへ接続する。
+
+1. `Runs`: one run/rowの固定列。JSON展開なしでquality、config、一次結果、artifactへ到達する。
+2. `Replicates`: point viewとstats/comparison viewを別tableとして全点とrobust statisticsを示す。競技bestを同じ列で置換しない。
+3. `Evidence`: 選択runのfamily/evidence itemごとに、scope、raw key、値hash、source、artifact member、欠損理由を示す。
+4. `Config Diff`: 左右run cell parameterからtable functionを直接呼ぶ。
+5. `Environment`: 左右run cell parameterからscope-aware diffを直接呼び、full byte-exact envをmask/redactせず比較する。
+6. `Data Status`: contract/SQL identity、各query時刻、delivery sync/high-watermark/latest publish、issue件数を常時表示する。
+
+Connected Sheetsは自動同期されないため、deployment checklistにrefresh owner、backup owner、schedule、
+data source変更後の再開確認を記録する。workbookは非NULLの一`delivery_destination` parameterへ固定し、
+status TVFが不存在destinationをsentinelで拒否する。各Connected object自身のqueryで
+`query_generated_at`を出し、Data StatusのSheet-local rangeが各tabのtimestamp cellを参照する。BigQueryの
+status queryが他objectのrefresh時刻を知るとはみなさない。同tabで`projection_synced_at`、
+`event_high_watermark_at`、`latest_publish_succeeded_at`も別表示し、snapshotとdelivery projection双方の
+freshnessを判断できるようにする。preview/extract/pivotは事前filter後の
+row数とresult byteを検査し、保守的な内部budget（pivot 80,000 result/8 MB未満、extract 400,000 row/
+8 MB未満かつ4 million cells以下）を超えたらscope単位に決定的分割する。`LIMIT`で先頭だけを
+表示しない。
+標準tabへraw tableやunbounded env relationを直接接続しない。
+
+consumer relationはまずlogical viewとtable functionだけで実装し、同じprojectionのscheduled tableを
+先回りして複製しない。実測したrefresh latency/bytesが運用budgetを超えた場合だけ、rawから完全再生成
+できるcache tableを別contractで導入する。
+
+この物理設計はBigQueryの[ingestion-time partitioning](https://docs.cloud.google.com/bigquery/docs/partitioned-tables)、
+[STRING clustering](https://cloud.google.com/bigquery/docs/creating-clustered-tables)、consumer運用は
+[Connected Sheetsのrefreshとresult制約](https://support.google.com/docs/answer/9703214)、
+[cell parameter付きcustom query](https://support.google.com/docs/answer/9703000)を前提にする。
+
+## 未決定事項と質問protocol
+
+[Grill with Docs](https://github.com/mattpocock/skills/blob/main/docs/engineering/grill-with-docs.md)の進め方を
+採用し、文書から調べられる事実を先に閉じた後、結果を変える未決定事項だけを一回に一問聞く。各回答は
+`decision_id/question/recommended option/alternatives/user answer/decided_at/affected contract fields and
+views/reopen trigger`をGit管理decision recordへ残す。未回答を推奨値で埋めず、依存するviewのdecisionはNULL、
+release gateは未通過のままにする。現在はinstrumentation overhead criterionを先に、durable archive/
+retention/quarantineを次に聞く。
 
 ## 決定状態
 
@@ -723,7 +889,8 @@ submission-binding -> scheduler-terminal ---------------------+-> post-terminal 
 | G5 process観測 | `test_stage_runner.py` | actual argv/cwd、combined log、process-group signal forwarding、exit/signal/spawn error、monotonic境界 |
 | G6 archive/送達 | `test_artifact_store.py`、`test_publish.py`、各PUT/verify/BQ accept直後crash matrix | exact bundle allowlist、deterministic bundle、put-if-absent、receipt再開、remote verify前cleanup禁止、二重replay同値 |
 | G7 OpenFOAM意味 | `test_observation_contract.py`、baseline log/mesh/Pstream/rank ACK fixture | contract source/時点/owner、sentinel/`[]`、rank欠損、ACK timeout、PJM timeout salvage |
-| G8 非擾乱 | lane別hook on/off paired run | 数値同等性と、未決定のoverhead採用基準を同時に満たすこと |
+| G8 consumer contract | contract生成SQL fixture、BigQuery golden rows、Sheet parameter/refresh smoke test | 全列lineage、reason detail/evidence、失敗attempt残存、protocol分離、pair/estimand、definition非互換・片側env欠損TVF、delivery FSM/freshness/size |
+| G9 非擾乱 | lane別hook on/off paired run | 数値同等性と、未決定のoverhead採用基準を同時に満たすこと |
 
 `test_observation_contract.py`はcontractのschemaとowner/source/capture/absenceの完全性を検査し、
 生成した観測マップ表がcommit済み表とbyte一致することを検査する。これが「この値はどこから取るか」
@@ -751,16 +918,18 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
 2. clean checkout、remote到達性、build sidecar manifest、manual provenance gateを作る。
 3. BigQuery credentialをrunnerだけへ移したうえで、現行metric集合のまま`Fact`、`Recorder`、
    JSONL WAL、runner merge/publish、archive/reconcilerを導入する。
-4. `raw_distinct`、conflict、completeness、exact-contract v2 comparison viewを旧collectorと
-   並行して作る。
-5. cavity3Dのcomplete solver record、mesh、provenanceをlegacy collectorと並行追加する。意味が
+4. ingestion-time partition/`run,key` clusterのraw table、distinct/singleton/conflict/reason items、evidence
+   item/family status、delivery event/status、exact-contract run/dimension/point/stats/paired view、二run table
+   functionをconsumer column contractから生成しfixtureを通す。
+5. cavity3Dのactual workload manifest、complete solver record、mesh、provenanceをlegacy collectorと並行追加する。意味が
    変わる既存keyをv2で再利用しない。
 6. canonical official evaluatorを作り、旧shell validityと全baseline golden logを照合する。
 7. 1/2/4 node lane、同一rank wrapper sidecar、二段階Pstream/partition auditを追加し、最終
    instrumentationを含む全laneでbaselineと比較適格性を再検証する。各laneでunmodified buildと
    hook-only buildを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
    lexeme一致を数値同等性ゲートにする。
-8. Connected Sheetsをv2 viewへ切り替え、旧key consumerがなくなってから派生・部分集合keyの
+8. Connected SheetsのRuns/Replicates/Evidence/Config Diff/Environment/Data Statusをbounded consumerへ
+   切り替え、freshness/result-size smoke testを通す。旧key consumerがなくなってから派生・部分集合keyの
    新規生成を止める。
 9. retention期間後もarchive済みJSONLだけから空tableへ完全replayできることを確認して旧viewを
    廃止する。
@@ -781,10 +950,23 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
 - `solver.step_timings`と`solver.pressure_solves`から派生値を一意に計算でき、subset keyがない。
 - ExecutionTime、ClockTime、launcher wallの異なるscopeが保存される。
 - 1/2/4 laneでrequested、allocated、solver Hosts、placementが一致する。
+- setup後の実case workload memberがprotocol manifestと一致し、1 byte差をcomparison不適格にできる。
 - direct/profileやplacement probeの計測影響が事前閾値内、またはscore runから分離される。
 - unmodified buildとhook-only buildの同一条件でpressure solve軌跡と公式markersが一致し、数値結果を
   hookが変えていない。
-- 同一protocolの反復が実行順とblockを含め復元でき、全点、median、MADがSheetに表示される。
+- 同一protocolの反復がpair ID、実行順、blockを含め復元でき、全estimand点、median、MADがSheetに表示される。
 - treatment値を含む同一条件だけが同じreplicate groupへ入り、宣言したtreatment差だけが同じ
   comparison set内で許される。
+- required dimensionが欠けたfailed/invalid runもpre-run planned groupのattempted nへ一度だけ入り、NULL
+  fingerprint groupへ脱落・混入しない。
+- 別protocolが同じhuman group labelを使ってもcontract/protocol/policy namespaceにより統計が混ざらない。
+- 各run/evidence/Sheet列がcontract raw keyまたはGit/artifact dimensionへ一意に遡れ、cast失敗や異値競合を
+  aggregateが隠さない。
+- 二run diffがcell parameter付きtable functionで計算され、NULL/同一/不存在runを拒否し、全run pairを
+  materializeせず、full envをparameterなしでSheetへextractしない。
+- config definition/policy非互換をequality NULLで表示し、片側env snapshot欠損をadded/removedでなく
+  unknownとして表示する。
+- Data Statusが各objectのquery時刻、delivery projection sync、event high-watermark、最新durable publish、
+  SQL/contract identity、conflict/incomplete件数を別々に表示し、
+  scheduled refreshのowner変更・停止とresult-size超過をsmoke testで検出できる。
 - Sheets利用者がJSON展開なしでcommit、妥当性、一次結果、反復統計、artifactへ到達できる。

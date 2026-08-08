@@ -85,10 +85,11 @@ completeness reasonで説明する。
 | metrics contract | Git管理`openfoam-v2.toml`とlaneが選んだexpected producer graph | `runner.manifest` / provision前 | `run.metrics_contract`、contract/protocol artifact | contract ID/content hash、exact producer version、view compatibility、mixed contract禁止 | comparison不適格 |
 | scheduler binding | pre-submit intent、`pjsub`応答またはnonce検索、PJM側の独立job-entry receipt | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後 | `scheduler.job_id`、submission intent/result/binding、`control/job-entry-receipt.json` artifact | jobはbindingを待たない。曖昧応答をblind retryせず検索し、terminal後finalizerがrun ID、submit response、entry receiptの`PJM_JOBID`一致を要求 | reject/unknownを別receipt化。片方欠損または不一致はartifactを保全して`invalid-quarantine` |
 | producer lifecycle | supervisorのcollector/child境界 | `pjm.supervisor`または`StageRunner` / 呼出し前とreturn後、`LifecycleJournal`が永続化 | 独立`lifecycle/<producer>.jsonl`のstarted/final | complete line salvage、末尾partial破棄、data fragmentと別owner | startedのみを中断、journalなしを未到達 |
-| protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | `experiment.block_id`、`block_order`、`replicate_index` | protocol commit、予定attempt、laneへのmembership | comparison不適格、推測しない |
+| protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | `experiment.block_id`、`experiment.block_order`、`experiment.replicate_index`、`experiment.pair_id`、`experiment.planned_replicate_group_id`、`experiment.planned_comparison_set_id` | contract/protocol/policy hash込みcanonical tupleからgroup/set IDを再計算、予定/max attempt、stopping rule、lane membership、pair IDの一意性 | comparison不適格。attempted groupやpairを観測値・順序から推測しない |
 | experiment source | checkout済み`1_OpenFOAM`の`git rev-parse HEAD`とclean/reachability check | `runner.manifest` / provision前 | repository/full commit | dirty tree拒否、remote到達または耐久bundleを要求 | jobを投入しない |
 | OpenFOAM/ThirdParty source | checkout直後、`.git`削除前の各`git rev-parse HEAD` | `build.finalizer` / build開始前 | build sidecar、比較用source commit索引 | moving branch名でなくfull commit。archive後にsidecarをcommit markerとしてrename | build artifactを公開しない |
 | toolchain/build | `mpiicx --version`、`mpiicpx --version`、`mpirun --version`、`readelf --dynamic <icoFoam>`、`ldd <icoFoam>`、完成binary/archive | `build.finalizer` / archive完成時 | immutable build sidecarとartifact identity索引、各command raw output | LC_ALL=C、DT_NEEDED、resolved path/hash、binary/archive hash、sidecar schema | build不完全としてreuse禁止 |
+| actual workload identity | setup後にsolverが読む実caseのworkload-defining memberとsolver executable/argv | `pjm.supervisor` / setup完了後、blockMesh前 | `case.workload_identity`、member/hash manifest artifact | `0/`、`constant/transportProperties`、`system/controlDict`、`fvSchemes`、`fvSolution`、`blockMeshDict`等のcontract列挙memberをpath、size、SHA-256でsealしprotocol workload identityと照合。generated `decomposeParDict`はpartition factだけが所有 | 欠損・member差・hash不一致はcomparison不適格 |
 | full job-entry environment | `env -0`相当のNUL区切りprocess environment | `pjm.supervisor` / script entry直後、module/unset前 | `env.job_entry.*` | byte-exact name escapeと全value Base64、entry count fixture | snapshot collector failed |
 | full exec environment | supervisor baselineと各solver wrapperのbyte environment | `pjm.supervisor` + `exec.wrapper`、runner reducer / mpirun直前、各rank exec直前、terminal後 | `env.host_exec.common.*`、rank delta、removed names | durable node sidecar、`os.environb`相当、common+delta full復元、expected全rank | configuration incomplete |
 | scheduler request | Git管理lane、PJM script identity、runnerが実行するexact `pjsub` argv | `runner.submission` / submit直前 | `scheduler.request` | lane.nodes/ranks/rscgrp/transportとscript/argv overrideを照合 | invalid protocol assignment |
@@ -187,6 +188,7 @@ rank cardinalityを使う。
 - 一行に複数NaN/Inf、`End`で始まる別行、official INVALIDだがprocess exit 0
 - 1/2/4 nodeのruntime headerとrank placement、host sum不一致
 - Pstreamのstartup/runtime override、false、0、default、明示値、runtime change、banner無効event
+- protocol workload fixtureと、setup後のcase member一つを変えた不一致fixture
 - supervisor common environmentとrank追加/変更/削除deltaのfull byte snapshot復元
 - 同じlogical dictを異なる挿入順で作ったcanonical JSON
 - append直後crash、途中JSON line、missing fragment、同値replay、異値conflict
