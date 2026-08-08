@@ -38,15 +38,15 @@ subsetなのでraw keyを作らない。
 
 ```text
 Actions runner
-  create and fsync run-manifest.json
+  create and fsync regular-run subject or qualification-allocation parent plus two child manifests
   verify clean/reachable Git state and build sidecar
-  fsync submission intent containing exact pjsub argv and searchable run nonce
+  fsync submission intent containing exact pjsub argv, subject ID, and searchable subject nonce
   submit PJM without BigQuery credentials
   after a definite response or nonce recovery, fsync immutable binding/outcome
 
 PJM supervisor
   snapshot job-entry environment
-  seal run ID and PJM_JOBID in job-entry-receipt without waiting for binding
+  seal subject kind/ID, PJM_JOBID, and qualification ordered child IDs without waiting for binding
   record requested scheduler shape and actual outer argv
   start one node-local rank-record collector per allocated node
   run preparation stages
@@ -62,12 +62,14 @@ OpenFOAM shared startup hook
   send only actual runtime control changes thereafter; observation failure never changes solver exit/numerics
 
 allocation-local post-run auditor
-  inspect mesh/partition only after the scored solver
+  regular: inspect mesh/partition only after the scored solver
+  qualification: inspect both arms only after arm 2; never between arms
 
 Actions runner
   after PJM terminal state, parse any saved solver log even after timeout/failure
   reduce durable node rank-record sidecars
-  merge -> validate -> archive and verify -> publish/replay
+  regular: merge -> validate -> archive and verify -> publish/replay
+  qualification: verify parent evidence archive once, then finalize/publish two child bundles independently
 ```
 
 `run-manifest.json`で生成したrun IDを全producerが読む。各processで再計算しない。target hookは
@@ -78,34 +80,40 @@ BigQuery、retryを知らない。
 
 表の「欠損」はraw valueへ空文字を入れる意味ではない。keyを出さず、対応producerのlifecycleと
 completeness reasonで説明する。
+これはapplicableかつexpectedなfamilyだけの規則である。bench/qualificationでprofile-onlyとなる列は
+consumerでNULLを返すだけで、raw key、lifecycle/family status、Evidence、reasonを作らない。
 
 | fact family | authoritative source | producer / capture moment | raw keyまたはartifact | validation | 欠損時の扱い |
 |---|---|---|---|---|---|
-| run identity | runnerが一度生成してfsyncした`run-manifest.json` | `runner.manifest` / provision前 | raw tableの`run`列、manifest artifact | repository、Actions run/attempt、submissionごとの128-bit nonceと全fragmentのrun一致。PJM job IDを含めない | manifestなしでは投入しない |
-| metrics contract | Git管理`openfoam-v2.toml`とlaneが選んだexpected producer graph | `runner.manifest` / provision前 | `run.metrics_contract`、contract/protocol artifact | contract ID/content hash、exact producer version、view compatibility、mixed contract禁止 | comparison不適格 |
-| scheduler binding | pre-submit intent、`pjsub`応答またはnonce検索、PJM側の独立job-entry receipt | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後 | `scheduler.job_id`、submission intent/result/binding、`control/job-entry-receipt.json` artifact | jobはbindingを待たない。曖昧応答をblind retryせず検索し、terminal後finalizerがrun ID、submit response、entry receiptの`PJM_JOBID`一致を要求 | reject/unknownを別receipt化。片方欠損または不一致はartifactを保全して`invalid-quarantine` |
+| run/subject identity | runnerが一度生成してfsyncしたsubject/child manifests | `runner.manifest` / provision前 | raw tableの`run`列、run/allocation manifest artifact | regular subject ID=run ID、qualification subject ID=allocation ID、subject/child CSPRNG nonce、ordered child/arm、全fragmentのrun一致。run/allocation IDはglobal unique/safe path。PJM job IDを含めない | manifestなしでは投入しない |
+| metrics contract | Git管理`openfoam-v2.toml`とlane/run variantが選んだexpected producer graph | `runner.manifest` / provision前 | `run.metrics_contract`、contract/protocol artifact | contract ID/content hash、exact producer version、view compatibility、mixed contract禁止、family/列の`applicable_run_variants`、applicable missing policyとinapplicable projection policyの分離 | required familyならcomparison不適格。非適用列はconsumerでNULLだけを返す |
+| source track | Gitのscore reference/profile base、実checkout head、purpose/qualification arm | `runner.manifest` / provision前 | tagged-union canonical source-track artifact、content hash、`control/source-track-validation.json` | benchはreference/head、profileはprofile base/head、qualification OFFはhead=score reference、ONはreference ancestorかつcanonical tree diff=build/bundleのinstrumentation patch identity。diff algorithm/version/base/head/expected patch/passをsubmit前にsealしquery時Git参照なし。clean HEAD/tree、reachability/source archive、submodule/mode/symlink/LFSも検証。moving branch名をidentityにせずdiff/hashをrawへ保存しない | jobを投入しない |
+| instrumentation bundle | Git管理bundle manifest、build sidecar、実launch設定 | `runner.manifest` / submit前、`runner.finalizer` / run後照合 | canonical manifest artifact。consumer hashはartifact contentから導出 | hook/probe/journal/ACK/sample/sink/buffer/timeout、wrapper/collector executable hash、contract version、env capture scope、build patchの列挙と実activation一致。labelだけで同一視しない | benchのrequired bundleならcomparison不適格。profile-only bundleはbenchでproducerを持たない |
+| instrumentation qualification decision | Git管理D-001 decision record | `runner.manifest` / bench submit前 | manifest fields、`control/instrumentation-qualification-decision.json`、Runsのdecision hash/status | canonical hash、adopt/reject、qualification protocol、reference/candidate tuple、bundle/build/workload/toolchain/MPI、evidence一致。通常bench tupleを再構成して照合 | 無計測benchはnot_required。未存在/未回答はpending、reject/異値はrejected/invalidでscore不適格 |
+| scheduler binding | pre-submit intent、`pjsub`応答またはnonce検索、PJM側の独立job-entry receipt | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後 | normal runまたはqualification allocationのsubmission intent/result/binding、`control/job-entry-receipt.json` artifact | jobはbindingを待たない。曖昧応答をblind retryせず検索する。normalはrun ID、qualificationはallocation ID+ordered child IDsをsubmit response/entry `PJM_JOBID`へ照合。childへbindingを複写せずparent join | reject/unknownを別receipt化。片方欠損または不一致はartifactを保全して`invalid-quarantine` |
 | producer lifecycle | supervisorのcollector/child境界 | `pjm.supervisor`または`StageRunner` / 呼出し前とreturn後、`LifecycleJournal`が永続化 | 独立`lifecycle/<producer>.jsonl`のstarted/final | complete line salvage、末尾partial破棄、data fragmentと別owner | startedのみを中断、journalなしを未到達 |
-| protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | `experiment.block_id`、`experiment.block_order`、`experiment.replicate_index`、`experiment.pair_id`、`experiment.planned_replicate_group_id`、`experiment.planned_comparison_set_id` | contract/protocol/policy hash込みcanonical tupleからgroup/set IDを再計算、予定/max attempt、stopping rule、lane membership、pair IDの一意性 | comparison不適格。attempted groupやpairを観測値・順序から推測しない |
-| experiment source | checkout済み`1_OpenFOAM`の`git rev-parse HEAD`とclean/reachability check | `runner.manifest` / provision前 | repository/full commit | dirty tree拒否、remote到達または耐久bundleを要求 | jobを投入しない |
+| protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | `experiment.block_id`、`experiment.block_order`、`experiment.replicate_index`、`experiment.pair_id`、`experiment.planned_replicate_group_id`、`experiment.planned_comparison_set_id`、qualification armを含むplanned treatment tuple | contract/protocol/policy hash込みcanonical tupleからgroup/set IDを再計算、run purpose、予定/max attempt、stopping rule、lane membership、pair IDの一意性 | purpose別comparison不適格。attempted groupやpairを観測値・順序から推測しない |
+| qualification allocation | Git管理paired scheduleとrunnerが一度sealするparent manifest | `runner.manifest` / pair submit前、`pjm.supervisor` / entry、`runner.finalizer` / terminal後 | allocation ID、scheduler binding/accounting、job-entry env locator/status、minimal hardware consensus/reason、pair/ordered child IDs、OFF/ON order、common binding、verified parent evidence archive | 一allocation一pair、二childの独立manifest/WAL/log/bundle、child parent ref、block ID=allocation ID、parent-first archive verify、pair間は別allocation | arm間crash/未起動/未sealも両child sourceを保全しpair不適格。片armを別allocationへ再pairしない |
 | OpenFOAM/ThirdParty source | checkout直後、`.git`削除前の各`git rev-parse HEAD` | `build.finalizer` / build開始前 | build sidecar、比較用source commit索引 | moving branch名でなくfull commit。archive後にsidecarをcommit markerとしてrename | build artifactを公開しない |
 | toolchain/build | `mpiicx --version`、`mpiicpx --version`、`mpirun --version`、`readelf --dynamic <icoFoam>`、`ldd <icoFoam>`、完成binary/archive | `build.finalizer` / archive完成時 | immutable build sidecarとartifact identity索引、各command raw output | LC_ALL=C、DT_NEEDED、resolved path/hash、binary/archive hash、sidecar schema | build不完全としてreuse禁止 |
 | actual workload identity | setup後にsolverが読む実caseのworkload-defining memberとsolver executable/argv | `pjm.supervisor` / setup完了後、blockMesh前 | `case.workload_identity`、member/hash manifest artifact | `0/`、`constant/transportProperties`、`system/controlDict`、`fvSchemes`、`fvSolution`、`blockMeshDict`等のcontract列挙memberをpath、size、SHA-256でsealしprotocol workload identityと照合。generated `decomposeParDict`はpartition factだけが所有 | 欠損・member差・hash不一致はcomparison不適格 |
-| full job-entry environment | `env -0`相当のNUL区切りprocess environment | `pjm.supervisor` / script entry直後、module/unset前 | `env.job_entry.*` | byte-exact name escapeと全value Base64、entry count fixture | snapshot collector failed |
-| full exec environment | supervisor baselineと各solver wrapperのbyte environment | `pjm.supervisor` + `exec.wrapper`、runner reducer / mpirun直前、各rank exec直前、terminal後 | `env.host_exec.common.*`、rank delta、removed names | durable node sidecar、`os.environb`相当、common+delta full復元、expected全rank | configuration incomplete |
-| scheduler request | Git管理lane、PJM script identity、runnerが実行するexact `pjsub` argv | `runner.submission` / submit直前 | `scheduler.request` | lane.nodes/ranks/rscgrp/transportとscript/argv overrideを照合 | invalid protocol assignment |
-| scheduler accounting | `pjstat --history -S --choose jid,st,sdt,elp,ec,sn,pc,nnumu,mmszu,uctmut,sctmut --data --delimiter "\t" <job>` | `runner.finalizer` / terminal state後 | `scheduler.accounting`、stdout/stderr/PJM version artifact | field list/unit/job ID固定、requestedとの一致はview判定 | 取得fieldだけ欠損扱い。host/rank/rscgrpを捏造しない |
-| observed topology/placement | solverと同じMPI launch内のglobal/local rank、`hostname`、CPU/NUMA affinity | `exec.wrapper` -> node collector、runner reducer / exec直前、terminal後 | `parallel.rank_placement` | durable node sidecar、別`mpirun`禁止、実証済みrank env名、expected rank/host/count | topology incomplete |
+| full job-entry environment | `env -0`相当のNUL区切りprocess environment | `pjm.supervisor` / script entry直後、module/unset前 | regularは`env.job_entry.*`、qualificationはparent `source/env/job-entry.snapshot`とallocation env projection | byte-exact name escapeと全value Base64、entry count fixture。child rawへ複写せずEnvironmentがblock/allocation join | applicable snapshot collector failed |
+| full exec environment | supervisor baselineと各solver wrapperのbyte environment | applicable score bundle/profile/qualification ONの`pjm.supervisor` + `exec.wrapper`、runner reducer / mpirun直前、各rank exec直前、terminal後 | `env.host_exec.common.*`、rank delta、removed names | durable node sidecar、`os.environb`相当、common+delta full復元、expected全rank | applicable variantではconfiguration incomplete。qualification OFFは非適用でNULLだけ |
+| scheduler request | Git管理lane、PJM script identity、runnerが実行するexact `pjsub` argv | `runner.submission` / submit直前 | regularは`run`の`scheduler.request`、qualificationはparent evidence artifact/allocation projection | lane.nodes/ranks/rscgrp/transportとscript/argv overrideを照合。child rawへ複写しない | invalid protocol assignment |
+| scheduler accounting | `pjstat --history -S --choose jid,st,sdt,elp,ec,sn,pc,nnumu,mmszu,uctmut,sctmut --data --delimiter "\t" <job>` | `runner.finalizer` / terminal state後 | regularは`scheduler.accounting`、qualificationはparent stdout/stderr/PJM version artifact/allocation projection | field list/unit/job ID固定、requestedとの一致はview判定。childはallocation IDでjoin | 取得fieldだけ欠損扱い。host/rank/rscgrpを捏造しない |
+| observed topology/placement | solverと同じMPI launch内のglobal/local rank、`hostname`、CPU/NUMA affinity | applicable score bundle/profile/qualification ONの`exec.wrapper` -> node collector、runner reducer / exec直前、terminal後 | `parallel.rank_placement` | durable node sidecar、別`mpirun`禁止、実証済みrank env名、expected rank/host/count | applicable variantではtopology incomplete。qualification OFFは非適用でNULLだけ |
 | actual argv | stage wrapperが`subprocess`へ渡すargv配列 | `StageRunner` / spawn直前 | stage別launch argv、solverは`run.launch_argv` | shell再構成文字列ではなく配列。spawnしたargvとbyte単位で一致 | stage未開始またはconfiguration incomplete |
 | run timing/outcome | supervisorのUTC clock、monotonic clock、最終status | `pjm.supervisor` / entry時とpost-run回収後 | `run.started_at`、`run.finished_at`、`run.elapsed_sec`、outcome/exit | wall timestamp pairとmonotonic elapsedを別clockとして保持、solver validityと分離 | lifecycleから中断理由を出す |
 | stage outcomes | supervisorの同じmonotonic clockとraw child wait status | `StageRunner` / spawn直前とwait直後 | `perf.stage.<name>.wall_time_sec`、`run.stage.<name>.termination` | exit/signal/spawn_errorをJSONで区別し、BigQuery時間を含めない | started/final lifecycleで中断を表現 |
-| node hardware | `LC_ALL=C lscpu --json`、`/sys/devices/system/cpu/online`、`/sys/devices/system/node/online`、各nodeの`cpulist`/`meminfo`、`/proc/meminfo` | `postrun.auditor` / solver終了後、allocated nodeごと | `hardware.nodes`、command/file raw artifact | host-invariant fieldsだけ、observed hostname集合、exact file membership/parser fixture | hardware completenessだけfalse。scoreは保持 |
-| mesh topology | exact buildにlinkした`mesh-facts` probeの`fvMesh::nCells/nFaces/nPoints/nInternalFaces`と`LC_ALL=C checkMesh` raw log | `postrun.auditor` / solver終了後 | `mesh.topology`、probe JSON、complete checkMesh log | native method値、probe/checkMesh exit、schema completeness | official scoreとは分離しcomparison不適格 |
+| minimal hardware identity | scheduler/node queryのnode class、CPU model/stepping | `pjm.supervisor` / regularはrun前、qualificationはallocation内でarm 1前に一度、allocated nodeごと | regularは`hardware.identity_min`、qualificationはparent `source/hardware/identity-min.*`とallocation projection | observed host集合、全node consensus、one-shot capture。qualification childはparent sourceをjoinしrawへ複写しない | applicable hardware identity incomplete |
+| full hardware topology（profile only） | `LC_ALL=C lscpu --json`、`/sys/devices/system/cpu/online`、`/sys/devices/system/node/online`、各nodeの`cpulist`/`meminfo`、`/proc/meminfo` | `postrun.auditor` / profile solver終了後、allocated nodeごと | `hardware.topology_full`とcommand/file raw artifact | observed hostname集合、exact file membership/parser fixture | profileではhardware incomplete。bench consumerはNULLだけを返す |
+| mesh topology | exact buildにlinkした`mesh-facts` probeの`fvMesh::nCells/nFaces/nPoints/nInternalFaces`と`LC_ALL=C checkMesh` raw log | `postrun.auditor` / regularはsolver後、qualificationはarm 2終了後だけ | `mesh.topology`、probe JSON、complete checkMesh log | native method値、probe/checkMesh exit、schema completeness | official scoreとは分離しcomparison不適格 |
 | requested partition | 実際に使用したgenerated `decomposeParDict` | `pjm.supervisor` / decomposePar直前 | `mesh.partition.requested`、dict artifact | argvが指すfileとartifact identity一致 | preparation failure |
-| observed partition | serial mesh/order、processor addressing、decompose/check output | `postrun.auditor` / solver終了後 | `mesh.partition.observed` | rank/local-index順保持、global cell一回、signed face addressing、expected subdomain集合 | partition incomplete |
+| observed partition | serial mesh/order、processor addressing、decompose/check output | `postrun.auditor` / regularはsolver後、qualificationはarm 2終了後だけ | `mesh.partition.observed` | rank/local-index順保持、global cell一回、signed face addressing、expected subdomain集合 | partition incomplete |
 | runtime header | OpenFOAM startupが出すBuild/Arch/Exec/nProcs/Hosts | `runner.log_parser` / PJM terminal後、保存logがあれば | `solver.runtime_header` | `argList.C` symbol/format golden、host sum=nProcs。Exec stringをargvへ逆変換しない | configuration incomplete |
-| Pstream startup-applied | `UPstream::init()`、node comm state、`attachOurBuffers()`後の実buffer | `openfoam.startup` -> node collector journal、`runner.pstream_parser` / attach完了後emit、terminal後reduce | `solver.pstream.startup_applied.rank.<rank>` | configured/clamped/attached byte、node control、expected全rank、bounded durable ACK。banner非依存 | expected structured event missing |
-| Pstream runtime-current | `Time::setControls()`でcase override済みの登録switch | `openfoam.runtime_config` -> node collector journal、`runner.pstream_parser` / time loop前emit、terminal後reduce | `solver.pstream.runtime_current.rank.<rank>` | floatTransfer、node controls、usingNodeComms等をsymbol対応、false/0明示、expected全rank、bounded durable ACK | expected structured event missing |
-| Pstream runtime changes | `Time::readModifiedObjects()`からの実control変更 | `openfoam.runtime_config` -> node collector rank journal、`runner.pstream_parser`がterminal後に一度reduce | `solver.pstream.change_events.rank.<rank>` ordered array | expected全rankへ常に出力、startup/runtime sentinelが揃いchange 0件だけ`[]`、complete-line/event count/sequence/old/new一致 | key不在またはevent不整合ならconfiguration incomplete |
+| Pstream startup-applied | `UPstream::init()`、node comm state、`attachOurBuffers()`後の実buffer | applicable score bundle/profile/qualification ONの`openfoam.startup` -> node collector journal、`runner.pstream_parser` / attach完了後emit、terminal後reduce | `solver.pstream.startup_applied.rank.<rank>` | configured/clamped/attached byte、node control、expected全rank、bounded durable ACK。banner非依存 | applicable variantで欠損ならreason/Evidenceあり。qualification OFFは非適用でNULLだけ |
+| Pstream runtime-current | `Time::setControls()`でcase override済みの登録switch | applicable score bundle/profile/qualification ONの`openfoam.runtime_config` -> node collector journal、`runner.pstream_parser` / time loop前emit、terminal後reduce | `solver.pstream.runtime_current.rank.<rank>` | floatTransfer、node controls、usingNodeComms等をsymbol対応、false/0明示、expected全rank、bounded durable ACK | applicable variantで欠損ならreason/Evidenceあり。qualification OFFは非適用でNULLだけ |
+| Pstream runtime changes | `Time::readModifiedObjects()`からの実control変更 | applicable score bundle/profile/qualification ONの`openfoam.runtime_config` -> node collector rank journal、`runner.pstream_parser`がterminal後に一度reduce | `solver.pstream.change_events.rank.<rank>` ordered array | expected全rankへ常に出力、startup/runtime sentinelが揃いchange 0件だけ`[]`、complete-line/event count/sequence/old/new一致 | applicable variantで欠損ならreason/Evidenceあり。qualification OFFは非適用でNULLだけ |
 | time-step timing | 保存済みsolver logの`Time =`と同一stepの`ExecutionTime = ... ClockTime = ...` | `runner.log_parser` / PJM terminal後 | `solver.step_timings` | 原lexemeとnullable numeric、全match順序。単調性/有限性はcomparison evaluator | 得られたcomplete recordだけ保存しofficial/comparison理由を分離 |
 | pressure solves | 保存済みsolver logの各`Solving for p` record | `runner.log_parser` / PJM terminal後 | `solver.pressure_solves` | initial/final residual/iterationsを同じrecordに保持、match数と公式期待数を照合 | 部分配列を保存しinvalid reasonを出す |
 | official markers | complete solver logとcanonical official evaluator | `runner.log_parser` / PJM terminal後 | `solver.log_markers`、official validityはview | shell validity semanticsのgolden parity後、固定locale/decimal evaluatorを共有 | parse failureとofficial invalidとscore算出不能を区別 |
@@ -189,6 +197,11 @@ rank cardinalityを使う。
 - 1/2/4 nodeのruntime headerとrank placement、host sum不一致
 - Pstreamのstartup/runtime override、false、0、default、明示値、runtime change、banner無効event
 - protocol workload fixtureと、setup後のcase member一つを変えた不一致fixture
+- variant applicability grid：profile-only collectorのprofile失敗はreasonあり、benchは理由/status/EvidenceなしNULL、qualification OFFのON専用列は同じNULL、qualification ONの同collector失敗はreasonあり
+- tagged-union source trackのbench/profile/qualification OFF/ON、base非ancestor、instrumentation以外の差分、checkout tree不一致、同bundleでbase/workload/toolchainだけ変更、moving branch名が同じでもcommitが異なるfixture
+- qualification allocationの一pair二child、二pair混入を全pair reject、child順/arm不一致、別allocationへの再pair、arm間crash、片child未起動/WAL未seal、parent-first archive fixture
+- instrumentation bundleのhook/sample interval一つだけを変えたhash差とactual activation不一致fixture
+- D-001 decisionの未存在、non-adopt、hash不一致、candidate tuple不一致、adopt完全一致fixture
 - supervisor common environmentとrank追加/変更/削除deltaのfull byte snapshot復元
 - 同じlogical dictを異なる挿入順で作ったcanonical JSON
 - append直後crash、途中JSON line、missing fragment、同値replay、異値conflict
@@ -198,7 +211,7 @@ rank cardinalityを使う。
 
 ## 未決定事項
 
-score runに許す計測の上限はユーザー確認待ちである。決まるまでは、effective config、result、
-phase boundaryの軽量local eventだけをscore候補へ入れ、GPU/CPU polling、profiler、verbose MPI debug、
-full placement診断は`instrumentation.mode=audit`として別groupにする。閾値を文書へ仮置きして
-comparison eligibleへ混入させない。
+bench/profile分離と、benchのprofile-only metricは値をNULLにするだけで原因/status/Evidenceを作らないことは
+ユーザー確定済みである。score runに許す最小bench bundleの統計上限D-001はユーザー確認待ちである。決まるまでは
+profiler、polling、verbose MPI/Pstream trace、full placement診断はprofile-only、未qualificationのinline eventは
+audit-onlyとする。閾値を文書へ仮置きしてscore/qualification eligibleへ混入させない。
