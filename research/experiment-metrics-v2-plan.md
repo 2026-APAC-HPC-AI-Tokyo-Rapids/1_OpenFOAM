@@ -422,8 +422,9 @@ placement reducerはfilename/global rank/run ID、global rankの`0..requested_ra
 
 1 nodeはPJM supervisorが`<provision>/bin/capture-hardware --mode minimal --subject-kind <regular_run|qualification_allocation>
 --subject-id <run|allocation> --output-root <subject>/source/hardware --node-ordinal 0`を実行する。multi-node laneはarm/timed solver外で
-一度だけ、検査済みabsolute `mpirun -np <lane.nodes> -ppn 1`の後ろへ同prefixと`--node-ordinal-from-env PMI_RANK`を置き、lane canaryで
-存在と連続性を確認した`PMI_RANK`をprobe自身が読む。各processはshared runtimeの
+一度だけ、検査済みabsolute `mpirun -np <lane.nodes> -ppn 1`の後ろへ同prefixと`--node-ordinal-from-env PMI_RANK`を置く。
+各lane canary自身で`PMI_RANK`の存在と期待連続集合を確認できたrunだけをconformance eligibleにし、probeは代替rank
+sourceを探索しない。各processはshared runtimeの
 `source/hardware/node-<node-ordinal>.json`へ書き、identityとplatform settingsを含むfull `hardware-node/v1`を持つ。
 `commands`はargv/exit_code/stderr、`lscpu`はstdoutからparseしたraw JSON objectである。さらにkernel release、
 CPU/node online/isolated/nohz_full、memory total/hugepage、NUMA balancing、boost、cpufreq policy別driver/governor/
@@ -488,9 +489,10 @@ supervisorが`mpirun`前にこのabsolute directoryを一度作り、rank hook�
 write失敗でsolverを止めず、fallback sinkや再送queueも作らない。その場合は値がNULL、requiredなrunでは
 `collection_complete=false`になる。
 
-`parallel.rank_placement`は別の`mpirun`で測らない。同じrank processのwrapperが、canaryで実証した
-`PMI_RANK`、`MPI_LOCALRANKID`、`MPI_LOCALNRANKS`、`gethostname()`、`os.sched_getaffinity(0)`、
-`/proc/self/status`の`Mems_allowed_list`を記録してから`exec icoFoam`する。
+`parallel.rank_placement`は別の`mpirun`で測らない。同じrank processのwrapperが`PMI_RANK`、
+`MPI_LOCALRANKID`、`MPI_LOCALNRANKS`、`gethostname()`、`os.sched_getaffinity(0)`、
+`/proc/self/status`の`Mems_allowed_list`を記録してから`exec icoFoam`する。各lane canary自身でrank envの存在と
+期待集合を確認し、欠損時の代替sourceは持たない。reducerはglobal rank昇順のcanonical arrayを作る。
 
 ### solver logの完全record
 
@@ -555,19 +557,24 @@ scoreはNULLにする。field別原因分類はしない。
 
 ## lane scopeと計測擾乱
 
-D-003未回答中は、現行scriptで実証済みの1 node条件だけを`experiments/lanes/openfoam-genkai-1.toml`の
-canary lane候補とする。D-003でGenkai 2/4 nodeも今回のscopeに含めるなら、実測でresource group、rank数、
-transport、walltimeを確定してから別laneを追加する。推奨どおり競技clusterを後続scopeにする場合は、対象cluster
-確定後にcluster固有の1/2/4 node contractを作り、Genkai laneと同一視しない。各lane fileはnode/rank/resource
-group/transport policy、required producer、instrumentation modeを持ち、runnerがexact `pjsub` argvとPJM script
-identityへ解決してmanifestへsealする。各runで次を照合する。
+D-003は「収集系を初版からmulti-node対応にし、Genkai 1/2/4 nodeを実機conformance対象にする」で確定した。
+node数やrank数をcollectorへhard-codeせず、`experiments/lanes/openfoam-genkai-n<nodes>-r<ranks>.toml`が
+node/rank/resource group/transport policyを一度所有する。required producerはcontractのvariant applicability、
+instrumentation modeはprotocol/bundle selectionだけが所有する。runnerはlaneから
+expected node ordinal/rank集合とexact `pjsub`/`mpirun` argvを展開し、PJM script identityとともにmanifestへsealする。
+初版canaryは総rank数を120に固定したbalanced配置
+`n1-r120`（120 rank/node、`I_MPI_FABRICS=shm`）、`n2-r120`（60 rank/node、`I_MPI_FABRICS=shm:ofi`）、
+`n4-r120`（30 rank/node、`I_MPI_FABRICS=shm:ofi`）を使う。いずれも`a-batch`、Scotch 120 subdomainで、launcherは
+`mpirun -np 120 -ppn <120/nodes>`へ固定する。1-nodeは現行64M workloadで実証済み、2-nodeは旧workloadで基盤だけ実証済み、
+4-nodeは未実証なので、後二者に性能期待値を仮置きせず各一回の通常canaryで取得成否を確認する。失敗時の自動retryや
+代替laneは作らない。canary後のrank sweepは同じschemaの別laneとして追加し、値を既存laneへ上書きしない。各runで次を照合する。
 
 ```text
 claimed lane == requested nodes == allocated nodes
              == distinct solver hosts == distinct placement hosts
 ```
 
-rank ID、header nProcs、Hosts合計、placement件数も一致させる。multi-node laneで
+rank ID、header nProcs、Hosts合計、placement件数、hostごとのrank数=`ranks/nodes`も一致させる。multi-node laneで
 `I_MPI_FABRICS=shm`のようなnode内限定transportを拒否する。
 
 scored solver直前にはBigQuery通信、profiler、MPI debug、`checkMesh`、大容量hashを実行しない。
@@ -695,6 +702,7 @@ Git管理SQLは次の非二乗relationを作る。
 | `openfoam_workload_members_raw_v2` | `(subject_kind,subject_id,path)` | pathとexact content bytesを保持。manifest identityはparent join、size/hashはview派生 |
 | `openfoam_profile_hardware_raw_v2` | `(run,node_ordinal,record_kind,numa_node_id)` | profile hardware artifactのnode summary/NUMA nodeをqueryableに転記。source member/hashを保持 |
 | `openfoam_perf_counters_v2` | `(run,global_rank,event_name)` | profile run × expected rank × fixed five event skeletonへrank別`perf-stat/v1`をLEFT JOINし、counter/coverage値をqueryableにする。別base copyは作らない |
+| `openfoam_rank_placements_v2` | `(run,global_rank)` | Fact `parallel.rank_placement`のordered arrayをglobal rank、hostname、local rank/size、CPU affinity、NUMA memsへlosslessに展開する唯一のlong consumer。別raw copyは作らない |
 | `openfoam_qualification_allocations_raw_v2` | `(allocation_id)` | parent artifactのscheduler、decoded env、二job IDとfull bundle member arrayを保持。hardwareはallocation subject、workloadはchild subjectのrelationへ分離 |
 | `openfoam_qualification_allocations_v2` | `(allocation_id)` | parent manifest/artifactからnamespace、ordered child IDs、binding、scheduler request/accounting/terminal、minimal hardware stage、observed control-plane hash、job-entry envを一度だけ投影。同じ`(namespace,pair_id)`が複数なら全候補をconflictへ出しskeleton joinへ0行を返す |
 | `openfoam_instrumentation_decisions_v2` | `(decision_id,decision_sha256)` | Git管理のclosed decision record。adopt済みscore benchだけmanifest ID/hashでexact join |
@@ -786,7 +794,7 @@ pivotだけで二run制約を実現しない。Sheetのfilterなしでfull envir
 | quality | `collection_complete`、`official_log_valid`、`score_comparison_eligible`、`qualification_arm_eligible`。欠損原因やreason codeは列にしない |
 | termination | `run_outcome`、`run_exit_code`、`solver_termination_kind`、`solver_exit_code`、`solver_signal`、`scheduler_terminal_state`、`scheduler_exit_code` |
 | workload/build | `workload_id`、`workload_manifest_identity`、`workload_match`、`precision`、`build_artifact_sha256`、`compiler_identity`、build時`mpi_identity`、run時`mpi_execution_identity` |
-| topology/placement | `requested_nodes`、`requested_ranks`、`allocated_nodes`、`solver_host_count`、`solver_nprocs`、`placement_host_count`、`placement_rank_count`、`resource_group`、`transport_policy`、`effective_transport`、`transport_valid`、`effective_file_handler`、`placement_affinity_signature`、`placement_policy_valid`。validated placementが存在すればrank集合は必ず正しいため`placement_rank_set_valid`を作らずeligibilityがfact存在を直接要求する。`solver_host_rank_sum`はvalidated runtime headerの`solver_nprocs`と常に同じなので列にしない。現行`pjstat`が返さない`allocated_ranks`も作らない |
+| topology/placement | `requested_nodes`、`requested_ranks`、`allocated_nodes`、`solver_host_count`、`solver_nprocs`、`placement_host_count`、`placement_rank_count`、`resource_group`、`transport_policy`、`effective_transport`、`transport_valid`、`effective_file_handler`、`placement_affinity_signature`。validated placementが存在すればrank集合は必ず正しいため`placement_rank_set_valid`を作らずeligibilityがfact存在を直接要求する。`solver_host_rank_sum`はvalidated runtime headerの`solver_nprocs`と常に同じなので列にしない。現行`pjstat`が返さない`allocated_ranks`も作らない |
 | hardware | bench coreの`cpu_model_consensus`、`kernel_release_consensus`、`physical_cores_per_node_consensus`、`numa_nodes_per_node_consensus`、`memory_total_bytes_consensus`、`cpu_governor_consensus`、`cpu_frequency_max_hz_consensus`、`cpu_boost_enabled_consensus`、`numa_balancing_consensus`と、profile-onlyの`numa_cpu_layout_identity`、`postrun_memory_available_bytes_min`。profile-only列はbenchでNULL |
 | mesh | `mesh_cells`、`mesh_faces`、`mesh_points`、`mesh_internal_faces`、`requested_partition_identity`、`observed_partition_identity`。`partition_valid`はvalidated observed factの存在からTRUE/NULLしか作れないstatus duplicateなので列にせず、eligibilityがconflict-free requested/observed sourceとexpected subdomain一致を直接要求する |
 | Pstream | `pstream_change_event_count`、`float_transfer`、`default_comms_type`、`pstream_buffers_algorithm`、`using_node_comms`、`node_comms_control`、`node_comms_min`、`topology_control`、`configured_mpi_buffer_value`、`environment_mpi_buffer_bytes_applied`、`attached_mpi_buffer_bytes`、`nprocs_simple_sum`、`nprocs_nonblocking_exchange`、`tuning_nbx`、`n_poll_proc_interfaces`、`max_comms_size`。startup/runtime consensus objectはこれらscalarの完全な投影、unchangedは`change_event_count=0`から完全導出なので列にしない。rank欠損時は該当valueをNULLにする |
@@ -802,7 +810,8 @@ percentageが0/NULLならNULLにする。parsed Factと同じpayloadを別raw ta
 
 `placement_affinity_signature`はhostnameや物理CPU番号を直接hashせず、rank/local-rank順のCPU-set
 cardinality、rank間overlap、NUMA binding、pinning shapeをcanonical JSONにした実値である。
-`placement_policy_valid`はその実値とlane要求の照合結果であり、異なる二つのvalid policyを同一視しない。
+eligibilityはこの実値をprotocol planned-value policyが所有する`placement_affinity_policy` must-match dimensionへ
+直接照合する。完全導出できる`placement_policy_valid`列は作らず、異なる二つのvalid policyを同一視しない。
 rank別のfull CPU set/hostはsource artifactに残す。
 
 Fact ref列だけは`run_key_singletons`を入力にしてcontract typeから`SAFE_CAST`/JSON validationする。projection refは
@@ -849,8 +858,9 @@ Connected Sheetsは次のtabだけをversioned consumer objectへ接続する。
 3. `Sources`: 選択runで実在する各表示列について、raw key、source、artifact member、transformを示す。
 4. `Config Diff`: 左右run cell parameterからtable functionを直接呼ぶ。
 5. `Environment`: 左右run cell parameterからscope-aware diffを直接呼び、full byte-exact envをmask/redactせず比較する。
-6. `Profile Counters`: 選択profile runの`openfoam_perf_counters_v2`をrank/event grainで表示する。benchには非適用のplaceholder行を作らない。
-7. `Data Status`: contract/SQL identity、各query時刻、latest publish/archive、未移管Artifact数、home空き容量を表示する。
+6. `Rank Placement`: 選択runの`openfoam_rank_placements_v2`をglobal rank grainでlosslessに表示する。
+7. `Profile Counters`: 選択profile runの`openfoam_perf_counters_v2`をrank/event grainで表示する。benchには非適用のplaceholder行を作らない。
+8. `Data Status`: contract/SQL identity、各query時刻、latest publish/archive、未移管Artifact数、home空き容量を表示する。
 
 Connected Sheetsは自動同期されないため、deployment checklistにrefresh ownerとscheduleを記録する。
 各Connected object自身のqueryで
@@ -948,20 +958,17 @@ D-001未回答中はinstrumented benchのoverhead decisionをNULLにする。pro
 views/reopen trigger`をGit管理decision recordへ残す。未回答を推奨値で埋めず、依存するviewのdecisionはNULL、
 release gateは未通過のままにする。
 
-コード監査で、D-001より上流にlane scope D-003が残っていることが分かった。現行
-`scripts/run-openfoam.pjm`が実証するGenkai条件は1 node、120 ranks、`a-batch`、
-`I_MPI_FABRICS=shm`だけであり、64M cavity3DのGenkai 2/4 node設定はコードやrun recordから一意に
-決められない。OpenFOAM内の依存順は次とする。
+D-003は2026-08-09にユーザー回答「基本的にはマルチノード対応型の収集」で確定した。質問はGenkai 1 nodeだけを
+初版canaryにするか、1/2/4 nodeをv2対象にするか、推奨は前者、採用回答は後者である。affected fields/viewsは
+lane resolved object、scheduler request、producer node/rank axes、placement/host consensus、profile rank source、
+score/qualification eligibilityである。reopen triggerは対象clusterのnode modelまたはscheduler/MPI placement意味が変わり、
+同じlane schemaでnode/rank集合を表せなくなった時だけとする。
 
-1. D-003: Genkai 1/2/4 nodeを今回のv2 scopeにするか、Genkai 1 nodeをcanaryに限定して競技clusterの
-   1/2/4 laneは対象cluster確定後に別contractとして追加するか。推奨は後者。
-2. D-001: D-003で確定した各score laneに許すinstrumentation overhead criterion。
+実装上は1/2/4 nodeで同じcollector graphを使い、node/rank数だけをlaneから展開する。未実証2/4-nodeの値を
+成功扱いせず、通常canaryの実観測をそのまま保存する。専用collector、fallback discovery、再投入枠は追加しない。
 
-プロジェクト全体の質問順は`D-003 -> D-004（Qwen初版profiler） -> D-001`とする。D-004はOpenFOAMの
-contractをblockしないが、両repository共通のD-001を最後に一度だけ扱うため、その前に閉じる。
-
-D-003が未回答の間、未実証の`openfoam-genkai-{2,4}.toml`を作ったことにせず、1/2/4 nodeを完了条件や
-D-001 campaign対象として数えない。
+残る質問順は`D-004（Qwen初版profiler） -> D-001`とする。D-004はOpenFOAM contractをblockしないが、
+両repository共通のD-001を最後に一度だけ扱うため、その前に閉じる。
 
 ## 決定状態
 
@@ -976,7 +983,7 @@ D-001 campaign対象として数えない。
 | 確定 | 実験用途として多段retry、fallback source、field別reason registry、formalな大規模qualification campaignは作らない |
 | 確定 | artifact移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する |
 | 確定 | home artifactは自動expireせず、容量が実際に問題になった時だけ手動整理する。専用quarantineは作らない |
-| 未決定 | D-003: OpenFOAM v2のlane scope。推奨は現行Genkai 1 nodeをcanaryとし、競技cluster 1/2/4は対象確定後に別contract化 |
+| 確定 | D-003: collectorはlane-driven multi-node対応とし、Genkai 1/2/4 nodeを初版実機conformance対象にする。初版canaryは総120 ranksのbalanced 1/2/4-node lane |
 | 未決定 | D-001: 固定5 pairの簡素screenで許すinstrumentation overhead閾値。推奨はFVOPS/outer wallとも1%以内 |
 
 ## 実装ハンドオフ
@@ -1372,7 +1379,7 @@ rollbackはlaneのprotocol contractを直前版へ戻して新しいrunを投入
    instrumentationを含む全対象laneでbaselineと比較適格性を再検証する。各laneでunmodified OFFと
    exact final ONを同一mesh/partition/rankで対にし、pressure residual/iteration軌跡と公式markersの
    lexeme一致を数値同等性ゲートにする。
-8. Connected SheetsのRuns/Replicates/Sources/Config Diff/Environment/Data Statusをbounded consumerへ
+8. Connected SheetsのRuns/Replicates/Sources/Config Diff/Environment/Rank Placement/Profile Counters/Data Statusをbounded consumerへ
    切り替え、freshness/result-size smoke testを通す。旧key consumerがなくなってから派生・部分集合keyの
    新規生成を止める。
 9. homeのrun artifact tree、qualification parent artifact、Git管理source/contract/protocol/decision/SQLから
