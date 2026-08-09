@@ -587,7 +587,7 @@ probeあり/なしの反復A/Bで事前閾値を超えるなら、そのrunはof
 `instrumentation_bundle_hash`は、score pathで有効なhook、probe、rank別source schema、sample interval、sink、
 buffer、wrapper executable hash、observation contract version、env capture scope、source path allowlistを
 列挙したcanonical manifestのcontent hashである。`lightweight`等の
-labelだけでは同一視しない。D-001が未回答、またはそのbundle/laneの簡素screenが未通過なら、
+labelだけでは同一視しない。該当D-001 decisionが未作成、またはそのbundle/laneの簡素screenが未通過なら、
 最小probeを含むinstrumented runはすべてaudit-onlyとし、自動的にscore-runへ昇格させない。
 このhashはpurpose/arm/run ID/absolute runtime rootを含まないsemantic identityで、sinkとargvはrelative templateにする。
 qualification ONと採用後benchは同じbundle bytesを参照し、実argv/sinkは別のrun sourceで観測する。
@@ -847,7 +847,10 @@ block/orderから推測しない。scoreは`score_comparison_eligible`、qualifi
 `candidate / baseline`と定義し、planned/attempted/eligible pair count、median、MAD、protocolが明示した場合だけの
 interval、decisionを併記する。これらはpoint rowとversioned protocolからquery時に導出し、rawへaggregateの
 第二正本を作らない。estimator/intervalはprotocolが事前指定した方法だけを使い、
-`instrumentation_overhead_decision`は現在未決定のcriterionを確定するまでNULLにする。暫定式を埋めない。
+`instrumentation_overhead_decision`は該当D-001 decisionがまだ存在しない間だけNULLにする。暫定式を埋めない。
+D-001 screenだけは、既知のarm/result不成立をeligible filterで消して残存pairだけを採用する選択バイアスを避けるため、
+`qualification_pair_eligible`をpre-filterに使わない。planned skeletonからquery-onlyの共通evaluable集合`E`を直接作り、
+取得済みgateのfalseを保持する。
 breakingなcolumn/type/meaning変更は
 既存v2 viewを書き換えずv3 objectを作る。
 
@@ -901,11 +904,17 @@ polling、verbose traceはscore bundleへ含めず、このgateの対象をbench
 再計算sourceは[`tasks/baseline_logs`](../tasks/baseline_logs/README.md)である。初版ではこの分散からsample sizeを
 再計算せず、固定5 pairの簡素screenとしてのみ使う。
 
-### 推奨する簡素な判定（ユーザー回答待ち）
+### 確定した簡素な判定
 
 初版はlaneごとに固定5 pairだけを事前commitし、同一allocation内でOFF/ONを隣接実行する。順序は
-OFF→ONとON→OFFを交互にする。pilot、sample-size再計算、TOST、sequential stopping、replacement slot、別response
-canaryは作らない。稀な失敗pairは欠測として残し、自動再投入しない。3 pair未満しか有効でなければ単に未決定とする。
+exact `[OFF→ON, ON→OFF, OFF→ON, ON→OFF, OFF→ON]`とする。pilot、sample-size再計算、TOST、sequential stopping、replacement slot、別response
+canaryは作らない。稀な失敗pairは欠測として残し、自動再投入しない。3 pair未満しか評価可能でなければ単に未決定とする。
+評価可能pair集合は二metricで共通の一集合`E`をquery時に一度だけ導出する。planned pairに両child、parent binding、namespace、
+各arm gateを評価するためのapplicable source、mesh/decomposition/workloadとinstrumentation対象外runtimeのidentity値、
+正有限な両performance値、result-equivalenceを評価するsourceがすべて存在するpairだけを`E`へ入れる。
+ここで必要なのは証拠の存在であり、`qualification_arm_eligible`、identity equality、official validityまたは
+result equivalenceのtruth値ではない。取得済み証拠からfalseを導出できるpairは`E`に残して後段のreject材料にし、
+証拠自体が欠けるpairだけを欠測にする。metric別集合、pair別reason/status、persistする`d001_pair_evaluable` booleanは作らない。
 
 判定対象はqualificationのexact contract/protocol/policy namespaceが所有する`lane_id`、score reference source object、
 workload identity、reference/score bundle path/SHA-256、control-plane file blob集合、exact 5-pair scheduleと、
@@ -915,9 +924,9 @@ build-semantic hashはbuild projectionのprecision/labels/flags、OpenFOAM/Third
 導出し、build-definition commit/sidecar lineageは除く。toolchain等は個別のrun比較dimensionとして見えるため、
 全archive hashはpackage integrityにだけ使う。lane/reference/workload/bundles/control-plane files/5 pair scheduleはpre-buildのexact protocol relationが
 一度所有する。runtime closureで初めて決まるreference/final build-semantic pairはpost-qualificationのevidenceなので、
-採否recordは`decision_id`、qualification namespace、qualified source diff SHA-256、このobserved build pair、
-eligible childで一値のobserved runtime MPI semantic SHA-256、
-`adopt|reject|inconclusive`をGit管理する。
+採否recordは`decision_id`、qualification namespace、`adopt|reject|inconclusive`をGit管理し、adopt/rejectだけ
+qualified source diff SHA-256、observed build pair、評価可能childで一値のobserved runtime MPI semantic SHA-256を持つ。
+inconclusiveは一値のevidenceを捏造せずそれらをabsentにする。
 instrumentationの実装、bundle、実行control-plane file、runtime MPI semanticのいずれかが変わった時だけ再判定し、無関係なcommitや環境値の変化ごとに
 decisionを再openしない。
 
@@ -934,29 +943,55 @@ decomposition、workloadを使う。ONにだけ必要なbundle宣言済みwrappe
 二つのscored solver間にbuild/copy/mesh preparation/checkMesh/archiveを挟まない。片armが失敗しても保存できたlogを
 残し、そのpairの値をNULLにするだけで別allocationのrunと再pairしない。
 
-判定は有効pairについて次を人間とagentが同じSheetで直接確認する。
+判定は評価可能pairについて次を人間とagentが同じSheetで直接確認する。
 
 - 公式FVOPS比 `FVOPS_ON / FVOPS_OFF` のmedian
 - solver outer wall比 `wall_ON / wall_OFF` のmedian
 - official validity、mesh/workload identity、pressure residual/iteration trajectoryの一致
 - ONで必要なsource fileが正常pathでは揃うこと
 
-pair eligibilityはOFF/ON各childの`workload_match=true`を要求する。同じprotocol expected identityへの二つの一致から
-actual同士の一致は完全導出できるため、第三のequality booleanを保存・再検査しない。
+exact qualification protocolの`qualification_target.screen`が次を一度だけ所有する。decision record、
+raw row、child manifestへ閾値やeligible数を複写しない。
+closed `protocol/v1`ではscreenをqualification時required、bench/profile時absentとし、decision contextはprotocolからjoinして露出する。
 
-推奨初期値は「FVOPS低下1%以内かつouter wall増加1%以内、数値結果一致」であるが、閾値はD-001の回答で
-確定する。これはformalな非擾乱証明ではなく、実験projectで明らかな計測負荷をbenchへ持ち込まないための
-screenである。5 pairの個々の値とmedianを表示し、CI、power、closed reason enumは作らない。
+```text
+criterion_id: const "median-pair-ratio-screen/v1"
+minimum_evaluable_pairs: const 3
+require_both_arm_orders: const true
+pair_set: const "common-evaluable-pairs"
+median: {kind:const "continuous", even:const "mean-middle-two"}
+criteria:
+  - {response_id:const "official_fvops_trim_m", ratio:const "on/off",
+     lower_bound_inclusive:const 0.99}
+  - {response_id:const "solver_outer_wall_sec", ratio:const "on/off",
+     upper_bound_inclusive:const 1.01}
+result_equivalence_policy_id: const "openfoam-official-validity-pressure-trajectory/v1"
+```
 
-D-001未回答中はinstrumented benchのoverhead decisionをNULLにする。profile runはscore比較へ混ぜない。
+両`response_id`は同じcontractの既存`consumer.estimand.estimand_id`を参照し、screen専用generic metricを増やさない。
+ratioとmedianはBigQueryの通常の数値演算で計算し、偶数個なら中央二値の算術平均を使う。Sheetの表示丸め前の値を
+0.99/1.01と比較すれば十分とし、専用の数値型や境界補正は実装しない。
 
-## 未決定事項と質問protocol
+`openfoam-official-validity-pressure-trajectory/v1`のevidence presentは、両armについてofficial marker、
+pressure-solve全array、そこからofficial validityを評価する全sourceが存在することを意味する。result equivalenceは両armの
+`official_log_valid=true`かつofficial-marker objectがexact一致し、pressure-solve arrayがlog順のまま
+simulation time、initial/final residual、iterationのlexemeとparse値をexact一致する時だけtrueである。
+mesh/workload/decomposition identityはこのpolicyへ重ねず`E`のpreconditionで比較する。evidence-presentとequivalenceの
+nullable truth値はquery時に別々に導出し、第三のraw equality booleanを保存しない。同じexpected workloadへの各arm一致から
+actual同士の一致は導出できるため、そのequalityも保存しない。
 
-[Grill with Docs](https://github.com/mattpocock/skills/blob/main/docs/engineering/grill-with-docs.md)の進め方を
-採用し、文書から調べられる事実を先に閉じた後、結果を変える未決定事項だけを一回に一問聞く。各回答は
-`decision_id/question/recommended option/alternatives/user answer/decided_at/affected contract fields and
-views/reopen trigger`をGit管理decision recordへ残す。未回答を推奨値で埋めず、依存するviewのdecisionはNULL、
-release gateは未通過のままにする。
+確定規則は、まず同じ`E`について`|E| >= 3`、両arm orderを一件以上含むこと、pair内および`E`全体の
+比較identityとpost-run semantic identityが一値に定まることをpreconditionとする。どれかが不成立なら、他gateの値にかかわらず
+`inconclusive`である。precondition成立後、BigQueryで得た未表示丸めのratio medianについて
+`median(FVOPS_ON / FVOPS_OFF) >= 0.99`、`median(wall_ON / wall_OFF) <= 1.01`、全pairのresult
+equivalenceと各arm gateがtrueなら`adopt`、いずれかがfalseなら`reject`とする。これはformalな非擾乱証明ではなく、
+実験projectで明らかな計測負荷をbenchへ持ち込まないためのscreenである。5 pairの個々の値とmedianを表示し、個々のratioへ
+1% gateを掛けない。CI、power、MAD、closed reason enumはgateにせず、retry/replacementも作らない。
+
+D-001 qualificationをまだ実行しておらずdecision recordが存在しない間は、instrumented benchのoverhead decisionを
+NULLにする。profile runはscore比較へ混ぜない。
+
+## 決定事項と再open条件
 
 D-003は2026-08-09にユーザー回答「基本的にはマルチノード対応型の収集」で確定した。質問はGenkai 1 nodeだけを
 初版canaryにするか、1/2/4 nodeをv2対象にするか、推奨は前者、採用回答は後者である。affected fields/viewsは
@@ -967,8 +1002,8 @@ score/qualification eligibilityである。reopen triggerは対象clusterのnode
 実装上は1/2/4 nodeで同じcollector graphを使い、node/rank数だけをlaneから展開する。未実証2/4-nodeの値を
 成功扱いせず、通常canaryの実観測をそのまま保存する。専用collector、fallback discovery、再投入枠は追加しない。
 
-残る質問順は`D-004（Qwen初版profiler） -> D-001`とする。D-004はOpenFOAM contractをblockしないが、
-両repository共通のD-001を最後に一度だけ扱うため、その前に閉じる。
+D-001は固定5 pair、最低3評価可能pair、FVOPS低下1%以内、solver outer wall増加1%以内の簡素screenで確定した。
+reopen triggerは一次estimandまたはbenchへ常時入れるinstrumentation bundleの意味が変わった時だけとする。
 
 ## 決定状態
 
@@ -984,7 +1019,7 @@ score/qualification eligibilityである。reopen triggerは対象clusterのnode
 | 確定 | artifact移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する |
 | 確定 | home artifactは自動expireせず、容量が実際に問題になった時だけ手動整理する。専用quarantineは作らない |
 | 確定 | D-003: collectorはlane-driven multi-node対応とし、Genkai 1/2/4 nodeを初版実機conformance対象にする。初版canaryは総120 ranksのbalanced 1/2/4-node lane |
-| 未決定 | D-001: 固定5 pairの簡素screenで許すinstrumentation overhead閾値。推奨はFVOPS/outer wallとも1%以内 |
+| 確定 | D-001: 固定5 pair、最低3評価可能pair、FVOPS低下1%以内かつsolver outer wall増加1%以内の簡素screen |
 
 ## 実装ハンドオフ
 
@@ -1342,7 +1377,7 @@ allocation manifest -> submit result/job-entry -> child OFF source/log/metrics
 | G6 archive/送達 | workflow integration fixture | happy pathで全expected artifactがhomeにあり、upload失敗はattempt failure、SCP失敗ではGitHub Artifactが残る。homeのartifact setをBigQueryへ再送できる |
 | G7 OpenFOAM意味 | `test_observation_contract.py`、baseline log/mesh/Pstream/rank/source-diff fixture、64M-cell canary | contract source/時点/owner、観測済み変更0件の`[]`、rank欠損時NULL、qualification ONの差分がinstrumentation patchだけ、native partition完全検査とRSS上限、profile rank別exact five perf eventであること |
 | G8 consumer contract | contract生成SQL fixture、variant別BigQuery golden rows、Sheet parameter/refresh smoke test | 全列lineage、profile attemptのscore統計除外、非適用・欠損列がNULL、pair-grain eligibility、同bundleでbase/workload/toolchainだけ変えたbench拒否、失敗attempt残存、protocol分離、estimand、definition非互換・片側env欠損TVF、freshness/size |
-| G9 非擾乱 | D-001のlane別unmodified OFF/final ON固定5 pair | 個々のFVOPS/outer wall、median、数値結果一致を表示し簡素screenを再現できること |
+| G9 非擾乱 | D-001のlane別unmodified OFF/final ON固定5 pair | 二metric共通E、両arm order、continuous median、inclusive 0.99/1.01境界、数値結果一致を使いadopt/reject/inconclusiveを再現できること |
 
 `test_observation_contract.py`はcontractのschemaとowner/source/capture/applicability/validatorの完全性を検査し、
 生成した観測マップ表がcommit済み表とbyte一致することを検査する。これが「この値はどこから取るか」

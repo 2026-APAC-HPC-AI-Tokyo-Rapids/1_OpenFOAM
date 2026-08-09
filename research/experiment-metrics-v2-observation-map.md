@@ -88,7 +88,7 @@ required sourceならrun-level `collection_complete=false`とするだけで、�
 | metrics contract | Git管理`openfoam-v2.toml`とlane/run variantが選んだexpected producer graph | `runner.manifest` / provision前 | `run.metrics_contract`、`control/contract.toml`、resolved laneと元lane path/SHA-256を含む`control/protocol.toml` | contract ID/content hash、exact producer version、view compatibility、mixed contract禁止、family/列の`applicable_run_variants` | required family欠損なら`collection_complete=false`。非適用列はNULL |
 | source track / control plane | Gitのscore reference/profile base、実checkout head、purpose/qualification arm、protocol列挙control fileの実blob | `runner.manifest` / provision前、publisher / archive後 | compact source-track projection。実control-plane JCS hashはregular manifestまたはqualification parent manifest/allocation projectionが一度所有。qualification ONだけ`control/source-track-diff.json` | base/head規則、ON diff path集合=score bundle paths。control-plane filesは実checkoutからprotocol path順にhashし、protocol/contextの配列hashへ照合。childへ配列/hashを複写せずparent join | jobを投入しない |
 | instrumentation bundle | Git管理purpose-neutral semantic bundle、build sidecar | `runner.manifest` / submit前 | `control/instrumentation-bundle.json`とsubject manifestのbundle SHA-256。actual argv/sinkはstage/artifact source | hook/probe/sample設定、wrapper executable hash、contract version、env capture scope、source path allowlist、relative argv template、sink source ID、solver process environment binding。sink path templateはcontract source registryだけが所有。referenceはempty、qualification ONと採用後benchは同じscore bytes | required source欠損なら`collection_complete=false`。profile-only bundleはbenchでproducerを持たない |
-| instrumentation qualification decision | Git管理D-001 decision record | `runner.manifest` / bench submit前 | manifestのdecision ID/hashからdecision context viewへexact join。artifact copyは作らない | namespace protocolがlane/reference/workload/reference+score bundle/control-plane blobs/5-pair scheduleを所有し、decisionがqualified source diff、observed build-semantic pair、eligible childで一値のruntime MPI semantic、verdictを所有。対象subsetをdecisionへ再掲しない | 未回答はdecision NULL。profileはscoreへ混ぜない |
+| instrumentation qualification decision | Git管理D-001 decision record | `runner.manifest` / bench submit前 | manifestのdecision ID/hashからdecision context viewへexact join。artifact copyは作らない | namespace protocolがlane/reference/workload/reference+score bundle/control-plane blobs/5-pair schedule/screenを所有し、decisionがqualified source diff、observed build-semantic pair、評価可能childで一値のruntime MPI semantic、verdictを所有。対象subsetをdecisionへ再掲しない | decision未作成はNULL。profileはscoreへ混ぜない |
 | scheduler join | `pjsub` argv/stdout/stderr/responseとPJM側job-entry file | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後、finalizer / terminal後 | regularは`scheduler.submit_job_id`と`scheduler.job_entry_job_id`、qualificationはallocation projection。binding file/booleanは作らない | normalは二scalar、qualificationはallocation ID+ordered child IDsをquery時照合。childへ共通値を複写しない | 欠損値はNULL。不一致はcomparison不適格 |
 | producer completion | producerのnormal closeとStageRunnerのchild outcome | `pjm.supervisor`または`StageRunner` / return後 | 完成producer fragment、stage termination | immutable contract/bundleからexpected fragment/fileを一回導出し`collection_complete`を決める。merge後fragmentは削除 | 欠損値はNULL。partial/tmpは手元に残り得るがartifact/mergeへ入れない |
 | protocol assignment | Git管理protocolとrunnerの割当record | `runner.manifest` / job投入前 | regularはplanned-treatmentのblock ID/order、replicate index、planned group/set ID、dimensions。qualification childはtop-level pair/arm、planned set/dimensionsだけ | closed namespace+purpose+dimensionsからgroup/set IDを再計算。qualificationのblock ID/order/replicateはallocation ID、parent/set child offset、protocol pair offsetから導出しchildへ複写しない | purpose別comparison不適格。attempted groupやpairを観測値・順序から推測しない |
@@ -204,7 +204,8 @@ post-run validatorがexpected rank cardinalityを検査する。
 - compact source trackのbench/profile/qualification OFF/ON、base非ancestor、score bundle source path外差分、control-plane blob差、checkout tree不一致、同bundleでbase/workload/toolchainだけ変更、moving branch名が同じでもcommitが異なるfixture
 - qualification allocationの一pair二child、二pair混入を全pair reject、child順/arm不一致、別allocationへの再pair、arm間crash、片child未起動/metrics未完成fixture
 - instrumentation bundleのhook/sample interval一つだけを変えたhash差fixture
-- D-001 decisionの未存在、non-adopt、対象pair不一致、adopt完全一致fixture
+- D-001 decisionの未存在、inconclusive union、対象pair不一致、共通Eとmetric別Eの差、取得済みofficial/result false、
+  片arm orderだけ残る欠測、0.99/1.01境界、evaluable=4の連続median、semantic identity conflict、adopt完全一致fixture
 - supervisor common environmentとrank追加/変更/削除deltaのfull byte snapshot復元
 - 同じlogical dictを異なる挿入順で作ったcanonical JSON
 - 正常close、program failure、完成fragment欠損、異値conflict。途中fileはmerge/artifactへ入れない
@@ -212,12 +213,12 @@ post-run validatorがexpected rank cardinalityを検査する。
 
 全fixtureで、raw row集合、`collection_complete`、comparison eligibility、公式parser parityを検査する。
 
-## 未決定事項
+## 確定事項
 
 bench/profile分離と、取得できなかった値およびprofile-only metricは値をNULLにするだけで原因/status/欠損用recordを
 作らないこと、極稀な失敗を救う多段safeguardは作らないことはユーザー確定済みである。
 D-003は2026-08-09にユーザー回答「基本的にはマルチノード対応型の収集」で確定した。OpenFOAMでは上記の
-1/2/4-node canaryを実機conformance対象とし、Qwenでも同じlane-driven cardinality原則を使う。残る質問は
-Qwen profiler D-004、最後に確定laneごとの最小bench bundleの統計上限D-001である。決まるまではprofiler、
-polling、verbose MPI/Pstream trace、full placement診断はprofile-only、未qualificationのinline eventはaudit-onlyとする。
+1/2/4-node canaryを実機conformance対象とし、Qwenでも同じlane-driven cardinality原則を使う。D-001は固定5 pair、
+最低3評価可能pair、FVOPS/outer wall 1%以内の簡素screenで確定した。profiler、polling、verbose MPI/Pstream trace、
+full placement診断はprofile-only、D-001 decision未作成のinline eventはaudit-onlyとする。
 未実証2/4-node canaryは成功扱いせず、実観測が揃ったrunだけをscore/qualification eligibleにする。

@@ -327,21 +327,24 @@ workflowが得るGitHub artifact ID、SCP outcome、home pathは一attempt一row
 
 ## qualification decisionと外側artifact set
 
-Git管理の`instrumentation-decision/v1` recordは次のclosed schemaを持つ。authoring時の一時JSONはrun artifactへ複写しない。
+Git管理の`instrumentation-decision/v1` recordは共通baseにclosed tagged unionを加える。authoring時の一時JSONはrun artifactへ複写しない。
 
 ```text
 schema_version: const "instrumentation-decision/v1"
 decision_id: nonempty string
 qualification_namespace: {contract_id:nonempty string, contract_sha256:sha256,
  protocol_id:nonempty string, protocol_sha256:sha256, dimension_policy_hash:sha256}
-qualified_source_diff_sha256: sha256
-observed_build_pair: {reference_build_semantic_sha256:sha256, final_build_semantic_sha256:sha256}
-observed_runtime_mpi_semantic_sha256: sha256
-decision: enum "adopt" | "reject" | "inconclusive"
+union:
+  {decision:enum "adopt"|"reject", qualified_source_diff_sha256:sha256,
+   observed_build_pair:{reference_build_semantic_sha256:sha256,final_build_semantic_sha256:sha256},
+   observed_runtime_mpi_semantic_sha256:sha256}
+  {decision:const "inconclusive"}
 ```
 
+`inconclusive`は評価可能pair不足または一値のobserved identityを構成できない時に使い、欠損field、reason、statusを持たない。
+
 このnamespaceのexact protocol relationが`lane_id`、reference source object、workload identity、
-reference/score bundle path/SHA-256、control-plane file blob集合、protocol順のexactly 5 pair scheduleを一行で所有する。
+reference/score bundle path/SHA-256、control-plane file blob集合、protocol順のexactly 5 pair scheduleとscreenを一行で所有する。
 decisionへこれらの
 完全な部分集合を複写しない。
 build semantic SHA-256は`openfoam_build_provenance_raw_v2`のconflict-free一行から次の
@@ -362,10 +365,10 @@ runtime_objects: [runtime object union from build-sidecar/v1, ...]
 `source_commits`と`toolchain_observations`は記載role順、runtime objectはpath byte順である。`build_definition` commit、
 build archive SHA-256、outer sidecarのpath/hashはsemantic objectへ入れない。pairの二hashは各childのFact `artifact.build_manifest_sha256 ->
 source_sha256`でjoinしたprojectionから再計算し、採用後benchも`final_build_semantic_sha256`とexact一致させる。
-採否に使うeligible pair（最低3 pair）の実在OFF childは同一reference semantic hash、実在ON childは同一final semantic hashと同一
+採否に使うD-001の評価可能pair（最低3 pair）の実在OFF childは同一reference semantic hash、実在ON childは同一final semantic hashと同一
 `SHA-256(JCS(source-track-diff/v2.entries))`を持ち、そのdiff hashはdecision `qualified_source_diff_sha256`、その順序付き
 一pairがdecision `observed_build_pair`と一致する。欠損/conflict/異なるbuildの混入があれば`adopt`にできない。
-未起動/null childはpairを欠測にするだけで、他の3–4 eligible pairによるdecisionを妨げない。
+未起動/null childはpairを欠測にするだけで、他の3–4評価可能pairによるdecisionを妨げない。
 無関係なdocument/build-definition commitだけでdecisionを開き直さない。
 各qualification childのcontract/protocol/policy composite keyは`qualification_namespace`とexact一致させる。採用後benchは
 別のscore protocolでもよいが、manifestのdecision ID/hashでこの不変record全体をexact joinする。
@@ -432,7 +435,7 @@ queryはtarを読まず実値をdecodeでき、childはallocation IDでjoinす�
 Git管理relation `openfoam_instrumentation_decisions_v2`は`instrumentation-decision/v1`の全fieldと
 `decision_sha256=SHA-256(JCS(record))`を一行に持ち、grainは`(decision_id,decision_sha256)`である。runnerは
 adopt済みdecisionを使うscore benchだけ、そのID/hashをrun manifestへbindする。artifact copyは作らない。
-qualification/profileや未回答benchは二fieldを持たず、consumerはNULLにする。
+qualification/profileやdecision未存在benchは二fieldを持たず、consumerはNULLにする。
 
 logical `openfoam_instrumentation_decision_context_v2`はdecisionの`qualification_namespace` composite keyを
 Git管理qualification protocol relationの`contract_id/hash,protocol_id/hash,dimension_policy_hash`へexact inner joinし、
@@ -636,13 +639,25 @@ qualification_target?: {
   bundles:{reference:{path:repository-relative POSIX path,sha256:sha256},
            score:{path:repository-relative POSIX path,sha256:sha256}},
   pairs:exactly 5 [{pair_id:unique nonempty string,
-                    arm_order:exact ["off","on"]|["on","off"]}]
+                    arm_order:exact ["off","on"]|["on","off"]}],
+  screen:{criterion_id:const "median-pair-ratio-screen/v1",
+          minimum_evaluable_pairs:const 3,
+          require_both_arm_orders:const true,
+          pair_set:const "common-evaluable-pairs",
+          median:{kind:const "continuous",even:const "mean-middle-two"},
+          criteria:exact [
+            {response_id:const "official_fvops_trim_m",ratio:const "on/off",
+             lower_bound_inclusive:const 0.99},
+            {response_id:const "solver_outer_wall_sec",ratio:const "on/off",
+             upper_bound_inclusive:const 1.01}],
+          result_equivalence_policy_id:const "openfoam-official-validity-pressure-trajectory/v1"}
 }
 ```
 
 qualificationではtarget requiredかつsampling absent、bench/profileではtarget absentかつsampling requiredである。
 pair replicate indexはarray offsetから導出し、初版arm orderは
-offset 0からOFF→ON / ON→OFFを交互にする。top-level `control_plane_files[].path`はscore bundle `source_paths`と非重複で、
+offset 0からexact `[OFF,ON],[ON,OFF],[OFF,ON],[ON,OFF],[OFF,ON]`とし、cross-field validatorとfixtureで
+array offset parityを検査する。別のorder fieldは作らない。top-level `control_plane_files[].path`はscore bundle `source_paths`と非重複で、
 各blob OIDはreference/final treeとparent実行checkoutでexact一致する。protocol/bundle metadata pathはscore `source_paths`へ
 含めてよいが、runner/PJM/control executable pathはcontrol-plane filesにだけ置く。lane source fileのclosed parse結果は
 `lane.resolved`とexact一致し、別resolved lane fileは作らない。
@@ -652,6 +667,14 @@ expected workload identityはexact 7 pathのpath/size/SHA-256 arrayのJCS hash�
 `planned_treatment.dimensions`はmust-match valuesと選択したexactly one treatment tupleだけを合成する。
 nuisance/outcomeはpre-run valueがないためplanned value policyへ入れない。qualification treatment IDは`off|on`に固定し、
 protocol pair scheduleのarmから一意に選ぶ。
+screen criteriaのresponse IDは同contractの`consumer.estimand`をexact参照する。ratio/medianはBigQueryの通常の数値演算、
+偶数medianは中央二値の算術平均とし、Sheet表示丸め前にinclusive boundと比較する。
+result-equivalence policyは両armのofficial validity、official-marker object、log順pressure-solve arrayの
+simulation time/residual/iteration lexemeとparse値のexact一致を要求する。判定用booleanやreasonをrawへ追加しない。
+screenはplanned skeletonから両metric共通の評価可能集合`E`をquery時に作る。両armの比較値、identity、arm gate、
+result-equivalenceを評価するsourceの存在だけをmembershipに使い、取得済みfalseをEから落とさない。
+`|E|<3`、片方のarm order欠如、identity conflictは`inconclusive`、それ以外で閾値/result/arm gateのどれかがfalseなら
+`reject`、すべてtrueなら`adopt`とする。
 `observed_control_plane_sha256=SHA-256(JCS([{path,blob_oid},...]))`はregularの実行checkout、qualification parentの
 実行checkoutからprotocol path順に一度観測する。protocol arrayの同hashとの一致だけをeligibilityへ使い、actual arrayを
 別artifact/Factsへ複写しない。
