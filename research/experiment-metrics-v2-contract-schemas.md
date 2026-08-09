@@ -89,7 +89,6 @@ profileは`base_role=profile_base`かつbaseがheadのancestor、qualification O
 | `protocol_id`, `protocol_sha256` | string, SHA-256 | required | required | required |
 | `dimension_policy_hash` | SHA-256 | required | required | required |
 | `observed_control_plane_sha256` | SHA-256 | required | required | absent |
-| `instrumentation_decision_id`, `instrumentation_decision_sha256` | nonempty string, SHA-256 | adopted score bench only | absent | absent |
 | `instrumentation_bundle_sha256` | SHA-256 | required | absent | required |
 | `lane_id` | tracked lane ID | required | required | required |
 | `planned_treatment` | closed tuple below | required | absent | required |
@@ -188,7 +187,8 @@ size/content SHA-256をbundle宣言へ一致させ、`component_executable`を�
 executable/samplerで別root、PATH検索、hash不一致fallbackを許さない。実run/allocation ID、absolute runtime root、実時刻はbundle byteに含めない。runnerは
 `reference -> qualification_off`、`score -> bench|qualification_on`、`profile -> profile`の固定写像でbundleを一つ選び、
 その全componentを一度activateする。component別applicabilityはこの写像の完全な複写になるため保存しない。
-qualification ONと採用後benchはscore bundleの同一実byte/SHA-256を使う。purpose/armはsubject manifest、実argv/cwdはStageRunner Fact、
+qualification ONは受入対象のscore bundle byte/SHA-256を使う。合格後のbenchは通常contractのscore bundleを使い、
+D-001 evidenceとの継続照合は行わない。purpose/armはsubject manifest、実argv/cwdはStageRunner Fact、
 sink path templateはsource registry、実byteを含むouter file identityはartifact manifestが所有する。`sink_bindings`はsink ID byte順uniqueかつ
 source ID uniqueで、全component `sink_ids`のunionとbinding ID集合はexact一致する。各binding sourceのproducer activationは
 そのsink IDを持つcomponent IDの`bundle_component`とexact一致する。sink token/componentのIDは対応bindingに存在し、hookの`source_commit_role`は
@@ -325,9 +325,11 @@ contract/protocol/bundleから導出したexpected producer/file集合をメモ�
 `collection_complete:bool`とmerge済み`metrics.jsonl`を作る。
 workflowが得るGitHub artifact ID、SCP outcome、home pathは一attempt一rowのoperational tableだけが所有する。
 
-## qualification decisionと外側artifact set
+## 一回限りのqualification decisionと外側artifact set
 
-Git管理の`instrumentation-decision/v1` recordは共通baseにclosed tagged unionを加える。authoring時の一時JSONはrun artifactへ複写しない。
+Git管理の`instrumentation-decision/v1` recordはcollector実装時に一度だけ行うD-001受入試験の記録であり、
+共通baseにclosed tagged unionを加える。authoring時の一時JSONはrun artifactへ複写しない。最初の`adopt`後は
+判定を固定し、通常bench manifestへのbinding、変更検知による再open、lane/環境/commit/bundle別の再実行は行わない。
 
 ```text
 schema_version: const "instrumentation-decision/v1"
@@ -364,14 +366,13 @@ runtime_objects: [runtime object union from build-sidecar/v1, ...]
 
 `source_commits`と`toolchain_observations`は記載role順、runtime objectはpath byte順である。`build_definition` commit、
 build archive SHA-256、outer sidecarのpath/hashはsemantic objectへ入れない。pairの二hashは各childのFact `artifact.build_manifest_sha256 ->
-source_sha256`でjoinしたprojectionから再計算し、採用後benchも`final_build_semantic_sha256`とexact一致させる。
+source_sha256`でjoinしたprojectionからD-001 report用に再計算する。通常benchはこの値へ一致させない。
 採否に使うD-001の評価可能pair（最低3 pair）の実在OFF childは同一reference semantic hash、実在ON childは同一final semantic hashと同一
 `SHA-256(JCS(source-track-diff/v2.entries))`を持ち、そのdiff hashはdecision `qualified_source_diff_sha256`、その順序付き
 一pairがdecision `observed_build_pair`と一致する。欠損/conflict/異なるbuildの混入があれば`adopt`にできない。
 未起動/null childはpairを欠測にするだけで、他の3–4評価可能pairによるdecisionを妨げない。
-無関係なdocument/build-definition commitだけでdecisionを開き直さない。
-各qualification childのcontract/protocol/policy composite keyは`qualification_namespace`とexact一致させる。採用後benchは
-別のscore protocolでもよいが、manifestのdecision ID/hashでこの不変record全体をexact joinする。
+各qualification childのcontract/protocol/policy composite keyは`qualification_namespace`とexact一致させる。
+この照合は一回限りのD-001 report内だけで行い、通常benchへ引き継がない。
 
 qualificationのGitHub Artifact/home directoryは、同名child fileを衝突させない次の一つのartifact setである。
 
@@ -433,17 +434,14 @@ childのtop-level armはset/projection entryと一致させる。childのparent 
 queryはtarを読まず実値をdecodeでき、childはallocation IDでjoinする。
 
 Git管理relation `openfoam_instrumentation_decisions_v2`は`instrumentation-decision/v1`の全fieldと
-`decision_sha256=SHA-256(JCS(record))`を一行に持ち、grainは`(decision_id,decision_sha256)`である。runnerは
-adopt済みdecisionを使うscore benchだけ、そのID/hashをrun manifestへbindする。artifact copyは作らない。
-qualification/profileやdecision未存在benchは二fieldを持たず、consumerはNULLにする。
+`decision_sha256=SHA-256(JCS(record))`を一行に持ち、grainは`(decision_id,decision_sha256)`である。
+これは一回限りのD-001 reportだけが読み、runnerと通常run manifestはID/hashを参照しない。artifact copyは作らない。
 
 logical `openfoam_instrumentation_decision_context_v2`はdecisionの`qualification_namespace` composite keyを
 Git管理qualification protocol relationの`contract_id/hash,protocol_id/hash,dimension_policy_hash`へexact inner joinし、
 decision fieldsとprotocolのlane/reference/workload/reference+score bundles/control-plane files/5-pair scheduleを一行で露出する。
-これは保存copyでなくviewで、grainはdecision ID/hashである。adopted benchはmanifestのdecision ID/hashからこのviewへ一段joinし、
-actual contract/policy、lane、reference、workload、score bundle、control-plane blobs、final build semantic、runtime MPI semanticを照合する。
-qualified source diff hashはqualification evidenceとしてcontextに残すが、unrelated later commitを許すadopted benchのcurrent HEAD diffへ
-再照合しない。
+これは保存copyでなくviewで、grainはdecision ID/hashである。一回限りのD-001 reportがqualification evidenceを確認するために使い、
+通常benchのcontract、eligibility、comparison dimensionまたはcurrent HEADへjoinしない。
 
 ## OpenFOAM compound schemas
 
@@ -779,7 +777,7 @@ capture/partition source blobのalgorithm/OID treeは`source_commits[commit_role
 launcher_version:{outcome:process-outcome,stdout_b64:base64,stderr_b64:base64},resolved_libmpi_sha256:sha256|null}`の
 `SHA-256(JCS(object))`である。`mpi_execution_identity`はこのhashを表示し、score/qualificationのmust-matchと
 eligibilityへ使う。採否に使うeligible 3–5 pairの実在childで一値に一致したhashだけをdecisionの
-`observed_runtime_mpi_semantic_sha256`へ置き、採用後benchもexact一致させる。
+`observed_runtime_mpi_semantic_sha256`へ置く。通常benchはこの受入時hashへ一致させない。
 - `source/placement/rank-<rank>.json`は`schema_version:const "rank-placement/v1"/run_id/global_rank/local_rank/local_size/hostname/
   cpu_affinity/numa_mems`を持つ。global/local rankはnonnegative integer、local sizeはpositive integer、hostnameはnonempty string、
   `cpu_affinity`はstrictly increasing unique uint array、`numa_mems`はkernel list grammarのstringまたはnullである。
@@ -1077,7 +1075,7 @@ A consumer column entry is closed by
 `name/type/unit/source_refs/scope_cardinality/reducer_id/conflict_rule/transform_id/applicable_run_variants/
 dimension_name/allowed_classes`。`source_refs`はordered
 `[{kind="fact"|"projection"|"dimension",id,json_path?,bindings?},...]`で、異種sourceの混合とreducer入力順を明示する。
-`dimension`は同じGit releaseで作る`contract|protocol|instrumentation_decision_context` relationのclosed union、
+`dimension`は同じGit releaseで作る`contract|protocol` relationのclosed union、
 projectionはconflict-free logical relationをqueryする。
 archive memberを直接読む`artifact` refは許さず、lineageだけprojectionのsource member/hashから辿る。
 projection refの`bindings`はnonempty
@@ -1093,8 +1091,7 @@ exact `(contract_id,contract_hash) -> (contract_id,contract_sha256)`、protocol 
 (contract_id,contract_sha256,protocol_id,protocol_sha256,dimension_policy_hash)`を使う。branch、最新release、
 IDだけによるfallback joinは許さない。`workload_id`と`expected_workload_identity`はこのprotocol composite keyで
 一行に決まり、actual workload projectionとはその後に比較する。
-decision relationはexact `(instrumentation_decision_id,instrumentation_decision_sha256) ->
-(decision_id,decision_sha256)`でjoinし、artifact内copyやlatest decisionをSQLから探索しない。
+instrumentation decision relationは通常consumer columnへjoinせず、一回限りのD-001 reportだけが読む。
 plan記載列でこのentryを持たない列は
 生成しない。
 
