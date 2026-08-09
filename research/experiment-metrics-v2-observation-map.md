@@ -100,7 +100,7 @@ required sourceならrun-level `collection_complete=false`とするだけで、�
 | full exec environment | supervisor baselineと各solver wrapperのbyte environment | applicable score bundle/profile/qualification ONの`pjm.supervisor` + `exec.wrapper`、runner reducer / mpirun直前、各rank exec直前、terminal後 | `env.host_exec.common.*`、`source/env/host-exec.snapshot`、`source/env/rank-<rank>.delta.json` | rank別source file、`os.environb`相当、common+delta full復元、expected全rank | 欠損値とqualification OFF consumerはNULL。requiredなら`collection_complete=false` |
 | scheduler request | Git管理lane、PJM script identity、runnerが実行するexact `pjsub` argv | `runner.submission` / submit直前 | regularは`run`の`scheduler.request`、qualificationはallocation artifact/raw projection | lane.nodes/ranks/rscgrp/transportとscript/argv overrideを照合。child rawへ複写しない | 欠損値はNULL。invalidなら投入しない |
 | scheduler accounting | `pjstat --history -S --choose jid,st,sdt,elp,ec,sn,pc,nnumu,mmszu,uctmut,sctmut --data --delimiter "\t" <job>` | `runner.postrun` / terminal state後 | regularは`scheduler.accounting`と`source/scheduler/pjstat.{stdout,stderr}`/`pjstat-version.txt`、qualificationはparent raw/allocation projection | field list/unit/job ID固定、requestedとの一致はview判定。childはallocation IDでjoin | 取得できないfieldはNULL。host/rank/rscgrpを捏造しない |
-| observed topology/placement | solverと同じMPI launch内のglobal/local rank、`hostname`、CPU/NUMA affinity | applicable score bundle/profile/qualification ONの`exec.wrapper`、runner reducer / exec直前、terminal後 | `source/placement/rank-<rank>.json`と`parallel.rank_placement` | rank別source file、別`mpirun`禁止、実証済みrank env名、filename/global rank/run ID、global rank連続集合、hostname内local size consensusとlocal rank連続集合 | 欠損値とqualification OFF consumerはNULL。requiredなら`collection_complete=false` |
+| observed topology/placement | solverと同じMPI launch内のglobal/local rank、`hostname`、CPU/NUMA affinity | applicable score bundle/profile/qualification ONの`exec.wrapper`、runner reducer / exec直前、terminal後 | `source/placement/rank-<rank>.json`と`parallel.rank_placement`、consumer `openfoam_rank_placements_v2` | rank別source file、別`mpirun`禁止、lane canary自身で確認するrank env、filename/global rank/run ID、global rank連続集合、hostname内local size consensusとlocal rank連続集合 | 固定幅consumerは欠損・qualification OFFでNULL、long consumerは0行。required欠損なら`collection_complete=false` |
 | actual launch | stage wrapperが`subprocess`へ渡すargv/cwd/stderr mode | `StageRunner` / spawn直前 | `run.stage.<name>.launch` | shell再構成文字列ではなくclosed object。全OpenFOAM executable sub-argvに`-fileHandler uncollated`をexactly once要求し、solver専用subset keyは作らない | stage未開始ならNULL |
 | run timing/outcome | supervisorのUTC clock、monotonic clock、最終exit | `pjm.supervisor` / regularはPJM entry→compute回収終了、qualificationは各child orchestration直前→そのchild回収終了 | `run.started_at`、`run.finished_at`、`run.elapsed_sec`、`run.exit_code` | wall timestamp pairとmonotonic elapsedを別clockとして保持。`run_outcome`はexit codeからview導出。allocation共通のscheduler request/accounting/terminalは親projだけが所有し、別allocation lifecycleは作らない | 保存できたterminationとstage outcomeから中断を表す |
 | stage outcomes | supervisorの同じmonotonic clockとraw child wait status | `StageRunner` / spawn直前とwait直後 | `perf.stage.<name>.wall_time_sec`、`run.stage.<name>.termination`、regularだけ`perf.pipeline.wall_time_sec` | exit/signal/spawn_errorをJSONで区別。qualification pipelineは二child準備時間が混ざるため非適用NULL | termination objectで中断を表現 |
@@ -163,10 +163,16 @@ symbolとfull commitをregistry source欄へ固定し、line番号だけを契�
 
 ## laneとsidecar契約
 
-D-003未回答中は実証済みの`experiments/lanes/openfoam-genkai-1.toml`だけをcanary候補とする。追加laneは
-D-003とcluster実測後に作る。各laneはnode数だけでなく、rank数、resource group、transport policy、required
-logical producer、instrumentation modeを明示する。rank数をcore数から暗黙推定しない。runnerはlane、PJM script identity、exact `pjsub` argvを一つのrequest recordへ
-sealする。validationは次の独立sourceを照合する。
+D-003は初版からlane-driven multi-node対応とし、Genkai 1/2/4 nodeを実機conformance対象にすることで確定した。
+各laneはnode数だけでなく、rank数、resource group、transport policyを一度所有する。required logical producerは
+contractのvariant applicability、instrumentation modeはprotocol/bundle selectionだけが所有する。rank数をcore数から
+暗黙推定しない。runnerはlane、PJM script identity、
+exact `pjsub` argvを一つのrequest recordへsealする。初版canaryは総rank数120のbalanced配置
+`openfoam-genkai-n1-r120`、`openfoam-genkai-n2-r120`、`openfoam-genkai-n4-r120`で、順に120、60、30 rank/node、
+resource groupは`a-batch`、decompositionはScotch 120、launcherは`mpirun -np 120 -ppn <120/nodes>`とする。
+1 nodeだけ`I_MPI_FABRICS=shm`、2/4 nodeは`I_MPI_FABRICS=shm:ofi`とする。1 nodeは現行64M workloadで実証済み、
+2 nodeは旧workloadで基盤だけ実証済み、4 nodeは未実証なので、後二者に性能期待値を置かず一回の通常canaryで
+取得成否を確認する。自動retry、代替lane、node数別collectorは作らない。validationは次の独立sourceを照合する。
 
 ```text
 lane.nodes = request.nodes = accounting.nnumu
@@ -210,8 +216,8 @@ post-run validatorがexpected rank cardinalityを検査する。
 
 bench/profile分離と、取得できなかった値およびprofile-only metricは値をNULLにするだけで原因/status/欠損用recordを
 作らないこと、極稀な失敗を救う多段safeguardは作らないことはユーザー確定済みである。
-現行Genkaiで実証済みなのは1 node/120 ranksだけなので、2/4 nodeを今回実装するかを
-決めるlane scope D-003が最上流のユーザー確認待ちである。プロジェクト全体では次にQwen profiler D-004、
-最後に確定laneごとの最小bench bundleの統計上限D-001を決める。決まるまでは
-profiler、polling、verbose MPI/Pstream trace、full placement診断はprofile-only、未qualificationのinline eventは
-audit-onlyとする。未実証のGenkai 2/4 node laneや閾値を文書へ仮置きしてscore/qualification eligibleへ混入させない。
+D-003は2026-08-09にユーザー回答「基本的にはマルチノード対応型の収集」で確定した。OpenFOAMでは上記の
+1/2/4-node canaryを実機conformance対象とし、Qwenでも同じlane-driven cardinality原則を使う。残る質問は
+Qwen profiler D-004、最後に確定laneごとの最小bench bundleの統計上限D-001である。決まるまではprofiler、
+polling、verbose MPI/Pstream trace、full placement診断はprofile-only、未qualificationのinline eventはaudit-onlyとする。
+未実証2/4-node canaryは成功扱いせず、実観測が揃ったrunだけをscore/qualification eligibleにする。

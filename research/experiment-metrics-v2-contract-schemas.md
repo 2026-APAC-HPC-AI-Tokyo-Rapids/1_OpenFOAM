@@ -288,6 +288,12 @@ artifact-manifest/v1 = {
 }
 ```
 
+`scheduler-request/v1.nodes/ranks`はsubmit時にlaneから解決して実argvへ入れた値である。初版Genkai canaryの
+lane集合は`(nodes,ranks)=(1,120),(2,120),(4,120)`で、`ranks % nodes = 0`、resource group `a-batch`、
+Scotch 120 subdomain、exact `mpirun -np 120 -ppn <120/nodes>`を要求する。transport policyは1 nodeだけ
+`shm`、2/4 nodeは`shm:ofi`である。node/rank別producer instanceはこのlaneから展開し、node数別schemaや
+collectorを作らない。
+
 `member-with-role`は`member`へcontract registryのclosed source-roleを一つ加えたobjectで、path byte順uniqueにsortする。
 bundle manifestはself/outer sidecarを含めない。artifact filesは記載role順uniqueで、bench/qualification childは
 `run_bundle,metrics`、profileは`run_bundle,metrics,profile_raw`をexactly once持つ。filenameはroleから
@@ -586,6 +592,20 @@ nonfinite residualはlexemeを残してnumericをnullとし、official validity�
 
 ## build、probe、実行source recordのclosed schema
 
+`lane-schema/v1`は全field required、`additionalProperties=false`のclosed objectである。
+
+```text
+schema_version: const "lane-schema/v1"
+nodes: positive uint
+ranks: positive uint
+resource_group: nonempty string
+transport_policy: nonempty string
+```
+
+全v1 laneで`ranks % nodes = 0`を要求し、expected node ordinalは`0..nodes-1`、expected global rankは
+`0..ranks-1`、expected rank/nodeは`ranks/nodes`としてこのobjectからだけ展開する。required producerはcontractの
+variant applicability、instrumentation modeはprotocol/bundle selectionが所有し、laneへ複写しない。
+
 `control/protocol.toml`はGit管理された実byteをそのままcopyする。subject manifestの`protocol_sha256`はこのfileの
 実byte SHA-256であり、protocol definition commitやlane fileだけのhashではない。全table/field required、
 `additionalProperties=false`相当のclosed `protocol/v1`は次である。`qualification_target`だけpurpose依存である。
@@ -601,7 +621,7 @@ repository: {repository_id:const "apac2026-openfoam",object_hash_algorithm:enum 
 control_plane_files:nonempty sorted unique [{path:repository-relative POSIX path,
   blob_oid:repository algorithm-constrained full OID}]
 lane: {lane_id:nonempty string,source:{repository_path:repository-relative POSIX path,sha256:sha256},
-       resolved:contract lane-schema object}
+       resolved:lane-schema/v1}
 workload: {workload_id:nonempty string,expected_workload_identity:sha256}
 sampling?: {planned_attempts:positive uint,max_attempts:positive uint,stopping_rule_id:nonempty string}
 dimension_policy: {entries:sorted unique [{name:nonempty string,
@@ -624,7 +644,8 @@ qualificationではtarget requiredかつsampling absent、bench/profileではtar
 pair replicate indexはarray offsetから導出し、初版arm orderは
 offset 0からOFF→ON / ON→OFFを交互にする。top-level `control_plane_files[].path`はscore bundle `source_paths`と非重複で、
 各blob OIDはreference/final treeとparent実行checkoutでexact一致する。protocol/bundle metadata pathはscore `source_paths`へ
-含めてよいが、runner/PJM/control executable pathはcontrol-plane filesにだけ置く。別resolved lane fileは作らない。
+含めてよいが、runner/PJM/control executable pathはcontrol-plane filesにだけ置く。lane source fileのclosed parse結果は
+`lane.resolved`とexact一致し、別resolved lane fileは作らない。
 expected workload identityはexact 7 pathのpath/size/SHA-256 arrayのJCS hashで、別raw Factへ複写しない。
 `dimension_policy_hash=SHA-256(JCS(dimension_policy))`である。planned value policyのmust-match namesはpolicyの同classを、
 各treatment valuesはpolicyのtreatment namesをexactly once持ち、logical typeはpolicyから取る。subject
@@ -739,12 +760,30 @@ eligibilityへ使う。採否に使うeligible 3–5 pairの実在childで一値
 - `source/placement/rank-<rank>.json`は`schema_version:const "rank-placement/v1"/run_id/global_rank/local_rank/local_size/hostname/
   cpu_affinity/numa_mems`を持つ。global/local rankはnonnegative integer、local sizeはpositive integer、hostnameはnonempty string、
   `cpu_affinity`はstrictly increasing unique uint array、`numa_mems`はkernel list grammarのstringまたはnullである。
-  rankはGenkai canaryで確認した`PMI_RANK`、local rank/sizeは
+  global rankのsource候補は`PMI_RANK`、local rank/sizeは
   `MPI_LOCALRANKID/MPI_LOCALNRANKS`、affinityは`os.sched_getaffinity(0)`、NUMAは
   `/proc/self/status`の`Mems_allowed_list`、hostnameは`gethostname()`をsourceにする。
+  各declared laneのcanary自身でこれらrank envの存在と期待集合を確認できたrunだけをconformance eligibleにし、
+  欠損時の代替rank sourceは持たない。
   reducerはfilenameのrankと`global_rank`、全fileのrun IDとsubject manifest、global rank集合と
   `0..requested_ranks-1`をexact一致させる。各recordで`0 <= local_rank < local_size`、各hostname内で
-  local sizeが一値に一致し、local rank集合が`0..local_size-1`であることも要求する。
+  local sizeが一値に一致し、local rank集合が`0..local_size-1`であることも要求する。完成
+  `parallel.rank_placement` arrayはglobal rank昇順へcanonicalizeする。
+
+`multi-node-placement/v1` validatorは新しいrawやreason fieldを作らず、protocol lane、scheduler request/accounting、
+`decomposeParDict.numberOfSubdomains`、`solver.runtime_header`、全`rank-placement/v1`、solver launch-effective environmentを
+一度だけ照合する。requestのlane ID/nodes/ranks/resource group/transport policyはresolved laneとexact一致し、
+accounting `nnumu`、runtime headerのdistinct Hosts、placementのdistinct hostnameは`lane.nodes`、dictionary subdomain、
+header `nProcs`/Hosts rank sum、placement count/global rank集合は`lane.ranks`と一致しなければならない。各placement
+hostnameはexact `lane.ranks/lane.nodes`件を持ち、headerのhostname/rank-count multisetとplacementから導出した同multisetを
+exact一致させ、全recordの`local_size`も同値にする。全rankのlaunch-effective environmentで実`I_MPI_FABRICS`が
+一値かつlane transport policyと一致し、`nodes > 1`かつ値が`shm`ならinvalidにする。配置側の必要sourceが欠ければ
+validatorは不成立、全sourceが揃って不一致ならinvalidとし、topology用boolean列、原因列、validation artifactは作らない。
+transport sourceだけは同じ規則で既存`transport_valid`へ投影する。これはregular bench/profileとqualification ONだけに適用する。
+benchの`score_comparison_eligible`とqualification ONの`qualification_arm_eligible`はvalidator成立と
+`transport_valid=true`を直接要求する。qualification OFFではvalidatorとtransport_validが非適用であり、arm共通の
+lane/request/accounting/runtime-header/official-result条件だけを`qualification_arm_eligible`へ使う。OFFへactual
+mapping/cpuset collectorを追加しない。完全導出できるtopology/affinity validation booleanは作らない。
 - `run.stage.<name>.launch`は`argv:string[]/cwd:string/stderr_mode:stdout|separate`だけを持つ。
   run-owned stageは`block_mesh|decompose_par|solver|check_mesh|mesh_facts|partition_audit|minimal_hardware_capture|profile_hardware_capture`で、
   最後の二つはregular全variant/profileだけに適用する。terminationは
@@ -995,6 +1034,11 @@ sourceからproducer、owner scope、applicable variant、requirednessを一意�
 | `solver.step_timings|pressure_solves|log_markers` | log parser / solver log | respective schema validator/reducer | schemas above |
 | `profile.perf_stat.rank.<rank>` | `runner.perf_parser` / rank別profile CSV after terminal | `perf_stat/v1` / `perf_stat/v1` | rank別exact five ordered event records -> logical `openfoam_perf_counters_v2`。perf versionはbuild-provision sourceだけが所有 |
 
+`openfoam_rank_placements_v2`は`parallel.rank_placement`のordered arrayを`(run,global_rank)`へ一度だけUNNESTし、
+hostname、local rank/size、CPU affinity、NUMA memsをlosslessに表示する。これはconsumer viewであり、新しいFactや
+artifact projectionを作らない。conflict-free Factが実在する時だけCROSS JOIN UNNESTし、source欠損、非適用、conflict時は
+0行とする。expected-rank skeletonへのLEFT JOINやplaceholder rowは作らない。
+
 consumer columns listed in the plan may only use these reducer IDs:
 
 - identity/protocol: `identity_projection/v1`
@@ -1033,8 +1077,8 @@ plan記載列でこのentryを持たない列は
 
 ## NULLと不完全run
 
-取得できなかったconsumer値と当該variantで非適用の値は、どちらも`NULL`だけを返す。field別reason code、
-missing statusや欠損用placeholderは作らない。run-levelではexpected source fileとproducer outputが揃ったかを
+取得できなかった固定幅consumer値と当該variantで非適用の値は、どちらも`NULL`だけを返す。source-grainのlong relationは
+実在source rowだけを表示し、欠損/非適用row、field別reason code、missing status、placeholderを作らない。run-levelではexpected source fileとproducer outputが揃ったかを
 表す`collection_complete`だけを持ち、falseでも原因分類を要求しない。これは稀な採取失敗を多段の耐久処理で
 救済するための契約ではなく、正常pathで取得対象が初めから実装漏れになることを防ぐための契約である。
 
@@ -1060,4 +1104,4 @@ provision validationの`perf --version`、event listをcontractへ固定し、ra
 `event_name/raw_count_lexeme/count/unit/running_ns/percent_running`の順序付きrecordへreduceする。
 unsupported/not-counted countだけnull、個別の非numeric fieldだけnullとし、
 multiplexed numericは捨てない。
-D-003 canary前にexact argv/event listを固定できない場合、そのlaneではprofileを開始しない。
+各declared laneのprofile canary前にexact argv/event listを固定できない場合、そのlaneではprofileを開始しない。
