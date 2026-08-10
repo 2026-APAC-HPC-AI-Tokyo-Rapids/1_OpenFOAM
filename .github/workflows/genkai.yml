@@ -70,7 +70,13 @@ jobs:
             while IFS=$'\t' read -r run_id run_number
             do
               [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
-              [[ -s "${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst" ]] || continue
+              archive="${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst"
+              sidecar="${BUILD_ARCHIVE_DIR}/${run_number}.build-sidecar.json"
+              [[ -s "${archive}" && -s "${sidecar}" ]] || continue
+              expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")" || continue
+              expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")" || continue
+              [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
+              [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
               archive_step_count="$(gh run view "${run_id}" --json jobs --jq '[.jobs[].steps[] | select((.name == "Archive OpenFOAM build" or .name == "Build and publish OpenFOAM" or .name == "Hardlink the selected archive") and .conclusion == "success")] | length')"
               [[ "${archive_step_count}" -gt 0 ]] || continue
               echo "Selected ${BUILD_ARCHIVE_DIR}/${run_number}.tar.zst"
@@ -92,7 +98,12 @@ jobs:
 
     steps:
       - name: Hardlink the selected archive
-        run: ln -f -- "${BUILD_ARCHIVE_DIR}/${{ needs.select-build.outputs.source_run_number }}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
+        run: |
+          source_number=${{ needs.select-build.outputs.source_run_number }}
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_number}.tar.zst" \
+            "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_number}.build-sidecar.json" \
+            "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.build-sidecar.json"
 
   build-openfoam:
     name: Build OpenFOAM
@@ -163,14 +174,21 @@ jobs:
           install -d -m 2775 "${OPENFOAM_RUNTIME_ROOT}"
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
-          mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results" "${provision_dir}/task"
+          mkdir -p "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results" "${provision_dir}/task"
+          archive="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
+          sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.build-sidecar.json"
+          expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")"
+          expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")"
+          test "$(stat -c '%s' "${archive}")" = "${expected_size}"
+          test "$(sha256sum "${archive}" | awk '{print $1}')" = "${expected_sha}"
+          install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
           cp -a "${GITHUB_WORKSPACE}/benchmark/cavity3D-64M" "${provision_dir}/task/"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
-          tar -I zstd -xf "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst" -C "${provision_dir}" \
+          tar -I zstd -xf "${archive}" -C "${provision_dir}" \
             --exclude='*.o' \
             --exclude='*.C' \
             --exclude='*.H' \
@@ -191,6 +209,7 @@ jobs:
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/checkMesh"
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/mesh-facts"
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/partition-audit"
+          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/capture-hardware"
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
@@ -213,44 +232,47 @@ jobs:
       - name: Checkout control-plane identity
         uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Create v2 run manifest before submission
         id: v2_context
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
-          git_algorithm="$(git rev-parse --show-object-format)"
           head_commit="$(git rev-parse HEAD)"
           base_commit="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")"
-          control_sha256="$(
-            sha256sum \
-              "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" \
-              "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
-              "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" \
-              "${GITHUB_WORKSPACE}/experiment-metrics/registry/openfoam-v2.toml" |
-              sha256sum | awk '{print $1}'
-          )"
-          bundle_sha256="$(
-            find "${GITHUB_WORKSPACE}/experiment-metrics" -type f \
-              -not -path '*/.venv/*' -print0 |
-              sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'
-          )"
           purpose=bench
           if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
             purpose=profile
-            base_role=profile_base
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json"
           else
-            base_role=score_reference
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
           fi
-          identities="$(printf '{"source_track":{"object_hash_algorithm":"%s","base_role":"%s","base_commit":"%s","head_commit":"%s"},"observed_control_plane_sha256":"%s","instrumentation_bundle_sha256":"%s"}' \
-            "${git_algorithm}" "${base_role}" "${base_commit}" "${head_commit}" \
-            "${control_sha256}" "${bundle_sha256}")"
+          bundle_sha256="$(
+            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+              bundle-identity --bundle "${bundle_path}" --purpose "${purpose}"
+          )"
+          identities="$(
+            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+              source-track-identities \
+              --repository "${GITHUB_WORKSPACE}" \
+              --purpose "${purpose}" \
+              --base-commit "${base_commit}" \
+              --instrumentation-bundle-sha256 "${bundle_sha256}" \
+              --control-plane-file .github/workflows/genkai.yml \
+              --control-plane-file benchmark/parse_result.sh \
+              --control-plane-file experiment-metrics/registry/openfoam-v2-protocol.toml \
+              --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
+              --control-plane-file scripts/run-openfoam.pjm
+          )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
-            --identities-json "${identities}" --repository-id "${GITHUB_REPOSITORY}" \
+            --identities-json "${identities}" --repository-id apac2026-openfoam \
+            --instrumentation-bundle "${bundle_path}" \
             --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")"
           run_dir="$(dirname "$(dirname "${manifest}")")"
           run_id="$(basename "${run_dir}")"
+          install -m 0644 "${PROVISION_DIR}/control/build-sidecar.json" \
+            "${run_dir}/control/build-sidecar.json"
           printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' \
             "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
           printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\n' \
@@ -368,6 +390,9 @@ jobs:
           args=(package --manifest "${RUN_MANIFEST}")
           for pair in \
             'control/run-manifest.json:run_manifest' \
+            'control/instrumentation-bundle.json:instrumentation_bundle' \
+            'control/build-sidecar.json:build_sidecar' \
+            'control/build-provision-validation.json:build_provision_validation' \
             'logs/blockMesh.log:block_mesh_log' \
             'logs/decomposePar.log:decompose_par_log' \
             'logs/solver.log:solver_log' \
@@ -387,9 +412,21 @@ jobs:
             args+=(--member "${path#"${RUN_DIR}/"}:pstream_source")
           done < <(find "${RUN_DIR}/domain/pstream" -type f -print0 | sort -z)
           while IFS= read -r -d '' path; do
+            args+=(--member "${path#"${RUN_DIR}/"}:minimal_hardware")
+          done < <(find "${RUN_DIR}/source/hardware" -type f -print0 | sort -z)
+          while IFS= read -r -d '' path; do
             args+=(--member "${path#"${RUN_DIR}/"}:postrun_source")
-          done < <(find "${RUN_DIR}/source/hardware" "${RUN_DIR}/source/mesh" \
+          done < <(find "${RUN_DIR}/source/mesh" \
+            "${RUN_DIR}/source/build-provision" \
             -type f -print0 | sort -z)
+          if [[ -f "${RUN_DIR}/source/workload-manifest.json" ]]; then
+            args+=(--member 'source/workload-manifest.json:workload_manifest')
+          fi
+          if [[ -d "${RUN_DIR}/source/workload" ]]; then
+            while IFS= read -r -d '' path; do
+              args+=(--member "${path#"${RUN_DIR}/"}:workload_member")
+            done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
+          fi
           if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
             while IFS= read -r -d '' path; do
               args+=(--profile-member "${path#"${RUN_DIR}/"}")
@@ -398,6 +435,7 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
 
       - name: Upload fixed v2 artifact set
+        id: upload_v2
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -411,7 +449,10 @@ jobs:
           compression-level: 0
 
       - name: Publish v2 raw facts to BigQuery
-        if: always() && steps.package_v2.outcome == 'success'
+        if: >-
+          always() &&
+          steps.package_v2.outcome == 'success' &&
+          steps.upload_v2.outcome == 'success'
         env:
           EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
         run: |

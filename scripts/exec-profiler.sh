@@ -17,7 +17,8 @@ case "${OPENFOAM_PROFILE_MODE:-direct}" in
     exec "$@"
     ;;
   perf-stat)
-    exec perf stat -x, -o "${OPENFOAM_PROFILE_DIR}/perf-stat.csv" \
+    : "${OPENFOAM_PERF_PATH:?validated perf path is required}"
+    exec "${OPENFOAM_PERF_PATH}" stat -x, -o "${OPENFOAM_PROFILE_DIR}/perf-stat.csv" \
       -e cycles,instructions,branches,branch-misses,cache-misses -- "$@"
     ;;
   *)

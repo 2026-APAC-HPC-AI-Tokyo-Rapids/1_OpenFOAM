@@ -20,6 +20,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
+    assert "export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID" in text
+    assert text.index("export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID") < text.index(
+        "stage solver"
+    )
+    assert "capture-workload" in text
 
 
 def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
@@ -32,5 +37,6 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow
     assert "Publish v2 raw facts to BigQuery" in workflow
+    assert "steps.upload_v2.outcome == 'success'" in workflow
     publish = workflow.index("Publish v2 raw facts to BigQuery")
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]

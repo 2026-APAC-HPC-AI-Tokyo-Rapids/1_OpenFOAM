@@ -29,6 +29,7 @@ DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 PROFILE_RUN_ID="${RUN_ID}-${PJM_JOBID}"
 OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
+export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID
 export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
 export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
@@ -36,6 +37,10 @@ test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
 test -f "${RUN_MANIFEST}"
 install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" \
   "${OPENFOAM_METRICS_PSTREAM_DIR}"
+"${METRICS_CLI}" validate-bundle-runtime \
+  --manifest "${RUN_MANIFEST}" \
+  --bundle "${RUN_DIR}/control/instrumentation-bundle.json" \
+  --registry "${REGISTRY}"
 
 # One exact argv is given directly to StageRunner; stdout and stderr are a
 # single durable record rather than a shell pipeline with ambiguous status.
@@ -77,15 +82,47 @@ ICO_FOAM=$(command -v icoFoam)
 CHECK_MESH=$(command -v checkMesh)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
+CAPTURE_HARDWARE=$(command -v capture-hardware)
 for executable in "${MPIEXEC}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" \
-  "${ICO_FOAM}" "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}"
+  "${ICO_FOAM}" "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}" \
+  "${CAPTURE_HARDWARE}"
 do
   [[ "${executable}" == /* && -x "${executable}" ]]
 done
 
+provision_args=(
+  validate-provision
+  --manifest "${RUN_MANIFEST}"
+  --build-sidecar "${RUN_DIR}/control/build-sidecar.json"
+  --provision-root "${PROVISION_DIR}"
+  --output "${RUN_DIR}/control/build-provision-validation.json"
+  --executable "icoFoam=${ICO_FOAM}"
+  --executable "blockMesh=${BLOCK_MESH}"
+  --executable "decomposePar=${DECOMPOSE_PAR}"
+  --executable "checkMesh=${CHECK_MESH}"
+  --executable "mesh-facts=${MESH_FACTS}"
+  --executable "partition-audit=${PARTITION_AUDIT}"
+  --executable "capture-hardware=${CAPTURE_HARDWARE}"
+  --executable "mpirun=${MPIEXEC}"
+)
+if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+  OPENFOAM_PERF_PATH=$(command -v perf)
+  [[ "${OPENFOAM_PERF_PATH}" == /* && -x "${OPENFOAM_PERF_PATH}" ]]
+  export OPENFOAM_PERF_PATH
+  provision_args+=(--executable "perf=${OPENFOAM_PERF_PATH}")
+fi
+"${METRICS_CLI}" "${provision_args[@]}"
+
 cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_DIR}"
 cd "${CASE_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
+
+# Seal the exact seven workload-defining files after setup and before the
+# first OpenFOAM stage reads the case.
+"${METRICS_CLI}" capture-workload \
+  --manifest "${RUN_MANIFEST}" \
+  --case-root "${CASE_DIR}" \
+  --output-root "${SOURCE_DIR}/workload"
 
 cat > "${DECOMPOSE_PAR_DICT}" <<EOF
 FoamFile
@@ -145,8 +182,7 @@ stage check_mesh "${LOG_DIR}/checkMesh.log" \
   "${CHECK_MESH}" -fileHandler uncollated -constant
 
 stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" \
-  "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m \
-  experiment_metrics.probes.capture_hardware \
+  "${CAPTURE_HARDWARE}" \
   --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" \
   --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware" \
   --node-ordinal 0
@@ -161,8 +197,7 @@ stage partition_audit "${LOG_DIR}/partition-audit.log" \
 
 if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
   stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \
-    "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m \
-    experiment_metrics.probes.capture_hardware \
+    "${CAPTURE_HARDWARE}" \
     --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" \
     --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" \
     --node-ordinal 0

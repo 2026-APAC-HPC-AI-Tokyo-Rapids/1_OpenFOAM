@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 # ruff: noqa: E501
@@ -10,9 +11,6 @@ import socket
 import subprocess
 from pathlib import Path
 
-from ..fact import canonical_json
-from ..manifest import RunManifest
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="capture-hardware")
@@ -23,22 +21,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--node-ordinal", type=int, required=True)
     arguments = parser.parse_args(argv)
-    manifest = RunManifest.load(arguments.manifest)
+    run_id, run_dir = _load_manifest(arguments.manifest)
     root = arguments.output_root.resolve()
     expected = (
-        manifest.path.parents[1] / "source/hardware"
+        run_dir / "source/hardware"
         if arguments.mode == "minimal"
-        else manifest.path.parents[1] / "profile/raw/hardware"
+        else run_dir / "profile/raw/hardware"
     )
     if (
-        arguments.subject_id != manifest.run_id
+        arguments.subject_id != run_id
         or arguments.node_ordinal < 0
         or root != expected.resolve()
     ):
         raise ValueError("hardware probe identity or output root is invalid")
     root.mkdir(parents=True, exist_ok=True)
     if arguments.mode == "profile-postrun":
-        _profile_capture(root, manifest.run_id, arguments.node_ordinal)
+        _profile_capture(root, run_id, arguments.node_ordinal)
         return 0
     stderr = root / f"lscpu-node-{arguments.node_ordinal}.stderr.txt"
     completed = subprocess.run(
@@ -64,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         "platform_settings": _platform_settings(),
     }
     target = root / f"node-{arguments.node_ordinal}.json"
-    target.write_text(canonical_json(document) + "\n", encoding="utf-8")
+    target.write_text(_canonical_json(document) + "\n", encoding="utf-8")
     return 0
 
 
@@ -106,8 +104,34 @@ def _profile_capture(root: Path, run_id: str, ordinal: int) -> None:
         ),
     }
     (node / "capture.json").write_text(
-        canonical_json(document) + "\n", encoding="utf-8"
+        _canonical_json(document) + "\n", encoding="utf-8"
     )
+
+
+def _load_manifest(path: Path) -> tuple[str, Path]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    run_id = document.get("run_id") if isinstance(document, dict) else None
+    if (
+        not isinstance(document, dict)
+        or document.get("schema_version") != "run-manifest/v1"
+        or document.get("subject_kind") != "regular_run"
+        or not isinstance(run_id, str)
+        or not re.fullmatch(r"r-[a-f0-9]{32}", run_id)
+    ):
+        raise ValueError("hardware probe requires a valid regular run manifest")
+    resolved = path.resolve(strict=True)
+    run_dir = resolved.parents[1]
+    if resolved != run_dir / "control/run-manifest.json" or run_dir.name != run_id:
+        raise ValueError("hardware probe manifest path is not run-bound")
+    return run_id, run_dir
+
+
+def _canonical_json(value: object) -> str:
+    # The hardware schemas contain only integers, booleans, null, strings,
+    # arrays, and ASCII object keys.  For that closed domain, sorted compact
+    # JSON is byte-identical to RFC 8785 and keeps this installed probe
+    # dependency-free.
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _member(

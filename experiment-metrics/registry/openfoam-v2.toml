@@ -184,3 +184,736 @@ pattern = "mesh.partition.observed"
 owner = "runner.postrun_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
+
+# Canonical v2 ownership graph. The compact [[producers]]/[[keys]] projection
+# above is consumed by the current Recorder API; registry loading requires it
+# to agree exactly with these producer/source/fact declarations.
+[contract]
+schema_version = "openfoam-observation-contract/v1"
+repository_id = "apac2026-openfoam"
+
+[artifact_roles]
+run_bundle = "run-artifacts.tar.zst"
+metrics = "metrics.jsonl"
+profile_raw = "profile-raw.tar.zst"
+artifact_manifest = "artifact-manifest.json"
+run_bundle_source_roles = [
+  "block_mesh_log",
+  "build_provision_validation",
+  "build_sidecar",
+  "check_mesh_log",
+  "decompose_par_log",
+  "imb_mpi1_projection",
+  "imb_mpi1_stdout",
+  "instrumentation_bundle",
+  "minimal_hardware",
+  "official_result",
+  "pjm_log",
+  "postrun_source",
+  "profile_location",
+  "pstream_source",
+  "run_manifest",
+  "solver_log",
+  "workload_manifest",
+  "workload_member",
+]
+
+[[producer]]
+id = "runner.manifest"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "stage.runner"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "cartesian", axes = ["stage_name"] }
+
+[[producer]]
+id = "runner.finalizer"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.log_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "network.parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.postrun_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.pstream_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.pstream-hook/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "openfoam.pstream-hook/v1"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.pstream-hook/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "probe.minimal_hardware"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "cartesian", axes = ["node_ordinal"] }
+
+[[producer]]
+id = "probe.profile_hardware"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "always" }
+instances = { kind = "cartesian", axes = ["node_ordinal"] }
+
+[[producer]]
+id = "runner.workload_manifest"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.workload_member"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "cartesian", axes = ["invocation_id"] }
+
+[[source]]
+id = "facts.manifest"
+producer_id = "runner.manifest"
+source_role = "manifest_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.manifest--initial.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.stage"
+producer_id = "stage.runner"
+source_role = "stage_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/stage.runner--stage." }, { token = "stage_name" }, { literal = ".jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.finalizer"
+producer_id = "runner.finalizer"
+source_role = "merged_metrics"
+storage = "fact_fragment"
+path_template = [{ literal = "metrics.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.solver_log"
+producer_id = "runner.log_parser"
+source_role = "solver_log_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.log_parser--solver-log.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.network"
+producer_id = "network.parser"
+source_role = "network_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/network.parser--imb-mpi1.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.postrun"
+producer_id = "runner.postrun_parser"
+source_role = "postrun_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.postrun_parser--postrun.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.pstream"
+producer_id = "runner.pstream_parser"
+source_role = "pstream_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.pstream_parser--pstream.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.subject_manifest"
+producer_id = "runner.manifest"
+source_role = "run_manifest"
+storage = "run_bundle"
+path_template = [{ literal = "control/run-manifest.json" }]
+schema_id = "run-manifest/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.build_sidecar"
+producer_id = "runner.manifest"
+source_role = "build_sidecar"
+storage = "run_bundle"
+path_template = [{ literal = "control/build-sidecar.json" }]
+schema_id = "build-sidecar/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.instrumentation_bundle"
+producer_id = "runner.manifest"
+source_role = "instrumentation_bundle"
+storage = "run_bundle"
+path_template = [{ literal = "control/instrumentation-bundle.json" }]
+schema_id = "instrumentation-bundle/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.build_provision"
+producer_id = "runner.postrun_parser"
+source_role = "build_provision_validation"
+storage = "run_bundle"
+path_template = [{ literal = "control/build-provision-validation.json" }]
+schema_id = "build-provision-validation/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.minimal_hardware"
+producer_id = "probe.minimal_hardware"
+source_role = "minimal_hardware"
+storage = "run_bundle"
+path_template = [{ literal = "source/hardware/node-" }, { token = "node_ordinal" }, { literal = ".json" }]
+schema_id = "hardware-node/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.workload_manifest"
+producer_id = "runner.workload_manifest"
+source_role = "workload_manifest"
+storage = "run_bundle"
+path_template = [{ literal = "source/workload-manifest.json" }]
+schema_id = "workload-manifest/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.workload_member"
+producer_id = "runner.workload_member"
+source_role = "workload_member"
+storage = "run_bundle"
+path_template = [{ literal = "source/workload/" }, { token = "invocation_id" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.profile_hardware"
+producer_id = "probe.profile_hardware"
+source_role = "profile_hardware_raw"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/hardware/node-" }, { token = "node_ordinal" }, { literal = "/capture.json" }]
+schema_id = "profile-hardware-capture/v1"
+required_when_applicable = true
+
+[[source]]
+id = "openfoam.pstream-rank-events/v1"
+producer_id = "openfoam.pstream-hook/v1"
+source_role = "pstream_source"
+storage = "run_bundle"
+path_template = [{ literal = "domain/pstream" }]
+schema_id = "openfoam-pstream-event-set/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.network_stdout"
+producer_id = "network.parser"
+source_role = "imb_mpi1_stdout"
+storage = "run_bundle"
+path_template = [{ literal = "source/network/imb-mpi1/stdout.txt" }]
+schema_id = "imb-mpi1-text/v1"
+required_when_applicable = true
+
+[[fact]]
+id = "run.identity.run_id"
+key_pattern = "run.identity.run_id"
+source_id = "facts.manifest"
+schema_id = "scalar-string/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "manifest/v1"
+validator_id = "identity/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "run.identity.run_purpose"
+key_pattern = "run.identity.run_purpose"
+source_id = "facts.manifest"
+schema_id = "scalar-string/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "manifest/v1"
+validator_id = "identity/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "run.identity.repository_id"
+key_pattern = "run.identity.repository_id"
+source_id = "facts.manifest"
+schema_id = "scalar-string/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "manifest/v1"
+validator_id = "identity/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "run.instrumentation_bundle_sha256"
+key_pattern = "run.instrumentation_bundle_sha256"
+source_id = "facts.manifest"
+schema_id = "sha256/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "manifest/v1"
+validator_id = "artifact_index/v1"
+reducer_id = "artifact_projection/v1"
+
+[[fact]]
+id = "run.stage.launch"
+key_pattern = "run.stage.*.launch"
+source_id = "facts.stage"
+schema_id = "stage-launch/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_stage"
+capture_id = "stage_spawn/v1"
+validator_id = "stage_record/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "run.stage.termination"
+key_pattern = "run.stage.*.termination"
+source_id = "facts.stage"
+schema_id = "stage-termination/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_stage"
+capture_id = "stage_wait/v1"
+validator_id = "stage_record/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "perf.stage.wall_time_sec"
+key_pattern = "perf.stage.*.wall_time_sec"
+source_id = "facts.stage"
+schema_id = "finite-decimal/v1"
+logical_type = "decimal"
+unit = "seconds"
+cardinality = "run_stage"
+capture_id = "stage_monotonic/v1"
+validator_id = "finite_seconds/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "collection_complete"
+key_pattern = "collection_complete"
+source_id = "facts.finalizer"
+schema_id = "boolean/v1"
+logical_type = "boolean"
+unit = "none"
+cardinality = "run"
+capture_id = "finalizer/v1"
+validator_id = "bool/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "solver.runtime_header"
+key_pattern = "solver.runtime_header"
+source_id = "facts.solver_log"
+schema_id = "openfoam-header/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "solver_log/v1"
+validator_id = "openfoam_header/v1"
+reducer_id = "openfoam_header/v1"
+
+[[fact]]
+id = "solver.step_timings"
+key_pattern = "solver.step_timings"
+source_id = "facts.solver_log"
+schema_id = "step-timing-array/v1"
+logical_type = "json"
+unit = "seconds"
+cardinality = "run_ordered_array"
+capture_id = "solver_log/v1"
+validator_id = "step_timing/v1"
+reducer_id = "step_timing/v1"
+
+[[fact]]
+id = "solver.pressure_solves"
+key_pattern = "solver.pressure_solves"
+source_id = "facts.solver_log"
+schema_id = "pressure-solve-array/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_ordered_array"
+capture_id = "solver_log/v1"
+validator_id = "pressure_solve/v1"
+reducer_id = "pressure_solve/v1"
+
+[[fact]]
+id = "solver.log_markers"
+key_pattern = "solver.log_markers"
+source_id = "facts.solver_log"
+schema_id = "official-marker/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "solver_log/v1"
+validator_id = "official_marker/v1"
+reducer_id = "official_marker/v1"
+
+[[fact]]
+id = "network.process_count"
+key_pattern = "network.imb_mpi1.process_count"
+source_id = "facts.network"
+schema_id = "positive-integer/v1"
+logical_type = "integer"
+unit = "processes"
+cardinality = "run"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.message_min"
+key_pattern = "network.imb_mpi1.message_size.min_bytes"
+source_id = "facts.network"
+schema_id = "uint/v1"
+logical_type = "integer"
+unit = "bytes"
+cardinality = "run"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.message_max"
+key_pattern = "network.imb_mpi1.message_size.max_bytes"
+source_id = "facts.network"
+schema_id = "uint/v1"
+logical_type = "integer"
+unit = "bytes"
+cardinality = "run"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.iteration_max"
+key_pattern = "network.imb_mpi1.iteration.max_per_sample"
+source_id = "facts.network"
+schema_id = "positive-integer/v1"
+logical_type = "integer"
+unit = "iterations"
+cardinality = "run"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.time_limit"
+key_pattern = "network.imb_mpi1.iteration.time_limit_sec"
+source_id = "facts.network"
+schema_id = "positive-integer/v1"
+logical_type = "integer"
+unit = "seconds"
+cardinality = "run"
+capture_id = "imb_command/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.iteration_policy"
+key_pattern = "network.imb_mpi1.iteration.policy"
+source_id = "facts.network"
+schema_id = "scalar-string/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "imb_command/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "network.software_version"
+key_pattern = "software.imb_mpi1.version"
+source_id = "facts.network"
+schema_id = "scalar-string/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_config/v1"
+reducer_id = "identity_projection/v1"
+
+[[fact]]
+id = "pstream.startup"
+key_pattern = "solver.pstream.startup_applied.rank.*"
+source_id = "facts.pstream"
+schema_id = "pstream-startup/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank"
+capture_id = "pstream_jsonl/v1"
+validator_id = "pstream_rank/v1"
+reducer_id = "pstream_rank/v1"
+
+[[fact]]
+id = "pstream.runtime"
+key_pattern = "solver.pstream.runtime_current.rank.*"
+source_id = "facts.pstream"
+schema_id = "pstream-runtime/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank"
+capture_id = "pstream_jsonl/v1"
+validator_id = "pstream_rank/v1"
+reducer_id = "pstream_rank/v1"
+
+[[fact]]
+id = "pstream.changes"
+key_pattern = "solver.pstream.change_events.rank.*"
+source_id = "facts.pstream"
+schema_id = "pstream-changes/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank"
+capture_id = "pstream_jsonl/v1"
+validator_id = "pstream_rank/v1"
+reducer_id = "pstream_rank/v1"
+
+[[fact]]
+id = "hardware.minimal.compatibility"
+key_pattern = "hardware.minimal.node.0"
+source_id = "facts.postrun"
+schema_id = "minimal-hardware-projection/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_node"
+capture_id = "hardware_node/v1"
+validator_id = "minimal_hardware/v1"
+reducer_id = "artifact_projection/v1"
+duplication_justification = "Compatibility fact until the artifact projection consumer is deployed."
+
+[[fact]]
+id = "mesh.topology"
+key_pattern = "mesh.topology"
+source_id = "facts.postrun"
+schema_id = "mesh-topology/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "mesh_probe/v1"
+validator_id = "mesh_topology/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "mesh.partition.requested"
+key_pattern = "mesh.partition.requested"
+source_id = "facts.postrun"
+schema_id = "partition-requested/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "decompose_dictionary/v1"
+validator_id = "partition_requested/v1"
+reducer_id = "partition_requested/v1"
+
+[[fact]]
+id = "mesh.partition.observed"
+key_pattern = "mesh.partition.observed"
+source_id = "facts.postrun"
+schema_id = "partition-observed/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "partition_audit/v1"
+validator_id = "partition_observed/v1"
+reducer_id = "partition_observed/v1"
+
+[[artifact_projection]]
+id = "openfoam.source_track"
+base_table_id = "openfoam_source_tracks_base_v2"
+relation_id = "openfoam_source_tracks_raw_v2"
+conflict_relation_id = "openfoam_source_tracks_conflicts_v2"
+source_artifact_id = "artifact.subject_manifest"
+source_schema_id = "run-manifest/v1"
+row_schema_id = "source-track-projection/v1"
+row_grain = ["run_id"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "source_track_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "run_id,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Compact query projection of the subject manifest source track."
+
+[[artifact_projection]]
+id = "openfoam.build_provenance"
+base_table_id = "openfoam_build_provenance_base_v2"
+relation_id = "openfoam_build_provenance_raw_v2"
+conflict_relation_id = "openfoam_build_provenance_conflicts_v2"
+source_artifact_id = "artifact.build_sidecar"
+source_schema_id = "build-sidecar/v1"
+row_schema_id = "build-provenance-projection/v1"
+row_grain = ["source_sha256"]
+subject_scopes = [{ owner_scope = "build" }]
+publisher_id = "runner.publisher"
+transform_id = "build_provenance_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "source_sha256"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Build-grain query projection of immutable sidecar and raw observations."
+
+[[artifact_projection]]
+id = "openfoam.build_provision"
+base_table_id = "openfoam_build_provisions_base_v2"
+relation_id = "openfoam_build_provisions_raw_v2"
+conflict_relation_id = "openfoam_build_provisions_conflicts_v2"
+source_artifact_id = "artifact.build_provision"
+source_schema_id = "build-provision-validation/v1"
+row_schema_id = "build-provision-projection/v1"
+row_grain = ["run_id"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "build_provision_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "run_id,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Run-grain validation is independent from build-grain provenance."
+
+[[artifact_projection]]
+id = "openfoam.minimal_hardware"
+base_table_id = "openfoam_minimal_hardware_base_v2"
+relation_id = "openfoam_minimal_hardware_raw_v2"
+conflict_relation_id = "openfoam_minimal_hardware_conflicts_v2"
+source_artifact_id = "artifact.minimal_hardware"
+source_schema_id = "hardware-node/v1"
+row_schema_id = "minimal-hardware-projection/v1"
+row_grain = ["run_id", "node_ordinal"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "minimal_hardware_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "run_id,node_ordinal,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Node projection exposes queryable hardware while source JSON remains authoritative."
+
+[[artifact_projection]]
+id = "openfoam.workload_manifest"
+base_table_id = "openfoam_workload_manifests_base_v2"
+relation_id = "openfoam_workload_manifests_raw_v2"
+conflict_relation_id = "openfoam_workload_manifests_conflicts_v2"
+source_artifact_id = "artifact.workload_manifest"
+source_schema_id = "workload-manifest/v1"
+row_schema_id = "workload-manifest-projection/v1"
+row_grain = ["subject_kind", "subject_id"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "workload_manifest_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "subject_kind,subject_id,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Manifest identity indexes the exact copied workload member set."
+
+[[artifact_projection]]
+id = "openfoam.workload_member"
+base_table_id = "openfoam_workload_members_base_v2"
+relation_id = "openfoam_workload_members_raw_v2"
+conflict_relation_id = "openfoam_workload_members_conflicts_v2"
+source_artifact_id = "artifact.workload_member"
+source_schema_id = "opaque-bytes/v1"
+row_schema_id = "workload-member-projection/v1"
+row_grain = ["subject_kind", "subject_id", "path"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "workload_member_projection/v1"
+conflict_rule = "parent_then_row_grain/v1"
+parent_projection_id = "openfoam.workload_manifest"
+parent_join_columns = ["subject_kind", "subject_id"]
+duplication_justification = "Exact content enables direct configuration comparison without reopening tar."
+
+[[artifact_projection]]
+id = "openfoam.profile_hardware"
+base_table_id = "openfoam_profile_hardware_base_v2"
+relation_id = "openfoam_profile_hardware_raw_v2"
+conflict_relation_id = "openfoam_profile_hardware_conflicts_v2"
+source_artifact_id = "artifact.profile_hardware"
+source_schema_id = "profile-hardware-capture/v1"
+row_schema_id = "profile-hardware-projection/v1"
+row_grain = ["run_id", "node_ordinal", "record_kind", "numa_node_id"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "profile_hardware_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_members.capture.path"
+source_sha256_field = "source_members.capture.sha256"
+source_instance_grain = "run_id,node_ordinal,source_member"
+source_instance_sha256_field = "source_members.capture.sha256"
+duplication_justification = "Profile hardware rows preserve source-linked NUMA details."
+
+[[artifact_projection]]
+id = "openfoam.mpi_network"
+base_table_id = "mpi_network_results_base_v2"
+relation_id = "mpi_network_results_v2"
+conflict_relation_id = "mpi_network_results_conflicts_v2"
+source_artifact_id = "artifact.network_stdout"
+source_schema_id = "imb-mpi1-text/v1"
+row_schema_id = "mpi-network-result/v2"
+row_grain = ["run_id", "benchmark", "process_count", "message_bytes"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "imb_mpi1_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "run_id,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Message-size rows are a lossless projection of complete IMB stdout."

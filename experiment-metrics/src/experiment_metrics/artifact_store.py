@@ -11,13 +11,18 @@ from typing import Any
 
 from .fact import canonical_json
 from .manifest import SHA256, RunManifest
+from .registry import Registry
 
+_REGISTRY_PATH = Path(__file__).resolve().parents[2] / "registry/openfoam-v2.toml"
+_REGISTRY = Registry.load(_REGISTRY_PATH)
+if _REGISTRY.artifact_roles is None:  # pragma: no cover - import-time invariant
+    raise RuntimeError("default registry has no artifact role contract")
 ROLE_FILENAMES = {
-    "run_bundle": "run-artifacts.tar.zst",
-    "metrics": "metrics.jsonl",
-    "profile_raw": "profile-raw.tar.zst",
+    role: _REGISTRY.artifact_roles.filename(role)
+    for role in ("run_bundle", "metrics", "profile_raw")
 }
-ARTIFACT_MANIFEST_FILENAME = "artifact-manifest.json"
+ARTIFACT_MANIFEST_FILENAME = _REGISTRY.artifact_roles.filename("artifact_manifest")
+RUN_BUNDLE_SOURCE_ROLES = frozenset(_REGISTRY.artifact_roles.run_bundle_source_roles)
 _RUN_MEMBER_ROOTS = frozenset(
     {"control", "source", "domain", "logs", "result", "results"}
 )
@@ -204,9 +209,7 @@ def read_metrics(path: Path, *, expected_run: str) -> tuple[MetricRow, ...]:
     for number, encoded in enumerate(raw.splitlines(), start=1):
         item = _load_json_strict(encoded, f"metrics row {number}")
         if not isinstance(item, dict) or list(item) != ["run", "key", "value"]:
-            raise ValueError(
-                f"metrics row {number} must contain ordered run/key/value"
-            )
+            raise ValueError(f"metrics row {number} must contain ordered run/key/value")
         if not all(isinstance(item[name], str) for name in ("run", "key", "value")):
             raise ValueError(f"metrics row {number} values must be strings")
         if item["run"] != expected_run:
@@ -235,10 +238,7 @@ def _run_members(
         raise ValueError("run bundle members must be path-unique")
     members = tuple(
         sorted(
-            (
-                Member.from_file(run_dir, relative, role)
-                for relative, role in declared
-            ),
+            (Member.from_file(run_dir, relative, role) for relative, role in declared),
             key=lambda item: item.path.encode(),
         )
     )
@@ -402,6 +402,8 @@ def _validate_role(role: object) -> None:
         )
     ):
         raise ValueError("artifact member role must be a lowercase registry token")
+    if role not in RUN_BUNDLE_SOURCE_ROLES:
+        raise ValueError(f"artifact member role is absent from the registry: {role}")
 
 
 def _regular_file(path: Path) -> Path:

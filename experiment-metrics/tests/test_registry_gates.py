@@ -34,6 +34,48 @@ def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
     assert "software.imb_mpi1.version" not in required
 
 
+def test_default_registry_exposes_closed_machine_contract_graph() -> None:
+    registry = Registry.load(Path(__file__).parents[1] / "registry/openfoam-v2.toml")
+
+    assert registry.contract is not None
+    assert registry.contract.repository_id == "apac2026-openfoam"
+    assert {item.identifier for item in registry.producers}.issubset(
+        {item.identifier for item in registry.producer_contracts}
+    )
+    assert {item.key_pattern for item in registry.facts} == {
+        item.pattern for item in registry.keys
+    }
+    assert {item.identifier for item in registry.artifact_projections} == {
+        "openfoam.source_track",
+        "openfoam.build_provenance",
+        "openfoam.build_provision",
+        "openfoam.minimal_hardware",
+        "openfoam.workload_manifest",
+        "openfoam.workload_member",
+        "openfoam.profile_hardware",
+        "openfoam.mpi_network",
+    }
+    assert registry.artifact_roles is not None
+    assert registry.artifact_roles.filename("run_bundle") == ("run-artifacts.tar.zst")
+    assert "workload_member" in registry.artifact_roles.run_bundle_source_roles
+    assert {
+        "artifact.subject_manifest",
+        "artifact.build_sidecar",
+        "artifact.build_provision",
+        "artifact.instrumentation_bundle",
+        "artifact.workload_manifest",
+        "artifact.network_stdout",
+        "openfoam.pstream-rank-events/v1",
+    }.issubset(
+        {
+            source_id
+            for source_id, _ in registry.required_literal_sources(
+                "bench", storages=frozenset({"run_bundle"})
+            )
+        }
+    )
+
+
 def test_required_wildcard_without_a_protocol_axis_is_an_error(tmp_path: Path) -> None:
     path = tmp_path / "registry.toml"
     path.write_text(

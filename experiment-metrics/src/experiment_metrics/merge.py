@@ -20,6 +20,7 @@ class FinalizeOutcome:
     conflicts: tuple[str, ...]
     invalid_fragments: tuple[str, ...]
     missing_stages: tuple[str, ...]
+    missing_sources: tuple[str, ...]
     protocol_invalid: bool
 
 
@@ -37,6 +38,8 @@ def merge_run(
     """
 
     manifest = RunManifest.load(manifest_path)
+    if runtime_dir.resolve(strict=True) != manifest.path.parents[1]:
+        raise ValueError("merge runtime directory differs from the bound manifest")
     registry = Registry.load(registry_path)
     protocol, protocol_invalid = _protocol(
         protocol_path or default_protocol_path(registry_path), manifest
@@ -100,6 +103,7 @@ def merge_run(
     )
     missing_keys = tuple(sorted(required_keys - set(rows)))
     missing_stages = _missing_stages(protocol, rows)
+    missing_sources = _missing_literal_sources(registry, manifest, runtime_dir)
     complete = not (
         protocol_invalid
         or missing_producers
@@ -107,6 +111,7 @@ def merge_run(
         or conflicts
         or invalid
         or missing_stages
+        or missing_sources
     )
     rows["collection_complete"] = {"true" if complete else "false"}
     metrics_path = runtime_dir / "metrics.jsonl"
@@ -122,6 +127,7 @@ def merge_run(
         conflicts=tuple(sorted(conflicts)),
         invalid_fragments=tuple(sorted(invalid)),
         missing_stages=missing_stages,
+        missing_sources=missing_sources,
         protocol_invalid=protocol_invalid,
     )
 
@@ -204,6 +210,22 @@ def _successful_termination(values: set[str]) -> bool:
     except json.JSONDecodeError:
         return False
     return value == {"kind": "exit", "code": 0}
+
+
+def _missing_literal_sources(
+    registry: Registry, manifest: RunManifest, runtime_dir: Path
+) -> tuple[str, ...]:
+    missing: list[str] = []
+    for source_id, relative in registry.required_literal_sources(
+        manifest.purpose, storages=frozenset({"run_bundle", "profile_raw"})
+    ):
+        path = runtime_dir / relative
+        exists = path.is_file() or (
+            path.is_dir() and any(item.is_file() for item in path.iterdir())
+        )
+        if not exists:
+            missing.append(source_id)
+    return tuple(missing)
 
 
 def _validate_protocol_key(key: str, protocol: RunProtocol) -> None:

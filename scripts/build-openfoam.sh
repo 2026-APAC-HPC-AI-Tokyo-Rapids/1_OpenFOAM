@@ -27,6 +27,7 @@ export EXPERIMENT_METRICS_NATIVE_ROOT="${GITHUB_WORKSPACE}/experiment-metrics/na
 export BUILD_TREE="${BUILD_DIR}/tree"
 export CCACHE_LOCAL_DIR="/dev/shm/ccache-${USER:?}"
 export PUBLISH_TMP="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.tar.zst.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+export PUBLISH_SIDECAR_TMP="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.build-sidecar.json.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
 export CCACHE_BASEDIR="${BUILD_TREE}"
 export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
 export CCACHE_DIR="${CCACHE_LOCAL_DIR}"
@@ -36,7 +37,7 @@ export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 cleanup() {
   status=$?
   trap - EXIT INT TERM
-  rm -f -- "${PUBLISH_TMP}" 2>/dev/null || true
+  rm -f -- "${PUBLISH_TMP}" "${PUBLISH_SIDECAR_TMP}" 2>/dev/null || true
   exit "${status}"
 }
 trap cleanup EXIT
@@ -54,11 +55,31 @@ git clone --no-checkout \
   "${GIT_MIRROR_DIR}/3_OpenFOAM_Src.git" \
   "${BUILD_TREE}/OpenFOAM"
 git -C "${BUILD_TREE}/OpenFOAM" checkout --detach "${OPENFOAM_SOURCE_REF}"
+openfoam_source_algorithm="$(git -C "${BUILD_TREE}/OpenFOAM" rev-parse --show-object-format)"
+openfoam_source_oid="$(git -C "${BUILD_TREE}/OpenFOAM" rev-parse HEAD)"
 
 git clone --no-checkout \
   "${GIT_MIRROR_DIR}/4_OpenFOAM_ThirdParty_Src.git" \
   "${BUILD_TREE}/ThirdParty"
 git -C "${BUILD_TREE}/ThirdParty" checkout --detach "${THIRDPARTY_SOURCE_REF}"
+thirdparty_source_algorithm="$(git -C "${BUILD_TREE}/ThirdParty" rev-parse --show-object-format)"
+thirdparty_source_oid="$(git -C "${BUILD_TREE}/ThirdParty" rev-parse HEAD)"
+
+# Bundle-declared in-process sources must be present in, and byte-identical to,
+# the exact detached OpenFOAM source commit before its Git metadata is removed.
+test -z "$(git -C "${BUILD_TREE}/OpenFOAM" status --porcelain=v1 --untracked-files=all)"
+test -z "$(git -C "${BUILD_TREE}/ThirdParty" status --porcelain=v1 --untracked-files=all)"
+while IFS= read -r source_path
+do
+  git -C "${BUILD_TREE}/OpenFOAM" cat-file -e "HEAD:${source_path}"
+  cmp -- "${BUILD_TREE}/OpenFOAM/${source_path}" \
+    <(git -C "${BUILD_TREE}/OpenFOAM" show "HEAD:${source_path}")
+done < <(
+  jq -r '.source_paths[]' \
+    "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" \
+    "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json" |
+    LC_ALL=C sort -u
+)
 
 # ビルドには worktree だけを使うため、成果物へ Git オブジェクトを含めない。
 rm -rf -- "${BUILD_TREE}/OpenFOAM/.git" "${BUILD_TREE}/ThirdParty/.git"
@@ -102,7 +123,46 @@ ccache --zero-stats
 }
 ccache --show-stats
 
+# The dependency-free probe entrypoint is installed byte-for-byte from the
+# tracked source and becomes the seventh build-owned executable.
+install -m 0755 \
+  "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/probes/capture_hardware.py" \
+  "${FOAM_APPBIN}/capture-hardware"
+
+# Capture all pre-archive semantic inputs while the toolchain environment and
+# resolved build paths are still live. The final archive hash is added only
+# after tar has completed, avoiding archive self-reference.
+uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
+metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
+build_state="${BUILD_DIR}/build-state.json"
+"${metrics_cli}" capture-build-state \
+  --output "${build_state}" \
+  --build-tree "${BUILD_TREE}" \
+  --build-definition-repo "${GITHUB_WORKSPACE}" \
+  --openfoam-oid "${openfoam_source_oid}" \
+  --openfoam-algorithm "${openfoam_source_algorithm}" \
+  --thirdparty-oid "${thirdparty_source_oid}" \
+  --thirdparty-algorithm "${thirdparty_source_algorithm}" \
+  --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" \
+  --compile-flag "WM_COMPILER=${WM_COMPILER:-}" \
+  --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" \
+  --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" \
+  --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" \
+  --executable "icoFoam=${FOAM_APPBIN}/icoFoam" \
+  --executable "blockMesh=${FOAM_APPBIN}/blockMesh" \
+  --executable "decomposePar=${FOAM_APPBIN}/decomposePar" \
+  --executable "checkMesh=${FOAM_APPBIN}/checkMesh" \
+  --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" \
+  --executable "partition-audit=${FOAM_APPBIN}/partition-audit" \
+  --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${PUBLISH_TMP}" -C "${BUILD_TREE}" .
+"${metrics_cli}" finalize-build-sidecar \
+  --state "${build_state}" \
+  --archive "${PUBLISH_TMP}" \
+  --output "${PUBLISH_SIDECAR_TMP}"
 mv -- "${PUBLISH_TMP}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
+mv -- "${PUBLISH_SIDECAR_TMP}" \
+  "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.build-sidecar.json"
 echo "Published ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
