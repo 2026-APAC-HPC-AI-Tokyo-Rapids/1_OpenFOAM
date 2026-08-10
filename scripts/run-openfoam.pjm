@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PJM -L elapse=00:50:00
+#PJM -L elapse=01:00:00
 
 # Compute-side v2 executor.  It owns only local case data, source captures,
 # logs, and atomic metric fragments.  The runner owns credentials, merge,
@@ -93,6 +93,15 @@ set +eu
 source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" \
   WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
 set -eu
+
+# capture-hardware is a tracked, dependency-free Python probe whose installed
+# shebang is intentionally portable.  Genkai's system python3 is 3.6, while
+# the probe and the metrics runtime require the provisioned Python.  Put that
+# interpreter first for both the direct minimal capture and the MPI-launched
+# profile capture; the executable identity remains the tracked probe itself.
+PROBE_PYTHON_DIR="${PROVISION_DIR}/experiment-metrics/.venv/bin"
+[[ -x "${PROBE_PYTHON_DIR}/python3" ]]
+export PATH="${PROBE_PYTHON_DIR}:${PATH}"
 
 unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
 unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC

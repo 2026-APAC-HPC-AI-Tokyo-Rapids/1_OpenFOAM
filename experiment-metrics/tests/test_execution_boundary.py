@@ -11,7 +11,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     text = script.read_text(encoding="utf-8")
 
     subprocess.run(["bash", "-n", str(script)], check=True)
-    assert "#PJM -L elapse=00:50:00" in text
+    assert "#PJM -L elapse=01:00:00" in text
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS" not in text
     assert "stage solver" in text
     assert "stage minimal_hardware_capture" in text
@@ -33,6 +33,21 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
+
+    # The installed hardware probe has an env python3 shebang.  Genkai's
+    # system Python is too old, so every direct or MPI-launched probe must
+    # inherit the provisioned interpreter without changing the probe argv.
+    python_path = 'PROBE_PYTHON_DIR="${PROVISION_DIR}/experiment-metrics/.venv/bin"'
+    export_path = 'export PATH="${PROBE_PYTHON_DIR}:${PATH}"'
+    assert python_path in text
+    assert '[[ -x "${PROBE_PYTHON_DIR}/python3" ]]' in text
+    assert export_path in text
+    assert text.index('source "${PROVISION_DIR}/OpenFOAM/etc/bashrc"') < text.index(
+        python_path
+    )
+    assert text.index(export_path) < text.index("CAPTURE_HARDWARE=$(command -v")
+    assert text.index(export_path) < text.index("stage minimal_hardware_capture")
+    assert text.index(export_path) < text.index("stage profile_hardware_capture")
 
 
 def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
