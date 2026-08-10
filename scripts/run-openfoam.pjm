@@ -230,11 +230,25 @@ grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 stage check_mesh "${LOG_DIR}/checkMesh.log" \
   "${CHECK_MESH}" -fileHandler uncollated -constant
 
+minimal_hardware_argv=(
+  "${CAPTURE_HARDWARE}"
+  --mode minimal
+  --subject-kind regular_run
+  --subject-id "${RUN_ID}"
+  --manifest "${RUN_MANIFEST}"
+  --output-root "${SOURCE_DIR}/hardware"
+)
+if (( OPENFOAM_NODES == 1 )); then
+  minimal_hardware_argv+=(--node-ordinal 0)
+else
+  minimal_hardware_argv=(
+    "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1
+    "${minimal_hardware_argv[@]}"
+    --node-ordinal-from-env PMI_RANK
+  )
+fi
 stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" \
-  "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" \
-  --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" \
-  --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware" \
-  --node-ordinal-from-env PMI_RANK
+  "${minimal_hardware_argv[@]}"
 
 stage mesh_facts "${LOG_DIR}/mesh-facts.log" \
   "${MESH_FACTS}" -case "${CASE_DIR}" -fileHandler uncollated -constant \
