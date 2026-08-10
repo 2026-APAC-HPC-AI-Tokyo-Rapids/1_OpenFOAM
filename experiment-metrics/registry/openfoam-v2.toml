@@ -29,6 +29,26 @@ required_for = ["bench", "profile"]
 id = "runner.pstream_parser"
 required_for = ["bench", "profile"]
 
+[[producers]]
+id = "runner.submission"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "pjm.supervisor"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.scheduler_postrun"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.execution_context_parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.perf_parser"
+required_for = ["profile"]
+
 [[keys]]
 pattern = "run.identity.run_id"
 owner = "runner.manifest"
@@ -52,6 +72,96 @@ pattern = "run.instrumentation_bundle_sha256"
 owner = "runner.manifest"
 logical_type = "string"
 required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.started_at"
+owner = "pjm.supervisor"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.finished_at"
+owner = "pjm.supervisor"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.elapsed_sec"
+owner = "pjm.supervisor"
+logical_type = "decimal"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.exit_code"
+owner = "pjm.supervisor"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "perf.pipeline.wall_time_sec"
+owner = "pjm.supervisor"
+logical_type = "decimal"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "scheduler.request"
+owner = "runner.submission"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "scheduler.submit_job_id"
+owner = "runner.submission"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "scheduler.job_entry_job_id"
+owner = "pjm.supervisor"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "scheduler.accounting"
+owner = "runner.scheduler_postrun"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "env.job_entry.*"
+owner = "pjm.supervisor"
+logical_type = "bytes_base64"
+required_for = []
+
+[[keys]]
+pattern = "env.host_exec.common.*"
+owner = "runner.execution_context_parser"
+logical_type = "bytes_base64"
+required_for = []
+
+[[keys]]
+pattern = "env.host_exec.rank.*.delta.*"
+owner = "runner.execution_context_parser"
+logical_type = "bytes_base64"
+required_for = []
+
+[[keys]]
+pattern = "env.host_exec.rank.*.removed_names"
+owner = "runner.execution_context_parser"
+logical_type = "json"
+required_for = []
+
+[[keys]]
+pattern = "parallel.rank_placement"
+owner = "runner.execution_context_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "profile.perf_stat.rank.*"
+owner = "runner.perf_parser"
+logical_type = "json"
+required_for = ["profile"]
 
 [[keys]]
 pattern = "run.stage.*.launch"
@@ -141,7 +251,7 @@ required_for = ["bench", "profile"]
 pattern = "software.imb_mpi1.version"
 owner = "network.parser"
 logical_type = "string"
-required_for = []
+required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "solver.pstream.startup_applied.rank.*"
@@ -162,7 +272,7 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "hardware.minimal.node.0"
+pattern = "hardware.minimal.node.*"
 owner = "runner.postrun_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
@@ -203,16 +313,31 @@ run_bundle_source_roles = [
   "build_sidecar",
   "check_mesh_log",
   "decompose_par_log",
+  "host_exec_environment",
+  "imb_mpi1_argv",
   "imb_mpi1_projection",
+  "imb_mpi1_stderr",
   "imb_mpi1_stdout",
   "instrumentation_bundle",
+  "job_entry",
+  "job_entry_environment",
   "minimal_hardware",
   "official_result",
   "pjm_log",
   "postrun_source",
   "profile_location",
   "pstream_source",
+  "rank_environment",
+  "rank_placement",
   "run_manifest",
+  "scheduler_accounting",
+  "scheduler_accounting_stderr",
+  "scheduler_accounting_stdout",
+  "scheduler_request",
+  "scheduler_submission_result",
+  "scheduler_submission_stderr",
+  "scheduler_submission_stdout",
+  "scheduler_terminal",
   "solver_log",
   "workload_manifest",
   "workload_member",
@@ -238,6 +363,55 @@ owner_scope = "run"
 applicable_run_variants = ["bench", "profile"]
 activation = { kind = "always" }
 instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.submission"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "pjm.supervisor"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.scheduler_postrun"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.execution_context_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "exec.wrapper"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "cartesian", axes = ["global_rank"] }
+
+[[producer]]
+id = "runner.perf_parser"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "openfoam.rank-perf-wrapper/v1"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.rank-perf-wrapper/v1" }
+instances = { kind = "cartesian", axes = ["global_rank"] }
 
 [[producer]]
 id = "runner.log_parser"
@@ -330,6 +504,51 @@ schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
 [[source]]
+id = "facts.submission"
+producer_id = "runner.submission"
+source_role = "submission_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.submission--submission.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.supervisor"
+producer_id = "pjm.supervisor"
+source_role = "supervisor_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/pjm.supervisor--supervisor.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.scheduler_postrun"
+producer_id = "runner.scheduler_postrun"
+source_role = "scheduler_postrun_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.scheduler_postrun--accounting.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.execution_context"
+producer_id = "runner.execution_context_parser"
+source_role = "execution_context_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.execution_context_parser--execution-context.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.perf"
+producer_id = "runner.perf_parser"
+source_role = "perf_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.perf_parser--perf.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
 id = "facts.solver_log"
 producer_id = "runner.log_parser"
 source_role = "solver_log_fact_fragment"
@@ -372,6 +591,123 @@ source_role = "run_manifest"
 storage = "run_bundle"
 path_template = [{ literal = "control/run-manifest.json" }]
 schema_id = "run-manifest/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_request"
+producer_id = "runner.submission"
+source_role = "scheduler_request"
+storage = "run_bundle"
+path_template = [{ literal = "control/scheduler-request.json" }]
+schema_id = "scheduler-request/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_submission_result"
+producer_id = "runner.submission"
+source_role = "scheduler_submission_result"
+storage = "run_bundle"
+path_template = [{ literal = "control/submission-result.json" }]
+schema_id = "submission-result/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_submission_stdout"
+producer_id = "runner.submission"
+source_role = "scheduler_submission_stdout"
+storage = "run_bundle"
+path_template = [{ literal = "source/scheduler/submission.stdout" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_submission_stderr"
+producer_id = "runner.submission"
+source_role = "scheduler_submission_stderr"
+storage = "run_bundle"
+path_template = [{ literal = "source/scheduler/submission.stderr" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.job_entry"
+producer_id = "pjm.supervisor"
+source_role = "job_entry"
+storage = "run_bundle"
+path_template = [{ literal = "control/job-entry.json" }]
+schema_id = "job-entry/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.job_entry_environment"
+producer_id = "pjm.supervisor"
+source_role = "job_entry_environment"
+storage = "run_bundle"
+path_template = [{ literal = "source/env/job-entry.snapshot" }]
+schema_id = "nul-environment/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_terminal"
+producer_id = "runner.scheduler_postrun"
+source_role = "scheduler_terminal"
+storage = "run_bundle"
+path_template = [{ literal = "control/scheduler-terminal.json" }]
+schema_id = "scheduler-terminal/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_accounting"
+producer_id = "runner.scheduler_postrun"
+source_role = "scheduler_accounting"
+storage = "run_bundle"
+path_template = [{ literal = "control/scheduler-accounting.json" }]
+schema_id = "scheduler-accounting/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_accounting_stdout"
+producer_id = "runner.scheduler_postrun"
+source_role = "scheduler_accounting_stdout"
+storage = "run_bundle"
+path_template = [{ literal = "source/scheduler/accounting.stdout" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.scheduler_accounting_stderr"
+producer_id = "runner.scheduler_postrun"
+source_role = "scheduler_accounting_stderr"
+storage = "run_bundle"
+path_template = [{ literal = "source/scheduler/accounting.stderr" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.host_exec_environment"
+producer_id = "runner.execution_context_parser"
+source_role = "host_exec_environment"
+storage = "run_bundle"
+path_template = [{ literal = "source/env/host-exec.snapshot" }]
+schema_id = "nul-environment/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.rank_environment"
+producer_id = "exec.wrapper"
+source_role = "rank_environment"
+storage = "run_bundle"
+path_template = [{ literal = "source/env/rank-" }, { token = "global_rank" }, { literal = ".delta.json" }]
+schema_id = "rank-env-delta/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.rank_placement"
+producer_id = "exec.wrapper"
+source_role = "rank_placement"
+storage = "run_bundle"
+path_template = [{ literal = "source/placement/rank-" }, { token = "global_rank" }, { literal = ".json" }]
+schema_id = "rank-placement/v1"
 required_when_applicable = true
 
 [[source]]
@@ -438,6 +774,24 @@ schema_id = "profile-hardware-capture/v1"
 required_when_applicable = true
 
 [[source]]
+id = "openfoam.perf-csv/v1"
+producer_id = "openfoam.rank-perf-wrapper/v1"
+source_role = "perf_csv"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/perf/rank-" }, { token = "global_rank" }, { literal = ".csv" }]
+schema_id = "perf-csv/v1"
+required_when_applicable = true
+
+[[source]]
+id = "openfoam.rank-launch/v1"
+producer_id = "openfoam.rank-perf-wrapper/v1"
+source_role = "perf_rank_launch"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/perf/rank-" }, { token = "global_rank" }, { literal = ".json" }]
+schema_id = "openfoam-rank-launch/v1"
+required_when_applicable = true
+
+[[source]]
 id = "openfoam.pstream-rank-events/v1"
 producer_id = "openfoam.pstream-hook/v1"
 source_role = "pstream_source"
@@ -453,6 +807,24 @@ source_role = "imb_mpi1_stdout"
 storage = "run_bundle"
 path_template = [{ literal = "source/network/imb-mpi1/stdout.txt" }]
 schema_id = "imb-mpi1-text/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.network_stderr"
+producer_id = "network.parser"
+source_role = "imb_mpi1_stderr"
+storage = "run_bundle"
+path_template = [{ literal = "source/network/imb-mpi1/stderr.txt" }]
+schema_id = "opaque-bytes/v1"
+required_when_applicable = true
+
+[[source]]
+id = "artifact.network_argv"
+producer_id = "network.parser"
+source_role = "imb_mpi1_argv"
+storage = "run_bundle"
+path_template = [{ literal = "source/network/imb-mpi1/argv.json" }]
+schema_id = "argv/v1"
 required_when_applicable = true
 
 [[fact]]
@@ -502,6 +874,186 @@ cardinality = "run"
 capture_id = "manifest/v1"
 validator_id = "artifact_index/v1"
 reducer_id = "artifact_projection/v1"
+
+[[fact]]
+id = "run.started_at"
+key_pattern = "run.started_at"
+source_id = "facts.supervisor"
+schema_id = "rfc3339-utc/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "supervisor_wall_clock/v1"
+validator_id = "rfc3339_utc/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "run.finished_at"
+key_pattern = "run.finished_at"
+source_id = "facts.supervisor"
+schema_id = "rfc3339-utc/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "supervisor_wall_clock/v1"
+validator_id = "rfc3339_utc/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "run.elapsed_sec"
+key_pattern = "run.elapsed_sec"
+source_id = "facts.supervisor"
+schema_id = "finite-decimal/v1"
+logical_type = "decimal"
+unit = "seconds"
+cardinality = "run"
+capture_id = "supervisor_monotonic/v1"
+validator_id = "finite_seconds/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "run.exit_code"
+key_pattern = "run.exit_code"
+source_id = "facts.supervisor"
+schema_id = "integer/v1"
+logical_type = "integer"
+unit = "none"
+cardinality = "run"
+capture_id = "supervisor_wait/v1"
+validator_id = "process_exit/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "perf.pipeline.wall_time_sec"
+key_pattern = "perf.pipeline.wall_time_sec"
+source_id = "facts.supervisor"
+schema_id = "finite-decimal/v1"
+logical_type = "decimal"
+unit = "seconds"
+cardinality = "run"
+capture_id = "pipeline_monotonic/v1"
+validator_id = "finite_seconds/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "scheduler.request"
+key_pattern = "scheduler.request"
+source_id = "facts.submission"
+schema_id = "scheduler-request/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "pjsub_argv/v1"
+validator_id = "scheduler_request/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "scheduler.submit_job_id"
+key_pattern = "scheduler.submit_job_id"
+source_id = "facts.submission"
+schema_id = "scheduler-job-id/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "pjsub_stdout/v1"
+validator_id = "scheduler_job_id/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "scheduler.job_entry_job_id"
+key_pattern = "scheduler.job_entry_job_id"
+source_id = "facts.supervisor"
+schema_id = "scheduler-job-id/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "pjm_environment/v1"
+validator_id = "scheduler_job_id/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "scheduler.accounting"
+key_pattern = "scheduler.accounting"
+source_id = "facts.scheduler_postrun"
+schema_id = "scheduler-accounting/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "pjstat_history/v1"
+validator_id = "scheduler_accounting/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "environment.job_entry"
+key_pattern = "env.job_entry.*"
+source_id = "facts.supervisor"
+schema_id = "byte-string/v1"
+logical_type = "bytes_base64"
+unit = "none"
+cardinality = "run_environment_name"
+capture_id = "proc_environ_nul/v1"
+validator_id = "nul_environment/v1"
+reducer_id = "environment_projection/v1"
+
+[[fact]]
+id = "environment.host_common"
+key_pattern = "env.host_exec.common.*"
+source_id = "facts.execution_context"
+schema_id = "byte-string/v1"
+logical_type = "bytes_base64"
+unit = "none"
+cardinality = "run_environment_name"
+capture_id = "proc_environ_nul/v1"
+validator_id = "nul_environment/v1"
+reducer_id = "environment_common_delta/v1"
+
+[[fact]]
+id = "environment.rank_delta"
+key_pattern = "env.host_exec.rank.*.delta.*"
+source_id = "facts.execution_context"
+schema_id = "byte-string/v1"
+logical_type = "bytes_base64"
+unit = "none"
+cardinality = "run_rank_environment_name"
+capture_id = "rank_wrapper_environ/v1"
+validator_id = "rank_env_delta/v1"
+reducer_id = "environment_common_delta/v1"
+
+[[fact]]
+id = "environment.rank_removed_names"
+key_pattern = "env.host_exec.rank.*.removed_names"
+source_id = "facts.execution_context"
+schema_id = "string-array/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank"
+capture_id = "rank_wrapper_environ/v1"
+validator_id = "rank_env_delta/v1"
+reducer_id = "environment_common_delta/v1"
+
+[[fact]]
+id = "parallel.rank_placement"
+key_pattern = "parallel.rank_placement"
+source_id = "facts.execution_context"
+schema_id = "rank-placement-array/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank_array"
+capture_id = "rank_wrapper_placement/v1"
+validator_id = "rank_placement_axes/v1"
+reducer_id = "rank_placement_axes/v1"
+
+[[fact]]
+id = "profile.perf_stat"
+key_pattern = "profile.perf_stat.rank.*"
+source_id = "facts.perf"
+schema_id = "perf-stat/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_rank"
+capture_id = "perf_csv/v1"
+validator_id = "perf_stat/v1"
+reducer_id = "perf_stat/v1"
 
 [[fact]]
 id = "run.stage.launch"
@@ -721,7 +1273,7 @@ reducer_id = "pstream_rank/v1"
 
 [[fact]]
 id = "hardware.minimal.compatibility"
-key_pattern = "hardware.minimal.node.0"
+key_pattern = "hardware.minimal.node.*"
 source_id = "facts.postrun"
 schema_id = "minimal-hardware-projection/v1"
 logical_type = "json"
@@ -898,6 +1450,25 @@ source_sha256_field = "source_members.capture.sha256"
 source_instance_grain = "run_id,node_ordinal,source_member"
 source_instance_sha256_field = "source_members.capture.sha256"
 duplication_justification = "Profile hardware rows preserve source-linked NUMA details."
+
+[[artifact_projection]]
+id = "openfoam.perf_counters"
+base_table_id = "openfoam_perf_counters_base_v2"
+relation_id = "openfoam_perf_counters_v2"
+conflict_relation_id = "openfoam_perf_counters_conflicts_v2"
+source_artifact_id = "openfoam.perf-csv/v1"
+source_schema_id = "perf-csv/v1"
+row_schema_id = "perf-counter-projection/v1"
+row_grain = ["run_id", "global_rank", "event_name"]
+subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["profile"] }]
+publisher_id = "runner.publisher"
+transform_id = "perf_counter_projection/v1"
+conflict_rule = "source_instance_then_row_grain/v1"
+source_member_field = "source_member"
+source_sha256_field = "source_sha256"
+source_instance_grain = "run_id,global_rank,source_member"
+source_instance_sha256_field = "source_sha256"
+duplication_justification = "Rank-event rows expose validated profile counter observations."
 
 [[artifact_projection]]
 id = "openfoam.mpi_network"

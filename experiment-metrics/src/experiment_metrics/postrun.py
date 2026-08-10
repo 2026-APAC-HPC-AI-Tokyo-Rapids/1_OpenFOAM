@@ -16,16 +16,17 @@ def minimal_hardware_fact(path: Path, *, run_id: str, source_member: str) -> Fac
     source = _source(path, source_member)
     document = _json(path)
     _hardware(document)
-    if document["node_ordinal"] != 0:
-        raise ValueError("bench minimal hardware must be node ordinal zero")
+    ordinal = document["node_ordinal"]
+    if source_member != f"source/hardware/node-{ordinal}.json":
+        raise ValueError("minimal hardware source member differs from node ordinal")
     lscpu = document["lscpu_json"]
     return Fact(
-        "hardware.minimal.node.0",
+        f"hardware.minimal.node.{ordinal}",
         {
             "schema_version": "minimal-hardware-projection/v1",
             "subject_kind": "regular_run",
             "subject_id": run_id,
-            "node_ordinal": 0,
+            "node_ordinal": ordinal,
             "hostname": document["hostname"],
             "cpu_identity": _cpu_identity(lscpu),
             "platform_settings": document["platform_settings"],

@@ -19,8 +19,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--subject-id", required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--node-ordinal", type=int, required=True)
+    ordinal = parser.add_mutually_exclusive_group(required=True)
+    ordinal.add_argument("--node-ordinal", type=int)
+    ordinal.add_argument("--node-ordinal-from-env", choices=["PMI_RANK"])
     arguments = parser.parse_args(argv)
+    node_ordinal = arguments.node_ordinal
+    if arguments.node_ordinal_from_env is not None:
+        raw_ordinal = os.environ.get(arguments.node_ordinal_from_env)
+        if raw_ordinal is None or not raw_ordinal.isdecimal():
+            raise ValueError("hardware probe node ordinal environment is invalid")
+        node_ordinal = int(raw_ordinal)
+    assert node_ordinal is not None
     run_id, run_dir = _load_manifest(arguments.manifest)
     root = arguments.output_root.resolve()
     expected = (
@@ -28,17 +37,13 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.mode == "minimal"
         else run_dir / "profile/raw/hardware"
     )
-    if (
-        arguments.subject_id != run_id
-        or arguments.node_ordinal < 0
-        or root != expected.resolve()
-    ):
+    if arguments.subject_id != run_id or node_ordinal < 0 or root != expected.resolve():
         raise ValueError("hardware probe identity or output root is invalid")
     root.mkdir(parents=True, exist_ok=True)
     if arguments.mode == "profile-postrun":
-        _profile_capture(root, run_id, arguments.node_ordinal)
+        _profile_capture(root, run_id, node_ordinal)
         return 0
-    stderr = root / f"lscpu-node-{arguments.node_ordinal}.stderr.txt"
+    stderr = root / f"lscpu-node-{node_ordinal}.stderr.txt"
     completed = subprocess.run(
         ["lscpu", "--json"], check=False, text=True, capture_output=True, env=_c_env()
     )
@@ -49,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         lscpu_json = None
     document = {
         "schema_version": "hardware-node/v1",
-        "node_ordinal": arguments.node_ordinal,
+        "node_ordinal": node_ordinal,
         "hostname": socket.gethostname(),
         "commands": {
             "lscpu": {
@@ -61,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         "lscpu_json": lscpu_json if isinstance(lscpu_json, dict) else None,
         "platform_settings": _platform_settings(),
     }
-    target = root / f"node-{arguments.node_ordinal}.json"
+    target = root / f"node-{node_ordinal}.json"
     target.write_text(_canonical_json(document) + "\n", encoding="utf-8")
     return 0
 

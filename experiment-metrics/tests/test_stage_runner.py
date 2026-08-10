@@ -133,3 +133,35 @@ def test_stage_captures_combined_stdout_without_a_shell_pipeline(
 
     assert termination.code == 0
     assert output.read_text().splitlines() == ["out", "err"]
+
+
+def test_stage_captures_separate_streams_and_enforces_timeout(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
+    runtime_dir = manifest_path.parents[1]
+    stdout = runtime_dir / "logs/stdout.txt"
+    stderr = runtime_dir / "logs/stderr.txt"
+    with Recorder.open(
+        manifest_path, registry_path, "stage.runner", runtime_dir, fragment_id="timeout"
+    ) as recorder:
+        termination = run_stage(
+            "timeout",
+            [
+                sys.executable,
+                "-c",
+                "import sys,time; print('out',flush=True); "
+                "print('err',file=sys.stderr,flush=True); time.sleep(5)",
+            ],
+            cwd=tmp_path,
+            stderr_mode="separate",
+            stdout_path=stdout,
+            stderr_path=stderr,
+            timeout_sec=1,
+            recorder=recorder,
+        )
+
+    assert termination.kind == "signal"
+    assert termination.signal == 9
+    assert stdout.read_text().strip() == "out"
+    assert stderr.read_text().strip() == "err"

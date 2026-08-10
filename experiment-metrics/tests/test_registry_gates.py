@@ -31,7 +31,20 @@ def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
         "mesh.partition.requested",
         "mesh.partition.observed",
     }.issubset(required)
-    assert "software.imb_mpi1.version" not in required
+    assert "software.imb_mpi1.version" in required
+
+
+def test_default_registry_expands_multi_node_hardware_axis() -> None:
+    registry = Registry.load(Path(__file__).parents[1] / "registry/openfoam-v2.toml")
+
+    required = registry.required_keys(
+        "bench", expected_pstream_ranks=4, expected_nodes=2
+    )
+
+    assert {key for key in required if key.startswith("hardware.minimal.node.")} == {
+        "hardware.minimal.node.0",
+        "hardware.minimal.node.1",
+    }
 
 
 def test_default_registry_exposes_closed_machine_contract_graph() -> None:
@@ -53,11 +66,15 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
         "openfoam.workload_manifest",
         "openfoam.workload_member",
         "openfoam.profile_hardware",
+        "openfoam.perf_counters",
         "openfoam.mpi_network",
     }
     assert registry.artifact_roles is not None
     assert registry.artifact_roles.filename("run_bundle") == ("run-artifacts.tar.zst")
     assert "workload_member" in registry.artifact_roles.run_bundle_source_roles
+    assert registry.required_keys("profile", expected_pstream_ranks=2).issuperset(
+        {"profile.perf_stat.rank.0", "profile.perf_stat.rank.1"}
+    )
     assert {
         "artifact.subject_manifest",
         "artifact.build_sidecar",

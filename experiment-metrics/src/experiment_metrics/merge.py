@@ -99,7 +99,9 @@ def merge_run(
         sorted(registry.required_producers(manifest.purpose) - accepted_producers)
     )
     required_keys = registry.required_keys(
-        manifest.purpose, expected_pstream_ranks=protocol.expected_pstream_ranks
+        manifest.purpose,
+        expected_pstream_ranks=protocol.expected_pstream_ranks,
+        expected_nodes=protocol.nodes,
     )
     missing_keys = tuple(sorted(required_keys - set(rows)))
     missing_stages = _missing_stages(protocol, rows)
@@ -183,7 +185,7 @@ def _protocol(path: Path, manifest: RunManifest) -> tuple[RunProtocol, bool]:
     except (FileNotFoundError, ValueError, OSError):
         # Keep merging recoverable evidence, but protocol absence/malformation
         # can never silently certify a collection.
-        return RunProtocol((), 0), True
+        return RunProtocol((), 1, 1, "invalid", "invalid", "invalid", "0" * 64), True
 
 
 def _missing_stages(
@@ -209,7 +211,10 @@ def _successful_termination(values: set[str]) -> bool:
         value = json.loads(next(iter(values)))
     except json.JSONDecodeError:
         return False
-    return value == {"kind": "exit", "code": 0}
+    return value == {
+        "schema_version": "stage-termination/v1",
+        "outcome": {"kind": "exit", "code": 0},
+    }
 
 
 def _missing_literal_sources(
@@ -229,6 +234,18 @@ def _missing_literal_sources(
 
 
 def _validate_protocol_key(key: str, protocol: RunProtocol) -> None:
+    profile_prefix = "profile.perf_stat.rank."
+    if key.startswith(profile_prefix):
+        rank = key.removeprefix(profile_prefix)
+        if not rank.isdecimal() or int(rank) >= protocol.ranks:
+            raise ValueError("profile rank key is outside the protocol axis")
+        return
+    hardware_prefix = "hardware.minimal.node."
+    if key.startswith(hardware_prefix):
+        ordinal = key.removeprefix(hardware_prefix)
+        if not ordinal.isdecimal() or int(ordinal) >= protocol.nodes:
+            raise ValueError("hardware node key is outside the protocol axis")
+        return
     prefix = "solver.pstream."
     if not key.startswith(prefix):
         return

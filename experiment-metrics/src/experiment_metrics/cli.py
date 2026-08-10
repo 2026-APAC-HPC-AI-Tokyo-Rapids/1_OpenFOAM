@@ -33,6 +33,7 @@ def parser() -> argparse.ArgumentParser:
     runtime_bundle.add_argument("--manifest", type=Path, required=True)
     runtime_bundle.add_argument("--bundle", type=Path, required=True)
     runtime_bundle.add_argument("--registry", type=Path, required=True)
+    runtime_bundle.add_argument("--artifact-root", type=Path)
 
     build_state = commands.add_parser("capture-build-state")
     build_state.add_argument("--output", type=Path, required=True)
@@ -72,6 +73,59 @@ def parser() -> argparse.ArgumentParser:
     source_track.add_argument("--control-plane-file", action="append", default=[])
     source_track.add_argument("--instrumentation-bundle-sha256", required=True)
 
+    submit = commands.add_parser("submit-run")
+    _runtime_common(submit)
+    submit.add_argument("--protocol", type=Path, required=True)
+    submit.add_argument("--repository-root", type=Path, required=True)
+    submit.add_argument("--pjm-script-repository-path", required=True)
+    submit.add_argument("--execution-script", type=Path, required=True)
+    submit.add_argument("--provision-dir", type=Path, required=True)
+    submit.add_argument(
+        "--profile-mode", choices=["direct", "perf-stat"], required=True
+    )
+
+    supervisor_start = commands.add_parser("supervisor-start")
+    supervisor_start.add_argument("--manifest", type=Path, required=True)
+    supervisor_start.add_argument("--state", type=Path, required=True)
+
+    supervisor_mark = commands.add_parser("supervisor-mark-pipeline")
+    supervisor_mark.add_argument("--state", type=Path, required=True)
+    supervisor_mark.add_argument("--mark", choices=["start", "finish"], required=True)
+
+    supervisor_finish = commands.add_parser("supervisor-finish")
+    supervisor_finish.add_argument("--manifest", type=Path, required=True)
+    supervisor_finish.add_argument("--state", type=Path, required=True)
+    supervisor_finish.add_argument("--registry", type=Path, required=True)
+    supervisor_finish.add_argument("--exit-code", type=int, required=True)
+
+    host_exec = commands.add_parser("capture-host-exec")
+    host_exec.add_argument("--manifest", type=Path, required=True)
+    host_exec.add_argument("--output", type=Path, required=True)
+
+    capture_argv = commands.add_parser("capture-argv")
+    capture_argv.add_argument("--manifest", type=Path, required=True)
+    capture_argv.add_argument("--output", type=Path, required=True)
+    capture_argv.add_argument("argv", nargs=argparse.REMAINDER)
+
+    terminal = commands.add_parser("record-scheduler-terminal")
+    _runtime_common(terminal)
+    terminal.add_argument("--job-id", required=True)
+
+    execution_context = commands.add_parser("record-execution-context")
+    _runtime_common(execution_context)
+    execution_context.add_argument("--protocol", type=Path, required=True)
+    execution_context.add_argument("--host-snapshot", type=Path, required=True)
+    execution_context.add_argument("--environment-root", type=Path, required=True)
+    execution_context.add_argument("--placement-root", type=Path, required=True)
+    execution_context.add_argument("--scheduler-request", type=Path, required=True)
+    execution_context.add_argument("--scheduler-accounting", type=Path, required=True)
+    execution_context.add_argument("--decompose-dict", type=Path, required=True)
+    execution_context.add_argument("--solver-log", type=Path, required=True)
+
+    profile_perf = commands.add_parser("record-profile-perf")
+    _runtime_common(profile_perf)
+    profile_perf.add_argument("--protocol", type=Path, required=True)
+
     record = commands.add_parser("record-json")
     _common(record)
     record.add_argument("--facts", type=Path, required=True)
@@ -84,6 +138,8 @@ def parser() -> argparse.ArgumentParser:
         "--stderr-mode", choices=["stdout", "separate"], default="separate"
     )
     stage.add_argument("--stdout-path", type=Path)
+    stage.add_argument("--stderr-path", type=Path)
+    stage.add_argument("--timeout-sec", type=int)
     stage.add_argument("--fragment-id")
     stage.add_argument("argv", nargs=argparse.REMAINDER)
 
@@ -101,10 +157,10 @@ def parser() -> argparse.ArgumentParser:
     imb = commands.add_parser("record-imb-mpi1")
     _runtime_common(imb)
     imb.add_argument("--stdout", type=Path, required=True)
+    imb.add_argument("--stderr", type=Path, required=True)
+    imb.add_argument("--argv-json", type=Path, required=True)
+    imb.add_argument("--protocol", type=Path, required=True)
     imb.add_argument("--source-member", required=True)
-    imb.add_argument("--version")
-    imb.add_argument("--time-limit-sec", type=int, required=True)
-    imb.add_argument("--iteration-policy", choices=["dynamic"], required=True)
     imb.add_argument("--fragment-id", default="imb-mpi1")
 
     pstream = commands.add_parser("record-pstream")
@@ -115,8 +171,10 @@ def parser() -> argparse.ArgumentParser:
 
     postrun = commands.add_parser("record-postrun")
     _runtime_common(postrun)
-    postrun.add_argument("--hardware", type=Path, required=True)
-    postrun.add_argument("--hardware-source-member", required=True)
+    postrun.add_argument("--hardware", type=Path)
+    postrun.add_argument("--hardware-source-member")
+    postrun.add_argument("--hardware-root", type=Path)
+    postrun.add_argument("--protocol", type=Path)
     postrun.add_argument("--topology", type=Path, required=True)
     postrun.add_argument("--decompose-dict", type=Path, required=True)
     postrun.add_argument("--partition-observed", type=Path, required=True)
@@ -184,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
                     arguments.manifest,
                     arguments.bundle,
                     arguments.registry,
+                    artifact_root=arguments.artifact_root,
                 ),
                 separators=(",", ":"),
                 sort_keys=True,
@@ -251,6 +310,142 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if arguments.command == "submit-run":
+        from .scheduler import submit_run
+
+        outcome = submit_run(
+            manifest_path=arguments.manifest,
+            runtime_dir=arguments.runtime_dir,
+            registry_path=arguments.registry,
+            protocol_path=arguments.protocol,
+            repository_root=arguments.repository_root,
+            pjm_script_repository_path=arguments.pjm_script_repository_path,
+            execution_script=arguments.execution_script,
+            provision_dir=arguments.provision_dir,
+            profile_mode=arguments.profile_mode,
+        )
+        if outcome.job_id is not None:
+            print(outcome.job_id)
+        return 0 if outcome.job_id is not None else 1
+    if arguments.command == "supervisor-start":
+        from .supervisor import start_supervisor
+
+        print(start_supervisor(arguments.manifest, arguments.state))
+        return 0
+    if arguments.command == "supervisor-mark-pipeline":
+        from .supervisor import mark_pipeline
+
+        print(mark_pipeline(arguments.state, arguments.mark))
+        return 0
+    if arguments.command == "supervisor-finish":
+        from .supervisor import finish_supervisor
+
+        print(
+            finish_supervisor(
+                arguments.manifest,
+                arguments.state,
+                arguments.registry,
+                exit_code=arguments.exit_code,
+            )
+        )
+        return 0
+    if arguments.command == "capture-host-exec":
+        from .environment import capture_snapshot
+        from .manifest import RunManifest
+
+        manifest = RunManifest.load(arguments.manifest)
+        expected = manifest.path.parents[1] / "source/env/host-exec.snapshot"
+        if arguments.output.resolve() != expected.resolve():
+            raise ValueError("host execution snapshot is outside the bound run")
+        print(capture_snapshot(arguments.output))
+        return 0
+    if arguments.command == "capture-argv":
+        from .fact import canonical_json
+        from .manifest import RunManifest
+
+        manifest = RunManifest.load(arguments.manifest)
+        expected = manifest.path.parents[1] / "source/network/imb-mpi1/argv.json"
+        if arguments.output.resolve() != expected.resolve():
+            raise ValueError("argv capture is outside its fixed run path")
+        command = arguments.argv[1:] if arguments.argv[:1] == ["--"] else arguments.argv
+        if not command or any(not item for item in command):
+            raise ValueError("captured argv must be a nonempty string array")
+        if arguments.output.exists():
+            raise FileExistsError(arguments.output)
+        arguments.output.write_text(
+            canonical_json({"schema_version": "argv/v1", "argv": command}) + "\n",
+            encoding="utf-8",
+        )
+        print(arguments.output)
+        return 0
+    if arguments.command == "record-scheduler-terminal":
+        from .scheduler import capture_scheduler_terminal
+
+        print(
+            capture_scheduler_terminal(
+                manifest_path=arguments.manifest,
+                runtime_dir=arguments.runtime_dir,
+                registry_path=arguments.registry,
+                job_id=arguments.job_id,
+            )
+        )
+        return 0
+    if arguments.command == "record-execution-context":
+        from .execution_context import record_execution_context
+
+        print(
+            record_execution_context(
+                manifest_path=arguments.manifest,
+                runtime_dir=arguments.runtime_dir,
+                registry_path=arguments.registry,
+                protocol_path=arguments.protocol,
+                host_snapshot=arguments.host_snapshot,
+                environment_root=arguments.environment_root,
+                placement_root=arguments.placement_root,
+                scheduler_request=arguments.scheduler_request,
+                scheduler_accounting=arguments.scheduler_accounting,
+                decompose_dictionary=arguments.decompose_dict,
+                solver_log=arguments.solver_log,
+            )
+        )
+        return 0
+    if arguments.command == "record-profile-perf":
+        from .manifest import RunManifest
+        from .profile_perf import profile_perf_fact_values, project_profile_perf
+        from .protocol import RunProtocol
+        from .recording import Recorder
+
+        manifest = RunManifest.load(arguments.manifest)
+        if manifest.purpose != "profile":
+            raise ValueError("perf facts apply only to profile runs")
+        protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
+        projection = project_profile_perf(
+            arguments.runtime_dir,
+            run_id=manifest.run_id,
+            expected_ranks=protocol.ranks,
+        )
+        projection.require_complete()
+        hosts = {fact.hostname for fact in projection.rank_facts}
+        if len(hosts) != protocol.nodes or any(
+            fact.local_size != protocol.ranks_per_node for fact in projection.rank_facts
+        ):
+            raise ValueError("perf rank axes differ from the protocol")
+        values = profile_perf_fact_values(
+            arguments.runtime_dir,
+            run_id=manifest.run_id,
+            expected_ranks=protocol.ranks,
+        )
+        with Recorder.open(
+            manifest.path,
+            arguments.registry,
+            "runner.perf_parser",
+            arguments.runtime_dir,
+            fragment_id="perf",
+        ) as recorder:
+            for rank, value in enumerate(values):
+                recorder.record(Fact(f"profile.perf_stat.rank.{rank}", value))
+        print(recorder.fragment_path)
+        return 0
     if arguments.command == "record-json":
         facts = _facts(arguments.facts)
         print(
@@ -281,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
                 stderr_mode=arguments.stderr_mode,
                 recorder=recorder,
                 stdout_path=arguments.stdout_path,
+                stderr_path=arguments.stderr_path,
+                timeout_sec=arguments.timeout_sec,
             )
         if termination.kind == "exit":
             return termination.code or 0
@@ -317,16 +514,38 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "record-imb-mpi1":
-        from .imb import parse_imb_mpi1
+        from .imb import validate_imb_capture
+        from .manifest import RunManifest
+        from .protocol import RunProtocol
         from .reducers import network_config_facts, network_projection_rows
 
-        results = parse_imb_mpi1(
-            arguments.stdout.read_text(encoding="utf-8", errors="replace")
+        manifest = RunManifest.load(arguments.manifest)
+        run_dir = manifest.path.parents[1]
+        expected_sources = {
+            "stdout": run_dir / "source/network/imb-mpi1/stdout.txt",
+            "stderr": run_dir / "source/network/imb-mpi1/stderr.txt",
+            "argv": run_dir / "source/network/imb-mpi1/argv.json",
+        }
+        if (
+            arguments.stdout.resolve(strict=True)
+            != expected_sources["stdout"].resolve(strict=True)
+            or arguments.stderr.resolve(strict=True)
+            != expected_sources["stderr"].resolve(strict=True)
+            or arguments.argv_json.resolve(strict=True)
+            != expected_sources["argv"].resolve(strict=True)
+            or arguments.source_member != "source/network/imb-mpi1/stdout.txt"
+        ):
+            raise ValueError("IMB sources are outside their fixed run paths")
+        capture = validate_imb_capture(
+            stdout_path=arguments.stdout,
+            stderr_path=arguments.stderr,
+            argv_path=arguments.argv_json,
+            protocol=RunProtocol.load(arguments.protocol, manifest.purpose),
         )
         _write_network_rows(
             arguments.runtime_dir / "domain/network-imb-mpi1-results.jsonl",
             network_projection_rows(
-                _run_id(arguments.manifest), results, arguments.source_member
+                manifest.run_id, capture.results, arguments.source_member
             ),
         )
         print(
@@ -335,10 +554,10 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "network.parser",
                 lambda: network_config_facts(
-                    results,
-                    arguments.version,
-                    time_limit_sec=arguments.time_limit_sec,
-                    iteration_policy=arguments.iteration_policy,
+                    capture.results,
+                    capture.version,
+                    time_limit_sec=capture.time_limit_sec,
+                    iteration_policy=capture.iteration_policy,
                 ),
                 registry_path=arguments.registry,
                 fragment_id=arguments.fragment_id,
@@ -377,15 +596,34 @@ def main(argv: list[str] | None = None) -> int:
             arguments.partition_observed,
             topology=topology.logical_value,  # type: ignore[arg-type]
         )
-        facts = (
-            minimal_hardware_fact(
-                arguments.hardware,
-                run_id=_run_id(arguments.manifest),
-                source_member=arguments.hardware_source_member,
-            ),
-            topology,
-            *partition,
-        )
+        hardware_facts: list[Fact]
+        if arguments.hardware_root is not None and arguments.protocol is not None:
+            from .manifest import RunManifest
+            from .protocol import RunProtocol
+
+            manifest = RunManifest.load(arguments.manifest)
+            protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
+            hardware_facts = [
+                minimal_hardware_fact(
+                    arguments.hardware_root / f"node-{ordinal}.json",
+                    run_id=manifest.run_id,
+                    source_member=f"source/hardware/node-{ordinal}.json",
+                )
+                for ordinal in range(protocol.nodes)
+            ]
+        elif arguments.hardware is not None and arguments.hardware_source_member:
+            hardware_facts = [
+                minimal_hardware_fact(
+                    arguments.hardware,
+                    run_id=_run_id(arguments.manifest),
+                    source_member=arguments.hardware_source_member,
+                )
+            ]
+        else:
+            raise ValueError(
+                "record-postrun requires hardware-root/protocol or hardware/member"
+            )
+        facts = (*hardware_facts, topology, *partition)
         print(
             collect_once(
                 arguments.manifest,

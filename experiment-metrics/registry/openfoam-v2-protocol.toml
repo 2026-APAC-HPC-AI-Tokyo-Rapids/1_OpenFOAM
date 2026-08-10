@@ -2,6 +2,12 @@
 schema_version = "openfoam-v2-run-protocol/v1"
 
 [variant.bench]
+nodes = 1
+ranks = 120
+resource_group = "a-batch"
+transport_policy = "shm"
+workload_id = "cavity3d-64m-v1"
+expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295ac14103cc967feb"
 expected_stages = [
   "block_mesh",
   "decompose_par",
@@ -12,9 +18,14 @@ expected_stages = [
   "minimal_hardware_capture",
   "network_imb_mpi1",
 ]
-expected_pstream_ranks = 120
 
 [variant.profile]
+nodes = 1
+ranks = 120
+resource_group = "a-batch"
+transport_policy = "shm"
+workload_id = "cavity3d-64m-v1"
+expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295ac14103cc967feb"
 expected_stages = [
   "block_mesh",
   "decompose_par",
@@ -26,4 +37,3 @@ expected_stages = [
   "profile_hardware_capture",
   "network_imb_mpi1",
 ]
-expected_pstream_ranks = 120

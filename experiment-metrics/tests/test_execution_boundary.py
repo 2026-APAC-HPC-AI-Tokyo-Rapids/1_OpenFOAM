@@ -25,15 +25,20 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         "stage solver"
     )
     assert "capture-workload" in text
+    assert '--expected-nodes "${OPENFOAM_NODES}"' in text
+    assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
+    assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
 
 
 def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
-    assert (
-        'job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR},PROVISION_DIR=${PROVISION_DIR},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE}"'
-        in workflow
-    )
+    assert "submit-run --manifest" in workflow
+    assert "--pjm-script-repository-path scripts/run-openfoam.pjm" in workflow
+    assert "record-scheduler-terminal --manifest" in workflow
+    assert "record-execution-context --manifest" in workflow
+    assert "record-profile-perf --manifest" in workflow
+    assert "env.MERGE_STATUS == '0'" in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow
     assert "Publish v2 raw facts to BigQuery" in workflow

@@ -24,6 +24,22 @@ def _identity(path: Path) -> dict[str, object]:
     return {"size_bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
 
 
+def test_intel_mpi_ldd_fixture_selects_only_libmpi_as_identity() -> None:
+    root = "/home/app/inteloneapi/2025.1.3/mpi/2021.15/lib/release"
+    paths = provision_module._ldd_paths(
+        f"""
+        libmpi.so.12 => {root}/libmpi.so.12 (0x00007f00)
+        libmpifort.so.12 => {root}/libmpifort.so.12 (0x00007e00)
+        """
+    )
+
+    assert [path.name for path in paths] == ["libmpi.so.12", "libmpifort.so.12"]
+    assert [
+        path.name for path in paths if provision_module._is_canonical_libmpi(path)
+    ] == ["libmpi.so.12"]
+    assert provision_module._is_mpi_companion(paths[1])
+
+
 def _sidecar(path: Path, executables: dict[str, Path]) -> Path:
     empty_sha = hashlib.sha256(b"").hexdigest()
     document = {
@@ -115,7 +131,11 @@ def test_provision_validation_binds_resolved_executables_and_ldd_sources(
     role_paths["mpirun"] = Path("/bin/true")
     libmpi = tmp_path / "libmpi.so.12"
     libmpi.write_bytes(b"fixture mpi")
-    monkeypatch.setattr(provision_module, "_ldd_paths", lambda _text: (libmpi,))
+    libmpifort = tmp_path / "libmpifort.so.12"
+    libmpifort.write_bytes(b"fixture mpifort")
+    monkeypatch.setattr(
+        provision_module, "_ldd_paths", lambda _text: (libmpi, libmpifort)
+    )
 
     output = validate_provision(
         manifest_path=manifest,
