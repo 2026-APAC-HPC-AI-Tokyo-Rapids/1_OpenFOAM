@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from experiment_metrics import init_run
-from experiment_metrics.scheduler import capture_scheduler_terminal, submit_run
+from experiment_metrics.scheduler import (
+    capture_scheduler_terminal,
+    parse_scheduler_accounting,
+    submit_run,
+)
 from experiment_metrics.supervisor import (
     finish_supervisor,
     mark_pipeline,
@@ -82,6 +86,45 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         (run_dir / "control/scheduler-terminal.json").read_text()
     )
     assert terminal["argv"][0] == str(pjstat)
+
+
+def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:
+    raw = (
+        b"H\tJOB ID\tSTATE\tJOB START DATE\tELAPSE TIME (USE)\tEXIT CODE\t"
+        b"SIGNAL NO\tPJM CODE\tNODE NUM (USE)\tMAX MEMORY SIZE (USE)\t"
+        b"USER CPU TIME (USE)\tSYSTEM CPU TIME (USE)\tMAX MEMORY SIZE (USE)\t"
+        b"USER CPU TIME (USE)\tSYSTEM CPU TIME (USE)\n"
+        b"\t6438276\tEXT\t2026/08/10 22:07:30\t00:25:03 (1503)\t-\t24\t11\t1\t"
+        b"81876.1 MiB (85853274112)\t24729340 ms\t627660 ms\t"
+        b"81876.1 MiB (85853274112)\t24729340 ms\t627660 ms\n"
+    )
+
+    accounting = parse_scheduler_accounting(raw, expected_job_id="6438276")
+
+    assert accounting["st"] == "EXT"
+    assert accounting["elp"] == {"lexeme": "00:25:03 (1503)", "seconds": 1503.0}
+    assert accounting["ec"] == {"lexeme": "-", "value": None}
+    assert accounting["sn"] == {"lexeme": "24", "value": 24}
+    assert accounting["pc"] == {"lexeme": "11", "value": 11}
+    assert accounting["mmszu"] == {
+        "lexeme": "81876.1 MiB (85853274112)",
+        "bytes": 85853274112,
+    }
+    assert accounting["uctmut"] == {
+        "lexeme": "24729340 ms",
+        "seconds": 24729.34,
+    }
+    assert accounting["sctmut"] == {"lexeme": "627660 ms", "seconds": 627.66}
+
+
+def test_parse_scheduler_accounting_rejects_conflicting_genkai_duplicates() -> None:
+    raw = (
+        b"\t6438276\tEND\t2026/08/10 22:07:30\t1\t0\t0\t0\t1\t4096\t2\t3\t"
+        b"8192\t2\t3\n"
+    )
+
+    with pytest.raises(ValueError, match="conflicting duplicate columns"):
+        parse_scheduler_accounting(raw, expected_job_id="6438276")
 
 
 def test_supervisor_captures_entry_lifecycle_and_pipeline(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PJM -L elapse=00:25:00
+#PJM -L elapse=00:50:00
 
 # Compute-side v2 executor.  It owns only local case data, source captures,
 # logs, and atomic metric fragments.  The runner owns credentials, merge,

@@ -11,6 +11,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     text = script.read_text(encoding="utf-8")
 
     subprocess.run(["bash", "-n", str(script)], check=True)
+    assert "#PJM -L elapse=00:50:00" in text
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS" not in text
     assert "stage solver" in text
     assert "stage minimal_hardware_capture" in text
