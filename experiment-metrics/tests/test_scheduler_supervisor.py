@@ -31,6 +31,13 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     execution = provision / "scripts/run-openfoam.pjm"
     source.write_bytes(b"#!/bin/sh\n")
     execution.write_bytes(source.read_bytes())
+    multiplexer = tmp_path / "bin/.cltkexec"
+    multiplexer.parent.mkdir()
+    multiplexer.write_bytes(b"fixture")
+    pjsub = multiplexer.with_name("pjsub")
+    pjstat = multiplexer.with_name("pjstat")
+    pjsub.symlink_to(multiplexer.name)
+    pjstat.symlink_to(multiplexer.name)
 
     submitted = submit_run(
         manifest_path=manifest,
@@ -42,7 +49,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         execution_script=execution,
         provision_dir=provision,
         profile_mode="direct",
-        pjsub_path=Path("/bin/true"),
+        pjsub_path=pjsub,
         execute=lambda argv: subprocess.CompletedProcess(
             argv, 0, b"Job 12345 submitted.\n", b""
         ),
@@ -51,6 +58,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     request = json.loads(submitted.request_path.read_text())
     assert request["nodes"] == 1
     assert request["ranks"] == 120
+    assert request["argv"][0] == str(pjsub)
     assert "OPENFOAM_RANKS=120" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
@@ -64,12 +72,16 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         runtime_dir=run_dir,
         registry_path=REGISTRY,
         job_id="12345",
-        pjstat_path=Path("/bin/true"),
+        pjstat_path=pjstat,
         execute=lambda argv: subprocess.CompletedProcess(argv, 0, raw, b""),
     )
     accounting = json.loads(accounting_path.read_text())
     assert accounting["jid"] == "12345"
     assert accounting["nnumu"] == {"lexeme": "1", "value": 1}
+    terminal = json.loads(
+        (run_dir / "control/scheduler-terminal.json").read_text()
+    )
+    assert terminal["argv"][0] == str(pjstat)
 
 
 def test_supervisor_captures_entry_lifecycle_and_pipeline(

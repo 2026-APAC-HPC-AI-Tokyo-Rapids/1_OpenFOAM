@@ -78,7 +78,7 @@ def submit_run(
     execution = execution_script.resolve(strict=True)
     if repository_script.read_bytes() != execution.read_bytes():
         raise ValueError("provisioned PJM script differs from repository source")
-    pjsub = (pjsub_path or _which("pjsub")).resolve(strict=True)
+    pjsub = _launcher_path(pjsub_path or _which("pjsub"))
     environment = {
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_PROFILE_MODE": profile_mode,
@@ -176,7 +176,7 @@ def capture_scheduler_terminal(
     entry = _json(run_dir / "control/job-entry.json")
     if submission.get("parsed_job_id") != job_id or entry.get("pjm_job_id") != job_id:
         raise ValueError("submission and job-entry scheduler IDs differ")
-    pjstat = (pjstat_path or _which("pjstat")).resolve(strict=True)
+    pjstat = _launcher_path(pjstat_path or _which("pjstat"))
     argv = [
         str(pjstat),
         "--history",
@@ -296,6 +296,15 @@ def _which(name: str) -> Path:
     if value is None:
         raise FileNotFoundError(name)
     return Path(value)
+
+
+def _launcher_path(path: Path) -> Path:
+    """Return an absolute command path without dereferencing a multicall symlink."""
+
+    absolute = Path(os.path.abspath(path))
+    if not absolute.is_file():
+        raise FileNotFoundError(absolute)
+    return absolute
 
 
 def _outcome(returncode: int) -> dict[str, object]:
