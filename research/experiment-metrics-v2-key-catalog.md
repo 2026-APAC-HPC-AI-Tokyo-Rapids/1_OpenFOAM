@@ -22,7 +22,7 @@ record field は「収集方法」に記す。
 
 | キー | 意味 | 収集方法（コマンド／関数） | 適用・種別 |
 |---|---|---|---|
-| `run.{run_id,run_purpose,repository_id}` | run ID、用途、repository | runner が Git 管理の run manifest を読み `identity_projection/v1` で投影 | bench/profile、raw |
+| `run.identity.{run_id,run_purpose,repository_id}` | run ID、用途、repository | runner が Git 管理の run manifest を読み `identity_projection/v1` で投影 | bench/profile、raw |
 | `run.instrumentation_bundle_sha256` | 適用 instrumentation bundle identity | run manifest と bundle manifest を照合 | bench/profile、raw |
 | `run.{started_at,finished_at}` | run の開始・終了 UTC 時刻 | PJM supervisor の wall clock | 全 variant、raw |
 | `run.elapsed_sec` | supervisor 範囲の run 経過秒 | `time.monotonic_ns()` 相当の開始・終了差 | 全 variant、raw |
@@ -129,15 +129,15 @@ capture stage は適用 variant だけ追加する。
 |---|---|---|---|
 | `solver.runtime_header.{build,arch,exec,file_handler,nprocs}` | OpenFOAM banner の build、arch、実行名、file handler、MPI rank 数 | 保存済み solver log の canonical official-log parser | 全 solver run、raw |
 | `solver.runtime_header.hosts[]` | banner の `{hostname,ranks}` long relation | solver log の `Hosts` block を parse。hostnameをkey segmentへ埋めず、記載なしは空 relation | 全 solver run、raw |
-| `solver.pstream.rank.<rank>.startup.{node_comms_control,node_comms_min,using_node_comms,num_nodes,topology_control}` | `UPstream::init()` 後の実適用通信設定 | OpenFOAM Pstream hook が rank JSONL event を生成 | bench/profile、raw |
-| `solver.pstream.rank.<rank>.startup.configured_mpi_buffer_value` | 設定された MPI buffer 値 | 同 hook。signed 値をそのまま保存 | 同上、raw |
-| `solver.pstream.rank.<rank>.startup.environment_mpi_buffer_bytes_applied` | 環境から実適用された MPI buffer bytes | 同 hook と launch-effective env | 同上、raw nullable |
-| `solver.pstream.rank.<rank>.startup.attached_buffer_bytes` | clamp 後に実際に attach した bytes | `attachOurBuffers()` 後の hook | 同上、raw |
-| `solver.pstream.rank.<rank>.runtime.{float_transfer,using_node_comms}` | runtime の transfer/node comms bool | `Time::setControls()` 後、time loop 前の hook | 同上、raw |
-| `solver.pstream.rank.<rank>.runtime.{n_procs_simple_sum,n_procs_nonblocking_exchange,tuning_nbx,pstream_buffers_algorithm}` | runtime の Pstream integer tuning | 同 hook | 同上、raw |
-| `solver.pstream.rank.<rank>.runtime.default_comms_type` | default communications type | 同 hook | 同上、raw enum |
-| `solver.pstream.rank.<rank>.runtime.{n_poll_proc_interfaces,max_comms_size,node_comms_control,node_comms_min,topology_control}` | polling、message size、node/topology tuning | 同 hook | 同上、raw |
-| `solver.pstream.rank.<rank>.change.<sequence>.{field,old,new}` | runtime dictionary 再読込による設定変更 | `Time::readModifiedObjects()` hook。sentinel が揃い変更0件なら空 relation | 同上、raw ordered events |
+| `solver.pstream.startup_applied.rank.<rank>.{node_comms_control,node_comms_min,using_node_comms,num_nodes,topology_control}` | `UPstream::init()` 後の実適用通信設定 | OpenFOAM Pstream hook が rank JSONL event を生成 | bench/profile、raw |
+| `solver.pstream.startup_applied.rank.<rank>.configured_mpi_buffer_value` | 設定された MPI buffer 値 | 同 hook。signed 値をそのまま保存 | 同上、raw |
+| `solver.pstream.startup_applied.rank.<rank>.environment_mpi_buffer_bytes_applied` | 環境から実適用された MPI buffer bytes | 同 hook と launch-effective env | 同上、raw nullable |
+| `solver.pstream.startup_applied.rank.<rank>.attached_buffer_bytes` | clamp 後に実際に attach した bytes | `attachOurBuffers()` 後の hook | 同上、raw |
+| `solver.pstream.runtime_current.rank.<rank>.{float_transfer,using_node_comms}` | runtime の transfer/node comms bool | `Time::setControls()` 後、time loop 前の hook | 同上、raw |
+| `solver.pstream.runtime_current.rank.<rank>.{n_procs_simple_sum,n_procs_nonblocking_exchange,tuning_nbx,pstream_buffers_algorithm}` | runtime の Pstream integer tuning | 同 hook | 同上、raw |
+| `solver.pstream.runtime_current.rank.<rank>.default_comms_type` | default communications type | 同 hook | 同上、raw enum |
+| `solver.pstream.runtime_current.rank.<rank>.{n_poll_proc_interfaces,max_comms_size,node_comms_control,node_comms_min,topology_control}` | polling、message size、node/topology tuning | 同 hook | 同上、raw |
+| `solver.pstream.change_events.rank.<rank>` | runtime dictionary 再読込による設定変更の順序付き `{field,old,new}` array | `Time::readModifiedObjects()` hook。sentinel が揃い変更0件なら空 array | 同上、raw ordered events |
 | `solver.step.<ordinal>.simulation_time.{lexeme,value}` | step の simulation time raw/数値 | solver log の `Time =` を parse | 全 solver run、raw nullable numeric |
 | `solver.step.<ordinal>.execution_time.{lexeme,sec}` | OpenFOAM `ExecutionTime` raw/秒 | 同一 step の timing line を parse | 全 solver run、raw nullable numeric |
 | `solver.step.<ordinal>.clock_time.{lexeme,sec}` | OpenFOAM `ClockTime` raw/秒 | 同上 | 全 solver run、raw nullable numeric |
@@ -214,8 +214,8 @@ PingPong/Sendrecv/Allreduceの実在rowだけを返し、存在しない列はNU
 | `solver.pstream.change_event_count` | runtime Pstream 変更件数 | 完全な change event relation を count |
 | `solver.pstream.{float_transfer,default_comms_type,pstream_buffers_algorithm,using_node_comms}` | rank 間で一致した主要 runtime Pstream 値 | startup/runtime rank records の consensus projection |
 | `solver.pstream.{node_comms_control,node_comms_min,topology_control}` | rank 間で一致した node/topology tuning | 同 consensus projection |
-| `solver.pstream.{configured_mpi_buffer_value,environment_mpi_buffer_bytes_applied,attached_mpi_buffer_bytes}` | rank 間で一致した buffer 設定/実適用値 | startup rank records の consensus projection |
-| `solver.pstream.{nprocs_simple_sum,nprocs_nonblocking_exchange,tuning_nbx,n_poll_proc_interfaces,max_comms_size}` | rank 間で一致した integer tuning | runtime rank records の consensus projection |
+| `solver.pstream.{configured_mpi_buffer_value,environment_mpi_buffer_bytes_applied,attached_buffer_bytes}` | rank 間で一致した buffer 設定/実適用値 | startup rank records の consensus projection |
+| `solver.pstream.{n_procs_simple_sum,n_procs_nonblocking_exchange,tuning_nbx,n_poll_proc_interfaces,max_comms_size}` | rank 間で一致した integer tuning | runtime rank records の consensus projection |
 
 ## 9. Lineage/control field と非収集項目
 
