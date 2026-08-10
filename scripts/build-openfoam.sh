@@ -21,6 +21,7 @@ export CC=mpiicx
 export CXX=mpiicpx
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+export EXPERIMENT_METRICS_NATIVE_ROOT="${GITHUB_WORKSPACE}/experiment-metrics/native"
 
 # ビルドツリー、ccache、一時 archive の場所を先に決めておく。
 export BUILD_TREE="${BUILD_DIR}/tree"

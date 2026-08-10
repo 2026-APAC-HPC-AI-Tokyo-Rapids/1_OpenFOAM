@@ -1,0 +1,31 @@
+Build  : test-build
+Arch   : "LSB;label=64;scalar=64"
+Exec   : icoFoam -parallel
+I/O    : uncollated
+nProcs : 2
+Hosts  :
+(
+    (node-b 1)
+    (node-a 1)
+)
+Time = 0.1
+Solving for p, Initial residual = 1, Final residual = 1.0e-1, No Iterations 321
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+ExecutionTime = 10.0 s  ClockTime = 11 s
+Time = 0.2
+Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+ExecutionTime = 20.0 s  ClockTime = 21 s
+Time = 0.3
+Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+ExecutionTime = 30.0 s  ClockTime = 31 s
+Time = 0.4
+Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+ExecutionTime = 40.0 s  ClockTime = 41 s
+Time = 0.5
+Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+ExecutionTime = 50.0 s  ClockTime = 51 s
+End

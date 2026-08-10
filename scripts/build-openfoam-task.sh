@@ -7,6 +7,7 @@ set -euo pipefail
 : "${OPENFOAM_BUILD_PARALLELISM:?}"
 : "${WM_PROJECT_DIR:?}"
 : "${WM_THIRD_PARTY_DIR:?}"
+: "${EXPERIMENT_METRICS_NATIVE_ROOT:?}"
 
 export WM_NCOMPPROCS="${OPENFOAM_BUILD_PARALLELISM}"
 cd "${WM_PROJECT_DIR}"
@@ -54,14 +55,26 @@ src/parallel/decompose/Allwmake
 for application in \
   applications/utilities/mesh/generation/blockMesh \
   applications/utilities/parallelProcessing/decomposePar \
+  applications/utilities/mesh/manipulation/checkMesh \
   applications/solvers/incompressible/icoFoam
 do
   wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${application}"
 done
 
+# These v2 probes are compiled against this exact OpenFOAM tree and placed in
+# FOAM_APPBIN so the published build archive, not the runner workspace, owns
+# the runtime executable bytes.
+native_tree="${WM_PROJECT_DIR}/applications/utilities/experimentMetricsV2"
+install -d "${native_tree}"
+for utility in mesh-facts partition-audit
+do
+  cp -a "${EXPERIMENT_METRICS_NATIVE_ROOT}/${utility}" "${native_tree}/${utility}"
+  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${native_tree}/${utility}"
+done
+
 # Fail the build here instead of discovering a missing binary during runtime
 # provisioning. Also ensure all shared-library dependencies resolve.
-for application in blockMesh decomposePar icoFoam
+for application in blockMesh decomposePar icoFoam checkMesh mesh-facts partition-audit
 do
   executable="${FOAM_APPBIN}/${application}"
   test -x "${executable}"

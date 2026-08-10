@@ -1,0 +1,3 @@
+partition-audit.C
+
+EXE = $(FOAM_APPBIN)/partition-audit
