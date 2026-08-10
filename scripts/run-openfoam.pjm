@@ -12,10 +12,10 @@ set -euo pipefail
 : "${RUN_ID:?runner-generated v2 run ID is required}"
 : "${RUN_MANIFEST:?runner-generated manifest path is required}"
 : "${RUN_DIR:?runner-generated runtime path is required}"
+: "${PROVISION_DIR:?provision directory is required}"
 : "${PJM_JOBID:?}"
 
-PROVISION_DIR=${1:?provision directory argument is required}
-OPENFOAM_PROFILE_MODE=${2:-direct}
+OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE:-direct}
 OPENFOAM_MPI_PROCS=120
 export OPENFOAM_MPI_PROCS OPENFOAM_PROFILE_MODE
 

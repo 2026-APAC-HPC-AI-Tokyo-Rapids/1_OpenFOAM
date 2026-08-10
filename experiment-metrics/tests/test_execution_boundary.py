@@ -26,7 +26,7 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
     assert (
-        'job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR}"'
+        'job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR},PROVISION_DIR=${PROVISION_DIR},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE}"'
         in workflow
     )
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow

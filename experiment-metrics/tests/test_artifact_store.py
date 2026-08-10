@@ -85,7 +85,7 @@ def test_packager_creates_and_revalidates_closed_bench_artifact_set(
         assert item["size_bytes"] == path.stat().st_size
         assert item["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
     members = subprocess.run(
-        ["tar", "--zstd", "-tf", run_dir / "run-artifacts.tar.zst"],
+        ["tar", "-I", "zstd", "-tf", run_dir / "run-artifacts.tar.zst"],
         check=True,
         text=True,
         capture_output=True,
