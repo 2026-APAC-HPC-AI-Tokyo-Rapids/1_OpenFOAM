@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+#PJM -L rscgrp=a-batch
+#PJM -L node=1
+#PJM -L elapse=00:25:00
+#PJM --mpi proc=120
+
+set -euo pipefail
+
+: "${CHECK_DIR:?}"
+: "${PJM_JOBID:?}"
+
+case_dir="${CHECK_DIR}/case"
+log_dir="${CHECK_DIR}/logs"
+pstream_dir="${CHECK_DIR}/pstream"
+decompose_dict=system/decomposeParDict.6
+
+module purge
+module load intel/2025.1.3 impi
+set +eu
+source "${CHECK_DIR}/tree/OpenFOAM/etc/bashrc" \
+  WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
+set -eu
+
+export I_MPI_FABRICS=shm
+unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
+unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC
+unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
+
+mpiexec="$(command -v mpirun)"
+block_mesh="$(command -v blockMesh)"
+decompose_par="$(command -v decomposePar)"
+solver="$(command -v icoFoam)"
+
+cp -a "${CHECK_DIR}/task/cavity3D-64M" "${case_dir}"
+cd "${case_dir}"
+cat > "${decompose_dict}" <<'EOF'
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    object decomposeParDict;
+}
+
+numberOfSubdomains 120;
+method scotch;
+EOF
+
+"${block_mesh}" -fileHandler uncollated >"${log_dir}/blockMesh.log" 2>&1
+"${decompose_par}" -fileHandler uncollated \
+  -decomposeParDict "${decompose_dict}" -force >"${log_dir}/decomposePar.log" 2>&1
+
+run_arm() {
+  local arm=$1
+  local output="${log_dir}/${arm}.solver.log"
+  local started ended
+  if [[ "${arm}" == off ]]; then
+    unset OPENFOAM_METRICS_PSTREAM_DIR OPENFOAM_METRICS_RUN_ID
+  else
+    install -d "${pstream_dir}"
+    export OPENFOAM_METRICS_PSTREAM_DIR="${pstream_dir}"
+    export OPENFOAM_METRICS_RUN_ID=r-00000000000000000000000000000001
+  fi
+  started="$(date +%s%N)"
+  "${mpiexec}" -np 120 -ppn 120 "${solver}" -parallel \
+    -fileHandler uncollated -decomposeParDict "${decompose_dict}" \
+    >"${output}" 2>&1
+  ended="$(date +%s%N)"
+  awk -v delta="$((ended - started))" 'BEGIN { printf "%.9f\n", delta / 1000000000 }' \
+    >"${log_dir}/${arm}.wall-sec"
+}
+
+run_arm off
+run_arm on
+
+extract_markers() {
+  sed -n \
+    -e '/^nProcs[[:space:]]*:/p' \
+    -e '/^Hosts[[:space:]]*:/,/^)/p' \
+    -e '/^Time = /p' \
+    -e '/Solving for p/p' \
+    -e '/^End$/p' "$1"
+}
+
+extract_markers "${log_dir}/off.solver.log" >"${log_dir}/off.markers"
+extract_markers "${log_dir}/on.solver.log" >"${log_dir}/on.markers"
+cmp -s "${log_dir}/off.markers" "${log_dir}/on.markers"
+
+test -x "${CHECK_DIR}/parse_result.sh"
+"${CHECK_DIR}/parse_result.sh" "${log_dir}/off.solver.log" >"${log_dir}/off.result"
+"${CHECK_DIR}/parse_result.sh" "${log_dir}/on.solver.log" >"${log_dir}/on.result"
+grep -qx 'STATUS: VALID' "${log_dir}/off.result"
+grep -qx 'STATUS: VALID' "${log_dir}/on.result"
+
+off_wall="$(<"${log_dir}/off.wall-sec")"
+on_wall="$(<"${log_dir}/on.wall-sec")"
+ratio="$(awk -v off="${off_wall}" -v on="${on_wall}" 'BEGIN { printf "%.9f", on / off }')"
+file_count="$(find "${pstream_dir}" -maxdepth 1 -type f -name 'rank-*.jsonl' | wc -l)"
+test "${file_count}" -eq 120
+
+{
+  printf 'off_wall_sec=%s\n' "${off_wall}"
+  printf 'on_wall_sec=%s\n' "${on_wall}"
+  printf 'on_over_off_ratio=%s\n' "${ratio}"
+  printf 'markers_equal=true\n'
+  printf 'pstream_rank_files=%s\n' "${file_count}"
+  printf 'off_%s\n' "$(grep '^RESULT:' "${log_dir}/off.result")"
+  printf 'on_%s\n' "$(grep '^RESULT:' "${log_dir}/on.result")"
+} >"${CHECK_DIR}/summary.txt"
+
+awk -v ratio="${ratio}" 'BEGIN { exit !(ratio <= 1.05) }'
