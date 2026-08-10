@@ -48,3 +48,21 @@ def test_openfoam_sql_is_read_only_ddl() -> None:
         assert "insert " not in text
         assert "update " not in text
         assert "drop table" not in text
+
+
+def test_artifact_projection_sql_covers_registry_physical_and_logical_relations() -> (
+    None
+):
+    from experiment_metrics.registry import Registry
+
+    registry = Registry.load(ROOT / "experiment-metrics/registry/openfoam-v2.toml")
+    projection_sql = _read("openfoam_artifact_projections_v2.sql")
+
+    for projection in registry.artifact_projections:
+        assert f".{projection.base_table_id}`" in projection_sql
+        assert f".{projection.relation_id}`" in projection_sql
+        assert f".{projection.conflict_relation_id}`" in projection_sql
+    assert "count(distinct _source_instance_sha256) > 1" in projection_sql
+    assert "count(distinct _payload_sha256) > 1" in projection_sql
+    assert "row_number() over (partition by _payload_sha256" in projection_sql
+    assert "openfoam_workload_manifests_raw_v2` as parent" in projection_sql

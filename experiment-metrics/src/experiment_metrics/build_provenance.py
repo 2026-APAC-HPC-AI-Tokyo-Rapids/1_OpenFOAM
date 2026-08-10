@@ -10,8 +10,8 @@ import tempfile
 from collections import deque
 from pathlib import Path, PurePosixPath
 
-from .fact import canonical_json
-from .manifest import SHA256
+from .fact import Fact, canonical_json
+from .manifest import SHA256, RunManifest
 
 EXECUTABLE_ROLES = (
     "icoFoam",
@@ -186,6 +186,20 @@ def verify_build_pair(sidecar: Path, archive: Path) -> dict[str, object]:
     ):
         raise ValueError("build archive does not match its sidecar")
     return document
+
+
+def build_artifact_index_fact(manifest_path: Path, build_sidecar_path: Path) -> Fact:
+    """Bind the validated build-sidecar identity to one regular run."""
+
+    manifest = RunManifest.load(manifest_path)
+    expected = manifest.path.parents[1] / "control/build-sidecar.json"
+    if build_sidecar_path.is_symlink() or build_sidecar_path.resolve(strict=True) != (
+        expected.resolve(strict=True)
+    ):
+        raise ValueError("build artifact index source is outside the bound run")
+    content = build_sidecar_path.read_bytes()
+    validate_build_sidecar(json.loads(content))
+    return Fact("artifact.build_manifest_sha256", hashlib.sha256(content).hexdigest())
 
 
 def validate_build_sidecar(document: object) -> None:

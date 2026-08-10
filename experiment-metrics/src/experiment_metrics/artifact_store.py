@@ -71,6 +71,30 @@ class ValidatedArtifactSet:
     metrics_rows: tuple[MetricRow, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ArchivedMember:
+    path: str
+    size_bytes: int
+    sha256: str
+    role: str | None
+    content: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactMembers:
+    run_bundle: tuple[ArchivedMember, ...]
+    profile_raw: tuple[ArchivedMember, ...]
+
+    def run(self, path: str, *, role: str | None = None) -> ArchivedMember:
+        return _unique_archived_member(self.run_bundle, path, role)
+
+    def profile(self, path: str) -> ArchivedMember:
+        return _unique_archived_member(self.profile_raw, path, None)
+
+    def run_by_role(self, role: str) -> tuple[ArchivedMember, ...]:
+        return tuple(member for member in self.run_bundle if member.role == role)
+
+
 class RunPackager:
     """Create and verify the closed v2 artifact set for one persisted run."""
 
@@ -196,6 +220,68 @@ def validate_artifact_set(
         files=tuple(files),
         metrics_rows=metrics_rows,
     )
+
+
+def read_artifact_members(artifact_set: ValidatedArtifactSet) -> ArtifactMembers:
+    """Read the already validated archives without extracting mutable files.
+
+    The run bundle's own manifest supplies per-member roles and identities.  A
+    profile archive is sealed by the outer artifact manifest, so member hashes
+    are computed over the bytes from that validated archive.
+    """
+
+    run_archive = artifact_set.files[0]
+    document = _load_json_strict(
+        _read_archive_member(run_archive, "bundle.manifest.json"),
+        "bundle manifest",
+    )
+    if not isinstance(document, dict) or not isinstance(document.get("members"), list):
+        raise ValueError("validated run bundle has no member index")
+    run_members: list[ArchivedMember] = []
+    for row in document["members"]:
+        if not isinstance(row, dict):  # pragma: no cover - validation invariant
+            raise ValueError("validated run bundle member is invalid")
+        content = _read_archive_member(run_archive, row["path"])
+        run_members.append(
+            ArchivedMember(
+                row["path"],
+                row["size_bytes"],
+                row["sha256"],
+                row["role"],
+                content,
+            )
+        )
+    profile_members: list[ArchivedMember] = []
+    if artifact_set.manifest.purpose == "profile":
+        profile_archive = artifact_set.files[2]
+        for relative in _archive_members(profile_archive):
+            _validate_relative_path(relative)
+            content = _read_archive_member(profile_archive, relative)
+            profile_members.append(
+                ArchivedMember(
+                    relative,
+                    len(content),
+                    hashlib.sha256(content).hexdigest(),
+                    None,
+                    content,
+                )
+            )
+    return ArtifactMembers(tuple(run_members), tuple(profile_members))
+
+
+def _unique_archived_member(
+    members: tuple[ArchivedMember, ...], path: str, role: str | None
+) -> ArchivedMember:
+    _validate_relative_path(path)
+    matches = [
+        member
+        for member in members
+        if member.path == path and (role is None or member.role == role)
+    ]
+    if len(matches) != 1:
+        qualifier = "" if role is None else f" with role {role}"
+        raise ValueError(f"artifact requires exactly one {path}{qualifier}")
+    return matches[0]
 
 
 def read_metrics(path: Path, *, expected_run: str) -> tuple[MetricRow, ...]:

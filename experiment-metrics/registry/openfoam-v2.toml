@@ -6,6 +6,10 @@ id = "runner.manifest"
 required_for = ["bench", "profile"]
 
 [[producers]]
+id = "runner.artifact_index"
+required_for = ["bench", "profile"]
+
+[[producers]]
 id = "stage.runner"
 required_for = ["bench", "profile"]
 
@@ -70,6 +74,12 @@ required_for = ["bench", "profile"]
 [[keys]]
 pattern = "run.instrumentation_bundle_sha256"
 owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "artifact.build_manifest_sha256"
+owner = "runner.artifact_index"
 logical_type = "string"
 required_for = ["bench", "profile"]
 
@@ -310,6 +320,7 @@ artifact_manifest = "artifact-manifest.json"
 run_bundle_source_roles = [
   "block_mesh_log",
   "build_provision_validation",
+  "build_raw",
   "build_sidecar",
   "check_mesh_log",
   "decompose_par_log",
@@ -345,6 +356,13 @@ run_bundle_source_roles = [
 
 [[producer]]
 id = "runner.manifest"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "runner.artifact_index"
 owner_scope = "run"
 applicable_run_variants = ["bench", "profile"]
 activation = { kind = "always" }
@@ -482,6 +500,15 @@ producer_id = "runner.manifest"
 source_role = "manifest_fact_fragment"
 storage = "fact_fragment"
 path_template = [{ literal = "domain/fragments/runner.manifest--initial.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.artifact_index"
+producer_id = "runner.artifact_index"
+source_role = "artifact_index_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.artifact_index--artifact-index.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -872,6 +899,18 @@ logical_type = "string"
 unit = "none"
 cardinality = "run"
 capture_id = "manifest/v1"
+validator_id = "artifact_index/v1"
+reducer_id = "artifact_projection/v1"
+
+[[fact]]
+id = "artifact.build_manifest_sha256"
+key_pattern = "artifact.build_manifest_sha256"
+source_id = "facts.artifact_index"
+schema_id = "sha256/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "artifact_index/v1"
 validator_id = "artifact_index/v1"
 reducer_id = "artifact_projection/v1"
 
@@ -1385,7 +1424,7 @@ conflict_relation_id = "openfoam_minimal_hardware_conflicts_v2"
 source_artifact_id = "artifact.minimal_hardware"
 source_schema_id = "hardware-node/v1"
 row_schema_id = "minimal-hardware-projection/v1"
-row_grain = ["run_id", "node_ordinal"]
+row_grain = ["subject_id", "node_ordinal"]
 subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
 publisher_id = "runner.publisher"
 transform_id = "minimal_hardware_projection/v1"
