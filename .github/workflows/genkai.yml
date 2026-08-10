@@ -155,7 +155,7 @@ jobs:
       - name: Checkout runtime files
         uses: actions/checkout@v7
         with:
-          submodules: true
+          submodules: false
 
       - name: Provision OpenFOAM runtime
         id: provision_runtime
@@ -165,8 +165,8 @@ jobs:
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
           mkdir -p "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results" "${provision_dir}/task"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${provision_dir}/scripts/"
-          install -m 0755 "${GITHUB_WORKSPACE}/tasks/parse_result.sh" "${provision_dir}/task/"
-          cp -a "${GITHUB_WORKSPACE}/tasks/case/cavity3D-64M" "${provision_dir}/task/"
+          install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
+          cp -a "${GITHUB_WORKSPACE}/benchmark/cavity3D-64M" "${provision_dir}/task/"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
@@ -226,7 +226,7 @@ jobs:
             sha256sum \
               "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" \
               "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
-              "${GITHUB_WORKSPACE}/tasks/parse_result.sh" \
+              "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" \
               "${GITHUB_WORKSPACE}/experiment-metrics/registry/openfoam-v2.toml" |
               sha256sum | awk '{print $1}'
           )"
