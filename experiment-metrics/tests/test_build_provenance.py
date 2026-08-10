@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,10 +8,12 @@ from pathlib import Path
 import pytest
 
 import experiment_metrics.build_provenance as provenance
+from experiment_metrics import init_run
 from experiment_metrics.build_provenance import (
     CAPTURE_SOURCE_PATH,
     EXECUTABLE_ROLES,
     PARTITION_SOURCE_PATHS,
+    build_artifact_index_fact,
     capture_build_state,
     finalize_build_sidecar,
     verify_build_pair,
@@ -58,7 +61,10 @@ def _definition_repo(root: Path) -> Path:
 
 
 def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    registry_path: Path,
+    identities: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     definition = _definition_repo(tmp_path)
     tree = tmp_path / "tree"
@@ -102,6 +108,15 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
         if item["kind"] == "executable"
     } == set(EXECUTABLE_ROLES)
     assert document["build_archive"]["size_bytes"] == archive.stat().st_size
+
+    manifest = init_run(
+        None, tmp_path / "runtime", identities, registry_path=registry_path
+    )
+    installed = manifest.parents[1] / "control/build-sidecar.json"
+    shutil.copy2(sidecar, installed)
+    fact = build_artifact_index_fact(manifest, installed)
+    assert fact.key == "artifact.build_manifest_sha256"
+    assert fact.logical_value == hashlib.sha256(installed.read_bytes()).hexdigest()
 
     archive.write_bytes(b"tampered")
     with pytest.raises(ValueError, match="does not match"):

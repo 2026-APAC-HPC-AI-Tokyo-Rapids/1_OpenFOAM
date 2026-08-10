@@ -125,6 +125,10 @@ def test_profile_projection_has_rank_completeness_and_rank_facts(
     assert (
         projection.rows[0].as_dict()["source_member"] == "profile/raw/perf/rank-0.csv"
     )
+    assert projection.rows[0].as_dict()["schema_version"] == (
+        "perf-counter-projection/v1"
+    )
+    assert projection.rows[0].as_dict()["run_id"] == RUN_ID
     values = profile_perf_fact_values(tmp_path, run_id=RUN_ID, expected_ranks=2)
     assert [value["global_rank"] for value in values] == [0, 1]
     assert set(values[0]) == {"schema_version", "run_id", "global_rank", "items"}

@@ -194,6 +194,13 @@ def parser() -> argparse.ArgumentParser:
     publish.add_argument("--manifest", type=Path, required=True)
     publish.add_argument("--artifact-manifest", type=Path, required=True)
     publish.add_argument("--pyproject", type=Path, required=True)
+    publish.add_argument("--registry", type=Path, required=True)
+    publish.add_argument("--protocol", type=Path, required=True)
+    publish.add_argument("--schema-sql", type=Path, required=True)
+
+    artifact_index = commands.add_parser("record-artifact-index")
+    _runtime_common(artifact_index)
+    artifact_index.add_argument("--build-sidecar", type=Path, required=True)
     return root
 
 
@@ -644,6 +651,24 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if arguments.command == "record-artifact-index":
+        from .build_provenance import build_artifact_index_fact
+
+        print(
+            collect_once(
+                arguments.manifest,
+                arguments.runtime_dir,
+                "runner.artifact_index",
+                lambda: (
+                    build_artifact_index_fact(
+                        arguments.manifest, arguments.build_sidecar
+                    ),
+                ),
+                registry_path=arguments.registry,
+                fragment_id="artifact-index",
+            )
+        )
+        return 0
     if arguments.command == "package":
         # Runner-only adapter: importing it here keeps compute-only commands
         # independent of tar/archive implementation details.
@@ -665,6 +690,9 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.manifest,
                 arguments.artifact_manifest,
                 BigQueryConfig.load(arguments.pyproject),
+                registry_path=arguments.registry,
+                protocol_path=arguments.protocol,
+                schema_sql_path=arguments.schema_sql,
             )
         )
         return 0

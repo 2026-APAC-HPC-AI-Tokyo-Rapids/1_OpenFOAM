@@ -276,6 +276,11 @@ jobs:
           run_id="$(basename "${run_dir}")"
           install -m 0644 "${PROVISION_DIR}/control/build-sidecar.json" \
             "${run_dir}/control/build-sidecar.json"
+          cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            record-artifact-index --manifest "${manifest}" --runtime-dir "${run_dir}" \
+            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+            --build-sidecar "${run_dir}/control/build-sidecar.json"
           printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' \
             "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
           printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\n' \
@@ -491,6 +496,9 @@ jobs:
           done < <(find "${RUN_DIR}/source/mesh" \
             "${RUN_DIR}/source/build-provision" \
             -type f -print0 | sort -z)
+          while IFS= read -r -d '' path; do
+            args+=(--member "${path#"${RUN_DIR}/"}:build_raw")
+          done < <(find "${RUN_DIR}/control/build-raw" -type f -print0 | sort -z)
           if [[ -f "${RUN_DIR}/source/workload-manifest.json" ]]; then
             args+=(--member 'source/workload-manifest.json:workload_manifest')
           fi
@@ -535,7 +543,10 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             publish --manifest "${RUN_MANIFEST}" \
             --artifact-manifest "${RUN_DIR}/artifact-manifest.json" \
-            --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml"
+            --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml" \
+            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml" \
+            --schema-sql "${GITHUB_WORKSPACE}/sql/openfoam_artifact_projections_v2.sql"
 
       - name: Upload cavity3D result
         if: success()

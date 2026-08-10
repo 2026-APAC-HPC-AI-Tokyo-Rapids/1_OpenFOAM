@@ -177,6 +177,15 @@ def test_cli_package_and_publish_are_lazy_runner_adapters(
                 str(run_dir / "artifact-manifest.json"),
                 "--pyproject",
                 str(Path(__file__).parents[1] / "pyproject.toml"),
+                "--registry",
+                str(registry_path),
+                "--protocol",
+                str(Path(__file__).parents[1] / "registry/openfoam-v2-protocol.toml"),
+                "--schema-sql",
+                str(
+                    Path(__file__).parents[2]
+                    / "sql/openfoam_artifact_projections_v2.sql"
+                ),
             ]
         )
         == 0

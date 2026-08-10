@@ -163,3 +163,41 @@ def test_publish_propagates_bigquery_row_rejection(
             BigQueryConfig("project", "dataset", "table", "asia-northeast1"),
             request=lambda _: b'{"insertErrors":[{"index":0}]}',
         )
+
+
+def test_publish_applies_and_waits_for_idempotent_schema_job_before_rows(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest_path, artifact_manifest, _ = _artifact_set(
+        tmp_path, registry_path, identities
+    )
+    schema = tmp_path / "schema.sql"
+    schema.write_text("CREATE TABLE IF NOT EXISTS `p.d.t` (x STRING);\n")
+    requests: list[Request] = []
+    responses = iter(
+        (
+            b'{"jobComplete":false,"jobReference":{"jobId":"schema-job"}}',
+            b'{"jobComplete":true}',
+            b"{}",
+        )
+    )
+
+    def send(request: Request) -> bytes:
+        requests.append(request)
+        return next(responses)
+
+    count = publish_artifact_set(
+        manifest_path,
+        artifact_manifest,
+        BigQueryConfig("project", "dataset", "table", "asia-northeast1"),
+        schema_sql_path=schema,
+        request=send,
+    )
+
+    assert count == 1
+    assert requests[0].method == "POST"
+    assert requests[0].full_url.endswith("/projects/project/queries")
+    assert json.loads(requests[0].data or b"{}")["useLegacySql"] is False
+    assert requests[1].method == "GET"
+    assert "/queries/schema-job?" in requests[1].full_url
+    assert requests[2].full_url.endswith("/tables/table/insertAll")

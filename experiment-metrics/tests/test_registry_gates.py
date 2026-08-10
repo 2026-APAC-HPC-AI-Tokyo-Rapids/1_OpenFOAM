@@ -58,6 +58,17 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
     assert {item.key_pattern for item in registry.facts} == {
         item.pattern for item in registry.keys
     }
+    assert registry.spec_for("artifact.build_manifest_sha256").owner == (
+        "runner.artifact_index"
+    )
+    assert (
+        next(
+            item
+            for item in registry.facts
+            if item.key_pattern == "artifact.build_manifest_sha256"
+        ).reducer_id
+        == "artifact_projection/v1"
+    )
     assert {item.identifier for item in registry.artifact_projections} == {
         "openfoam.source_track",
         "openfoam.build_provenance",

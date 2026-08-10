@@ -185,8 +185,8 @@ class PerfProjectionRow:
 
     def as_dict(self) -> dict[str, object]:
         return {
-            "projection_relation": "openfoam_perf_counters_v2",
-            "run": self.run_id,
+            "schema_version": "perf-counter-projection/v1",
+            "run_id": self.run_id,
             "global_rank": self.global_rank,
             "event_name": self.item.event_name,
             "raw_count_lexeme": self.item.raw_count_lexeme,
