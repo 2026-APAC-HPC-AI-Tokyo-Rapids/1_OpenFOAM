@@ -94,3 +94,59 @@ def test_bundle_identity_cli(capsys: object) -> None:
     assert main(["bundle-identity", "--bundle", str(bundle), "--purpose", "bench"]) == 0
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert captured.out.strip() == bundle_identity(bundle, purpose="bench")
+
+
+def test_profile_bundle_binds_hashed_rank_executable(
+    tmp_path: Path, identities: dict[str, object]
+) -> None:
+    bundle = BUNDLES / "openfoam-profile-v1.json"
+    document = load_bundle(bundle, purpose="profile")
+    activation = document["components"][1]["activation"]
+
+    assert activation["kind"] == "executable"
+    assert activation["artifact_relative_path"] == "scripts/openfoam-rank-wrapper.py"
+    assert len(activation["content_sha256"]) == 64
+
+    root = tmp_path / "artifact"
+    executable = root / activation["artifact_relative_path"]
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(
+        (Path(__file__).parents[2] / "scripts/openfoam-rank-wrapper.py").read_bytes()
+    )
+    executable.chmod(0o755)
+    import hashlib
+
+    assert (
+        hashlib.sha256(executable.read_bytes()).hexdigest()
+        == activation["content_sha256"]
+    )
+    profile_identities = {
+        **identities,
+        "source_track": {
+            **identities["source_track"],
+            "base_role": "profile_base",
+        },
+        "instrumentation_bundle_sha256": bundle_identity(bundle, purpose="profile"),
+    }
+    registry = Path(__file__).parents[1] / "registry/openfoam-v2.toml"
+    manifest = init_run(
+        None,
+        tmp_path / "runs",
+        profile_identities,
+        purpose="profile",
+        registry_path=registry,
+        instrumentation_bundle_path=bundle,
+    )
+    sink = manifest.parents[1] / "domain/pstream"
+    sink.mkdir()
+    rendered = validate_runtime_bindings(
+        manifest,
+        manifest.with_name("instrumentation-bundle.json"),
+        registry,
+        environment={
+            "OPENFOAM_METRICS_PSTREAM_DIR": str(sink),
+            "OPENFOAM_METRICS_RUN_ID": manifest.parents[1].name,
+        },
+        artifact_root=root,
+    )
+    assert rendered["OPENFOAM_METRICS_RUN_ID"] == manifest.parents[1].name

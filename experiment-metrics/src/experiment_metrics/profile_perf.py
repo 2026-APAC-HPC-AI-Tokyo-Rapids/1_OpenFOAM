@@ -517,6 +517,45 @@ def project_perf_rows(
     )
 
 
+def profile_perf_fact_values(
+    runtime_dir: Path, *, run_id: str, expected_ranks: int
+) -> tuple[dict[str, object], ...]:
+    """Return one closed, complete perf-stat value for every expected rank."""
+
+    projection = project_profile_perf(
+        runtime_dir, run_id=run_id, expected_ranks=expected_ranks
+    )
+    projection.require_complete()
+    values = []
+    for rank in range(expected_ranks):
+        record = parse_perf_file(
+            runtime_dir / f"profile/raw/perf/rank-{rank}.csv",
+            run_id=run_id,
+            global_rank=rank,
+        )
+        values.append(
+            {
+                "schema_version": "perf-stat/v1",
+                "run_id": record.run_id,
+                "global_rank": record.global_rank,
+                "items": [
+                    _json_numbers(
+                        {
+                            "event_name": item.event_name,
+                            "raw_count_lexeme": item.raw_count_lexeme,
+                            "count": item.count,
+                            "unit": item.unit,
+                            "running_ns": item.running_ns,
+                            "percent_running": item.percent_running,
+                        }
+                    )
+                    for item in record.items
+                ],
+            }
+        )
+    return tuple(values)
+
+
 def _rank_files(root: Path, pattern: re.Pattern[str]) -> dict[int, Path]:
     result: dict[int, Path] = {}
     for path in root.iterdir():
@@ -543,6 +582,16 @@ def _number_or_none(lexeme: str) -> Decimal | None:
         raise PerfValidationError(f"numeric lexeme is invalid: {lexeme!r}") from error
     if not value.is_finite():
         raise PerfValidationError("numeric lexeme is not finite")
+    return value
+
+
+def _json_numbers(value: object) -> object:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, list):
+        return [_json_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_numbers(item) for key, item in value.items()}
     return value
 
 

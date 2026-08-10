@@ -19,12 +19,18 @@ _ROOT_FIELDS = {
     "sink_bindings",
     "environment_bindings",
 }
-_ACTIVATION_FIELDS = {
+_HOOK_ACTIVATION_FIELDS = {
     "kind",
     "source_commit_role",
     "source_path",
     "symbol",
     "event_schema_id",
+}
+_EXECUTABLE_ACTIVATION_FIELDS = {
+    "kind",
+    "artifact_relative_path",
+    "content_sha256",
+    "argv_template",
 }
 
 
@@ -98,18 +104,38 @@ def load_bundle(
         component_sinks = _sorted_strings(item["sink_ids"], "component sink IDs")
         used_sinks.extend(component_sinks)
         activation = item["activation"]
-        if not isinstance(activation, dict) or set(activation) != _ACTIVATION_FIELDS:
+        if not isinstance(activation, dict):
             raise ValueError("instrumentation activation is not closed")
-        if (
-            activation["kind"] != "in_process_hook"
-            or activation["source_commit_role"] != "openfoam_source"
-        ):
+        if activation.get("kind") == "in_process_hook":
+            if set(activation) != _HOOK_ACTIVATION_FIELDS:
+                raise ValueError("instrumentation hook activation is not closed")
+            if activation["source_commit_role"] != "openfoam_source":
+                raise ValueError("unsupported instrumentation hook source")
+            _relative_path(_nonempty(activation["source_path"], "source_path"))
+            if activation["source_path"] not in sources:
+                raise ValueError(
+                    "component activation source is absent from source_paths"
+                )
+            _nonempty(activation["symbol"], "symbol")
+            _nonempty(activation["event_schema_id"], "event_schema_id")
+        elif activation.get("kind") == "executable":
+            if set(activation) != _EXECUTABLE_ACTIVATION_FIELDS:
+                raise ValueError("instrumentation executable activation is not closed")
+            artifact = _nonempty(
+                activation["artifact_relative_path"], "artifact_relative_path"
+            )
+            _relative_path(artifact)
+            if artifact not in sources:
+                raise ValueError("component executable is absent from source_paths")
+            digest = activation["content_sha256"]
+            if (
+                not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            ):
+                raise ValueError("component executable hash is invalid")
+            _argv_template(activation["argv_template"], set(component_sinks))
+        else:
             raise ValueError("unsupported instrumentation activation")
-        _relative_path(_nonempty(activation["source_path"], "source_path"))
-        if activation["source_path"] not in sources:
-            raise ValueError("component activation source is absent from source_paths")
-        _nonempty(activation["symbol"], "symbol")
-        _nonempty(activation["event_schema_id"], "event_schema_id")
     _sorted_unique(component_ids, "component IDs")
     if sorted(set(used_sinks), key=str.encode) != sink_ids:
         raise ValueError("component and bundle sink sets differ")
@@ -176,6 +202,7 @@ def validate_runtime_bindings(
     registry_path: Path,
     *,
     environment: dict[str, str] | None = None,
+    artifact_root: Path | None = None,
 ) -> dict[str, str]:
     """Bind the immutable bundle to the environment used by the solver tree."""
 
@@ -192,6 +219,30 @@ def validate_runtime_bindings(
         purpose=manifest.purpose,
         registry_path=registry_path,
     )
+    executable_activations = [
+        component["activation"]
+        for component in document["components"]  # type: ignore[union-attr]
+        if component["activation"]["kind"] == "executable"
+    ]
+    if executable_activations:
+        if artifact_root is None:
+            raise ValueError("executable bundle requires an artifact root")
+        root = artifact_root.resolve(strict=True)
+        for activation in executable_activations:
+            executable = (root / activation["artifact_relative_path"]).resolve(
+                strict=True
+            )
+            if (
+                not executable.is_relative_to(root)
+                or not executable.is_file()
+                or executable.stat().st_mode & 0o111 == 0
+            ):
+                raise ValueError("component executable escapes the artifact root")
+            if (
+                hashlib.sha256(executable.read_bytes()).hexdigest()
+                != activation["content_sha256"]
+            ):
+                raise ValueError("component executable content differs from bundle")
     if (
         hashlib.sha256(canonical_json(document).encode()).hexdigest()
         != manifest.instrumentation_bundle_sha256
@@ -296,6 +347,48 @@ def _value_template(value: object, sink_ids: set[str]) -> None:
         ):
             continue
         raise ValueError("environment value template segment is invalid")
+
+
+def _argv_template(value: object, sink_ids: set[str]) -> None:
+    if not isinstance(value, list) or not value:
+        raise ValueError("component argv template must be nonempty")
+    component_tokens = 0
+    for argument in value:
+        if not isinstance(argument, list) or not argument:
+            raise ValueError("component argv argument must be nonempty")
+        for segment in argument:
+            if not isinstance(segment, dict):
+                raise ValueError("component argv segment is invalid")
+            if (
+                set(segment) == {"literal"}
+                and isinstance(segment["literal"], str)
+                and segment["literal"]
+            ):
+                if "@@GLOBAL_RANK@@" in segment["literal"]:
+                    raise ValueError("rank marker cannot be a literal")
+                continue
+            if set(segment) == {"token"} and segment["token"] in {
+                "component_executable",
+                "subject_run_id",
+                "expected_global_ranks",
+            }:
+                component_tokens += segment["token"] == "component_executable"
+                continue
+            if (
+                set(segment) == {"token", "role"}
+                and segment["token"] in {"provisioned_executable", "stage_executable"}
+                and segment["role"] in {"perf", "icoFoam"}
+            ):
+                continue
+            if (
+                set(segment) == {"token", "sink_id"}
+                and segment["token"] == "rank_sink_template"
+                and segment["sink_id"] in sink_ids
+            ):
+                continue
+            raise ValueError("component argv segment is invalid")
+    if value[0] != [{"token": "component_executable"}] or component_tokens != 1:
+        raise ValueError("component executable must be argv zero exactly once")
 
 
 def _validate_registry_links(

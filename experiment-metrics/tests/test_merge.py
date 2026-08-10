@@ -147,11 +147,21 @@ schema_version = "openfoam-v2-run-protocol/v1"
 
 [variant.bench]
 expected_stages = ["{stage}"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{"a" * 64}"
 
 [variant.profile]
 expected_stages = ["{stage}"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{"a" * 64}"
 ''',
         encoding="utf-8",
     )

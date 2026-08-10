@@ -14,6 +14,7 @@ from experiment_metrics.profile_perf import (
     deduplicate_projection_rows,
     parse_perf_csv,
     perf_command,
+    profile_perf_fact_values,
     project_profile_perf,
 )
 
@@ -124,6 +125,17 @@ def test_profile_projection_has_rank_completeness_and_rank_facts(
     assert (
         projection.rows[0].as_dict()["source_member"] == "profile/raw/perf/rank-0.csv"
     )
+    values = profile_perf_fact_values(tmp_path, run_id=RUN_ID, expected_ranks=2)
+    assert [value["global_rank"] for value in values] == [0, 1]
+    assert set(values[0]) == {"schema_version", "run_id", "global_rank", "items"}
+    assert set(values[0]["items"][0]) == {
+        "event_name",
+        "raw_count_lexeme",
+        "count",
+        "unit",
+        "running_ns",
+        "percent_running",
+    }
 
 
 def test_projection_dedupes_equal_rows_and_keeps_conflicts() -> None:

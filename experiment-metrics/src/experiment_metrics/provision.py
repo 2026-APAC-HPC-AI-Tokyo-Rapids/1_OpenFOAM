@@ -77,6 +77,7 @@ def validate_provision(
     ldd_raw: list[dict[str, object]] = []
     provision_libraries: set[Path] = set()
     mpi_pairs: set[tuple[str, str]] = set()
+    mpi_companions: set[Path] = set()
     for role in ELF_ROLES:
         completed = subprocess.run(
             ["ldd", str(resolved[role])], check=False, capture_output=True
@@ -90,8 +91,10 @@ def validate_provision(
             real = path.resolve(strict=True)
             if real.is_relative_to(provision):
                 provision_libraries.add(real)
-            if re.match(r"^libmpi(?:\.so|_)|^libmpifort", path.name):
+            if _is_canonical_libmpi(path):
                 mpi_pairs.add((str(real), _sha256(real)))
+            elif _is_mpi_companion(path):
+                mpi_companions.add(real)
 
     expected_libraries = {
         (provision / item["path"]).resolve(strict=True): item
@@ -110,6 +113,9 @@ def validate_provision(
     if len(mpi_pairs) != 1:
         raise ValueError("provision must resolve exactly one libmpi identity")
     path, digest = next(iter(mpi_pairs))
+    libmpi_parent = Path(path).parent
+    if any(item.parent != libmpi_parent for item in mpi_companions):
+        raise ValueError("MPI companion libraries resolve outside the libmpi root")
     resolved_libmpi = {"path": path, "sha256": digest}
 
     launcher_version = _capture_version(
@@ -273,6 +279,14 @@ def _ldd_paths(text: str) -> tuple[Path, ...]:
         if match is not None:
             paths.append(Path(match.group(1)))
     return tuple(paths)
+
+
+def _is_canonical_libmpi(path: Path) -> bool:
+    return re.fullmatch(r"libmpi\.so(?:\.[0-9]+)*", path.name) is not None
+
+
+def _is_mpi_companion(path: Path) -> bool:
+    return path.name.startswith(("libmpi_", "libmpifort.so"))
 
 
 def _member(path: Path, run_dir: Path) -> dict[str, object]:

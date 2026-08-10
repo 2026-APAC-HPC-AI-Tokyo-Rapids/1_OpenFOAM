@@ -85,18 +85,29 @@ def test_protocol_derived_stage_absence_marks_merge_incomplete(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
     protocol = tmp_path / "protocol.toml"
+    digest = "a" * 64
     protocol.write_text(
-        """
+        f"""
 [protocol]
 schema_version = "openfoam-v2-run-protocol/v1"
 
 [variant.bench]
 expected_stages = ["solver"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{digest}"
 
 [variant.profile]
 expected_stages = ["solver"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{digest}"
 """.strip()
         + "\n"
     )
@@ -139,18 +150,29 @@ def test_unsuccessful_expected_stage_cannot_complete(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
     protocol = tmp_path / "protocol.toml"
+    digest = "a" * 64
     protocol.write_text(
-        """
+        f"""
 [protocol]
 schema_version = "openfoam-v2-run-protocol/v1"
 
 [variant.bench]
 expected_stages = ["solver"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{digest}"
 
 [variant.profile]
 expected_stages = ["solver"]
-expected_pstream_ranks = 1
+nodes = 1
+ranks = 1
+resource_group = "test"
+transport_policy = "shm"
+workload_id = "test"
+expected_workload_identity = "{digest}"
 """.strip()
         + "\n"
     )

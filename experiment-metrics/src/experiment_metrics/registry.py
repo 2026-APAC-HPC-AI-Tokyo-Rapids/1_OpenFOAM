@@ -169,7 +169,11 @@ class Registry:
         )
 
     def required_keys(
-        self, purpose: str, *, expected_pstream_ranks: int
+        self,
+        purpose: str,
+        *,
+        expected_pstream_ranks: int,
+        expected_nodes: int = 1,
     ) -> frozenset[str]:
         """Expand every required pattern, rejecting undeclared axis semantics."""
 
@@ -179,10 +183,15 @@ class Registry:
                 continue
             if "*" not in item.pattern:
                 required.add(item.pattern)
-            elif item.pattern in _PSTREAM_RANK_PATTERNS:
+            elif item.pattern in _RANK_PATTERNS:
                 required.update(
                     item.pattern.replace("*", str(rank))
                     for rank in range(expected_pstream_ranks)
+                )
+            elif item.pattern == "hardware.minimal.node.*":
+                required.update(
+                    item.pattern.replace("*", str(node))
+                    for node in range(expected_nodes)
                 )
             else:
                 raise ValueError(
@@ -567,10 +576,11 @@ def _purposes(value: object) -> frozenset[str]:
     return frozenset(value)
 
 
-_PSTREAM_RANK_PATTERNS = frozenset(
+_RANK_PATTERNS = frozenset(
     {
         "solver.pstream.startup_applied.rank.*",
         "solver.pstream.runtime_current.rank.*",
         "solver.pstream.change_events.rank.*",
+        "profile.perf_stat.rank.*",
     }
 )

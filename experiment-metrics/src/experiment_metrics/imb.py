@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+
+from .protocol import RunProtocol
 
 BENCHMARKS = ("PingPong", "Sendrecv", "Allreduce")
 _SECTION = re.compile(r"^#\s*Benchmarking\s+(PingPong|Sendrecv|Allreduce)\s*$")
 _PROCESSES = re.compile(r"^#\s*#?processes\s*=\s*(\d+)\s*$", re.IGNORECASE)
+_VERSION = re.compile(r"^IMB-MPI1\s+(\S+)\s*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +24,82 @@ class IMBResult:
     time_avg_us: Decimal | None
     time_max_us: Decimal | None
     bandwidth_mbytes_per_sec: Decimal | None
+
+
+@dataclass(frozen=True, slots=True)
+class IMBCapture:
+    results: tuple[IMBResult, ...]
+    version: str
+    time_limit_sec: int
+    iteration_policy: str
+
+
+def validate_imb_capture(
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+    argv_path: Path,
+    protocol: RunProtocol,
+) -> IMBCapture:
+    """Validate the launch command and both durable output streams together."""
+
+    stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
+    stderr_path.read_bytes()
+    document = json.loads(argv_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "argv"}
+        or document["schema_version"] != "argv/v1"
+        or not isinstance(document["argv"], list)
+        or not all(isinstance(item, str) and item for item in document["argv"])
+    ):
+        raise ValueError("IMB argv record is not a closed argv/v1 object")
+    argv = document["argv"]
+    assert isinstance(argv, list)
+    if (
+        len(argv) != 19
+        or not Path(argv[0]).is_absolute()
+        or not Path(argv[5]).is_absolute()
+    ):
+        raise ValueError("IMB argv does not have the closed command shape")
+    expected_tail = [
+        "-np",
+        str(protocol.ranks),
+        "-ppn",
+        str(protocol.ranks_per_node),
+        argv[5],
+        "-npmin",
+        str(protocol.ranks),
+        "-msglog",
+        "0:22",
+        "-iter",
+        "1000",
+        "-time",
+        "1",
+        "-iter_policy",
+        "dynamic",
+        "PingPong",
+        "Sendrecv",
+        "Allreduce",
+    ]
+    if argv[1:] != expected_tail:
+        raise ValueError("IMB argv differs from the protocol command")
+    results = parse_imb_mpi1(stdout)
+    if {item.process_count for item in results} != {protocol.ranks}:
+        raise ValueError("IMB output process count differs from the protocol")
+    expected_sizes = {0, *(1 << exponent for exponent in range(23))}
+    for benchmark in BENCHMARKS:
+        observed_sizes = {
+            item.message_bytes for item in results if item.benchmark == benchmark
+        }
+        if observed_sizes != expected_sizes:
+            raise ValueError(f"IMB {benchmark} message-size sweep is incomplete")
+    versions = [
+        match[1] for line in stdout.splitlines() if (match := _VERSION.match(line))
+    ]
+    if len(versions) != 1:
+        raise ValueError("IMB output has no unique software version")
+    return IMBCapture(results, versions[0], 1, "dynamic")
 
 
 def parse_imb_mpi1(text: str) -> tuple[IMBResult, ...]:
