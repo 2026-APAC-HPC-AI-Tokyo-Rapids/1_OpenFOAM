@@ -258,10 +258,9 @@ jobs:
 
       - name: Submit OpenFOAM job
         run: |
-          job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR}"
+          job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR},PROVISION_DIR=${PROVISION_DIR},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE}"
           job_output="$(pjsub -x "${job_environment}" -o "${RUN_DIR}/logs/%j.pjm.log" -j \
-            -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm" \
-            "${PROVISION_DIR}" "${OPENFOAM_PROFILE_MODE}")"
+            -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"

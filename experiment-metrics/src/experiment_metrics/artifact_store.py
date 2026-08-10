@@ -349,7 +349,7 @@ def _validate_archive_members(path: Path, expected: tuple[str, ...]) -> None:
 
 def _archive_members(path: Path) -> list[str]:
     result = subprocess.run(
-        ["tar", "--zstd", "-tf", path],
+        ["tar", "-I", "zstd", "-tf", path],
         check=True,
         capture_output=True,
         text=True,
@@ -360,7 +360,7 @@ def _archive_members(path: Path) -> list[str]:
 
 def _read_archive_member(path: Path, relative: str) -> bytes:
     result = subprocess.run(
-        ["tar", "--zstd", "-xOf", path, "--", relative],
+        ["tar", "-I", "zstd", "-xOf", path, "--", relative],
         check=True,
         capture_output=True,
     )
@@ -426,7 +426,7 @@ def _tar_zstd(
     ) as stream:
         temporary = Path(stream.name)
     temporary.unlink()
-    argv = ["tar", "--zstd", "-cf", str(temporary), "-C", str(root)]
+    argv = ["tar", "-I", "zstd", "-cf", str(temporary), "-C", str(root)]
     if bundle_manifest is not None:
         argv.extend(["--transform", "s|^archive-staging/||"])
     argv.extend(["--", *members])
