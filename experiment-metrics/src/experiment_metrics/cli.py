@@ -23,6 +23,54 @@ def parser() -> argparse.ArgumentParser:
     init.add_argument("--repository-id", default="apac2026-openfoam")
     init.add_argument("--settings-path", type=Path)
     init.add_argument("--registry", type=Path)
+    init.add_argument("--instrumentation-bundle", type=Path)
+
+    bundle = commands.add_parser("bundle-identity")
+    bundle.add_argument("--bundle", type=Path, required=True)
+    bundle.add_argument("--purpose", choices=["bench", "profile"], required=True)
+
+    runtime_bundle = commands.add_parser("validate-bundle-runtime")
+    runtime_bundle.add_argument("--manifest", type=Path, required=True)
+    runtime_bundle.add_argument("--bundle", type=Path, required=True)
+    runtime_bundle.add_argument("--registry", type=Path, required=True)
+
+    build_state = commands.add_parser("capture-build-state")
+    build_state.add_argument("--output", type=Path, required=True)
+    build_state.add_argument("--build-tree", type=Path, required=True)
+    build_state.add_argument("--build-definition-repo", type=Path, required=True)
+    build_state.add_argument("--openfoam-oid", required=True)
+    build_state.add_argument(
+        "--openfoam-algorithm", choices=["sha1", "sha256"], required=True
+    )
+    build_state.add_argument("--thirdparty-oid", required=True)
+    build_state.add_argument(
+        "--thirdparty-algorithm", choices=["sha1", "sha256"], required=True
+    )
+    build_state.add_argument("--executable", action="append", default=[])
+    build_state.add_argument("--compile-flag", action="append", default=[])
+
+    build_finalize = commands.add_parser("finalize-build-sidecar")
+    build_finalize.add_argument("--state", type=Path, required=True)
+    build_finalize.add_argument("--archive", type=Path, required=True)
+    build_finalize.add_argument("--output", type=Path, required=True)
+
+    build_verify = commands.add_parser("verify-build-pair")
+    build_verify.add_argument("--sidecar", type=Path, required=True)
+    build_verify.add_argument("--archive", type=Path, required=True)
+
+    provision = commands.add_parser("validate-provision")
+    provision.add_argument("--manifest", type=Path, required=True)
+    provision.add_argument("--build-sidecar", type=Path, required=True)
+    provision.add_argument("--provision-root", type=Path, required=True)
+    provision.add_argument("--output", type=Path, required=True)
+    provision.add_argument("--executable", action="append", default=[])
+
+    source_track = commands.add_parser("source-track-identities")
+    source_track.add_argument("--repository", type=Path, required=True)
+    source_track.add_argument("--purpose", choices=["bench", "profile"], required=True)
+    source_track.add_argument("--base-commit", required=True)
+    source_track.add_argument("--control-plane-file", action="append", default=[])
+    source_track.add_argument("--instrumentation-bundle-sha256", required=True)
 
     record = commands.add_parser("record-json")
     _common(record)
@@ -74,6 +122,11 @@ def parser() -> argparse.ArgumentParser:
     postrun.add_argument("--partition-observed", type=Path, required=True)
     postrun.add_argument("--fragment-id", default="postrun")
 
+    workload = commands.add_parser("capture-workload")
+    workload.add_argument("--manifest", type=Path, required=True)
+    workload.add_argument("--case-root", type=Path, required=True)
+    workload.add_argument("--output-root", type=Path, required=True)
+
     package = commands.add_parser("package")
     package.add_argument("--manifest", type=Path, required=True)
     package.add_argument("--member", action="append", default=[])
@@ -113,6 +166,88 @@ def main(argv: list[str] | None = None) -> int:
                 purpose=arguments.purpose,
                 repository_id=arguments.repository_id,
                 registry_path=arguments.registry,
+                instrumentation_bundle_path=arguments.instrumentation_bundle,
+            )
+        )
+        return 0
+    if arguments.command == "bundle-identity":
+        from .instrumentation import bundle_identity
+
+        print(bundle_identity(arguments.bundle, purpose=arguments.purpose))
+        return 0
+    if arguments.command == "validate-bundle-runtime":
+        from .instrumentation import validate_runtime_bindings
+
+        print(
+            json.dumps(
+                validate_runtime_bindings(
+                    arguments.manifest,
+                    arguments.bundle,
+                    arguments.registry,
+                ),
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 0
+    if arguments.command == "capture-build-state":
+        from .build_provenance import capture_build_state
+
+        print(
+            capture_build_state(
+                output=arguments.output,
+                build_tree=arguments.build_tree,
+                build_definition_repo=arguments.build_definition_repo,
+                openfoam_oid=arguments.openfoam_oid,
+                openfoam_algorithm=arguments.openfoam_algorithm,
+                thirdparty_oid=arguments.thirdparty_oid,
+                thirdparty_algorithm=arguments.thirdparty_algorithm,
+                executable_paths=_role_paths(arguments.executable),
+                compile_flags=arguments.compile_flag,
+            )
+        )
+        return 0
+    if arguments.command == "finalize-build-sidecar":
+        from .build_provenance import finalize_build_sidecar
+
+        print(
+            finalize_build_sidecar(arguments.state, arguments.archive, arguments.output)
+        )
+        return 0
+    if arguments.command == "verify-build-pair":
+        from .build_provenance import verify_build_pair
+
+        verify_build_pair(arguments.sidecar, arguments.archive)
+        print(arguments.sidecar)
+        return 0
+    if arguments.command == "validate-provision":
+        from .provision import validate_provision
+
+        print(
+            validate_provision(
+                manifest_path=arguments.manifest,
+                build_sidecar_path=arguments.build_sidecar,
+                provision_root=arguments.provision_root,
+                output=arguments.output,
+                executable_paths=_role_paths(arguments.executable),
+            )
+        )
+        return 0
+    if arguments.command == "source-track-identities":
+        from .fact import canonical_json
+        from .source_track import source_track_identities
+
+        print(
+            canonical_json(
+                source_track_identities(
+                    repository=arguments.repository,
+                    purpose=arguments.purpose,
+                    base_commit=arguments.base_commit,
+                    control_plane_files=arguments.control_plane_file,
+                    instrumentation_bundle_sha256=(
+                        arguments.instrumentation_bundle_sha256
+                    ),
+                )
             )
         )
         return 0
@@ -262,6 +397,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if arguments.command == "capture-workload":
+        from .workload import capture_workload
+
+        print(
+            capture_workload(
+                arguments.manifest, arguments.case_root, arguments.output_root
+            )
+        )
+        return 0
     if arguments.command == "package":
         # Runner-only adapter: importing it here keeps compute-only commands
         # independent of tar/archive implementation details.
@@ -304,6 +448,16 @@ def _member(value: str) -> tuple[str, str]:
     if not separator or not relative or not role:
         raise ValueError("package --member must be RELATIVE_PATH:ROLE")
     return relative, role
+
+
+def _role_paths(values: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        role, separator, path = value.partition("=")
+        if not separator or not role or not path or role in result:
+            raise ValueError("--executable must be unique ROLE=PATH values")
+        result[role] = Path(path)
+    return result
 
 
 def _run_id(manifest_path: Path) -> str:

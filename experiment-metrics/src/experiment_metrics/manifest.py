@@ -12,6 +12,7 @@ from .fact import canonical_json
 RUN_ID = re.compile(r"^r-[a-f0-9]{32}$")
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 PURPOSES = frozenset({"bench", "profile"})
+REPOSITORY_ID = "apac2026-openfoam"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,8 +58,8 @@ class RunManifest:
             raise ValueError("invalid run ID")
         if purpose not in PURPOSES:
             raise ValueError("run purpose must be bench or profile")
-        if not isinstance(repository_id, str) or not repository_id:
-            raise ValueError("repository_id is required")
+        if repository_id != REPOSITORY_ID:
+            raise ValueError("repository_id must be apac2026-openfoam")
         if not isinstance(source_track, dict):
             raise ValueError("source_track must be an object")
         _validate_source_track(source_track, purpose)
@@ -87,8 +88,9 @@ def init_run(
     identities: Mapping[str, object],
     *,
     purpose: str = "bench",
-    repository_id: str = "apac2026-openfoam",
+    repository_id: str = REPOSITORY_ID,
     registry_path: Path | None = None,
+    instrumentation_bundle_path: Path | None = None,
 ) -> Path:
     """Create a persisted manifest before any producer starts.
 
@@ -99,8 +101,8 @@ def init_run(
 
     if purpose not in PURPOSES:
         raise ValueError("purpose must be bench or profile")
-    if not repository_id:
-        raise ValueError("repository_id must not be empty")
+    if repository_id != REPOSITORY_ID:
+        raise ValueError("repository_id must be apac2026-openfoam")
     _validate_identities(identities, purpose)
     run_id = "r-" + os.urandom(16).hex()
     run_dir = runtime_root.resolve() / "runs" / run_id
@@ -127,6 +129,22 @@ def init_run(
         "instrumentation_bundle_sha256": identities["instrumentation_bundle_sha256"],
     }
     path = run_dir / "control/run-manifest.json"
+    if instrumentation_bundle_path is not None:
+        from .instrumentation import bundle_identity, install_bundle
+
+        installed_identity = bundle_identity(
+            instrumentation_bundle_path,
+            purpose=purpose,
+            registry_path=registry_path,
+        )
+        if installed_identity != identities["instrumentation_bundle_sha256"]:
+            raise ValueError("instrumentation bundle identity does not match manifest")
+        install_bundle(
+            instrumentation_bundle_path,
+            run_dir / "control/instrumentation-bundle.json",
+            purpose=purpose,
+            registry_path=registry_path,
+        )
     _atomic_write(path, canonical_json(document) + "\n")
     RunManifest.load(path)
     # The persisted manifest is itself an owned required observation.  This

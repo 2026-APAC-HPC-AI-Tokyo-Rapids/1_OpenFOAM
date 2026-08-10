@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+import experiment_metrics.build_provenance as provenance
+from experiment_metrics.build_provenance import (
+    CAPTURE_SOURCE_PATH,
+    EXECUTABLE_ROLES,
+    PARTITION_SOURCE_PATHS,
+    capture_build_state,
+    finalize_build_sidecar,
+    verify_build_pair,
+)
+
+
+def _definition_repo(root: Path) -> Path:
+    repo = root / "definition"
+    repo.mkdir()
+    capture = repo / CAPTURE_SOURCE_PATH
+    capture.parent.mkdir(parents=True)
+    capture.write_text("#!/usr/bin/env python3\n")
+    for relative in PARTITION_SOURCE_PATHS:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(relative + "\n")
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", head],
+        check=True,
+    )
+    return repo
+
+
+def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    definition = _definition_repo(tmp_path)
+    tree = tmp_path / "tree"
+    bin_dir = tree / "OpenFOAM/platforms/test/bin"
+    bin_dir.mkdir(parents=True)
+    paths: dict[str, Path] = {}
+    for role in EXECUTABLE_ROLES[:-1]:
+        path = bin_dir / role
+        shutil.copy2("/bin/true", path)
+        paths[role] = path
+    capture = bin_dir / "capture-hardware"
+    shutil.copy2(definition / CAPTURE_SOURCE_PATH, capture)
+    capture.chmod(0o755)
+    paths["capture-hardware"] = capture
+    monkeypatch.setattr(provenance, "_which", lambda _name: Path("/bin/true"))
+
+    state = capture_build_state(
+        output=tmp_path / "state.json",
+        build_tree=tree,
+        build_definition_repo=definition,
+        openfoam_oid="a" * 40,
+        openfoam_algorithm="sha1",
+        thirdparty_oid="b" * 40,
+        thirdparty_algorithm="sha1",
+        executable_paths=paths,
+        compile_flags=["WM_PRECISION_OPTION=DP", "WM_LABEL_SIZE=64"],
+    )
+    archive = tmp_path / "build.tar.zst"
+    archive.write_bytes(b"immutable-build-archive")
+    sidecar = finalize_build_sidecar(state, archive, tmp_path / "sidecar.json")
+    document = verify_build_pair(sidecar, archive)
+
+    assert [item["commit_role"] for item in document["source_commits"]] == [
+        "build_definition",
+        "openfoam_source",
+        "thirdparty_source",
+    ]
+    assert {
+        item["role"]
+        for item in document["runtime_objects"]
+        if item["kind"] == "executable"
+    } == set(EXECUTABLE_ROLES)
+    assert document["build_archive"]["size_bytes"] == archive.stat().st_size
+
+    archive.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="does not match"):
+        verify_build_pair(sidecar, archive)
+
+
+def test_capture_build_state_rejects_modified_installed_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    definition = _definition_repo(tmp_path)
+    tree = tmp_path / "tree"
+    bin_dir = tree / "bin"
+    bin_dir.mkdir(parents=True)
+    paths = {}
+    for role in EXECUTABLE_ROLES:
+        path = bin_dir / role
+        shutil.copy2("/bin/true", path)
+        paths[role] = path
+    monkeypatch.setattr(provenance, "_which", lambda _name: Path("/bin/true"))
+
+    with pytest.raises(ValueError, match="differs from tracked source"):
+        capture_build_state(
+            output=tmp_path / "state.json",
+            build_tree=tree,
+            build_definition_repo=definition,
+            openfoam_oid="a" * 40,
+            openfoam_algorithm="sha1",
+            thirdparty_oid="b" * 40,
+            thirdparty_algorithm="sha1",
+            executable_paths=paths,
+            compile_flags=[],
+        )

@@ -65,9 +65,7 @@ def test_packager_creates_and_revalidates_closed_bench_artifact_set(
     run_dir = manifest.path.parents[1]
     _write_metrics(run_dir, manifest.run_id)
 
-    result = RunPackager().package(
-        manifest_path, run_members=_bench_members(run_dir)
-    )
+    result = RunPackager().package(manifest_path, run_members=_bench_members(run_dir))
     validated = validate_artifact_set(manifest_path, result.manifest_path)
 
     assert [path.name for path in result.files] == [
@@ -128,6 +126,14 @@ def test_packager_rejects_unsafe_or_open_run_members(
             manifest_path,
             run_members=(("control/run-manifest.json", "wrong_role"),),
         )
+    with pytest.raises(ValueError, match="absent from the registry"):
+        RunPackager().package(
+            manifest_path,
+            run_members=(
+                ("control/run-manifest.json", "run_manifest"),
+                ("logs/solver.log", "unknown_source_role"),
+            ),
+        )
     with pytest.raises(ValueError, match="unsafe artifact member"):
         RunPackager().package(
             manifest_path,
@@ -178,9 +184,7 @@ def test_artifact_set_rejects_role_order_filename_and_hash_tampering(
     manifest_path, manifest = _run(tmp_path, registry_path, identities)
     run_dir = manifest.path.parents[1]
     _write_metrics(run_dir, manifest.run_id)
-    result = RunPackager().package(
-        manifest_path, run_members=_bench_members(run_dir)
-    )
+    result = RunPackager().package(manifest_path, run_members=_bench_members(run_dir))
     document = json.loads(result.manifest_path.read_text())
     document["files"].reverse()
     result.manifest_path.write_text(json.dumps(document) + "\n", encoding="utf-8")
