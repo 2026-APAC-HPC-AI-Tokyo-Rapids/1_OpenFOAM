@@ -188,6 +188,9 @@ jobs:
             --exclude='install_manifest.txt' \
             --exclude='Makefile'
           test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/icoFoam"
+          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/checkMesh"
+          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/mesh-facts"
+          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/partition-audit"
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
@@ -207,15 +210,58 @@ jobs:
       OPENFOAM_PROFILE_MODE: ${{ inputs.profile_mode || 'direct' }}
 
     steps:
-      - name: Submit OpenFOAM job
-        env:
-          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+      - name: Checkout control-plane identity
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Create v2 run manifest before submission
+        id: v2_context
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
-          test -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}"
-          credentials_base64="$(printf '%s' "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}" | base64 --wrap=0)"
-          job_environment="PROVISION_DIR=${PROVISION_DIR},OPENFOAM_RUN_ROOT=${OPENFOAM_RUN_ROOT},OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE},GITHUB_RUN_ID=${GITHUB_RUN_ID},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_REPOSITORY=${GITHUB_REPOSITORY},GITHUB_SHA=${GITHUB_SHA},EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64=${credentials_base64}"
-          job_output="$(pjsub -x "${job_environment}" -o "${PROVISION_DIR}/logs/%j.log" -j -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm")"
+          git_algorithm="$(git rev-parse --show-object-format)"
+          head_commit="$(git rev-parse HEAD)"
+          base_commit="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")"
+          control_sha256="$(
+            sha256sum \
+              "${GITHUB_WORKSPACE}/.github/workflows/genkai.yml" \
+              "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
+              "${GITHUB_WORKSPACE}/tasks/parse_result.sh" \
+              "${GITHUB_WORKSPACE}/experiment-metrics/registry/openfoam-v2.toml" |
+              sha256sum | awk '{print $1}'
+          )"
+          bundle_sha256="$(
+            find "${GITHUB_WORKSPACE}/experiment-metrics" -type f \
+              -not -path '*/.venv/*' -print0 |
+              sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'
+          )"
+          purpose=bench
+          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+            purpose=profile
+            base_role=profile_base
+          else
+            base_role=score_reference
+          fi
+          identities="$(printf '{"source_track":{"object_hash_algorithm":"%s","base_role":"%s","base_commit":"%s","head_commit":"%s"},"observed_control_plane_sha256":"%s","instrumentation_bundle_sha256":"%s"}' \
+            "${git_algorithm}" "${base_role}" "${base_commit}" "${head_commit}" \
+            "${control_sha256}" "${bundle_sha256}")"
+          manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
+            --identities-json "${identities}" --repository-id "${GITHUB_REPOSITORY}" \
+            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")"
+          run_dir="$(dirname "$(dirname "${manifest}")")"
+          run_id="$(basename "${run_dir}")"
+          printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' \
+            "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
+          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\n' \
+            "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_ENV}"
+
+      - name: Submit OpenFOAM job
+        run: |
+          job_environment="RUN_ID=${RUN_ID},RUN_MANIFEST=${RUN_MANIFEST},RUN_DIR=${RUN_DIR}"
+          job_output="$(pjsub -x "${job_environment}" -o "${RUN_DIR}/logs/%j.pjm.log" -j \
+            -N openfoam_run "${PROVISION_DIR}/scripts/run-openfoam.pjm" \
+            "${PROVISION_DIR}" "${OPENFOAM_PROFILE_MODE}")"
           printf '%s\n' "${job_output}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${job_output}")"
           test -n "${job_id}"
@@ -223,24 +269,23 @@ jobs:
 
       - name: Wait for OpenFOAM job to start
         run: |
-          while [[ ! -e "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" ]]; do
+          while [[ ! -e "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" ]]; do
             wait_status="$(pjwait -w waitnone "${PJM_JOB_ID}")"
             pjm_code="$(awk 'NR == 1 { print $2 }' <<< "${wait_status}")"
             if [[ -n "${pjm_code}" && "${pjm_code}" != X ]]; then
               printf '%s\n' "${wait_status}"
-              echo "PJM job ended before creating ${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" >&2
+              echo "PJM job ended before creating ${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" >&2
               exit 1
             fi
             sleep 2
           done
-          echo "PJM job log is ready: ${PROVISION_DIR}/logs/${PJM_JOB_ID}.log"
+          echo "PJM job log is ready: ${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log"
 
       - name: Stream OpenFOAM execution log
         run: |
-          # Keep the complete PJM log for the artifact, but only stream solver
-          # progress lines to the Actions console.
-          tail --lines=+1 --follow=name "${PROVISION_DIR}/logs/${PJM_JOB_ID}.log" |
-            grep --line-buffered -E '^(Time =|ExecutionTime =)' &
+          # The PJM record is durable inside RUN_DIR; follow it only for
+          # scheduler diagnostics while solver stdout/stderr remains combined.
+          tail --lines=+1 --follow=name "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" &
           stream_pid=$!
           stop_stream() {
             kill "${stream_pid}" 2>/dev/null || true
@@ -256,32 +301,135 @@ jobs:
       - name: Verify OpenFOAM job completion
         run: |
           pjwait "${PJM_JOB_ID}"
-          test -e "${PROVISION_DIR}/run-success"
+          test -e "${RUN_DIR}/run-success"
 
-      - name: Collect PJM accounting metrics
-        if: always() && env.PJM_JOB_ID != ''
-        env:
-          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+      - name: Record saved solver log
+        if: always()
         run: |
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
-            collect scheduler \
-            --job-id "${PJM_JOB_ID}"
+          if [[ -s "${RUN_DIR}/logs/solver.log" ]]; then
+            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+              record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
+              --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+              --log "${RUN_DIR}/logs/solver.log"
+          else
+            echo 'solver log is absent; collection will be incomplete' >&2
+          fi
 
-      - name: Upload OpenFOAM execution log
+      - name: Record Pstream rank sources
+        if: always()
+        run: |
+          if [[ -d "${RUN_DIR}/domain/pstream" ]] && \
+             compgen -G "${RUN_DIR}/domain/pstream/rank-*.jsonl" > /dev/null; then
+            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+              record-pstream --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
+              --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+              --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml" \
+              --source-dir "${RUN_DIR}/domain/pstream"
+          else
+            echo 'Pstream rank JSONL is absent; collection will be incomplete' >&2
+          fi
+
+      - name: Record validated post-run sources
+        if: always()
+        run: |
+          source_root="${RUN_DIR}/source"
+          if [[ -f "${source_root}/hardware/node-0.json" && \
+                -f "${source_root}/mesh/topology.json" && \
+                -f "${source_root}/mesh/decomposeParDict" && \
+                -f "${source_root}/mesh/partition-observed.json" ]]; then
+            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+              record-postrun --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
+              --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+              --hardware "${source_root}/hardware/node-0.json" \
+              --hardware-source-member source/hardware/node-0.json \
+              --topology "${source_root}/mesh/topology.json" \
+              --decompose-dict "${source_root}/mesh/decomposeParDict" \
+              --partition-observed "${source_root}/mesh/partition-observed.json"
+          else
+            echo 'one or more v2 post-run sources are absent; collection will be incomplete' >&2
+          fi
+
+      - name: Merge terminal fragments
+        if: always()
+        run: |
+          set +e
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            merge --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
+            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
+            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml"
+          merge_status=$?
+          set -e
+          echo "MERGE_STATUS=${merge_status}" >> "${GITHUB_ENV}"
+          echo "v2 merge status: ${merge_status} (1 means intentionally incomplete)"
+
+      - name: Package fixed v2 artifact set
+        id: package_v2
+        if: always()
+        run: |
+          args=(package --manifest "${RUN_MANIFEST}")
+          for pair in \
+            'control/run-manifest.json:run_manifest' \
+            'logs/blockMesh.log:block_mesh_log' \
+            'logs/decomposePar.log:decompose_par_log' \
+            'logs/solver.log:solver_log' \
+            "logs/${PJM_JOB_ID}.pjm.log:pjm_log" \
+            'logs/profile-location.txt:profile_location' \
+            'logs/checkMesh.log:check_mesh_log' \
+            'results/result.txt:official_result' \
+            'source/network/imb-mpi1/stdout.txt:imb_mpi1_stdout' \
+            'domain/network-imb-mpi1-results.jsonl:imb_mpi1_projection'
+          do
+            relative="${pair%%:*}"
+            if [[ -f "${RUN_DIR}/${relative}" ]]; then
+              args+=(--member "${pair}")
+            fi
+          done
+          while IFS= read -r -d '' path; do
+            args+=(--member "${path#"${RUN_DIR}/"}:pstream_source")
+          done < <(find "${RUN_DIR}/domain/pstream" -type f -print0 | sort -z)
+          while IFS= read -r -d '' path; do
+            args+=(--member "${path#"${RUN_DIR}/"}:postrun_source")
+          done < <(find "${RUN_DIR}/source/hardware" "${RUN_DIR}/source/mesh" \
+            -type f -print0 | sort -z)
+          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+            while IFS= read -r -d '' path; do
+              args+=(--profile-member "${path#"${RUN_DIR}/"}")
+            done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
+          fi
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
+
+      - name: Upload fixed v2 artifact set
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-run-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.PROVISION_DIR }}/logs
-          if-no-files-found: warn
-          compression-level: 1
+          name: openfoam-v2-${{ steps.v2_context.outputs.run_id }}
+          path: |
+            ${{ steps.v2_context.outputs.run_dir }}/artifact-manifest.json
+            ${{ steps.v2_context.outputs.run_dir }}/run-artifacts.tar.zst
+            ${{ steps.v2_context.outputs.run_dir }}/metrics.jsonl
+            ${{ steps.v2_context.outputs.run_dir }}/profile-raw.tar.zst
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Publish v2 raw facts to BigQuery
+        if: always() && steps.package_v2.outcome == 'success'
+        env:
+          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          test -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}"
+          uv sync --project "${PROVISION_DIR}/experiment-metrics" \
+            --frozen --no-dev --extra publish
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            publish --manifest "${RUN_MANIFEST}" \
+            --artifact-manifest "${RUN_DIR}/artifact-manifest.json" \
+            --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml"
 
       - name: Upload cavity3D result
         if: success()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-cavity3d-result-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.PROVISION_DIR }}/results
+          path: ${{ steps.v2_context.outputs.run_dir }}/results
           if-no-files-found: error
           compression-level: 0
 

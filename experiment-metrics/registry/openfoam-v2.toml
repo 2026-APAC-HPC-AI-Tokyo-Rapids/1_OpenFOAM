@@ -1,0 +1,186 @@
+[registry]
+schema_version = "openfoam-v2-registry/v1"
+
+[[producers]]
+id = "runner.manifest"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "stage.runner"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.finalizer"
+required_for = []
+
+[[producers]]
+id = "runner.log_parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "network.parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.postrun_parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "runner.pstream_parser"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.identity.run_id"
+owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.identity.run_purpose"
+owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.identity.repository_id"
+owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.instrumentation_bundle_sha256"
+owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "run.stage.*.launch"
+owner = "stage.runner"
+logical_type = "json"
+required_for = []
+
+[[keys]]
+pattern = "run.stage.*.termination"
+owner = "stage.runner"
+logical_type = "json"
+required_for = []
+
+[[keys]]
+pattern = "perf.stage.*.wall_time_sec"
+owner = "stage.runner"
+logical_type = "decimal"
+required_for = []
+
+[[keys]]
+pattern = "collection_complete"
+owner = "runner.finalizer"
+logical_type = "boolean"
+required_for = []
+
+[[keys]]
+pattern = "solver.runtime_header"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.step_timings"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.pressure_solves"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.log_markers"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.process_count"
+owner = "network.parser"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.message_size.min_bytes"
+owner = "network.parser"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.message_size.max_bytes"
+owner = "network.parser"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.iteration.max_per_sample"
+owner = "network.parser"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.iteration.time_limit_sec"
+owner = "network.parser"
+logical_type = "integer"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "network.imb_mpi1.iteration.policy"
+owner = "network.parser"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "software.imb_mpi1.version"
+owner = "network.parser"
+logical_type = "string"
+required_for = []
+
+[[keys]]
+pattern = "solver.pstream.startup_applied.rank.*"
+owner = "runner.pstream_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.pstream.runtime_current.rank.*"
+owner = "runner.pstream_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.pstream.change_events.rank.*"
+owner = "runner.pstream_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "hardware.minimal.node.0"
+owner = "runner.postrun_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "mesh.topology"
+owner = "runner.postrun_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "mesh.partition.requested"
+owner = "runner.postrun_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "mesh.partition.observed"
+owner = "runner.postrun_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]

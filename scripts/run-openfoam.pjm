@@ -4,75 +4,89 @@
 #PJM -L elapse=00:25:00
 #PJM --mpi proc=120
 
-# 競技タスクの cavity3D 64M-cell ケースを1ノードで実行する。
+# Compute-side v2 executor.  It owns only local case data, source captures,
+# logs, and atomic metric fragments.  The runner owns credentials, merge,
+# packaging, upload, and BigQuery publication.
 set -euo pipefail
 
-# ジョブの実行条件をスクリプト内で固定し、投入元の環境に依存しないようにする。
-export OPENFOAM_MPI_PROCS=120
-
-# ジョブ実行に必要な環境変数が設定されていることを確認する。
-: "${OPENFOAM_RUN_ROOT:?}"
-: "${PROVISION_DIR:?}"
+: "${RUN_ID:?runner-generated v2 run ID is required}"
+: "${RUN_MANIFEST:?runner-generated manifest path is required}"
+: "${RUN_DIR:?runner-generated runtime path is required}"
 : "${PJM_JOBID:?}"
-: "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64:?}"
 
-# 認証情報は子の収集CLIへだけ渡す。実験プロセスの環境や保存対象には含めない。
-METRICS_CREDENTIALS_BASE64="${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64}"
-unset EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64
+PROVISION_DIR=${1:?provision directory argument is required}
+OPENFOAM_PROFILE_MODE=${2:-direct}
+OPENFOAM_MPI_PROCS=120
+export OPENFOAM_MPI_PROCS OPENFOAM_PROFILE_MODE
 
-# ジョブ専用の作業ディレクトリとプロファイルの保存先を先に決めておく。
-export RUN_DIR="$(mktemp -d "${OPENFOAM_RUN_ROOT}/job-${PJM_JOBID}.XXXXXXXXXX")"
-export CASE_DIR="${RUN_DIR}/cavity3D-64M"
-export OPENFOAM_PROFILE_RUN_ID="${GITHUB_RUN_ID:-manual}-${PJM_JOBID}"
-export OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${OPENFOAM_PROFILE_RUN_ID}"
-export OPENFOAM_PROFILE_MODE="${OPENFOAM_PROFILE_MODE:-direct}"
-export SOLVER_LOG="${PROVISION_DIR}/logs/log.icoFoam"
-export DECOMPOSE_PAR_DICT=system/decomposeParDict.6
-export EXPERIMENT_METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
-PIPELINE_STARTED_SECONDS=${SECONDS}
+CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
+LOG_DIR="${RUN_DIR}/logs"
+SOURCE_DIR="${RUN_DIR}/source"
+RESULTS_DIR="${RUN_DIR}/results"
+REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
+METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
+DECOMPOSE_PAR_DICT=system/decomposeParDict.6
+SOLVER_LOG="${LOG_DIR}/solver.log"
+PROFILE_RUN_ID="${RUN_ID}-${PJM_JOBID}"
+OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
+export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
+export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
-metrics_cli() {
-  EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64="${METRICS_CREDENTIALS_BASE64}" \
-    "${EXPERIMENT_METRICS_CLI}" "$@"
+test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
+test -f "${RUN_MANIFEST}"
+install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" \
+  "${OPENFOAM_METRICS_PSTREAM_DIR}"
+
+# One exact argv is given directly to StageRunner; stdout and stderr are a
+# single durable record rather than a shell pipeline with ambiguous status.
+stage() {
+  local stage_name=$1
+  local stdout_path=$2
+  shift 2
+  "${METRICS_CLI}" run-stage \
+    --manifest "${RUN_MANIFEST}" \
+    --runtime-dir "${RUN_DIR}" \
+    --registry "${REGISTRY}" \
+    --producer stage.runner \
+    --stage "${stage_name}" \
+    --cwd "${CASE_DIR}" \
+    --stderr-mode stdout \
+    --stdout-path "${stdout_path}" \
+    -- "$@"
 }
 
-metrics_collect() {
-  metrics_cli collect "$@" || true
-}
-
-# すべての MPI 処理を1ノード内で実行するため、OFI/MLX のネットワーク経路を
-# 初期化せず、Intel MPI の共有メモリ転送を使用する。
+# All ranks run within one node, so use Intel MPI shared-memory transport.
 export I_MPI_FABRICS=shm
-# 成否にかかわらず、一時作業ディレクトリを削除する。
-cleanup() {
-  status=$?
-  trap - EXIT INT TERM
-  run_elapsed_sec="$((SECONDS - PIPELINE_STARTED_SECONDS))"
-  metrics_collect run-end --case-dir "${CASE_DIR}" --exit-code "${status}" --elapsed-sec "${run_elapsed_sec}"
-  rm -rf -- "${RUN_DIR:?}"
-  exit "${status}"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 module purge
 module load intel/2025.1.3 impi
 
-# OpenFOAM の初期化では、bashrc 内の中間的な失敗を許容する。
 set +eu
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" \
+  WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
 set -eu
 
-# 提出元の環境から継承した Intel MPI の設定を無効化する。ホスト固有の
-# ピンニング、診断、自動チューニングによって MPI 処理の挙動が変わらないようにする。
-unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
+unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
+unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC
+unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
 
-# submodule で固定した競技ケースをジョブ専用領域へコピーする。
+MPIEXEC=$(command -v mpirun)
+BLOCK_MESH=$(command -v blockMesh)
+DECOMPOSE_PAR=$(command -v decomposePar)
+ICO_FOAM=$(command -v icoFoam)
+CHECK_MESH=$(command -v checkMesh)
+MESH_FACTS=$(command -v mesh-facts)
+PARTITION_AUDIT=$(command -v partition-audit)
+for executable in "${MPIEXEC}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" \
+  "${ICO_FOAM}" "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}"
+do
+  [[ "${executable}" == /* && -x "${executable}" ]]
+done
+
 cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_DIR}"
 cd "${CASE_DIR}"
+install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
-# Genkai の1ノード120ランク向けに、可変である分割数だけを追加する。
 cat > "${DECOMPOSE_PAR_DICT}" <<EOF
 FoamFile
 {
@@ -86,21 +100,20 @@ numberOfSubdomains ${OPENFOAM_MPI_PROCS};
 method scotch;
 EOF
 
-metrics_collect run-start --case-dir . --command mpirun -np "${OPENFOAM_MPI_PROCS}" icoFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}"
-metrics_collect platform --case-dir .
-metrics_collect parallel --case-dir .
+# This is the exact generated dictionary consumed by decomposePar, preserved
+# before its spawn and reduced later from the same immutable bytes.
+install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 
-PIPELINE_STARTED_SECONDS=${SECONDS}
-metrics_cli stage block_mesh -- blockMesh
-metrics_cli stage decompose_par -- decomposePar -decomposeParDict "${DECOMPOSE_PAR_DICT}" -force
+stage block_mesh "${LOG_DIR}/blockMesh.log" \
+  "${BLOCK_MESH}" -fileHandler uncollated
+stage decompose_par "${LOG_DIR}/decomposePar.log" \
+  "${DECOMPOSE_PAR}" -fileHandler uncollated \
+  -decomposeParDict "${DECOMPOSE_PAR_DICT}" -force
 
-# プロファイルの保存先は冒頭で決めた設定を使い、必要なディレクトリを作成する。
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
-
-# 実行条件と環境を記録し、実行ノードの CPU 情報も保存する。
 printf '%s\n' \
   "PJM_JOBID=${PJM_JOBID}" \
-  "GITHUB_RUN_ID=${GITHUB_RUN_ID:-}" \
+  "run_id=${RUN_ID}" \
   "launch_host=$(hostname)" \
   "mpi_procs=${OPENFOAM_MPI_PROCS}" \
   "profile_mode=${OPENFOAM_PROFILE_MODE}" \
@@ -108,41 +121,91 @@ printf '%s\n' \
   > "${OPENFOAM_PROFILE_DIR}/run.txt"
 cp system/decomposeParDict.6 system/controlDict "${OPENFOAM_PROFILE_DIR}/"
 env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
-
-{
-  printf 'host=%s\n' "$(hostname)"
-  lscpu
-} > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
-
-# ソルバーの開始・終了時刻を記録し、必要に応じてプロファイラを選べる形で
-# MPI 並列計算を実行する。
-echo "started_at=$(date --iso-8601=seconds)" | tee "${SOLVER_LOG}"
+{ printf 'host=%s\n' "$(hostname)"; lscpu; } > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
 
 set +e
-metrics_cli stage ico_foam -- "${PROVISION_DIR}/scripts/exec-profiler.sh" mpirun -np "${OPENFOAM_MPI_PROCS}" icoFoam -parallel -decomposeParDict "${DECOMPOSE_PAR_DICT}" 2>&1 | tee -a "${SOLVER_LOG}"
-solver_status=${PIPESTATUS[0]}
+stage solver "${SOLVER_LOG}" \
+  "${PROVISION_DIR}/scripts/exec-profiler.sh" \
+  "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${OPENFOAM_MPI_PROCS}" \
+  "${ICO_FOAM}" -parallel \
+  -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+solver_status=$?
 set -e
 
-echo "finished_at=$(date --iso-8601=seconds)" | tee -a "${SOLVER_LOG}"
-
-metrics_collect solver-status --case-dir . --exit-code "${solver_status}"
-
+cp "${SOLVER_LOG}" "${OPENFOAM_PROFILE_DIR}/"
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
 
-# 競技付属の検証器で固定 workload の完走を確認し、提出可能な小さい成果物を残す。
-"${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" | tee "${PROVISION_DIR}/results/result.txt"
-grep -qx 'STATUS: VALID' "${PROVISION_DIR}/results/result.txt"
-grep -q '^RESULT:' "${PROVISION_DIR}/results/result.txt"
-cp "${SOLVER_LOG}" "${PROVISION_DIR}/results/log.icoFoam"
+"${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" > "${RESULTS_DIR}/result.txt"
+grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
+grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
-# プロファイルと実行ログを保存する場所を記録する。
-cp "${SOLVER_LOG}" "${OPENFOAM_PROFILE_DIR}/"
-du -sh "${OPENFOAM_PROFILE_DIR}" | tee \
-  "${PROVISION_DIR}/logs/profile-location.txt"
-printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" | tee -a \
-  "${PROVISION_DIR}/logs/profile-location.txt"
+stage check_mesh "${LOG_DIR}/checkMesh.log" \
+  "${CHECK_MESH}" -fileHandler uncollated -constant
 
-# ワークフロー側がジョブ成功を判定できる完了マーカーを作成する。
-touch "${PROVISION_DIR}/run-success"
+stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" \
+  "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m \
+  experiment_metrics.probes.capture_hardware \
+  --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" \
+  --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware" \
+  --node-ordinal 0
+
+stage mesh_facts "${LOG_DIR}/mesh-facts.log" \
+  "${MESH_FACTS}" -case "${CASE_DIR}" -fileHandler uncollated -constant \
+  -output "${SOURCE_DIR}/mesh/topology.json"
+
+stage partition_audit "${LOG_DIR}/partition-audit.log" \
+  "${PARTITION_AUDIT}" -case "${CASE_DIR}" -fileHandler uncollated -constant \
+  -output "${SOURCE_DIR}/mesh/partition-observed.json"
+
+if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \
+    "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m \
+    experiment_metrics.probes.capture_hardware \
+    --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" \
+    --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" \
+    --node-ordinal 0
+fi
+
+# Network measurement is an independent post-solver stage.  Missing IMB,
+# failed execution, or malformed output deliberately does not alter the solver
+# success marker; the absent network.parser fragment makes merge incomplete.
+IMB_STDOUT="${SOURCE_DIR}/network/imb-mpi1/stdout.txt"
+install -d -m 0755 "${IMB_STDOUT%/*}"
+imb_bin=$(command -v IMB-MPI1 || true)
+if [[ -n "${imb_bin}" ]]; then
+  set +e
+  stage network_imb_mpi1 "${IMB_STDOUT}" \
+    "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${OPENFOAM_MPI_PROCS}" "${imb_bin}" \
+    -npmin "${OPENFOAM_MPI_PROCS}" -msglog 0:22 -iter 1000 -time 1 \
+    -iter_policy dynamic PingPong Sendrecv Allreduce
+  imb_status=$?
+  set -e
+  if [[ "${imb_status}" -eq 0 ]]; then
+    "${METRICS_CLI}" record-imb-mpi1 \
+      --manifest "${RUN_MANIFEST}" \
+      --runtime-dir "${RUN_DIR}" \
+      --registry "${REGISTRY}" \
+      --stdout "${IMB_STDOUT}" \
+      --source-member source/network/imb-mpi1/stdout.txt \
+      --time-limit-sec 1 \
+      --iteration-policy dynamic ||
+      printf '%s\n' 'IMB output was not a complete canonical capture' >&2
+  else
+    printf '%s\n' "IMB-MPI1 stage failed (${imb_status}); collection will be incomplete" >&2
+  fi
+else
+  printf '%s\n' 'IMB-MPI1 is unavailable; collection will be incomplete' >&2
+fi
+
+if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+  install -d -m 0700 "${RUN_DIR}/profile/raw"
+  cp -a "${OPENFOAM_PROFILE_DIR}/." "${RUN_DIR}/profile/raw/"
+fi
+
+du -sh "${OPENFOAM_PROFILE_DIR}" > "${LOG_DIR}/profile-location.txt"
+printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" >> "${LOG_DIR}/profile-location.txt"
+
+# Only solver validity controls the scheduler/job success marker.
+touch "${RUN_DIR}/run-success"

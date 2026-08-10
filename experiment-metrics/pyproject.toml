@@ -1,0 +1,45 @@
+[project]
+name = "experiment-metrics"
+version = "2.0.0"
+description = "Local, durable experiment-metrics v2 core for OpenFOAM runs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "rfc8785>=0.1.4,<0.2",
+]
+
+[project.scripts]
+experiment-metrics = "experiment_metrics.cli:main"
+
+[project.optional-dependencies]
+publish = [
+    "google-auth>=2.40.0",
+    "requests>=2.32.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "ruff>=0.16.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.experiment-metrics.bigquery]
+project = "apac-hpc-ai-tokyo-rapids-26"
+dataset = "openfoam_experiment_metrics"
+table = "openfoam_metrics"
+location = "asia-northeast1"

@@ -1,0 +1,29 @@
+[protocol]
+schema_version = "openfoam-v2-run-protocol/v1"
+
+[variant.bench]
+expected_stages = [
+  "block_mesh",
+  "decompose_par",
+  "solver",
+  "check_mesh",
+  "mesh_facts",
+  "partition_audit",
+  "minimal_hardware_capture",
+  "network_imb_mpi1",
+]
+expected_pstream_ranks = 120
+
+[variant.profile]
+expected_stages = [
+  "block_mesh",
+  "decompose_par",
+  "solver",
+  "check_mesh",
+  "mesh_facts",
+  "partition_audit",
+  "minimal_hardware_capture",
+  "profile_hardware_capture",
+  "network_imb_mpi1",
+]
+expected_pstream_ranks = 120
