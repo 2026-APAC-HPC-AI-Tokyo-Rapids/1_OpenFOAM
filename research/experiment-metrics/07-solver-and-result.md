@@ -154,15 +154,9 @@ probe番号と論理名は次に固定する。
 `solverInfo1`の最終行から取得する。
 
 ```text
-solver.linear.u.0.initial_residual
-solver.linear.u.0.final_residual
-solver.linear.u.0.iterations
-solver.linear.u.1.initial_residual
-solver.linear.u.1.final_residual
-solver.linear.u.1.iterations
-solver.linear.u.2.initial_residual
-solver.linear.u.2.final_residual
-solver.linear.u.2.iterations
+solver.linear.u.initial_residual
+solver.linear.u.final_residual
+solver.linear.u.iterations
 solver.linear.u.converged
 
 solver.linear.p.initial_residual
@@ -173,9 +167,9 @@ solver.linear.p.converged
 
 v2606の列名は`Ux_initial`, `Ux_final`, `Ux_iters`から`Uz_iters`、
 `U_converged`、`p_initial`, `p_final`, `p_iters`, `p_converged`である。
-OpenFOAM列の`x`, `y`, `z`をそれぞれ数字sub-propertyの`0`, `1`, `2`へ対応付ける。
-vector fieldのconverged列はcomponent別ではなくfield全体に1つだけである。
-residualをfloat、iterationsをint、convergedの`0`または`1`をboolへ変換する。
+Uのresidualとiterationsは`x`, `y`, `z`の順のlistにし、それぞれ`str(list)`で
+1つのSTRING valueへ保存する。component別のキーには展開しない。vector fieldの
+converged列はfield全体に1つだけである。convergedの`0`または`1`をboolへ変換する。
 solver名文字列は比較用物理量ではないため保存しない。
 
 ### Continuity
@@ -243,18 +237,17 @@ abs(inlet + outlet) / max(abs(inlet), abs(outlet))
 
 ### Final wake probes
 
-各`<probe_name>`について4つのスカラーへ展開する。
+各`<probe_name>`について、U vectorを1つのlist string、kinematic pressureを1つの
+scalar stringとして保存する。
 
 ```text
-result.probe.<probe_name>.u.final_m_per_sec.0
-result.probe.<probe_name>.u.final_m_per_sec.1
-result.probe.<probe_name>.u.final_m_per_sec.2
+result.probe.<probe_name>.u.final_m_per_sec
 result.probe.<probe_name>.kinematic_pressure.final_m2_per_sec2
 ```
 
 対象名は`wake_near`, `wake_upper`, `wake_far`である。probe番号0、1、2をこの順で
 論理名へ対応付け、取得できたfinal valueを読む。header座標との再照合は行わない。
-U vectorの`x`, `y`, `z`成分を数字sub-propertyの`0`, `1`, `2`へ展開する。
+U vectorの`x`, `y`, `z`成分はこの順のlistにし、`str(list)`で1つのvalueにする。
 
 ## 出力ファイルとparser契約
 
