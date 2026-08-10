@@ -31,6 +31,24 @@ _ACCOUNTING_FIELDS = (
     "uctmut",
     "sctmut",
 )
+_ACCOUNTING_HEADER = (
+    "H",
+    "JOB ID",
+    "STATE",
+    "JOB START DATE",
+    "ELAPSE TIME (USE)",
+    "EXIT CODE",
+    "SIGNAL NO",
+    "PJM CODE",
+    "NODE NUM (USE)",
+    "MAX MEMORY SIZE (USE)",
+    "USER CPU TIME (USE)",
+    "SYSTEM CPU TIME (USE)",
+    "MAX MEMORY SIZE (USE)",
+    "USER CPU TIME (USE)",
+    "SYSTEM CPU TIME (USE)",
+)
+_ACCOUNTING_DUPLICATE_TAIL = 3
 _JOB_ID = re.compile(r"^[0-9]+$")
 
 
@@ -226,10 +244,23 @@ def parse_scheduler_accounting(
         text = raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
         raise ValueError("scheduler accounting is not UTF-8") from error
-    lines = [line for line in text.splitlines() if line]
+    lines = [line.split("\t") for line in text.splitlines() if line]
+    if lines and tuple(lines[0]) == _ACCOUNTING_HEADER:
+        lines.pop(0)
     if len(lines) != 1:
         raise ValueError("scheduler accounting must contain exactly one data row")
-    values = lines[0].split("\t")
+    values = lines[0]
+    if values and not values[0]:
+        values = values[1:]
+    expected_columns = len(_ACCOUNTING_FIELDS)
+    if len(values) == expected_columns + _ACCOUNTING_DUPLICATE_TAIL:
+        duplicate = values[-_ACCOUNTING_DUPLICATE_TAIL:]
+        original = values[
+            -2 * _ACCOUNTING_DUPLICATE_TAIL : -_ACCOUNTING_DUPLICATE_TAIL
+        ]
+        if duplicate != original:
+            raise ValueError("scheduler accounting has conflicting duplicate columns")
+        values = values[:-_ACCOUNTING_DUPLICATE_TAIL]
     if len(values) != len(_ACCOUNTING_FIELDS) or values[0] != expected_job_id:
         raise ValueError("scheduler accounting row has invalid columns or job ID")
     row = dict(zip(_ACCOUNTING_FIELDS, values, strict=True))
@@ -284,7 +315,10 @@ def _unsigned_value(value: str) -> int | None:
 
 def _numeric_token(value: str) -> str:
     parenthesized = re.search(r"\(([-+]?[0-9]+(?:\.[0-9]+)?)\)", value)
-    return parenthesized.group(1) if parenthesized else value.strip()
+    if parenthesized:
+        return parenthesized.group(1)
+    milliseconds = re.fullmatch(r"\s*([-+]?[0-9]+(?:\.[0-9]+)?)\s+ms\s*", value)
+    return milliseconds.group(1) if milliseconds else value.strip()
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess[bytes]:
