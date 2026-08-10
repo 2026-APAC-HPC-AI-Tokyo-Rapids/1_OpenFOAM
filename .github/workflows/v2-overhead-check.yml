@@ -38,9 +38,9 @@ jobs:
           printf 'check_dir=%s\n' "${check_dir}" >> "${GITHUB_OUTPUT}"
           install -d "${check_dir}/tree" "${check_dir}/task" "${check_dir}/logs"
           tar -I zstd -xf "${archive}" -C "${check_dir}/tree"
-          cp -a tasks/case/cavity3D-64M "${check_dir}/task/"
+          cp -a benchmark/cavity3D-64M "${check_dir}/task/"
           install -m 0755 scripts/v2-overhead-check.pjm "${check_dir}/"
-          install -m 0755 tasks/parse_result.sh "${check_dir}/"
+          install -m 0755 benchmark/parse_result.sh "${check_dir}/"
 
       - name: Submit isolated comparison
         run: |
