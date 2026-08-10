@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #PJM -L rscgrp=a-batch
 #PJM -L node=1
-#PJM -L elapse=00:25:00
+#PJM -L elapse=00:50:00
 #PJM --mpi proc=120
 
 set -euo pipefail
