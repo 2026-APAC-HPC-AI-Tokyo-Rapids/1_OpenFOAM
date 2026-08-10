@@ -19,7 +19,7 @@ meshingの前に取得する。それ以降は実行条件となる環境を変�
 | `system.os.version_id` | string | `/etc/os-release` | 同APIの`VERSION_ID` |
 | `system.kernel.release` | string | kernel | `os.uname().release` |
 | `system.architecture` | string | kernel | architectureを表す環境変数がない場合だけ`os.uname().machine` |
-| `system.node.0.hostname` | string | kernel | hostnameを表す環境変数がない場合だけ`socket.gethostname()` |
+| `system.node.hostname` | string | kernel | hostnameを表す環境変数がない場合だけ`socket.gethostname()` |
 | `hardware.cpu.model` | string | `lscpu --json` | `Model name:`の`data` |
 | `hardware.cpu.socket_count` | int | `lscpu --json` | `Socket(s):` |
 | `hardware.cpu.cores_per_socket` | int | `lscpu --json` | `Core(s) per socket:` |

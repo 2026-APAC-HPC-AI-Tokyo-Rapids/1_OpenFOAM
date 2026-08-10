@@ -42,8 +42,9 @@ value  STRING NOT NULL
 | `openfoam-123456-1-98765` | `result.aero.cd.tail.mean` | `"0.512345"` |
 | `openfoam-123456-1-98765` | `resource.job.memory.max_rss_bytes` | `""` |
 
-`value`は必ず1つのスカラー値である。配列、object、JSON、CSV、空白区切りvectorを
-格納しない。複数値は別recordにし、安定した固有名または数字のsub-propertyで分ける。
+`value`はBigQuery上で必ず1つのSTRINGスカラーである。取得値がint、float、bool、
+timestampならcanonicalな文字列表現にする。取得値がlistなら要素ごとのrecordへ展開せず、
+Pythonの`str(list)`で1つのSTRINGにする。objectや独自JSON schemaは格納しない。
 event IDや計測時刻などの列は追加しない。
 
 通常の成功runでは`(run, key)`を一意とする。raw tableはappend-onlyとし、
@@ -57,8 +58,8 @@ timestampへの型変換は参照viewで`SAFE_CAST`する。
 
 - 通常は英小文字、数字、アンダースコアを使い、階層をピリオドで区切る。
 - 同種要素に安定した名前があれば、その名前を数字より優先する。
-- vector、tuple、command引数など順序を持つ複数値は`.0`, `.1`のように
-  0始まりの数字sub-propertyへ展開する。
+- vector、tuple、command引数など順序を持つ複数値を、要素番号のsub-propertyへ
+  展開しない。取得単位のlist全体を1つのSTRING valueとして保持する。
 - 成果物、probe地点、fieldなど固有の意味を持つ対象には安定した論理名を使う。
 - 時間は原則秒で`_sec`、data量はbyteで`_bytes`を末尾に付ける。
 - 0–100の割合は`_percent`、0–1の比率は`_ratio`とする。
@@ -86,6 +87,7 @@ timestampへの型変換は参照viewで`SAFE_CAST`する。
 - 数値に単位、桁区切り、`NaN`、infinityを含めない。
 - 取得commandの失敗、目的の列・値の欠損、型変換失敗は空文字を保存する。
 - 値が実際に空の環境変数も空文字を保存する。
+- listはPythonの`str(list)`で1つのscalar stringとして保持する。
 - 改行を含む文字列は1つのscalar stringとして保持できる。
 
 論理型はmodule文書で固定し、送信時にその型をSTRINGへ変換する。
@@ -168,7 +170,7 @@ collectorが独自にraw command出力をfileへ退避することは禁止す�
 | component | 責務 |
 |---|---|
 | `CommandRunner` | shellを介さないargv実行、`LC_ALL=C`、timeout、return code、pipe読取 |
-| `ScalarCodec` | int/float/bool/timestampのSTRING化 |
+| `ScalarCodec` | int/float/bool/timestamp/listの単一STRING化 |
 | `KeyValidator` | 通常キーと環境変数キーの組み立て |
 | `OpenFoamDictionaryReader` | `foamDictionary -entry ... -value`の実行と値の読取 |
 | `OpenFoamTokenizer` | scalar、word、括弧付きvectorのtoken化 |

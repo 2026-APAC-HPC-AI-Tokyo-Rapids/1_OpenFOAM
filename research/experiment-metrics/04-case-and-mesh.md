@@ -19,9 +19,7 @@
 | `case.delta_t` | float | `system/controlDict` | `foamDictionary` |
 | `case.write_interval` | int | `system/controlDict` | `foamDictionary` |
 | `case.write_precision` | int | `system/controlDict` | `foamDictionary` |
-| `case.freestream_velocity_m_per_sec.0` | float | `0.orig/include/initialConditions` | `foamDictionary`のvector出力の第1成分 |
-| `case.freestream_velocity_m_per_sec.1` | float | 同上 | 同上 |
-| `case.freestream_velocity_m_per_sec.2` | float | 同上 | 同上 |
+| `case.freestream_velocity_m_per_sec` | list string | `0.orig/include/initialConditions` | `foamDictionary`のvector出力をlist化して`str(list)` |
 | `case.initial.kinematic_pressure_m2_per_sec2` | float | `0.orig/include/initialConditions` | `foamDictionary` |
 | `case.initial.turbulent_kinetic_energy_m2_per_sec2` | float | 同上 | `foamDictionary` |
 | `case.initial.specific_dissipation_rate_per_sec` | float | 同上 | `foamDictionary` |
@@ -71,7 +69,8 @@ LC_ALL=C foamDictionary -entry simulationType -value constant/turbulenceProperti
 LC_ALL=C foamDictionary -entry RAS/RASModel -value constant/turbulenceProperties
 ```
 
-OpenFOAM vectorは共通の`openfoam_vector` parserで3成分へ分ける。
+OpenFOAM vectorは共通の`openfoam_vector` parserで3要素のlistへ変換する。そのlistは
+要素別のメトリクスへ展開せず、`str(list)`による1つのSTRING valueとして送る。
 
 SHA-256はPython `hashlib.sha256`でファイルを固定長chunkずつ読み、他のファイルを
 作らずに計算する。hash対象は変更後のeffective fileであり、元tutorialのファイル

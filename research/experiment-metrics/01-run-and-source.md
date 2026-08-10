@@ -74,7 +74,10 @@ cancelled
 | `git.diff_hash` | untracked fileを含む完全なdirty状態を一意に表せない |
 | `github.*` | `GITHUB_*`環境変数を全件`env.*`へ保存するため重複する |
 | GitHub run URL | repositoryとrun IDから後で作れる派生値 |
-| commandを1本の文字列にした値 | 引数境界を失い、複数値を1つのvalueへ詰め込む |
+| command引数を要素ごとのキーにした値 | 1つの実行条件を多数のrecordへ不要に展開する |
+
+commandは`shlex.join()`による復元可能な1つのSTRINGとして保存する。これはlistを
+要素ごとのメトリクスへ展開しないというraw tableの方針に沿う。
 
 ## 参照仕様
 
