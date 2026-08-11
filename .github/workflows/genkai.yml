@@ -550,8 +550,7 @@ jobs:
             --artifact-manifest "${RUN_DIR}/artifact-manifest.json" \
             --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml" \
             --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
-            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml" \
-            --schema-sql "${GITHUB_WORKSPACE}/sql/openfoam_artifact_projections_v2.sql"
+            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml"
 
       - name: Upload cavity3D result
         if: success()
