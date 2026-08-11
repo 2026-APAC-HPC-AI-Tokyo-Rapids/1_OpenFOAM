@@ -21,6 +21,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "--node-ordinal-from-env PMI_RANK" in text
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
+    assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
     assert "stage check_mesh" not in text
@@ -36,6 +37,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
+
+    prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
+    subprocess.run(["bash", "-n", str(prepare)], check=True)
+    assert "blockMesh" in prepare.read_text(encoding="utf-8")
+    assert "decomposePar" in prepare.read_text(encoding="utf-8")
 
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must
@@ -65,6 +71,13 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow
     assert "Publish v2 raw facts to BigQuery" in workflow
+    assert "Prepare OpenFOAM case cache" in workflow
+    prepare_concurrency = (
+        "genkai-openfoam-case-"
+        "${{ needs.select-build.outputs.prepare_script_sha256 }}"
+    )
+    assert prepare_concurrency in workflow
+    assert workflow.count("- name: Record v2 terminal sources") == 1
     assert "steps.upload_v2.outcome == 'success'" in workflow
     publish = workflow.index("Publish v2 raw facts to BigQuery")
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]

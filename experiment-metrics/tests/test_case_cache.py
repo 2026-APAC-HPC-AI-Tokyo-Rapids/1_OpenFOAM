@@ -51,6 +51,7 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
 
     assert "cache_hit=false" in first.stdout
     assert "cache_hit=true" in second.stdout
+    assert "flock" not in SCRIPT.read_text(encoding="utf-8")
     assert counter.read_text().splitlines() == ["blockMesh", "decomposePar"]
     cache_root = tmp_path / "home" / "share" / "openfoam-case-cache"
     cache_entries = [path for path in cache_root.iterdir() if path.is_dir()]
@@ -59,3 +60,19 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
     assert (tmp_path / "case-2").is_symlink()
     assert (tmp_path / "case-2" / "processor119").is_dir()
     assert not os.access(tmp_path / "case-2" / "system" / "controlDict", os.W_OK)
+
+    required = subprocess.run(
+        [
+            SCRIPT,
+            source,
+            tmp_path / "case-3",
+            block_mesh,
+            decompose_par,
+            "--require-cache",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert "cache_hit=true" in required.stdout
