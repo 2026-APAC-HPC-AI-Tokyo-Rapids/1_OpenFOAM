@@ -12,7 +12,7 @@ from typing import Any
 from .artifact_store import ArchivedMember, ArtifactMembers, ValidatedArtifactSet
 from .build_provenance import validate_build_sidecar
 from .fact import canonical_json
-from .imb import parse_imb_mpi1
+from .imb import parse_imb_mpi1, validate_imb_results
 from .manifest import SHA256
 from .postrun import _cpu_identity, _hardware
 from .profile_perf import parse_perf_csv, project_perf_record
@@ -592,14 +592,7 @@ def _mpi_network(
     argv_document = _json_object(argv_source.content, "IMB argv")
     _validate_imb_argv(argv_document, protocol)
     results = parse_imb_mpi1(stdout.content.decode("utf-8", errors="strict"))
-    expected_sizes = {0, *(1 << exponent for exponent in range(23))}
-    if {row.process_count for row in results} != {protocol.ranks}:
-        raise ValueError("IMB result process count differs from protocol")
-    for benchmark in ("PingPong", "Sendrecv", "Allreduce"):
-        if {
-            row.message_bytes for row in results if row.benchmark == benchmark
-        } != expected_sizes:
-            raise ValueError(f"IMB {benchmark} message-size sweep is incomplete")
+    validate_imb_results(results, protocol.ranks)
     rows = network_projection_rows(run_id, results, stdout.path)
     return _batch(spec, list(rows), run_id, source_sha256=stdout.sha256)
 
