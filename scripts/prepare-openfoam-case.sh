@@ -106,6 +106,7 @@ if ! cache_valid; then
         '{schema_version:"openfoam-case-cache/v1",prepare_script_sha256:$prepare_script_sha256,number_of_subdomains:120,method:"scotch",file_handler:"uncollated"}' \
         > "${TEMP_DIR}/manifest.json"
     find "${TEMP_DIR}/case" -type f -exec chmod a-w {} +
+    find "${TEMP_DIR}/case" -type d -exec chmod a-w {} +
     if [[ -e "${CACHE_DIR}" ]]; then
         rm -rf "${TEMP_DIR}"
         cache_valid || { echo "invalid cache entry: ${CACHE_DIR}" >&2; exit 65; }
@@ -117,7 +118,6 @@ if ! cache_valid; then
 fi
 flock -u 9
 
-cp -al "${CACHE_DIR}/case" "${TARGET_CASE}"
-find "${TARGET_CASE}" -type d -exec chmod u+w {} +
+ln -s "${CACHE_DIR}/case" "${TARGET_CASE}"
 printf 'cache_hit=%s\nprepare_script_sha256=%s\ncache_dir=%s\n' \
     "${cache_hit}" "${SCRIPT_SHA256}" "${CACHE_DIR}"

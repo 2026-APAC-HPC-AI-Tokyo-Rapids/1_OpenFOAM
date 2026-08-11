@@ -56,5 +56,6 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
     cache_entries = [path for path in cache_root.iterdir() if path.is_dir()]
     assert len(cache_entries) == 1
     assert len(cache_entries[0].name) == 64
+    assert (tmp_path / "case-2").is_symlink()
     assert (tmp_path / "case-2" / "processor119").is_dir()
     assert not os.access(tmp_path / "case-2" / "system" / "controlDict", os.W_OK)
