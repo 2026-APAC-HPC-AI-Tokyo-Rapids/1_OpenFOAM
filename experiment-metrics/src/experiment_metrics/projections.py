@@ -317,7 +317,11 @@ def _minimal_hardware(
     protocol: RunProtocol,
 ) -> tuple[ProjectionBatch, ...]:
     manifest = artifact_set.manifest
-    sources = members.run_by_role("minimal_hardware")
+    sources = tuple(
+        source
+        for source in members.run_by_role("minimal_hardware")
+        if _HARDWARE_PATH.fullmatch(source.path)
+    )
     if len(sources) != protocol.nodes:
         raise ValueError("minimal hardware source count differs from protocol nodes")
     batches = []
