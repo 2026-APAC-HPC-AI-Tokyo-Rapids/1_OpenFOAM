@@ -266,8 +266,8 @@ jobs:
               --control-plane-file benchmark/parse_result.sh \
               --control-plane-file experiment-metrics/registry/openfoam-v2-protocol.toml \
               --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
-              --control-plane-file scripts/run-openfoam.pjm \
-              --control-plane-file scripts/prepare-openfoam-case.sh
+              --control-plane-file scripts/prepare-openfoam-case.sh \
+              --control-plane-file scripts/run-openfoam.pjm
           )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
