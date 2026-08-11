@@ -115,7 +115,6 @@ def parser() -> argparse.ArgumentParser:
     _runtime_common(execution_context)
     execution_context.add_argument("--protocol", type=Path, required=True)
     execution_context.add_argument("--host-snapshot", type=Path, required=True)
-    execution_context.add_argument("--environment-root", type=Path, required=True)
     execution_context.add_argument("--placement-root", type=Path, required=True)
     execution_context.add_argument("--scheduler-request", type=Path, required=True)
     execution_context.add_argument("--scheduler-accounting", type=Path, required=True)
@@ -407,7 +406,6 @@ def main(argv: list[str] | None = None) -> int:
                 registry_path=arguments.registry,
                 protocol_path=arguments.protocol,
                 host_snapshot=arguments.host_snapshot,
-                environment_root=arguments.environment_root,
                 placement_root=arguments.placement_root,
                 scheduler_request=arguments.scheduler_request,
                 scheduler_accounting=arguments.scheduler_accounting,

@@ -142,22 +142,10 @@ metadataだけを列挙し、workload exact 7 paths、実行設定/PJM/common ru
 
 全scopeの`.snapshot`はname byte順の`name\0value\0`反復である。POSIX environmentのname/valueはNULを
 含められないためlosslessである。最後もNULで終える。parserはraw name/valueを変更せず、BigQuery factではnameを
-単射escapeしvalueをBase64にする。このformatを使うのは`source/env/job-entry.snapshot`と
+単射escapeし、`host-exec.snapshot`のUTF-8 valueを平文にする。このformatを使うのは`source/env/job-entry.snapshot`と
 `source/env/host-exec.snapshot`だけである。
 
-`source/env/rank-<rank>.delta.json`は`rank-env-delta/v1`のclosed objectで、次を持つ。全fieldはrequired、
-`additionalProperties=false`である。
-
-```text
-schema_version: const "rank-env-delta/v1"
-common_snapshot_sha256: sha256
-rank: nonnegative integer
-added_or_changed: [{name_b64: base64, value_b64: base64}, ...]
-removed_names_b64: [base64, ...]
-```
-
-両arrayはdecode後のname byte順、nameは各array内uniqueかつ二array間disjointである。common snapshotへdeltaを
-適用した結果だけを`env.host_exec.rank.<rank>.*`へ展開し、delta自身のfield別raw keyは作らない。
+rank別environment deltaは収集しない。rank/node固有情報はplacement、scheduler、hardware schemaが所有する。
 
 ## control artifact schemas
 
@@ -795,8 +783,7 @@ sourceからproducer、owner scope、applicable variant、requirednessを一意�
 | `scheduler.request` | `runner.submission` / submission request | `scheduler_request/v1` / `identity/v1` | `scheduler-request/v1` JSON |
 | `scheduler.accounting` | `runner.postrun` / pjstat raw | `scheduler_accounting/v1` / `pjstat/v1` | `scheduler-accounting/v1` JSON |
 | `scheduler.submit_job_id|scheduler.job_entry_job_id` | finalizer / submission result + job-entry | `job_id/v1` / `identity/v1` | source-specific string、欠損時key absent |
-| `env.job_entry.*` | supervisor / job-entry snapshot | `environment_snapshot/v1` / `environment/v1` | Base64 string |
-| `env.host_exec.common.*`, `env.host_exec.rank.<rank>.*` | supervisor+rank wrapper / snapshot+delta | `rank_env/v1` / `environment_common_delta/v1` | Base64 string |
+| `env.*` | supervisor / host-exec snapshot | `environment_snapshot/v1` / `environment/v1` | UTF-8 plain string |
 | `parallel.rank_placement` | rank wrapper / rank placement sources | `rank_placement/v1` / `rank_placement/v1` | ordered JSON array |
 | `mesh.topology` | postrun auditor / mesh probe | `mesh_topology/v1` / `identity/v1` | `mesh-topology/v1` JSON |
 | `mesh.partition.requested|observed` | supervisor/auditor / dict+mesh files | respective schema validator/reducer | schemas above |

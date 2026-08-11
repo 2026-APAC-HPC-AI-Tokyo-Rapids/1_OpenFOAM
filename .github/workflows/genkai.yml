@@ -389,7 +389,6 @@ jobs:
               --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
               --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml" \
               --host-snapshot "${RUN_DIR}/source/env/host-exec.snapshot" \
-              --environment-root "${RUN_DIR}/source/env" \
               --placement-root "${RUN_DIR}/source/placement" \
               --scheduler-request "${RUN_DIR}/control/scheduler-request.json" \
               --scheduler-accounting "${RUN_DIR}/control/scheduler-accounting.json" \

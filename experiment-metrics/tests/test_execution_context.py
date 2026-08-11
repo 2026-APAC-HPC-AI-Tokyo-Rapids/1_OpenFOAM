@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from experiment_metrics import init_run
-from experiment_metrics.environment import capture_rank_delta, capture_snapshot
+from experiment_metrics.environment import capture_snapshot
 from experiment_metrics.execution_context import record_execution_context
 from experiment_metrics.fact import canonical_json
 
@@ -50,12 +50,6 @@ expected_workload_identity = "{digest}"
     common = {b"I_MPI_FABRICS": b"ofi", b"RUN_ID": run_dir.name.encode()}
     capture_snapshot(host, common)
     for rank, hostname in enumerate(("node-a", "node-b")):
-        capture_rank_delta(
-            host,
-            env_root / f"rank-{rank}.delta.json",
-            rank=rank,
-            environment={**common, b"PMI_RANK": str(rank).encode()},
-        )
         placement = {
             "schema_version": "rank-placement/v1",
             "run_id": run_dir.name,
@@ -105,7 +99,6 @@ expected_workload_identity = "{digest}"
         registry_path=REGISTRY,
         protocol_path=protocol,
         host_snapshot=host,
-        environment_root=env_root,
         placement_root=placement_root,
         scheduler_request=request,
         scheduler_accounting=accounting,
@@ -114,7 +107,9 @@ expected_workload_identity = "{digest}"
     )
 
     rows = [json.loads(line) for line in fragment.read_text().splitlines()]
-    keys = {row["key"] for row in rows}
+    values = {row["key"]: row["value"] for row in rows}
+    keys = set(values)
     assert "parallel.rank_placement" in keys
-    assert "env.host_exec.rank.0.delta.PMI_RANK" in keys
-    assert "env.host_exec.rank.1.removed_names" in keys
+    assert values["env.I_MPI_FABRICS"] == "ofi"
+    assert values["env.RUN_ID"] == run_dir.name
+    assert not any(key.startswith("env.host_exec") for key in keys)

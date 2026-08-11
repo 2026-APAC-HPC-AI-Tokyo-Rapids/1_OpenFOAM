@@ -5,10 +5,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from .environment import (
-    host_execution_facts,
-    reconstruct_rank_environments,
-)
+from .environment import environment_facts, parse_snapshot
 from .manifest import RunManifest
 from .placement import placement_fact
 from .protocol import RunProtocol
@@ -23,7 +20,6 @@ def record_execution_context(
     registry_path: Path,
     protocol_path: Path,
     host_snapshot: Path,
-    environment_root: Path,
     placement_root: Path,
     scheduler_request: Path,
     scheduler_accounting: Path,
@@ -65,16 +61,11 @@ def record_execution_context(
     )
     if placement_hosts != header_hosts or len(placement_hosts) != protocol.nodes:
         raise ValueError("solver and placement host mappings differ")
-    environments = reconstruct_rank_environments(
-        host_snapshot, environment_root, expected_ranks=protocol.ranks
-    )
-    transports = {item.get(b"I_MPI_FABRICS") for item in environments}
-    if transports != {protocol.transport_policy.encode()}:
+    environment = parse_snapshot(host_snapshot.read_bytes())
+    if environment.get(b"I_MPI_FABRICS") != protocol.transport_policy.encode():
         raise ValueError("launch-effective MPI transport differs from protocol")
     facts = (
-        *host_execution_facts(
-            host_snapshot, environment_root, expected_ranks=protocol.ranks
-        ),
+        *environment_facts(host_snapshot),
         placement,
     )
     with Recorder.open(

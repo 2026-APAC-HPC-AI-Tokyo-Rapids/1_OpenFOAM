@@ -248,14 +248,12 @@ contractへ特定できない候補は追加しない。
 
 同じ名前でも時点とprocessが違えば意味が異なるため、次を分ける。
 
-- `env.job_entry.*`: PJM entry直後、module操作やunsetより前の全環境
-- `env.host_exec.common.*`: `mpirun`直前のsupervisor full environment
-- `env.host_exec.rank.<rank>.delta.*`と`removed_names`: 同じrank wrapperのexec環境とcommonの
-  byte-exact差分。両者から各rankの全環境をlosslessに復元する
+- `source/env/job-entry.snapshot`: PJM entry直後のraw provenance artifact。factへは投影しない
+- `env.*`: `mpirun`直前のsupervisor environmentをUTF-8平文で投影する
+- rank固有environmentは収集しない。rank/node情報はplacement、scheduler、hardwareが所有する
 
-名前と値はbyte-exactに取得する。nameの各byteは`[A-Za-z0-9_]`だけをそのまま使い、それ以外は
-`~HH`の大文字hexでescapeするため単射になる。valueはUTF-8可否にかかわらず全件をRFC 4648の
-padding付きBase64にし、registryで`bytes/base64`と宣言する。これにより通常文字列とBase64の
+raw snapshotの名前と値はbyte-exactに取得する。factのnameは`[A-Za-z0-9_]`だけをそのまま使い、
+それ以外は`~HH`の大文字hexでescapeする。valueはUTF-8を検証してエンコードせず保存する。これにより通常文字列の
 曖昧性を作らない。rank deltaは追加・変更値と削除nameを持ち、commonとの和がfull snapshotに
 一致しなければならない。snapshot間で同じ値が重複してもscopeが異なる独立観測である。標準の
 二run差分はGit管理された比較関連keyだけを表示し、全env差分は別viewでdecodeして提供する。
