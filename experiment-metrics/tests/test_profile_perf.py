@@ -54,6 +54,16 @@ def test_perf_parser_preserves_lexemes_and_nulls() -> None:
     assert record.items[2].metric_value_lexeme == "3.5"
 
 
+def test_perf_parser_accepts_perf_provenance_comment_and_blank_separator() -> None:
+    record = parse_perf_csv(
+        "# started on Tue Aug 11 14:42:12 2026\n\n" + _csv(),
+        run_id=RUN_ID,
+        global_rank=0,
+    )
+
+    assert tuple(item.event_name for item in record.items) == EVENTS
+
+
 def test_perf_parser_requires_fixed_event_order_and_columns() -> None:
     with pytest.raises(PerfValidationError):
         parse_perf_csv(
