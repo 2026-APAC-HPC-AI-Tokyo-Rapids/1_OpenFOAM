@@ -196,7 +196,7 @@ def parser() -> argparse.ArgumentParser:
     publish.add_argument("--pyproject", type=Path, required=True)
     publish.add_argument("--registry", type=Path, required=True)
     publish.add_argument("--protocol", type=Path, required=True)
-    publish.add_argument("--schema-sql", type=Path, required=True)
+    publish.add_argument("--schema-sql", type=Path)
 
     artifact_index = commands.add_parser("record-artifact-index")
     _runtime_common(artifact_index)
