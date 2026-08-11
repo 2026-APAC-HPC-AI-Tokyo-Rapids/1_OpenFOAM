@@ -19,20 +19,13 @@ if _REGISTRY.artifact_roles is None:  # pragma: no cover - import-time invariant
     raise RuntimeError("default registry has no artifact role contract")
 ROLE_FILENAMES = {
     role: _REGISTRY.artifact_roles.filename(role)
-    for role in ("run_bundle", "metrics", "profile_raw")
+    for role in ("run_bundle", "profile_raw")
 }
 ARTIFACT_MANIFEST_FILENAME = _REGISTRY.artifact_roles.filename("artifact_manifest")
 RUN_BUNDLE_SOURCE_ROLES = frozenset(_REGISTRY.artifact_roles.run_bundle_source_roles)
 _RUN_MEMBER_ROOTS = frozenset(
     {"control", "source", "domain", "logs", "result", "results"}
 )
-
-
-@dataclass(frozen=True, slots=True)
-class MetricRow:
-    run: str
-    key: str
-    value: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +61,6 @@ class ValidatedArtifactSet:
     manifest: RunManifest
     artifact_manifest_path: Path
     files: tuple[Path, ...]
-    metrics_rows: tuple[MetricRow, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,8 +99,6 @@ class RunPackager:
     ) -> ArtifactSet:
         manifest = _load_bound_manifest(manifest_path)
         run_dir = manifest.path.parents[1]
-        metrics = run_dir / ROLE_FILENAMES["metrics"]
-        read_metrics(metrics, expected_run=manifest.run_id)
         members = _run_members(run_dir, run_members)
         profile_paths: tuple[str, ...] = ()
         if manifest.purpose == "profile":
@@ -138,7 +128,6 @@ class RunPackager:
 
         outputs: list[tuple[str, Path]] = [
             ("run_bundle", run_bundle),
-            ("metrics", metrics),
         ]
         if manifest.purpose == "profile":
             profile_archive = run_dir / ROLE_FILENAMES["profile_raw"]
@@ -212,13 +201,11 @@ def validate_artifact_set(
             raise ValueError(f"artifact file identity mismatch: {role}")
         files.append(path)
 
-    metrics_rows = read_metrics(files[1], expected_run=manifest.run_id)
     _validate_run_bundle(files[0], manifest.run_id)
     return ValidatedArtifactSet(
         manifest=manifest,
         artifact_manifest_path=artifact_manifest,
         files=tuple(files),
-        metrics_rows=metrics_rows,
     )
 
 
@@ -253,7 +240,7 @@ def read_artifact_members(artifact_set: ValidatedArtifactSet) -> ArtifactMembers
         )
     profile_members: list[ArchivedMember] = []
     if artifact_set.manifest.purpose == "profile":
-        profile_archive = artifact_set.files[2]
+        profile_archive = artifact_set.files[1]
         for relative in _archive_members(profile_archive):
             _validate_relative_path(relative)
             content = _read_archive_member(profile_archive, relative)
@@ -282,31 +269,6 @@ def _unique_archived_member(
         qualifier = "" if role is None else f" with role {role}"
         raise ValueError(f"artifact requires exactly one {path}{qualifier}")
     return matches[0]
-
-
-def read_metrics(path: Path, *, expected_run: str) -> tuple[MetricRow, ...]:
-    metrics = _regular_file(path)
-    if metrics.name != ROLE_FILENAMES["metrics"]:
-        raise ValueError("metrics must use the fixed filename")
-    raw = metrics.read_bytes()
-    if not raw or not raw.endswith(b"\n"):
-        raise ValueError("metrics.jsonl must be nonempty and end with LF")
-    rows: list[MetricRow] = []
-    for number, encoded in enumerate(raw.splitlines(), start=1):
-        item = _load_json_strict(encoded, f"metrics row {number}")
-        if not isinstance(item, dict) or list(item) != ["run", "key", "value"]:
-            raise ValueError(f"metrics row {number} must contain ordered run/key/value")
-        if not all(isinstance(item[name], str) for name in ("run", "key", "value")):
-            raise ValueError(f"metrics row {number} values must be strings")
-        if item["run"] != expected_run:
-            raise ValueError(f"metrics row {number} belongs to a foreign run")
-        if not item["key"]:
-            raise ValueError(f"metrics row {number} has an empty key")
-        rows.append(MetricRow(item["run"], item["key"], item["value"]))
-    ordered = sorted(rows, key=lambda row: (row.key.encode(), row.value.encode()))
-    if rows != ordered or len(set(rows)) != len(rows):
-        raise ValueError("metrics rows must be unique and in key/value byte order")
-    return tuple(rows)
 
 
 def _run_members(
@@ -364,9 +326,9 @@ def _load_bound_manifest(path: Path) -> RunManifest:
 
 def _expected_roles(purpose: str) -> tuple[str, ...]:
     if purpose == "bench":
-        return ("run_bundle", "metrics")
+        return ("run_bundle",)
     if purpose == "profile":
-        return ("run_bundle", "metrics", "profile_raw")
+        return ("run_bundle", "profile_raw")
     raise ValueError(f"unsupported run purpose: {purpose}")
 
 

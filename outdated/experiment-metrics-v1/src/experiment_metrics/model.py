@@ -4,12 +4,6 @@ import math
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, slots=True)
-class Metric:
-    key: str
-    value: str
-
-
 def scalar(value: object | None) -> str:
     if value is None:
         return ""
@@ -22,5 +16,15 @@ def scalar(value: object | None) -> str:
     return str(value)
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class Metric:
+    key: str
+    value: str
+
+    def __init__(self, key: str, value: object | None) -> None:
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "value", scalar(value))
+
+
 def metrics(keys: list[str], values: dict[str, object]) -> list[Metric]:
-    return [Metric(key, scalar(values.get(key))) for key in keys]
+    return [Metric(key, values.get(key)) for key in keys]

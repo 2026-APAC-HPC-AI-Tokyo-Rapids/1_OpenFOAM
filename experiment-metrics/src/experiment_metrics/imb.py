@@ -99,9 +99,7 @@ def validate_imb_capture(
     return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
 
 
-def validate_imb_results(
-    results: tuple[IMBResult, ...], process_count: int
-) -> None:
+def validate_imb_results(results: tuple[IMBResult, ...], process_count: int) -> None:
     """Validate benchmark-specific axes from one complete IMB invocation."""
 
     expected_process_counts = {
@@ -205,9 +203,7 @@ def _parse_row(
     }
     if benchmark == "Allreduce" or multi_time_header.issubset(columns):
         bandwidth = (
-            _decimal_column(columns, "mbytes/sec")
-            if benchmark == "Sendrecv"
-            else None
+            _decimal_column(columns, "mbytes/sec") if benchmark == "Sendrecv" else None
         )
         if bandwidth is not None and bandwidth < 0:
             raise ValueError(f"IMB {benchmark} row has invalid transfer values")

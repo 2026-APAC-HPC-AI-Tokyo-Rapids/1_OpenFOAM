@@ -42,12 +42,16 @@ def test_recorder_closes_only_by_atomic_rename(
     manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
     runtime_dir = manifest_path.parents[1]
     recorder = Recorder.open(
-        manifest_path, registry_path, "runner.finalizer", runtime_dir, fragment_id="one"
+        manifest_path,
+        registry_path,
+        "arbitrary-producer",
+        runtime_dir,
+        fragment_id="one",
     )
-    recorder.record(Fact("collection_complete", False))
+    recorder.record(Fact("arbitrary.key", False))
 
     assert not list(
-        (runtime_dir / "domain/fragments").glob("runner.finalizer--one.jsonl")
+        (runtime_dir / "domain/fragments").glob("arbitrary-producer--one.jsonl")
     )
     assert list((runtime_dir / "domain/fragments").glob("*.tmp"))
     fragment = recorder.close()
@@ -79,13 +83,12 @@ def test_manifest_load_rejects_extra_closed_field(
         RunManifest.load(manifest_path)
 
 
-def test_recorder_rejects_foreign_and_duplicate_keys(
+def test_recorder_allows_unregistered_keys_but_rejects_duplicate_keys(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
     manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
-    with Recorder.open(manifest_path, registry_path, "runner.finalizer") as recorder:
-        recorder.record(Fact("collection_complete", False))
+    with Recorder.open(manifest_path, registry_path, "arbitrary-producer") as recorder:
+        recorder.record(Fact("arbitrary.key", False))
         with pytest.raises(ValueError, match="duplicate"):
-            recorder.record(Fact("collection_complete", True))
-        with pytest.raises(ValueError, match="does not own"):
-            recorder.record(Fact("run.identity.run_id", "foreign"))
+            recorder.record(Fact("arbitrary.key", True))
+        recorder.record(Fact("unregistered.producer.key", "value"))

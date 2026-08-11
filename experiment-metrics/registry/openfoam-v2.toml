@@ -14,10 +14,6 @@ id = "stage.runner"
 required_for = ["bench", "profile"]
 
 [[producers]]
-id = "runner.finalizer"
-required_for = []
-
-[[producers]]
 id = "runner.log_parser"
 required_for = ["bench", "profile"]
 
@@ -174,12 +170,6 @@ logical_type = "decimal"
 required_for = []
 
 [[keys]]
-pattern = "collection_complete"
-owner = "runner.finalizer"
-logical_type = "boolean"
-required_for = []
-
-[[keys]]
 pattern = "solver.runtime_header"
 owner = "runner.log_parser"
 logical_type = "json"
@@ -284,7 +274,6 @@ repository_id = "apac2026-openfoam"
 
 [artifact_roles]
 run_bundle = "run-artifacts.tar.zst"
-metrics = "metrics.jsonl"
 profile_raw = "profile-raw.tar.zst"
 artifact_manifest = "artifact-manifest.json"
 run_bundle_source_roles = [
@@ -344,13 +333,6 @@ owner_scope = "run"
 applicable_run_variants = ["bench", "profile"]
 activation = { kind = "always" }
 instances = { kind = "cartesian", axes = ["stage_name"] }
-
-[[producer]]
-id = "runner.finalizer"
-owner_scope = "run"
-applicable_run_variants = ["bench", "profile"]
-activation = { kind = "always" }
-instances = { kind = "singleton" }
 
 [[producer]]
 id = "runner.submission"
@@ -488,15 +470,6 @@ producer_id = "stage.runner"
 source_role = "stage_fact_fragment"
 storage = "fact_fragment"
 path_template = [{ literal = "domain/fragments/stage.runner--stage." }, { token = "stage_name" }, { literal = ".jsonl" }]
-schema_id = "fact-jsonl/v1"
-required_when_applicable = true
-
-[[source]]
-id = "facts.finalizer"
-producer_id = "runner.finalizer"
-source_role = "merged_metrics"
-storage = "fact_fragment"
-path_template = [{ literal = "metrics.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -870,7 +843,7 @@ unit = "none"
 cardinality = "run"
 capture_id = "manifest/v1"
 validator_id = "artifact_index/v1"
-reducer_id = "artifact_projection/v1"
+reducer_id = "identity/v1"
 
 [[fact]]
 id = "artifact.build_manifest_sha256"
@@ -882,7 +855,7 @@ unit = "none"
 cardinality = "run"
 capture_id = "artifact_index/v1"
 validator_id = "artifact_index/v1"
-reducer_id = "artifact_projection/v1"
+reducer_id = "identity/v1"
 
 [[fact]]
 id = "run.started_at"
@@ -1065,18 +1038,6 @@ validator_id = "finite_seconds/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
-id = "collection_complete"
-key_pattern = "collection_complete"
-source_id = "facts.finalizer"
-schema_id = "boolean/v1"
-logical_type = "boolean"
-unit = "none"
-cardinality = "run"
-capture_id = "finalizer/v1"
-validator_id = "bool/v1"
-reducer_id = "identity/v1"
-
-[[fact]]
 id = "solver.runtime_header"
 key_pattern = "solver.runtime_header"
 source_id = "facts.solver_log"
@@ -1254,8 +1215,7 @@ unit = "none"
 cardinality = "run_node"
 capture_id = "hardware_node/v1"
 validator_id = "minimal_hardware/v1"
-reducer_id = "artifact_projection/v1"
-duplication_justification = "Compatibility fact until the artifact projection consumer is deployed."
+reducer_id = "identity/v1"
 
 [[fact]]
 id = "mesh.partition.requested"
@@ -1268,173 +1228,3 @@ cardinality = "run"
 capture_id = "decompose_dictionary/v1"
 validator_id = "partition_requested/v1"
 reducer_id = "partition_requested/v1"
-
-
-[[artifact_projection]]
-id = "openfoam.source_track"
-base_table_id = "openfoam_source_tracks_base_v2"
-relation_id = "openfoam_source_tracks_raw_v2"
-conflict_relation_id = "openfoam_source_tracks_conflicts_v2"
-source_artifact_id = "artifact.subject_manifest"
-source_schema_id = "run-manifest/v1"
-row_schema_id = "source-track-projection/v1"
-row_grain = ["run_id"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "source_track_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "run_id,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Compact query projection of the subject manifest source track."
-
-[[artifact_projection]]
-id = "openfoam.build_provenance"
-base_table_id = "openfoam_build_provenance_base_v2"
-relation_id = "openfoam_build_provenance_raw_v2"
-conflict_relation_id = "openfoam_build_provenance_conflicts_v2"
-source_artifact_id = "artifact.build_sidecar"
-source_schema_id = "build-sidecar/v1"
-row_schema_id = "build-provenance-projection/v1"
-row_grain = ["source_sha256"]
-subject_scopes = [{ owner_scope = "build" }]
-publisher_id = "runner.publisher"
-transform_id = "build_provenance_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "source_sha256"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Build-grain query projection of immutable sidecar and raw observations."
-
-[[artifact_projection]]
-id = "openfoam.build_provision"
-base_table_id = "openfoam_build_provisions_base_v2"
-relation_id = "openfoam_build_provisions_raw_v2"
-conflict_relation_id = "openfoam_build_provisions_conflicts_v2"
-source_artifact_id = "artifact.build_provision"
-source_schema_id = "build-provision-validation/v1"
-row_schema_id = "build-provision-projection/v1"
-row_grain = ["run_id"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "build_provision_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "run_id,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Run-grain validation is independent from build-grain provenance."
-
-[[artifact_projection]]
-id = "openfoam.minimal_hardware"
-base_table_id = "openfoam_minimal_hardware_base_v2"
-relation_id = "openfoam_minimal_hardware_raw_v2"
-conflict_relation_id = "openfoam_minimal_hardware_conflicts_v2"
-source_artifact_id = "artifact.minimal_hardware"
-source_schema_id = "hardware-node/v1"
-row_schema_id = "minimal-hardware-projection/v1"
-row_grain = ["subject_id", "node_ordinal"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "minimal_hardware_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "run_id,node_ordinal,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Node projection exposes queryable hardware while source JSON remains authoritative."
-
-[[artifact_projection]]
-id = "openfoam.workload_manifest"
-base_table_id = "openfoam_workload_manifests_base_v2"
-relation_id = "openfoam_workload_manifests_raw_v2"
-conflict_relation_id = "openfoam_workload_manifests_conflicts_v2"
-source_artifact_id = "artifact.workload_manifest"
-source_schema_id = "workload-manifest/v1"
-row_schema_id = "workload-manifest-projection/v1"
-row_grain = ["subject_kind", "subject_id"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "workload_manifest_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "subject_kind,subject_id,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Manifest identity indexes the exact copied workload member set."
-
-[[artifact_projection]]
-id = "openfoam.workload_member"
-base_table_id = "openfoam_workload_members_base_v2"
-relation_id = "openfoam_workload_members_raw_v2"
-conflict_relation_id = "openfoam_workload_members_conflicts_v2"
-source_artifact_id = "artifact.workload_member"
-source_schema_id = "opaque-bytes/v1"
-row_schema_id = "workload-member-projection/v1"
-row_grain = ["subject_kind", "subject_id", "path"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "workload_member_projection/v1"
-conflict_rule = "parent_then_row_grain/v1"
-parent_projection_id = "openfoam.workload_manifest"
-parent_join_columns = ["subject_kind", "subject_id"]
-duplication_justification = "Exact content enables direct configuration comparison without reopening tar."
-
-[[artifact_projection]]
-id = "openfoam.profile_hardware"
-base_table_id = "openfoam_profile_hardware_base_v2"
-relation_id = "openfoam_profile_hardware_raw_v2"
-conflict_relation_id = "openfoam_profile_hardware_conflicts_v2"
-source_artifact_id = "artifact.profile_hardware"
-source_schema_id = "profile-hardware-capture/v1"
-row_schema_id = "profile-hardware-projection/v1"
-row_grain = ["run_id", "node_ordinal", "record_kind", "numa_node_id"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "profile_hardware_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_members.capture.path"
-source_sha256_field = "source_members.capture.sha256"
-source_instance_grain = "run_id,node_ordinal,source_member"
-source_instance_sha256_field = "source_members.capture.sha256"
-duplication_justification = "Profile hardware rows preserve source-linked NUMA details."
-
-[[artifact_projection]]
-id = "openfoam.perf_counters"
-base_table_id = "openfoam_perf_counters_base_v2"
-relation_id = "openfoam_perf_counters_v2"
-conflict_relation_id = "openfoam_perf_counters_conflicts_v2"
-source_artifact_id = "openfoam.perf-csv/v1"
-source_schema_id = "perf-csv/v1"
-row_schema_id = "perf-counter-projection/v1"
-row_grain = ["run_id", "global_rank", "event_name"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "perf_counter_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "run_id,global_rank,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Rank-event rows expose validated profile counter observations."
-
-[[artifact_projection]]
-id = "openfoam.mpi_network"
-base_table_id = "mpi_network_results_base_v2"
-relation_id = "mpi_network_results_v2"
-conflict_relation_id = "mpi_network_results_conflicts_v2"
-source_artifact_id = "artifact.network_stdout"
-source_schema_id = "imb-mpi1-text/v1"
-row_schema_id = "mpi-network-result/v2"
-row_grain = ["run_id", "benchmark", "process_count", "message_bytes"]
-subject_scopes = [{ owner_scope = "run", applicable_run_variants = ["bench", "profile"] }]
-publisher_id = "runner.publisher"
-transform_id = "imb_mpi1_projection/v1"
-conflict_rule = "source_instance_then_row_grain/v1"
-source_member_field = "source_member"
-source_sha256_field = "source_sha256"
-source_instance_grain = "run_id,source_member"
-source_instance_sha256_field = "source_sha256"
-duplication_justification = "Message-size rows are a lossless projection of complete IMB stdout."

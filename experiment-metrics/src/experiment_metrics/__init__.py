@@ -1,10 +1,9 @@
-"""Local v2 fact recording and merge primitives for OpenFOAM experiments."""
+"""Local producer recording primitives for OpenFOAM experiments."""
 
 from .fact import Fact
 from .imb import IMBResult, parse_imb_mpi1
 from .instrumentation import bundle_identity, install_bundle, load_bundle
 from .manifest import RunManifest, init_run, manifest_facts
-from .merge import FinalizeOutcome, merge_run
 from .protocol import RunProtocol
 from .pstream import pstream_facts
 from .recording import Recorder, collect_once
@@ -20,7 +19,6 @@ from .workload import WORKLOAD_MEMBERS, capture_workload
 
 __all__ = [
     "Fact",
-    "FinalizeOutcome",
     "IMBResult",
     "OfficialEvaluation",
     "ParsedSolverLog",
@@ -37,7 +35,6 @@ __all__ = [
     "init_run",
     "install_bundle",
     "load_bundle",
-    "merge_run",
     "manifest_facts",
     "network_projection_rows",
     "network_config_facts",

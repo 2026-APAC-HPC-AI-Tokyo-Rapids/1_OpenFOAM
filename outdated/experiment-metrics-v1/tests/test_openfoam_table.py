@@ -18,5 +18,5 @@ def test_read_table_selects_header_and_rows(tmp_path: Path) -> None:
     assert len(table.tail(100)) == 2
 
 
-def test_vector_returns_empty_components_for_missing_value() -> None:
-    assert vector("") == ["", "", ""]
+def test_vector_returns_no_components_for_missing_value() -> None:
+    assert vector("") == []

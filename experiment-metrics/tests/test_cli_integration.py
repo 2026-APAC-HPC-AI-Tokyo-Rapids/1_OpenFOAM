@@ -138,20 +138,14 @@ expected_workload_identity = "{digest}"
     assert rows[0]["source_member"] == "source/network/imb-mpi1/stdout.txt"
 
 
-def test_cli_package_and_publish_are_lazy_runner_adapters(
+def test_cli_package_excludes_merged_metrics(
     tmp_path: Path,
     registry_path: Path,
     identities: dict[str, object],
-    monkeypatch: object,
 ) -> None:
     manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
     run_dir = manifest_path.parents[1]
     (run_dir / "logs/solver.log").write_text("done\n")
-    run_id = manifest_path.parents[1].name
-    (run_dir / "metrics.jsonl").write_text(
-        json.dumps({"run": run_id, "key": "collection_complete", "value": "false"})
-        + "\n"
-    )
     assert (
         main(
             [
@@ -165,24 +159,4 @@ def test_cli_package_and_publish_are_lazy_runner_adapters(
         == 0
     )
 
-    import experiment_metrics.publish as publication
-
-    monkeypatch.setattr(publication, "publish_metrics", lambda *_args, **_kwargs: 1)
-    assert (
-        main(
-            [
-                "publish",
-                "--manifest",
-                str(manifest_path),
-                "--artifact-manifest",
-                str(run_dir / "artifact-manifest.json"),
-                "--pyproject",
-                str(Path(__file__).parents[1] / "pyproject.toml"),
-                "--registry",
-                str(registry_path),
-                "--protocol",
-                str(Path(__file__).parents[1] / "registry/openfoam-v2-protocol.toml"),
-            ]
-        )
-        == 0
-    )
+    assert not (run_dir / "metrics.jsonl").exists()

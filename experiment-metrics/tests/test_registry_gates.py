@@ -27,7 +27,7 @@ def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
         "network.imb_mpi1.iteration.time_limit_sec",
         "network.imb_mpi1.iteration.policy",
         "hardware.minimal.node.0",
-            "mesh.partition.requested",
+        "mesh.partition.requested",
     }.issubset(required)
     assert "software.imb_mpi1.version" in required
 
@@ -65,19 +65,8 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
             for item in registry.facts
             if item.key_pattern == "artifact.build_manifest_sha256"
         ).reducer_id
-        == "artifact_projection/v1"
+        == "identity/v1"
     )
-    assert {item.identifier for item in registry.artifact_projections} == {
-        "openfoam.source_track",
-        "openfoam.build_provenance",
-        "openfoam.build_provision",
-        "openfoam.minimal_hardware",
-        "openfoam.workload_manifest",
-        "openfoam.workload_member",
-        "openfoam.profile_hardware",
-        "openfoam.perf_counters",
-        "openfoam.mpi_network",
-    }
     assert registry.artifact_roles is not None
     assert registry.artifact_roles.filename("run_bundle") == ("run-artifacts.tar.zst")
     assert "workload_member" in registry.artifact_roles.run_bundle_source_roles

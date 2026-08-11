@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
-from experiment_metrics import Recorder, init_run, merge_run, pstream_facts, run_stage
+from experiment_metrics import pstream_facts
 
 
 def _event(
@@ -79,117 +78,3 @@ def test_pstream_reducer_requires_complete_rank_streams(tmp_path: Path) -> None:
     ]
     with pytest.raises(ValueError, match="do not match"):
         pstream_facts(source, run_id="r-" + "a" * 32, expected_ranks=(0, 1))
-
-
-def test_protocol_derived_stage_absence_marks_merge_incomplete(
-    tmp_path: Path, registry_path: Path, identities: dict[str, object]
-) -> None:
-    protocol = tmp_path / "protocol.toml"
-    digest = "a" * 64
-    protocol.write_text(
-        f"""
-[protocol]
-schema_version = "openfoam-v2-run-protocol/v1"
-
-[variant.bench]
-expected_stages = ["solver"]
-nodes = 1
-ranks = 1
-resource_group = "test"
-transport_policy = "shm"
-workload_id = "test"
-expected_workload_identity = "{digest}"
-
-[variant.profile]
-expected_stages = ["solver"]
-nodes = 1
-ranks = 1
-resource_group = "test"
-transport_policy = "shm"
-workload_id = "test"
-expected_workload_identity = "{digest}"
-""".strip()
-        + "\n"
-    )
-
-    missing_manifest = init_run(None, tmp_path, identities, registry_path=registry_path)
-    outcome = merge_run(
-        missing_manifest,
-        missing_manifest.parents[1],
-        registry_path=registry_path,
-        protocol_path=protocol,
-    )
-
-    assert not outcome.collection_complete
-    assert outcome.missing_stages == ("solver",)
-
-    manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
-    run_dir = manifest_path.parents[1]
-    with Recorder.open(
-        manifest_path,
-        registry_path,
-        "stage.runner",
-        run_dir,
-        fragment_id="stage.solver",
-    ) as recorder:
-        run_stage(
-            "solver",
-            [sys.executable, "-c", "raise SystemExit(0)"],
-            cwd=tmp_path,
-            stderr_mode="separate",
-            recorder=recorder,
-        )
-    outcome = merge_run(
-        manifest_path, run_dir, registry_path=registry_path, protocol_path=protocol
-    )
-    assert outcome.collection_complete
-    assert outcome.missing_stages == ()
-
-
-def test_unsuccessful_expected_stage_cannot_complete(
-    tmp_path: Path, registry_path: Path, identities: dict[str, object]
-) -> None:
-    protocol = tmp_path / "protocol.toml"
-    digest = "a" * 64
-    protocol.write_text(
-        f"""
-[protocol]
-schema_version = "openfoam-v2-run-protocol/v1"
-
-[variant.bench]
-expected_stages = ["solver"]
-nodes = 1
-ranks = 1
-resource_group = "test"
-transport_policy = "shm"
-workload_id = "test"
-expected_workload_identity = "{digest}"
-
-[variant.profile]
-expected_stages = ["solver"]
-nodes = 1
-ranks = 1
-resource_group = "test"
-transport_policy = "shm"
-workload_id = "test"
-expected_workload_identity = "{digest}"
-""".strip()
-        + "\n"
-    )
-    manifest = init_run(None, tmp_path, identities, registry_path=registry_path)
-    run_dir = manifest.parents[1]
-    with Recorder.open(
-        manifest, registry_path, "stage.runner", run_dir, fragment_id="stage.solver"
-    ) as recorder:
-        run_stage(
-            "solver",
-            [sys.executable, "-c", "raise SystemExit(2)"],
-            cwd=tmp_path,
-            stderr_mode="separate",
-            recorder=recorder,
-        )
-    outcome = merge_run(
-        manifest, run_dir, registry_path=registry_path, protocol_path=protocol
-    )
-    assert not outcome.collection_complete
-    assert outcome.missing_stages == ("solver",)

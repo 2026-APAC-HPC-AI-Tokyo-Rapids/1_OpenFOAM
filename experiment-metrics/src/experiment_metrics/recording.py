@@ -7,20 +7,19 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .fact import Fact, encode_value
+from .fact import Fact, encode_logical_value
 from .manifest import RunManifest
-from .registry import Registry
 
 
 @dataclass(slots=True)
 class Recorder:
     manifest: RunManifest
-    registry: Registry
     producer_id: str
     fragment_path: Path
     _temporary_path: Path
     _stream: object
     _keys: set[str] = field(default_factory=set)
+    _rows: list[dict[str, str]] = field(default_factory=list)
     _closed: bool = False
 
     @classmethod
@@ -34,8 +33,6 @@ class Recorder:
         fragment_id: str = "default",
     ) -> Recorder:
         manifest = RunManifest.load(manifest_path)
-        registry = Registry.load(registry_path)
-        registry.producer(producer_id)
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", fragment_id):
             raise ValueError("fragment_id must be a safe path component")
         root = (
@@ -51,23 +48,19 @@ class Recorder:
         if fragment_path.exists() or temporary_path.exists():
             raise FileExistsError(f"fragment already exists for {producer_id}")
         stream = temporary_path.open("x", encoding="utf-8", buffering=64 * 1024)
-        return cls(
-            manifest, registry, producer_id, fragment_path, temporary_path, stream
-        )
+        return cls(manifest, producer_id, fragment_path, temporary_path, stream)
 
     def record(self, fact: Fact) -> None:
         if self._closed:
             raise RuntimeError("recorder is closed")
         if fact.key in self._keys:
             raise ValueError(f"producer emitted duplicate key: {fact.key}")
-        spec = self.registry.spec_for(fact.key)
-        if spec.owner != self.producer_id:
-            raise ValueError(f"producer {self.producer_id} does not own {fact.key}")
-        value = encode_value(fact.logical_value, spec.logical_type)
+        value = encode_logical_value(fact.logical_value)
         row = {"run": self.manifest.run_id, "key": fact.key, "value": value}
         self._stream.write(
             json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
         )
+        self._rows.append(row)
         self._keys.add(fact.key)
 
     def close(self) -> Path:
@@ -78,6 +71,10 @@ class Recorder:
         self._stream.close()
         self._temporary_path.replace(self.fragment_path)
         self._closed = True
+        if os.environ.get("EXPERIMENT_METRICS_DIRECT_SEND") == "1":
+            from .publish import send_raw
+
+            send_raw(self.manifest.run_id, self._rows)
         return self.fragment_path
 
     def abort(self) -> None:

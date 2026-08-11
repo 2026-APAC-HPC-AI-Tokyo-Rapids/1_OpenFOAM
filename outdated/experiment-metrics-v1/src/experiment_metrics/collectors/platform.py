@@ -31,7 +31,7 @@ def collect(_: Path) -> list[Metric]:
     if not ({"HOSTTYPE", "WM_ARCH"} & environment_names):
         result.append(Metric("system.architecture", os.uname().machine))
     if not ({"HOSTNAME", "PJM_NODE"} & environment_names):
-        result.append(Metric("system.node.0.hostname", socket.gethostname()))
+        result.append(Metric("system.node.hostname", socket.gethostname()))
 
     result.extend(_cpu())
     try:

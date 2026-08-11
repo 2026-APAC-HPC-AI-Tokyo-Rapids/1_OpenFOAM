@@ -82,9 +82,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     accounting = json.loads(accounting_path.read_text())
     assert accounting["jid"] == "12345"
     assert accounting["nnumu"] == {"lexeme": "1", "value": 1}
-    terminal = json.loads(
-        (run_dir / "control/scheduler-terminal.json").read_text()
-    )
+    terminal = json.loads((run_dir / "control/scheduler-terminal.json").read_text())
     assert terminal["argv"][0] == str(pjstat)
 
 
@@ -119,8 +117,7 @@ def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:
 
 def test_parse_scheduler_accounting_rejects_conflicting_genkai_duplicates() -> None:
     raw = (
-        b"\t6438276\tEND\t2026/08/10 22:07:30\t1\t0\t0\t0\t1\t4096\t2\t3\t"
-        b"8192\t2\t3\n"
+        b"\t6438276\tEND\t2026/08/10 22:07:30\t1\t0\t0\t0\t1\t4096\t2\t3\t8192\t2\t3\n"
     )
 
     with pytest.raises(ValueError, match="conflicting duplicate columns"):

@@ -4,6 +4,10 @@ OpenFOAM実験からrun単位の値を取得し、BigQueryの`run`, `key`, `valu
 直ちに送る小さなPythonプロジェクトです。collectorは値同士を照合しません。
 取得失敗時は対象キーの`value`を空文字にします。
 
+`value`は常に1つのSTRINGとして送ります。数値、bool、時刻などはスカラー表現にし、
+取得値がlistの場合も要素ごとのキーへ展開せず、Pythonの`str(list)`による1つの文字列
+として保存します。
+
 ## 設定
 
 BigQueryの非機密設定は`pyproject.toml`に置く。

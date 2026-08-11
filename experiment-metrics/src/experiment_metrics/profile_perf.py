@@ -239,11 +239,11 @@ class PerfProjection:
     conflicts: tuple[ProjectionConflict, ...] = ()
 
     @property
-    def collection_complete(self) -> bool:
+    def is_complete(self) -> bool:
         return not self.missing_ranks and not self.conflicts
 
     def require_complete(self) -> tuple[PerfProjectionRow, ...]:
-        if not self.collection_complete:
+        if not self.is_complete:
             raise PerfValidationError(
                 f"profile perf collection incomplete: missing={self.missing_ranks}, "
                 f"conflicts={len(self.conflicts)}"

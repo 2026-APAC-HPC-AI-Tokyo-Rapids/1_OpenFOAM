@@ -70,4 +70,4 @@ def vector(value: str) -> list[str]:
         parts = text[1:-1].split()
         if len(parts) == 3:
             return parts
-    return ["", "", ""]
+    return []

@@ -295,8 +295,19 @@ jobs:
 
       - name: Create v2 run manifest before submission
         id: v2_context
+        env:
+          METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
         run: |
           install -d -m 2775 "${OPENFOAM_RUN_ROOT}"
+          test -n "${METRICS_CREDENTIAL_JSON}"
+          staging_credential="${OPENFOAM_RUN_ROOT}/.bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          install -m 0600 /dev/null "${staging_credential}"
+          printf '%s' "${METRICS_CREDENTIAL_JSON}" >"${staging_credential}"
+          trap 'rm -f -- "${staging_credential}"' EXIT
+          export EXPERIMENT_METRICS_DIRECT_SEND=1
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${staging_credential}"
+          export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
+          uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
           head_commit="$(git rev-parse HEAD)"
           base_commit="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")"
           purpose=bench
@@ -332,6 +343,11 @@ jobs:
             --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")"
           run_dir="$(dirname "$(dirname "${manifest}")")"
           run_id="$(basename "${run_dir}")"
+          credential_file="${run_dir}/control/bigquery-credential.json"
+          mv -- "${staging_credential}" "${credential_file}"
+          trap - EXIT
+          trap 'rm -f -- "${credential_file}"' EXIT
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
           install -m 0644 "${PROVISION_DIR}/control/build-sidecar.json" \
             "${run_dir}/control/build-sidecar.json"
           cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
@@ -343,6 +359,17 @@ jobs:
             "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
           printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\n' \
             "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_ENV}"
+          printf 'EXPERIMENT_METRICS_DIRECT_SEND=1\n' >>"${GITHUB_ENV}"
+          printf 'EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\n' "${credential_file}" >>"${GITHUB_ENV}"
+          printf 'EXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' \
+            "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >>"${GITHUB_ENV}"
+          trap - EXIT
+
+      - name: Verify runner BigQuery connectivity
+        run: |
+          uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
+            smoke-send --run "${RUN_ID}" --source runner
 
       - name: Submit OpenFOAM job
         run: |
@@ -466,19 +493,6 @@ jobs:
           fi
           exit "${record_status}"
 
-      - name: Merge terminal fragments
-        if: always()
-        run: |
-          set +e
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
-            merge --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
-            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml"
-          merge_status=$?
-          set -e
-          echo "MERGE_STATUS=${merge_status}" >> "${GITHUB_ENV}"
-          echo "v2 merge status: ${merge_status} (1 means intentionally incomplete)"
-
       - name: Package fixed v2 artifact set
         id: package_v2
         if: always()
@@ -565,29 +579,9 @@ jobs:
           path: |
             ${{ steps.v2_context.outputs.run_dir }}/artifact-manifest.json
             ${{ steps.v2_context.outputs.run_dir }}/run-artifacts.tar.zst
-            ${{ steps.v2_context.outputs.run_dir }}/metrics.jsonl
             ${{ steps.v2_context.outputs.run_dir }}/profile-raw.tar.zst
           if-no-files-found: error
           compression-level: 0
-
-      - name: Publish v2 raw facts to BigQuery
-        if: >-
-          always() &&
-          steps.package_v2.outcome == 'success' &&
-          steps.upload_v2.outcome == 'success' &&
-          env.MERGE_STATUS == '0'
-        env:
-          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
-        run: |
-          test -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON}"
-          uv sync --project "${PROVISION_DIR}/experiment-metrics" \
-            --frozen --no-dev --extra publish
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
-            publish --manifest "${RUN_MANIFEST}" \
-            --artifact-manifest "${RUN_DIR}/artifact-manifest.json" \
-            --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml" \
-            --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
-            --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml"
 
       - name: Upload cavity3D result
         if: success()
@@ -601,6 +595,9 @@ jobs:
       - name: Cleanup provisioned runtime
         if: always()
         run: |
+          if [[ -n "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}" ]]; then
+            rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE}"
+          fi
           if [[ -n "${PJM_JOB_ID:-}" ]]; then
             pjdel "${PJM_JOB_ID}" 2>/dev/null || true
             pjwait -z "${PJM_JOB_ID}" || true

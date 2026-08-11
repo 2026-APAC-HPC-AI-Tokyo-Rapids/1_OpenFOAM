@@ -9,7 +9,12 @@ from .fact import Fact
 
 def snapshot_bytes(environment: dict[bytes, bytes] | None = None) -> bytes:
     values = os.environb if environment is None else environment
-    names = sorted(values)
+    secret_names = {
+        b"EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE",
+        b"EXPERIMENT_METRICS_BIGQUERY_CONFIG",
+        b"EXPERIMENT_METRICS_DIRECT_SEND",
+    }
+    names = sorted(name for name in values if name not in secret_names)
     if any(not name or b"=" in name or b"\0" in name for name in names):
         raise ValueError("environment contains an invalid name")
     if any(b"\0" in values[name] for name in names):
