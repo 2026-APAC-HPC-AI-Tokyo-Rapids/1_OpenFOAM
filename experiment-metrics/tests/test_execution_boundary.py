@@ -65,3 +65,44 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "steps.upload_v2.outcome == 'success'" in workflow
     publish = workflow.index("Publish v2 raw facts to BigQuery")
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]
+
+
+def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
+    source = (
+        ROOT / "experiment-metrics/native/partition-audit/partition-audit.C"
+    ).read_text(encoding="utf-8")
+
+    assert "writeJsonString(output, locator.sha256);" in source
+    assert '<< locator.sha256 << "\\\"}"' not in source
+
+
+def test_overhead_check_repeats_primary_solver_and_keeps_diagnostics() -> None:
+    script_path = ROOT / "scripts/v2-overhead-check.pjm"
+    script = script_path.read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/v2-overhead-check.yml").read_text(
+        encoding="utf-8"
+    )
+
+    subprocess.run(["bash", "-n", str(script_path)], check=True)
+    order = [
+        script.index("run_arm off 1"),
+        script.index("run_arm on 1"),
+        script.index("run_arm off 2"),
+        script.index("run_arm on 2"),
+    ]
+    assert order == sorted(order)
+    assert "primary_on_over_off_trim_ratio" in script
+    assert '(on1 + on2) / (off1 + off2)' in script
+    assert 'ratio <= 1.05' in script
+    assert "sha256sum --check" in script
+    assert "markers_equal=true" in script
+    assert "for rank in $(seq 0 119)" in script
+    assert "diagnostic-status.txt" in script
+
+    upload = workflow.index("Upload comparison diagnostics")
+    cleanup = workflow.index("Discard comparison data")
+    assert upload < cleanup
+    assert "if: always() && steps.provision.outputs.check_dir != ''" in workflow
+    assert "archive_sha256=" in workflow
+    assert "bigquery" not in workflow.lower()
+    assert "GOOGLE_CREDENTIALS" not in workflow

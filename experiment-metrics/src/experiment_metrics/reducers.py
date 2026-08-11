@@ -48,20 +48,18 @@ def network_config_facts(
     results: tuple[IMBResult, ...],
     version: str | None,
     *,
+    process_count: int,
     time_limit_sec: int,
     iteration_policy: str,
 ) -> tuple[Fact, ...]:
     """Reduce one validated IMB capture's scalar command/result settings."""
 
-    process_counts = {item.process_count for item in results}
-    if len(process_counts) != 1:
-        raise ValueError("network scalar facts require one IMB process count")
     message_sizes = {item.message_bytes for item in results}
     iterations = {item.iterations for item in results}
-    if time_limit_sec <= 0 or iteration_policy != "dynamic":
+    if process_count <= 0 or time_limit_sec <= 0 or iteration_policy != "dynamic":
         raise ValueError("network command settings do not match the v2 protocol")
     facts = [
-        Fact("network.imb_mpi1.process_count", process_counts.pop()),
+        Fact("network.imb_mpi1.process_count", process_count),
         Fact("network.imb_mpi1.message_size.min_bytes", min(message_sizes)),
         Fact("network.imb_mpi1.message_size.max_bytes", max(message_sizes)),
         Fact("network.imb_mpi1.iteration.max_per_sample", max(iterations)),

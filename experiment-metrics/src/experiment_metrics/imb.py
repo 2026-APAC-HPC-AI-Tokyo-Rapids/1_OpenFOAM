@@ -11,7 +11,9 @@ from .protocol import RunProtocol
 BENCHMARKS = ("PingPong", "Sendrecv", "Allreduce")
 _SECTION = re.compile(r"^#\s*Benchmarking\s+(PingPong|Sendrecv|Allreduce)\s*$")
 _PROCESSES = re.compile(r"^#\s*#?processes\s*=\s*(\d+)\s*$", re.IGNORECASE)
-_VERSION = re.compile(r"^IMB-MPI1\s+(\S+)\s*$")
+_VERSION = re.compile(
+    r"^(?:IMB-MPI1\s+(\S+)|#\s+Intel\(R\) MPI Benchmarks\s+(\S+),\s+MPI-1 part)\s*$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,7 @@ class IMBResult:
 class IMBCapture:
     results: tuple[IMBResult, ...]
     version: str
+    process_count: int
     time_limit_sec: int
     iteration_policy: str
 
@@ -85,21 +88,39 @@ def validate_imb_capture(
     if argv[1:] != expected_tail:
         raise ValueError("IMB argv differs from the protocol command")
     results = parse_imb_mpi1(stdout)
-    if {item.process_count for item in results} != {protocol.ranks}:
-        raise ValueError("IMB output process count differs from the protocol")
-    expected_sizes = {0, *(1 << exponent for exponent in range(23))}
+    expected_process_counts = {
+        "PingPong": 2,
+        "Sendrecv": protocol.ranks,
+        "Allreduce": protocol.ranks,
+    }
+    for benchmark, expected_process_count in expected_process_counts.items():
+        observed_process_counts = {
+            item.process_count for item in results if item.benchmark == benchmark
+        }
+        if observed_process_counts != {expected_process_count}:
+            raise ValueError(f"IMB {benchmark} process count differs from the protocol")
+    transfer_sizes = {0, *(1 << exponent for exponent in range(23))}
+    expected_sizes = {
+        "PingPong": transfer_sizes,
+        "Sendrecv": transfer_sizes,
+        # Intel IMB uses MPI_INT for this collective, so msglog 0:22 starts
+        # with zero bytes and then four bytes rather than one and two bytes.
+        "Allreduce": {0, *(1 << exponent for exponent in range(2, 23))},
+    }
     for benchmark in BENCHMARKS:
         observed_sizes = {
             item.message_bytes for item in results if item.benchmark == benchmark
         }
-        if observed_sizes != expected_sizes:
+        if observed_sizes != expected_sizes[benchmark]:
             raise ValueError(f"IMB {benchmark} message-size sweep is incomplete")
     versions = [
-        match[1] for line in stdout.splitlines() if (match := _VERSION.match(line))
+        next(group for group in match.groups() if group is not None)
+        for line in stdout.splitlines()
+        if (match := _VERSION.match(line))
     ]
     if len(versions) != 1:
         raise ValueError("IMB output has no unique software version")
-    return IMBCapture(results, versions[0], 1, "dynamic")
+    return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
 
 
 def parse_imb_mpi1(text: str) -> tuple[IMBResult, ...]:
@@ -167,7 +188,21 @@ def _parse_row(
     iterations = _integer(columns, "repetitions")
     if message_bytes < 0 or iterations <= 0:
         raise ValueError(f"IMB {benchmark} row has invalid cardinality")
-    if benchmark == "Allreduce":
+    multi_time_header = {
+        "bytes",
+        "repetitions",
+        "t_min[usec]",
+        "t_max[usec]",
+        "t_avg[usec]",
+    }
+    if benchmark == "Allreduce" or multi_time_header.issubset(columns):
+        bandwidth = (
+            _decimal_column(columns, "mbytes/sec")
+            if benchmark == "Sendrecv"
+            else None
+        )
+        if bandwidth is not None and bandwidth < 0:
+            raise ValueError(f"IMB {benchmark} row has invalid transfer values")
         return IMBResult(
             benchmark,
             process_count,
@@ -176,7 +211,7 @@ def _parse_row(
             _decimal_column(columns, "t_min[usec]"),
             _decimal_column(columns, "t_avg[usec]"),
             _decimal_column(columns, "t_max[usec]"),
-            None,
+            bandwidth,
         )
     time = _decimal_column(columns, "t[usec]")
     bandwidth = _decimal_column(columns, "mbytes/sec")

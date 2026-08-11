@@ -563,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
                 lambda: network_config_facts(
                     capture.results,
                     capture.version,
+                    process_count=capture.process_count,
                     time_limit_sec=capture.time_limit_sec,
                     iteration_policy=capture.iteration_policy,
                 ),

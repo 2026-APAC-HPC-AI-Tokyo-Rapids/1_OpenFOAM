@@ -457,8 +457,14 @@ void writeLocator(Ostream& output, const Locator& locator)
 {
     output << "{\"locator_kind\":\"runtime_relative_ephemeral\",\"path\":";
     writeJsonString(output, std::string(locator.path));
-    output << ",\"size_bytes\":" << locator.sizeBytes << ",\"sha256\":\""
-           << locator.sha256 << "\"}";
+    output << ",\"size_bytes\":" << locator.sizeBytes << ",\"sha256\":";
+    // Foam::Ostream quotes std::string values itself.  Surrounding that
+    // insertion with literal quotes therefore produced ""<digest>"" and an
+    // invalid partition-observed document.  Use the same byte-wise JSON
+    // string writer as paths so the representation is independent of the
+    // OpenFOAM stream overload selected for std::string.
+    writeJsonString(output, locator.sha256);
+    output << '}';
 }
 
 void writeNamedLocators
