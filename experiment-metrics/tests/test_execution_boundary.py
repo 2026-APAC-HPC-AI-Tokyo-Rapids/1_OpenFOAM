@@ -65,6 +65,10 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "steps.upload_v2.outcome == 'success'" in workflow
     publish = workflow.index("Publish v2 raw facts to BigQuery")
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]
+    # Schema deployment is an explicit control-plane operation.  Steady-state
+    # publication must need only insertAll permissions, not query-job creation.
+    publish_step = workflow[publish : workflow.index("Upload cavity3D result")]
+    assert "--schema-sql" not in publish_step
     assert "-name 'node-*.json'" in workflow
     assert "! -name 'node-*.json'" in workflow
 
