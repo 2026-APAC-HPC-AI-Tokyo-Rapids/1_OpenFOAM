@@ -292,7 +292,12 @@ def parse_perf_csv(
     _rank(global_rank)
     _member(source_member)
     _sha256(source_sha256)
-    reader = csv.reader(text.splitlines(), strict=True)
+    # perf writes a provenance comment and a blank separator before the
+    # requested event records.  They are source evidence, but not CSV rows.
+    data_lines = tuple(
+        line for line in text.splitlines() if line and not line.startswith("#")
+    )
+    reader = csv.reader(data_lines, strict=True)
     rows = list(reader)
     if len(rows) != len(EVENTS) or any(len(row) != len(CSV_FIELDS) for row in rows):
         raise PerfValidationError(
