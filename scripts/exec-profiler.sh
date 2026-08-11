@@ -21,6 +21,13 @@ case "${OPENFOAM_PROFILE_MODE:-direct}" in
     exec "${OPENFOAM_PERF_PATH}" stat -x, -o "${OPENFOAM_PROFILE_DIR}/perf-stat.csv" \
       -e cycles,instructions,branches,branch-misses,cache-misses -- "$@"
     ;;
+  vtune-hotspots)
+    : "${OPENFOAM_VTUNE_RESULT_DIR:?VTune result directory is required}"
+    command -v vtune >/dev/null
+    exec vtune -collect hotspots \
+      -knob enable-stack-collection=true \
+      -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
+    ;;
   *)
     printf 'Unknown OPENFOAM_PROFILE_MODE: %s\n' \
       "${OPENFOAM_PROFILE_MODE}" >&2

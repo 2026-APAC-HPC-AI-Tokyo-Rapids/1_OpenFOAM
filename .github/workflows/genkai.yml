@@ -14,13 +14,14 @@ on:
         default: false
         type: boolean
       profile_mode:
-        description: Run directly for scoring or opt in to perf stat profiling
+        description: Run directly or opt in to perf stat or VTune hotspots profiling
         required: true
         default: direct
         type: choice
         options:
           - direct
           - perf-stat
+          - vtune-hotspots
   push:
     paths-ignore:
       - 'research/**'
@@ -191,6 +192,8 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
+            "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-hotspots-summary.py" \
             "${GITHUB_WORKSPACE}/scripts/openfoam-rank-wrapper.py" \
             "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
@@ -311,7 +314,7 @@ jobs:
           head_commit="$(git rev-parse HEAD)"
           base_commit="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")"
           purpose=bench
-          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+          if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
             purpose=profile
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json"
           else
@@ -332,9 +335,12 @@ jobs:
               --control-plane-file benchmark/parse_result.sh \
               --control-plane-file experiment-metrics/registry/openfoam-v2-protocol.toml \
               --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
+              --control-plane-file scripts/exec-profiler.sh \
+              --control-plane-file scripts/export-vtune-hotspots.sh \
               --control-plane-file scripts/prepare-openfoam-case.pjm \
               --control-plane-file scripts/prepare-openfoam-case.sh \
-              --control-plane-file scripts/run-openfoam.pjm
+              --control-plane-file scripts/run-openfoam.pjm \
+              --control-plane-file scripts/vtune-hotspots-summary.py
           )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
@@ -419,6 +425,20 @@ jobs:
         run: |
           pjwait "${PJM_JOB_ID}"
           test -e "${RUN_DIR}/run-success"
+
+      - name: Publish VTune hotspots to Actions summary
+        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        run: |
+          summary="${RUN_DIR}/profile/raw/vtune-summary/summary.md"
+          test -s "${summary}"
+          cat "${summary}" >> "${GITHUB_STEP_SUMMARY}"
+          vtune_result_dir="$(sed -n 's/^vtune_result_dir=//p' \
+            "${RUN_DIR}/logs/profile-location.txt")"
+          test -n "${vtune_result_dir}"
+          {
+            printf '\nVTune result on Genkai:\n\n'
+            printf -- '- `%s`\n' "${vtune_result_dir}"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Record v2 terminal sources
         if: always()
@@ -563,7 +583,7 @@ jobs:
               args+=(--member "${path#"${RUN_DIR}/"}:workload_member")
             done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
           fi
-          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+          if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
             while IFS= read -r -d '' path; do
               args+=(--profile-member "${path#"${RUN_DIR}/"}")
             done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
