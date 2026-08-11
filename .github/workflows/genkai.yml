@@ -21,11 +21,6 @@ on:
         options:
           - direct
           - perf-stat
-      prune_legacy_metrics:
-        description: Delete raw BigQuery rows belonging to runs other than this successful run
-        required: true
-        default: false
-        type: boolean
   push:
     paths-ignore:
       - 'research/**'
@@ -576,7 +571,6 @@ jobs:
           compression-level: 0
 
       - name: Publish v2 raw facts to BigQuery
-        id: publish_v2
         if: >-
           always() &&
           steps.package_v2.outcome == 'success' &&
@@ -594,76 +588,6 @@ jobs:
             --pyproject "${PROVISION_DIR}/experiment-metrics/pyproject.toml" \
             --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
             --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml"
-
-      - name: Prune legacy BigQuery runs
-        if: >-
-          always() &&
-          inputs.prune_legacy_metrics == true &&
-          steps.publish_v2.outcome == 'success'
-        env:
-          CURRENT_RUN_ID: ${{ steps.v2_context.outputs.run_id }}
-          EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
-        run: |
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" - <<'PY'
-          import json
-          import os
-          import time
-          import urllib.parse
-          import urllib.request
-
-          from google.auth.transport.requests import Request
-          from google.oauth2 import service_account
-
-          project = "apac-hpc-ai-tokyo-rapids-26"
-          location = "asia-northeast1"
-          credentials = service_account.Credentials.from_service_account_info(
-              json.loads(os.environ["EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON"]),
-              scopes=["https://www.googleapis.com/auth/bigquery"],
-          )
-          credentials.refresh(Request())
-
-          def request(url, *, body=None):
-              headers = {"Authorization": f"Bearer {credentials.token}"}
-              data = None
-              if body is not None:
-                  headers["Content-Type"] = "application/json"
-                  data = json.dumps(body, separators=(",", ":")).encode()
-              with urllib.request.urlopen(
-                  urllib.request.Request(url, data=data, headers=headers), timeout=60
-              ) as response:
-                  return json.load(response)
-
-          result = request(
-              f"https://bigquery.googleapis.com/bigquery/v2/projects/{project}/queries",
-              body={
-                  "query": (
-                      "DELETE FROM `apac-hpc-ai-tokyo-rapids-26."
-                      "openfoam_experiment_metrics.openfoam_metrics` "
-                      "WHERE run != @current_run"
-                  ),
-                  "useLegacySql": False,
-                  "location": location,
-                  "timeoutMs": 60000,
-                  "parameterMode": "NAMED",
-                  "queryParameters": [{
-                      "name": "current_run",
-                      "parameterType": {"type": "STRING"},
-                      "parameterValue": {"value": os.environ["CURRENT_RUN_ID"]},
-                  }],
-              },
-          )
-          job_id = result["jobReference"]["jobId"]
-          while not result.get("jobComplete", False):
-              time.sleep(5)
-              query = urllib.parse.urlencode({"location": location})
-              result = request(
-                  f"https://bigquery.googleapis.com/bigquery/v2/projects/"
-                  f"{project}/queries/{job_id}?{query}"
-              )
-          if result.get("errors"):
-              raise RuntimeError(json.dumps(result["errors"], sort_keys=True))
-          print(f"deleted_rows={result.get('numDmlAffectedRows', '0')}")
-          PY
 
       - name: Upload cavity3D result
         if: success()
