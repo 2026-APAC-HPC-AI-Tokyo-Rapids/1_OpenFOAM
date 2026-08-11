@@ -67,6 +67,9 @@ thirdparty_source_oid="$(git -C "${BUILD_TREE}/ThirdParty" rev-parse HEAD)"
 
 # Bundle-declared in-process sources must be present in, and byte-identical to,
 # the exact detached OpenFOAM source commit before its Git metadata is removed.
+# Executable component paths are relative to the separately provisioned
+# instrumentation artifact root, so they must not be resolved in this upstream
+# OpenFOAM checkout.
 test -z "$(git -C "${BUILD_TREE}/OpenFOAM" status --porcelain=v1 --untracked-files=all)"
 test -z "$(git -C "${BUILD_TREE}/ThirdParty" status --porcelain=v1 --untracked-files=all)"
 while IFS= read -r source_path
@@ -75,7 +78,8 @@ do
   cmp -- "${BUILD_TREE}/OpenFOAM/${source_path}" \
     <(git -C "${BUILD_TREE}/OpenFOAM" show "HEAD:${source_path}")
 done < <(
-  jq -r '.source_paths[]' \
+  jq -r \
+    '.components[].activation | select(.kind == "in_process_hook") | .source_path' \
     "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" \
     "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json" |
     LC_ALL=C sort -u
