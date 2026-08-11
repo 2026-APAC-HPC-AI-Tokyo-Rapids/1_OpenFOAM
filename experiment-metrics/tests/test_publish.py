@@ -10,6 +10,7 @@ from experiment_metrics import RunManifest, init_run
 from experiment_metrics.artifact_store import RunPackager, read_metrics
 from experiment_metrics.publish import (
     BigQueryConfig,
+    _bigquery_projection_row,
     publish_artifact_set,
     publish_metrics,
 )
@@ -163,6 +164,26 @@ def test_publish_propagates_bigquery_row_rejection(
             BigQueryConfig("project", "dataset", "table", "asia-northeast1"),
             request=lambda _: b'{"insertErrors":[{"index":0}]}',
         )
+
+
+def test_bigquery_projection_row_encodes_scalar_json_columns() -> None:
+    row = {
+        "_source_instance_key": '["r-1","source.json"]',
+        "compile_flags": {"cxx": ["-O3"], "cc": ["-O2"]},
+        "runtime_objects": [{"path": "lib.so", "kind": "shared_library"}],
+        "label_bits": 64,
+        "resolved_libmpi_path": None,
+    }
+
+    encoded = _bigquery_projection_row(row)
+
+    assert encoded == {
+        "_source_instance_key": '["r-1","source.json"]',
+        "compile_flags": '{"cc":["-O2"],"cxx":["-O3"]}',
+        "runtime_objects": '[{"kind":"shared_library","path":"lib.so"}]',
+        "label_bits": 64,
+        "resolved_libmpi_path": None,
+    }
 
 
 def test_publish_applies_and_waits_for_idempotent_schema_job_before_rows(

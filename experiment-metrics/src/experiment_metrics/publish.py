@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifact_store import MetricRow, read_artifact_members, validate_artifact_set
+from .fact import canonical_json
 from .projections import project_artifact_set, resolve_projection_batches
 from .protocol import RunProtocol
 from .registry import Registry
@@ -103,7 +104,7 @@ def publish_artifact_set(
         insert_rows = tuple(
             {
                 "insertId": _projection_insert_id(batch.spec.base_table_id, row),
-                "json": row,
+                "json": _bigquery_projection_row(row),
             }
             for row in batch.insert_rows()
         )
@@ -268,6 +269,15 @@ def _projection_insert_id(table: str, row: dict[str, object]) -> str:
         row, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()
     return hashlib.sha256(table.encode() + b"\0" + payload).hexdigest()
+
+
+def _bigquery_projection_row(row: dict[str, object]) -> dict[str, object]:
+    """Encode scalar BigQuery JSON columns for the tabledata.insertAll API."""
+
+    return {
+        name: canonical_json(value) if isinstance(value, (dict, list)) else value
+        for name, value in row.items()
+    }
 
 
 def _access_token() -> str:
