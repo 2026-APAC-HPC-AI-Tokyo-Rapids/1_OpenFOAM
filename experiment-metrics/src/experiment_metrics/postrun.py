@@ -36,6 +36,10 @@ def minimal_hardware_fact(path: Path, *, run_id: str, source_member: str) -> Fac
     )
 
 
+def partition_requested_fact(dictionary: Path) -> Fact:
+    return Fact("mesh.partition.requested", _requested_partition(dictionary))
+
+
 def mesh_topology_fact(path: Path) -> Fact:
     document = _json(path)
     expected = {"schema_version", "cells", "faces", "points", "internal_faces"}

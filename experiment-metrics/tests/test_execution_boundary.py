@@ -19,8 +19,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "minimal_hardware_argv+=(--node-ordinal 0)" in text
     assert '"${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1' in text
     assert "--node-ordinal-from-env PMI_RANK" in text
-    assert "stage mesh_facts" in text
-    assert "stage partition_audit" in text
+    assert "stage_at case_prepare" in text
+    assert "prepare-openfoam-case.sh" in text
+    assert "stage mesh_facts" not in text
+    assert "stage partition_audit" not in text
+    assert "stage check_mesh" not in text
     assert "native tool is not provisioned" not in text
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text

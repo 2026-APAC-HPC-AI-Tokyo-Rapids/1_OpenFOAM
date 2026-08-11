@@ -174,9 +174,7 @@ def parser() -> argparse.ArgumentParser:
     postrun.add_argument("--hardware-source-member")
     postrun.add_argument("--hardware-root", type=Path)
     postrun.add_argument("--protocol", type=Path)
-    postrun.add_argument("--topology", type=Path, required=True)
     postrun.add_argument("--decompose-dict", type=Path, required=True)
-    postrun.add_argument("--partition-observed", type=Path, required=True)
     postrun.add_argument("--fragment-id", default="postrun")
 
     workload = commands.add_parser("capture-workload")
@@ -594,14 +592,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "record-postrun":
-        from .postrun import mesh_topology_fact, minimal_hardware_fact, partition_facts
-
-        topology = mesh_topology_fact(arguments.topology)
-        partition = partition_facts(
-            arguments.decompose_dict,
-            arguments.partition_observed,
-            topology=topology.logical_value,  # type: ignore[arg-type]
-        )
+        from .postrun import minimal_hardware_fact, partition_requested_fact
         hardware_facts: list[Fact]
         if arguments.hardware_root is not None and arguments.protocol is not None:
             from .manifest import RunManifest
@@ -629,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(
                 "record-postrun requires hardware-root/protocol or hardware/member"
             )
-        facts = (*hardware_facts, topology, *partition)
+        facts = (*hardware_facts, partition_requested_fact(arguments.decompose_dict))
         print(
             collect_once(
                 arguments.manifest,

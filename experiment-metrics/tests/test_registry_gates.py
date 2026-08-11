@@ -27,9 +27,7 @@ def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
         "network.imb_mpi1.iteration.time_limit_sec",
         "network.imb_mpi1.iteration.policy",
         "hardware.minimal.node.0",
-        "mesh.topology",
-        "mesh.partition.requested",
-        "mesh.partition.observed",
+            "mesh.partition.requested",
     }.issubset(required)
     assert "software.imb_mpi1.version" in required
 

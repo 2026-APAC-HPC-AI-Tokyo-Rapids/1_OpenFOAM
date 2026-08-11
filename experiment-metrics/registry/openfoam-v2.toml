@@ -270,19 +270,7 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "mesh.topology"
-owner = "runner.postrun_parser"
-logical_type = "json"
-required_for = ["bench", "profile"]
-
-[[keys]]
 pattern = "mesh.partition.requested"
-owner = "runner.postrun_parser"
-logical_type = "json"
-required_for = ["bench", "profile"]
-
-[[keys]]
-pattern = "mesh.partition.observed"
 owner = "runner.postrun_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
@@ -1270,18 +1258,6 @@ reducer_id = "artifact_projection/v1"
 duplication_justification = "Compatibility fact until the artifact projection consumer is deployed."
 
 [[fact]]
-id = "mesh.topology"
-key_pattern = "mesh.topology"
-source_id = "facts.postrun"
-schema_id = "mesh-topology/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "mesh_probe/v1"
-validator_id = "mesh_topology/v1"
-reducer_id = "identity/v1"
-
-[[fact]]
 id = "mesh.partition.requested"
 key_pattern = "mesh.partition.requested"
 source_id = "facts.postrun"
@@ -1293,17 +1269,6 @@ capture_id = "decompose_dictionary/v1"
 validator_id = "partition_requested/v1"
 reducer_id = "partition_requested/v1"
 
-[[fact]]
-id = "mesh.partition.observed"
-key_pattern = "mesh.partition.observed"
-source_id = "facts.postrun"
-schema_id = "partition-observed/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "partition_audit/v1"
-validator_id = "partition_observed/v1"
-reducer_id = "partition_observed/v1"
 
 [[artifact_projection]]
 id = "openfoam.source_track"
