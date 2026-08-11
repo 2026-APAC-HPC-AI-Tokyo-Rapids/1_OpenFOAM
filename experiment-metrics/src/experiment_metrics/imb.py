@@ -88,10 +88,26 @@ def validate_imb_capture(
     if argv[1:] != expected_tail:
         raise ValueError("IMB argv differs from the protocol command")
     results = parse_imb_mpi1(stdout)
+    validate_imb_results(results, protocol.ranks)
+    versions = [
+        next(group for group in match.groups() if group is not None)
+        for line in stdout.splitlines()
+        if (match := _VERSION.match(line))
+    ]
+    if len(versions) != 1:
+        raise ValueError("IMB output has no unique software version")
+    return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
+
+
+def validate_imb_results(
+    results: tuple[IMBResult, ...], process_count: int
+) -> None:
+    """Validate benchmark-specific axes from one complete IMB invocation."""
+
     expected_process_counts = {
         "PingPong": 2,
-        "Sendrecv": protocol.ranks,
-        "Allreduce": protocol.ranks,
+        "Sendrecv": process_count,
+        "Allreduce": process_count,
     }
     for benchmark, expected_process_count in expected_process_counts.items():
         observed_process_counts = {
@@ -113,14 +129,6 @@ def validate_imb_capture(
         }
         if observed_sizes != expected_sizes[benchmark]:
             raise ValueError(f"IMB {benchmark} message-size sweep is incomplete")
-    versions = [
-        next(group for group in match.groups() if group is not None)
-        for line in stdout.splitlines()
-        if (match := _VERSION.match(line))
-    ]
-    if len(versions) != 1:
-        raise ValueError("IMB output has no unique software version")
-    return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
 
 
 def parse_imb_mpi1(text: str) -> tuple[IMBResult, ...]:

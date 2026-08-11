@@ -490,7 +490,12 @@ jobs:
           done < <(find "${RUN_DIR}/domain/pstream" -type f -print0 | sort -z)
           while IFS= read -r -d '' path; do
             args+=(--member "${path#"${RUN_DIR}/"}:minimal_hardware")
-          done < <(find "${RUN_DIR}/source/hardware" -type f -print0 | sort -z)
+          done < <(find "${RUN_DIR}/source/hardware" -type f \
+            -name 'node-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do
+            args+=(--member "${path#"${RUN_DIR}/"}:postrun_source")
+          done < <(find "${RUN_DIR}/source/hardware" -type f \
+            ! -name 'node-*.json' -print0 | sort -z)
           while IFS= read -r -d '' path; do
             args+=(--member "${path#"${RUN_DIR}/"}:postrun_source")
           done < <(find "${RUN_DIR}/source/mesh" \

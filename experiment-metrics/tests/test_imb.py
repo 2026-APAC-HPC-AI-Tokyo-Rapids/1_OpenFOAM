@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from experiment_metrics.imb import parse_imb_mpi1
+from experiment_metrics.imb import IMBResult, parse_imb_mpi1, validate_imb_results
 from experiment_metrics.reducers import network_config_facts, network_projection_rows
 from experiment_metrics.registry import Registry
 
@@ -70,6 +70,40 @@ def test_intel_imb_version_banner_is_unambiguous() -> None:
     assert match is not None
     assert next(group for group in match.groups() if group is not None) == "2021.9"
     assert _VERSION.fullmatch("# Version : Linux kernel version") is None
+
+
+def test_result_axes_follow_intel_benchmark_semantics() -> None:
+    transfer_sizes = (0, *(1 << exponent for exponent in range(23)))
+    collective_sizes = (0, *(1 << exponent for exponent in range(2, 23)))
+    results = tuple(
+        IMBResult(benchmark, count, size, 1000, None, None, Decimal("1"), None)
+        for benchmark, count, sizes in (
+            ("PingPong", 2, transfer_sizes),
+            ("Sendrecv", 120, transfer_sizes),
+            ("Allreduce", 120, collective_sizes),
+        )
+        for size in sizes
+    )
+
+    validate_imb_results(results, 120)
+
+    with pytest.raises(ValueError, match="PingPong process count"):
+        validate_imb_results(
+            tuple(
+                IMBResult(
+                    item.benchmark,
+                    120 if item.benchmark == "PingPong" else item.process_count,
+                    item.message_bytes,
+                    item.iterations,
+                    item.time_min_us,
+                    item.time_avg_us,
+                    item.time_max_us,
+                    item.bandwidth_mbytes_per_sec,
+                )
+                for item in results
+            ),
+            120,
+        )
 
 
 def test_imb_parser_rejects_truncated_target_output() -> None:

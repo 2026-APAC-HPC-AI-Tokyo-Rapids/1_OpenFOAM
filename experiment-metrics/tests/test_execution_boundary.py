@@ -65,6 +65,8 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "steps.upload_v2.outcome == 'success'" in workflow
     publish = workflow.index("Publish v2 raw facts to BigQuery")
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]
+    assert "-name 'node-*.json'" in workflow
+    assert "! -name 'node-*.json'" in workflow
 
 
 def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
