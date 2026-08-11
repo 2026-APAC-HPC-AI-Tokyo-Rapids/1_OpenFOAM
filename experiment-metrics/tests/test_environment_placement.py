@@ -6,18 +6,17 @@ from pathlib import Path
 import pytest
 
 from experiment_metrics.environment import (
-    capture_rank_delta,
     capture_snapshot,
+    environment_facts,
     escape_name,
     parse_snapshot,
-    reconstruct_rank_environments,
     snapshot_bytes,
 )
 from experiment_metrics.fact import canonical_json
 from experiment_metrics.placement import placement_fact
 
 
-def test_nul_environment_snapshot_and_rank_delta_round_trip(tmp_path: Path) -> None:
+def test_nul_environment_snapshot_projects_plain_utf8_values(tmp_path: Path) -> None:
     common = {b"Z": b"last", b"A": b"one", b"DROP": b"gone"}
     snapshot = tmp_path / "host.snapshot"
     capture_snapshot(snapshot, common)
@@ -25,17 +24,20 @@ def test_nul_environment_snapshot_and_rank_delta_round_trip(tmp_path: Path) -> N
     assert snapshot.read_bytes() == b"A\0one\0DROP\0gone\0Z\0last\0"
     assert parse_snapshot(snapshot.read_bytes()) == common
 
-    deltas = tmp_path / "delta"
-    capture_rank_delta(
-        snapshot,
-        deltas / "rank-0.delta.json",
-        rank=0,
-        environment={b"A": b"two", b"Z": b"last", b"NEW": b"\xff"},
-    )
-    assert reconstruct_rank_environments(snapshot, deltas, expected_ranks=1) == (
-        {b"A": b"two", b"Z": b"last", b"NEW": b"\xff"},
-    )
+    facts = environment_facts(snapshot)
+    assert [(fact.key, fact.logical_value) for fact in facts] == [
+        ("env.A", "one"),
+        ("env.DROP", "gone"),
+        ("env.Z", "last"),
+    ]
     assert escape_name(b"A.B_\xff") == "A~2EB_~FF"
+
+
+def test_environment_fact_rejects_non_utf8_value(tmp_path: Path) -> None:
+    snapshot = tmp_path / "host.snapshot"
+    capture_snapshot(snapshot, {b"INVALID": b"\xff"})
+    with pytest.raises(ValueError, match="not UTF-8"):
+        environment_facts(snapshot)
 
 
 def test_nul_environment_rejects_noncanonical_names() -> None:

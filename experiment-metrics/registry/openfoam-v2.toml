@@ -138,27 +138,9 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "env.job_entry.*"
-owner = "pjm.supervisor"
-logical_type = "bytes_base64"
-required_for = []
-
-[[keys]]
-pattern = "env.host_exec.common.*"
+pattern = "env.*"
 owner = "runner.execution_context_parser"
-logical_type = "bytes_base64"
-required_for = []
-
-[[keys]]
-pattern = "env.host_exec.rank.*.delta.*"
-owner = "runner.execution_context_parser"
-logical_type = "bytes_base64"
-required_for = []
-
-[[keys]]
-pattern = "env.host_exec.rank.*.removed_names"
-owner = "runner.execution_context_parser"
-logical_type = "json"
+logical_type = "string"
 required_for = []
 
 [[keys]]
@@ -1023,52 +1005,16 @@ validator_id = "scheduler_accounting/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
-id = "environment.job_entry"
-key_pattern = "env.job_entry.*"
-source_id = "facts.supervisor"
-schema_id = "byte-string/v1"
-logical_type = "bytes_base64"
+id = "environment"
+key_pattern = "env.*"
+source_id = "facts.execution_context"
+schema_id = "utf8-string/v1"
+logical_type = "string"
 unit = "none"
 cardinality = "run_environment_name"
 capture_id = "proc_environ_nul/v1"
-validator_id = "nul_environment/v1"
+validator_id = "utf8_environment/v1"
 reducer_id = "environment_projection/v1"
-
-[[fact]]
-id = "environment.host_common"
-key_pattern = "env.host_exec.common.*"
-source_id = "facts.execution_context"
-schema_id = "byte-string/v1"
-logical_type = "bytes_base64"
-unit = "none"
-cardinality = "run_environment_name"
-capture_id = "proc_environ_nul/v1"
-validator_id = "nul_environment/v1"
-reducer_id = "environment_common_delta/v1"
-
-[[fact]]
-id = "environment.rank_delta"
-key_pattern = "env.host_exec.rank.*.delta.*"
-source_id = "facts.execution_context"
-schema_id = "byte-string/v1"
-logical_type = "bytes_base64"
-unit = "none"
-cardinality = "run_rank_environment_name"
-capture_id = "rank_wrapper_environ/v1"
-validator_id = "rank_env_delta/v1"
-reducer_id = "environment_common_delta/v1"
-
-[[fact]]
-id = "environment.rank_removed_names"
-key_pattern = "env.host_exec.rank.*.removed_names"
-source_id = "facts.execution_context"
-schema_id = "string-array/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run_rank"
-capture_id = "rank_wrapper_environ/v1"
-validator_id = "rank_env_delta/v1"
-reducer_id = "environment_common_delta/v1"
 
 [[fact]]
 id = "parallel.rank_placement"

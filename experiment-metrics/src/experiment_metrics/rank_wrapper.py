@@ -4,7 +4,6 @@ import argparse
 import os
 from pathlib import Path
 
-from .environment import capture_rank_delta
 from .manifest import RunManifest
 from .placement import capture_rank_placement
 
@@ -14,8 +13,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--expected-ranks", type=int, required=True)
     parser.add_argument("--expected-nodes", type=int, required=True)
-    parser.add_argument("--common-snapshot", type=Path, required=True)
-    parser.add_argument("--environment-root", type=Path, required=True)
     parser.add_argument("--placement-root", type=Path, required=True)
     parser.add_argument("solver_argv", nargs=argparse.REMAINDER)
     arguments = parser.parse_args(argv)
@@ -28,13 +25,9 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("rank wrapper requires an absolute solver executable")
     manifest = RunManifest.load(arguments.manifest)
     run_dir = manifest.path.parents[1]
-    environment_root = arguments.environment_root.resolve()
     placement_root = arguments.placement_root.resolve()
     if (
-        environment_root != (run_dir / "source/env").resolve()
-        or placement_root != (run_dir / "source/placement").resolve()
-        or arguments.common_snapshot.resolve(strict=True)
-        != (run_dir / "source/env/host-exec.snapshot").resolve(strict=True)
+        placement_root != (run_dir / "source/placement").resolve()
         or arguments.expected_ranks <= 0
         or arguments.expected_nodes <= 0
         or arguments.expected_ranks % arguments.expected_nodes
@@ -48,11 +41,6 @@ def main(argv: list[str] | None = None) -> int:
     ranks_per_node = arguments.expected_ranks // arguments.expected_nodes
     if local_size != ranks_per_node:
         raise ValueError("rank wrapper local size differs from expected axes")
-    capture_rank_delta(
-        arguments.common_snapshot,
-        environment_root / f"rank-{rank}.delta.json",
-        rank=rank,
-    )
     capture_rank_placement(
         placement_root / f"rank-{rank}.json",
         run_id=manifest.run_id,

@@ -216,8 +216,6 @@ else
     -m experiment_metrics.rank_wrapper \
     --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
     --expected-nodes "${OPENFOAM_NODES}" \
-    --common-snapshot "${SOURCE_DIR}/env/host-exec.snapshot" \
-    --environment-root "${SOURCE_DIR}/env" \
     --placement-root "${SOURCE_DIR}/placement" -- \
     "${ICO_FOAM}" -parallel \
     -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"

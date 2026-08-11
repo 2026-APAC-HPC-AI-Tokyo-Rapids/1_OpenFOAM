@@ -10,8 +10,6 @@ launch-effective environment/affinity.
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
 import json
 import os
 import socket
@@ -84,7 +82,6 @@ def main(argv: list[str] | None = None) -> int:
             "output_member": _member_for_output(output, rank),
         },
     )
-    _write_environment_delta(run_root, rank)
     _write_sidecar(
         run_root / f"source/placement/rank-{rank}.json",
         {
@@ -157,46 +154,6 @@ def _run_root(output: Path, run_id: str) -> Path:
     if root.name != run_id:
         raise ValueError("profile output run differs from --run-id")
     return root
-
-
-def _write_environment_delta(run_root: Path, rank: int) -> None:
-    common_path = run_root / "source/env/host-exec.snapshot"
-    common_raw = common_path.read_bytes()
-    common = _parse_snapshot(common_raw)
-    current = dict(os.environb)
-    changed = [
-        {"name_b64": _b64(name), "value_b64": _b64(current[name])}
-        for name in sorted(current)
-        if common.get(name) != current[name]
-    ]
-    removed = [_b64(name) for name in sorted(set(common) - set(current))]
-    _write_sidecar(
-        run_root / f"source/env/rank-{rank}.delta.json",
-        {
-            "schema_version": "rank-env-delta/v1",
-            "common_snapshot_sha256": hashlib.sha256(common_raw).hexdigest(),
-            "rank": rank,
-            "added_or_changed": changed,
-            "removed_names_b64": removed,
-        },
-    )
-
-
-def _parse_snapshot(raw: bytes) -> dict[bytes, bytes]:
-    if not raw or not raw.endswith(b"\0"):
-        raise ValueError("host environment snapshot is invalid")
-    fields = raw.split(b"\0")
-    if fields[-1] != b"" or len(fields) % 2 != 1:
-        raise ValueError("host environment snapshot field count is invalid")
-    pairs = list(zip(fields[:-1:2], fields[1:-1:2], strict=True))
-    names = [name for name, _ in pairs]
-    if any(not name or b"=" in name for name in names) or names != sorted(set(names)):
-        raise ValueError("host environment snapshot names are not canonical")
-    return dict(pairs)
-
-
-def _b64(value: bytes) -> str:
-    return base64.b64encode(value).decode("ascii")
 
 
 def _write_sidecar(path: Path, value: dict[str, object]) -> None:

@@ -83,10 +83,7 @@ capture stage は適用 variant だけ追加する。
 | `scheduler.accounting.mmszu.{lexeme,bytes}` | 最大 RSS の raw 表現と bytes | 同上。括弧内 byte 値を parse | 同上、raw nullable numeric |
 | `scheduler.accounting.uctmut.{lexeme,seconds}` | user CPU time | 同上。millisecond 表現を秒へ変換 | 同上、raw nullable numeric |
 | `scheduler.accounting.sctmut.{lexeme,seconds}` | system CPU time | 同上。millisecond 表現を秒へ変換 | 同上、raw nullable numeric |
-| `env.job_entry.<escaped_name>` | job entry 環境 | name/value の `name\0value\0` snapshot を name byte 順に保存し value を Base64 化 | scheduler entry、raw dynamic family |
-| `env.host_exec.common.<escaped_name>` | 全 rank 共通の launch-effective host 環境 | rank wrapper が全環境を byte-exact snapshot、common/delta reducer で共通分を投影 | bench/profile、raw projection |
-| `env.host_exec.rank.<rank>.delta.<escaped_name>` | rank 固有の追加・変更環境値 | 同 rank snapshot と common snapshot の byte-exact delta | 同上、raw projection |
-| `env.host_exec.rank.<rank>.removed_names` | common から当該 rank で消えた環境変数名 | `removed_names_b64` を name byte 順の可逆 list として投影 | 同上、raw projection |
+| `env.<escaped_name>` | MPI起動直前のlaunch-effective host環境 | `host-exec.snapshot`のUTF-8 valueをエンコードせず投影 | bench/profile、raw projection |
 
 ## 3. Platform、hardware、rank placement
 
