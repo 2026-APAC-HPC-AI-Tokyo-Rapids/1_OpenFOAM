@@ -17,11 +17,13 @@ set -euo pipefail
 : "${OPENFOAM_TRANSPORT_POLICY:?protocol transport policy is required}"
 
 OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE:-direct}
+: "${OPENFOAM_VTUNE_RANK:=0}"
 OPENFOAM_MPI_PROCS=${OPENFOAM_RANKS}
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 OPENFOAM_MPI_PPN=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 export OPENFOAM_MPI_PROCS OPENFOAM_MPI_PPN OPENFOAM_PROFILE_MODE
+export OPENFOAM_VTUNE_RANK
 
 CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
 CASE_INPUT_DIR="${RUN_DIR}/work/cavity3D-64M-input"
@@ -38,7 +40,10 @@ SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 PROFILE_RUN_ID="${RUN_ID}-${PJM_JOBID}"
 OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
+OPENFOAM_VTUNE_ROOT="${HOME}/openfoam-vtune/${PROFILE_RUN_ID}"
+OPENFOAM_VTUNE_RESULT_DIR="${OPENFOAM_VTUNE_ROOT}/rank-${OPENFOAM_VTUNE_RANK}"
 export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID
+export OPENFOAM_VTUNE_RESULT_DIR
 export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
 export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
@@ -158,11 +163,16 @@ provision_args=(
   --executable "capture-hardware=${CAPTURE_HARDWARE}"
   --executable "mpirun=${MPIEXEC}"
 )
-if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
   OPENFOAM_PERF_PATH=$(command -v perf)
   [[ "${OPENFOAM_PERF_PATH}" == /* && -x "${OPENFOAM_PERF_PATH}" ]]
   export OPENFOAM_PERF_PATH
   provision_args+=(--executable "perf=${OPENFOAM_PERF_PATH}")
+fi
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
+  (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
+  command -v vtune >/dev/null
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
 
@@ -191,6 +201,9 @@ install -m 0644 "${HOME}/../share/openfoam-case-cache/$(sha256sum "${PROVISION_D
   "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  install -d -m 0700 "${HOME}/openfoam-vtune" "${OPENFOAM_VTUNE_ROOT}"
+fi
 printf '%s\n' \
   "PJM_JOBID=${PJM_JOBID}" \
   "run_id=${RUN_ID}" \
@@ -217,6 +230,19 @@ if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
     --output "${RUN_DIR}/profile/raw/perf/rank-{rank}.csv" \
     --perf "${OPENFOAM_PERF_PATH}" --solver "${ICO_FOAM}" -- \
     -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+elif [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  # Profiling mpirun only observes Hydra. Intel MPI gtool wraps the selected
+  # rank after launch, while every rank still records its normal placement.
+  stage solver "${SOLVER_LOG}" \
+    "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${OPENFOAM_MPI_PPN}" \
+    -gtool "${PROVISION_DIR}/scripts/exec-profiler.sh:${OPENFOAM_VTUNE_RANK}" \
+    "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" \
+    -m experiment_metrics.rank_wrapper \
+    --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
+    --expected-nodes "${OPENFOAM_NODES}" \
+    --placement-root "${SOURCE_DIR}/placement" -- \
+    "${ICO_FOAM}" -parallel \
+    -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 else
   stage solver "${SOLVER_LOG}" \
     "${PROVISION_DIR}/scripts/exec-profiler.sh" \
@@ -237,6 +263,10 @@ set -e
 cp "${SOLVER_LOG}" "${OPENFOAM_PROFILE_DIR}/"
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
+fi
+
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
 fi
 
 "${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" > "${RESULTS_DIR}/result.txt"
@@ -263,7 +293,7 @@ fi
 stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" \
   "${minimal_hardware_argv[@]}"
 
-if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
   stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \
     "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" \
     --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" \
@@ -315,13 +345,24 @@ else
   printf '%s\n' 'IMB-MPI1 is unavailable; collection will be incomplete' >&2
 fi
 
-if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
   install -d -m 0700 "${RUN_DIR}/profile/raw"
   cp -a "${OPENFOAM_PROFILE_DIR}/." "${RUN_DIR}/profile/raw/"
 fi
 
 du -sh "${OPENFOAM_PROFILE_DIR}" > "${LOG_DIR}/profile-location.txt"
 printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" >> "${LOG_DIR}/profile-location.txt"
+if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+  vtune_result_dirs=()
+  for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
+  do
+    [[ -d "${candidate}" ]] && vtune_result_dirs+=("${candidate}")
+  done
+  [[ "${#vtune_result_dirs[@]}" -eq 1 ]]
+  du -sh "${OPENFOAM_VTUNE_ROOT}" >> "${LOG_DIR}/profile-location.txt"
+  printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" \
+    >> "${LOG_DIR}/profile-location.txt"
+fi
 
 # Only solver validity controls the scheduler/job success marker.
 touch "${RUN_DIR}/run-success"

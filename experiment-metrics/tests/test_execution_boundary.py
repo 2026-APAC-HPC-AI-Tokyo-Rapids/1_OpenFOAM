@@ -37,6 +37,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
+    assert '-gtool "${PROVISION_DIR}/scripts/exec-profiler.sh:' in text
+    assert '"${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"' in text
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)
@@ -67,6 +69,9 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert "record-scheduler-terminal --manifest" in workflow
     assert "record-execution-context --manifest" in workflow
     assert "record-profile-perf --manifest" in workflow
+    assert "Publish VTune hotspots to Actions summary" in workflow
+    assert "vtune-hotspots" in workflow
+    assert "Perfetto" not in workflow
     assert "Merge terminal fragments" not in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow
