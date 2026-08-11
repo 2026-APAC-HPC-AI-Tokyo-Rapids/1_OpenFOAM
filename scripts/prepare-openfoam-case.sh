@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-    echo "usage: $0 SOURCE_CASE TARGET_CASE BLOCK_MESH DECOMPOSE_PAR" >&2
+if [[ $# -lt 4 || $# -gt 5 || ( $# -eq 5 && $5 != --require-cache ) ]]; then
+    echo "usage: $0 SOURCE_CASE TARGET_CASE BLOCK_MESH DECOMPOSE_PAR [--require-cache]" >&2
     exit 64
 fi
 
@@ -10,6 +10,7 @@ SOURCE_CASE=$1
 TARGET_CASE=$2
 BLOCK_MESH=$3
 DECOMPOSE_PAR=$4
+REQUIRE_CACHE=${5:-}
 CACHE_ROOT="${HOME}/../share/openfoam-case-cache"
 NUMBER_OF_SUBDOMAINS=120
 
@@ -20,7 +21,6 @@ NUMBER_OF_SUBDOMAINS=120
 
 SCRIPT_SHA256=$(sha256sum "$0" | awk '{print $1}')
 CACHE_DIR="${CACHE_ROOT}/${SCRIPT_SHA256}"
-LOCK_FILE="${CACHE_ROOT}/.${SCRIPT_SHA256}.lock"
 mkdir -p "${CACHE_ROOT}"
 
 write_generation_files() {
@@ -83,10 +83,12 @@ cache_valid() {
         [[ -d "${CACHE_DIR}/case/processor$((NUMBER_OF_SUBDOMAINS - 1))" ]]
 }
 
-exec 9>"${LOCK_FILE}"
-flock 9
 cache_hit=true
 if ! cache_valid; then
+    if [[ "${REQUIRE_CACHE}" == --require-cache ]]; then
+        echo "required cache entry is absent or invalid: ${CACHE_DIR}" >&2
+        exit 75
+    fi
     cache_hit=false
     TEMP_DIR="${CACHE_DIR}.tmp.$$"
     trap 'rm -rf "${TEMP_DIR:-}"' EXIT
@@ -116,7 +118,6 @@ if ! cache_valid; then
     fi
     trap - EXIT
 fi
-flock -u 9
 
 ln -s "${CACHE_DIR}/case" "${TARGET_CASE}"
 printf 'cache_hit=%s\nprepare_script_sha256=%s\ncache_dir=%s\n' \

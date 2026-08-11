@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#PJM -L elapse=00:30:00
+
+set -euo pipefail
+
+: "${PROVISION_DIR:?provision directory is required}"
+: "${PREPARE_TARGET:?temporary materialization path is required}"
+
+module purge
+module load intel/2025.1.3 impi
+
+set +eu
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" \
+  WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
+set -eu
+
+BLOCK_MESH=$(command -v blockMesh)
+DECOMPOSE_PAR=$(command -v decomposePar)
+[[ "${BLOCK_MESH}" == /* && -x "${BLOCK_MESH}" ]]
+[[ "${DECOMPOSE_PAR}" == /* && -x "${DECOMPOSE_PAR}" ]]
+
+rm -f -- "${PREPARE_TARGET}"
+trap 'rm -f -- "${PREPARE_TARGET}"' EXIT
+"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
+  "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
+  "${BLOCK_MESH}" "${DECOMPOSE_PAR}"
+[[ -L "${PREPARE_TARGET}" && -d "${PREPARE_TARGET}/processor119" ]]

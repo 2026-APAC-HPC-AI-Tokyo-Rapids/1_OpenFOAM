@@ -178,7 +178,8 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
   --state "${SUPERVISOR_STATE}" --mark start
 stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" \
   "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
-  "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}"
+  "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" \
+  --require-cache
 cd "${CASE_DIR}"
 install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/blockMesh.log "${LOG_DIR}/blockMesh.log"
