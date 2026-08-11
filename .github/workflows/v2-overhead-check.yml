@@ -41,6 +41,13 @@ jobs:
           cp -a benchmark/cavity3D-64M "${check_dir}/task/"
           install -m 0755 scripts/v2-overhead-check.pjm "${check_dir}/"
           install -m 0755 benchmark/parse_result.sh "${check_dir}/"
+          {
+            printf 'schema_version=openfoam-v2-overhead-build/v1\n'
+            printf 'build_run_number=%s\n' '${{ inputs.build_run_number }}'
+            printf 'archive_size_bytes=%s\n' "$(stat -c '%s' "${archive}")"
+            printf 'archive_sha256=%s\n' "$(sha256sum "${archive}" | awk '{print $1}')"
+            printf 'repository_sha=%s\n' "${GITHUB_SHA}"
+          } > "${check_dir}/build-identity.txt"
 
       - name: Submit isolated comparison
         run: |
@@ -73,6 +80,22 @@ jobs:
           printf '%s\n' 'OPENFOAM_V2_OVERHEAD_CHECK_BEGIN'
           cat "${check_dir}/summary.txt"
           printf '%s\n' 'OPENFOAM_V2_OVERHEAD_CHECK_END'
+
+      - name: Upload comparison diagnostics
+        if: always() && steps.provision.outputs.check_dir != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-v2-overhead-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.provision.outputs.check_dir }}/logs
+            ${{ steps.provision.outputs.check_dir }}/pstream
+            ${{ steps.provision.outputs.check_dir }}/build-identity.txt
+            ${{ steps.provision.outputs.check_dir }}/workload.sha256
+            ${{ steps.provision.outputs.check_dir }}/summary.txt
+            ${{ steps.provision.outputs.check_dir }}/diagnostic-status.txt
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30
 
       - name: Discard comparison data
         if: always()

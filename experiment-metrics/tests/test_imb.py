@@ -44,6 +44,34 @@ def test_imb_parser_accepts_multiple_process_count_sections() -> None:
     assert results[-1].process_count == 8
 
 
+def test_imb_parser_accepts_intel_sendrecv_min_avg_max_columns() -> None:
+    text = (FIXTURES / "imb-complete.txt").read_text().replace(
+        "#bytes #repetitions t[usec] Mbytes/sec\n"
+        "0 1000 1.1e-1 0.0\n"
+        "1 1000 2.6e-1 3.1e+0\n",
+        "#bytes #repetitions t_min[usec] t_max[usec] t_avg[usec] Mbytes/sec\n"
+        "0 1000 1.0e-1 1.2e-1 1.1e-1 0.0\n"
+        "1 1000 2.5e-1 2.7e-1 2.6e-1 3.1e+0\n",
+    )
+
+    sendrecv = [item for item in parse_imb_mpi1(text) if item.benchmark == "Sendrecv"]
+
+    assert sendrecv[0].time_min_us == Decimal("1.0e-1")
+    assert sendrecv[0].time_avg_us == Decimal("1.1e-1")
+    assert sendrecv[0].time_max_us == Decimal("1.2e-1")
+    assert sendrecv[1].bandwidth_mbytes_per_sec == Decimal("3.1e+0")
+
+
+def test_intel_imb_version_banner_is_unambiguous() -> None:
+    from experiment_metrics.imb import _VERSION
+
+    match = _VERSION.fullmatch("#    Intel(R) MPI Benchmarks 2021.9, MPI-1 part")
+
+    assert match is not None
+    assert next(group for group in match.groups() if group is not None) == "2021.9"
+    assert _VERSION.fullmatch("# Version : Linux kernel version") is None
+
+
 def test_imb_parser_rejects_truncated_target_output() -> None:
     text = (
         (FIXTURES / "imb-complete.txt")
@@ -81,7 +109,11 @@ def test_network_projection_has_contract_grain_and_relative_source() -> None:
 def test_network_config_reducer_creates_only_config_facts() -> None:
     results = parse_imb_mpi1((FIXTURES / "imb-complete.txt").read_text())
     facts = network_config_facts(
-        results, "2021.3", time_limit_sec=1, iteration_policy="dynamic"
+        results,
+        "2021.3",
+        process_count=2,
+        time_limit_sec=1,
+        iteration_policy="dynamic",
     )
 
     assert {(fact.key, fact.logical_value) for fact in facts} == {

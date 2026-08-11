@@ -20,7 +20,8 @@ def _complete_imb() -> str:
         else:
             lines.append("#bytes #repetitions t[usec] Mbytes/sec")
             row = "{size} 1000 0.1 1.0"
-        for size in (0, *(1 << exponent for exponent in range(23))):
+        exponents = range(2, 23) if benchmark == "Allreduce" else range(23)
+        for size in (0, *(1 << exponent for exponent in exponents)):
             lines.append(row.format(size=size))
     return "\n".join(lines) + "\n"
 
