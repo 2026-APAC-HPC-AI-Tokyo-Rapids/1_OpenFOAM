@@ -25,7 +25,6 @@ case "${OPENFOAM_PROFILE_MODE:-direct}" in
     : "${OPENFOAM_VTUNE_RESULT_DIR:?VTune result directory is required}"
     command -v vtune >/dev/null
     exec vtune -collect hotspots \
-      -knob enable-stack-collection=true \
       -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
     ;;
   *)
