@@ -76,12 +76,6 @@ logical_type = "decimal"
 required_for = []
 
 [[keys]]
-pattern = "collection_complete"
-owner = "runner.finalizer"
-logical_type = "boolean"
-required_for = []
-
-[[keys]]
 pattern = "solver.runtime_header"
 owner = "runner.log_parser"
 logical_type = "json"

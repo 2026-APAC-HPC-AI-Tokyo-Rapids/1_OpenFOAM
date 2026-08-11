@@ -5,6 +5,7 @@ import pytest
 from experiment_metrics.fact import (
     Fact,
     canonical_json,
+    encode_logical_value,
     encode_value,
     validate_encoded_value,
 )
@@ -26,6 +27,15 @@ def test_fact_is_transport_free() -> None:
     fact = Fact("probe.name", "value")
     assert fact.key == "probe.name"
     assert fact.logical_value == "value"
+
+
+def test_registry_free_value_encoding() -> None:
+    assert encode_logical_value("text") == "text"
+    assert encode_logical_value(True) == "true"
+    assert encode_logical_value(12) == "12"
+    assert encode_logical_value(Decimal("12.3400")) == "12.34"
+    assert encode_logical_value(b"binary") == "YmluYXJ5"
+    assert encode_logical_value({"z": 1, "a": [True]}) == '{"a":[true],"z":1}'
 
 
 def test_encoded_value_validation_rejects_noncanonical_fragment_data() -> None:

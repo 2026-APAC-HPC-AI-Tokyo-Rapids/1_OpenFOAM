@@ -2,8 +2,8 @@
 #PJM -L elapse=01:00:00
 
 # Compute-side v2 executor.  It owns only local case data, source captures,
-# logs, and atomic metric fragments.  The runner owns credentials, merge,
-# packaging, upload, and BigQuery publication.
+# logs, and atomic metric fragments. Producers send through the shared
+# mode-0600 credential path; transport failure never changes solver status.
 set -euo pipefail
 
 : "${RUN_ID:?runner-generated v2 run ID is required}"
@@ -30,6 +30,9 @@ SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
+
+# Fail before mesh/solver work if compute nodes cannot append raw metrics.
+"${METRICS_CLI}" smoke-send --run "${RUN_ID}" --source compute
 DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
@@ -270,7 +273,7 @@ fi
 
 # Network measurement is an independent post-solver stage.  Missing IMB,
 # failed execution, or malformed output deliberately does not alter the solver
-# success marker; the absent network.parser fragment makes merge incomplete.
+# success marker; network diagnostics remain a separate non-gating stage.
 IMB_STDOUT="${SOURCE_DIR}/network/imb-mpi1/stdout.txt"
 IMB_STDERR="${SOURCE_DIR}/network/imb-mpi1/stderr.txt"
 IMB_ARGV="${SOURCE_DIR}/network/imb-mpi1/argv.json"

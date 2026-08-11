@@ -19,9 +19,7 @@ WORKLOAD_MEMBERS = (
 )
 
 
-def capture_workload(
-    manifest_path: Path, case_root: Path, output_root: Path
-) -> Path:
+def capture_workload(manifest_path: Path, case_root: Path, output_root: Path) -> Path:
     """Copy and seal the exact workload-defining case members.
 
     Member copies are completed before the manifest is atomically published, so

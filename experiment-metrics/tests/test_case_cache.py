@@ -23,7 +23,7 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
     counter = tmp_path / "counter"
     block_mesh = _executable(
         tmp_path / "blockMesh",
-        f'mkdir -p constant/polyMesh\nprintf \'%s\\n\' blockMesh >> "{counter}"\n',
+        f"mkdir -p constant/polyMesh\nprintf '%s\\n' blockMesh >> \"{counter}\"\n",
     )
     decompose_par = _executable(
         tmp_path / "decomposePar",

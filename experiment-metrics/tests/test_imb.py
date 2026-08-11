@@ -45,13 +45,17 @@ def test_imb_parser_accepts_multiple_process_count_sections() -> None:
 
 
 def test_imb_parser_accepts_intel_sendrecv_min_avg_max_columns() -> None:
-    text = (FIXTURES / "imb-complete.txt").read_text().replace(
-        "#bytes #repetitions t[usec] Mbytes/sec\n"
-        "0 1000 1.1e-1 0.0\n"
-        "1 1000 2.6e-1 3.1e+0\n",
-        "#bytes #repetitions t_min[usec] t_max[usec] t_avg[usec] Mbytes/sec\n"
-        "0 1000 1.0e-1 1.2e-1 1.1e-1 0.0\n"
-        "1 1000 2.5e-1 2.7e-1 2.6e-1 3.1e+0\n",
+    text = (
+        (FIXTURES / "imb-complete.txt")
+        .read_text()
+        .replace(
+            "#bytes #repetitions t[usec] Mbytes/sec\n"
+            "0 1000 1.1e-1 0.0\n"
+            "1 1000 2.6e-1 3.1e+0\n",
+            "#bytes #repetitions t_min[usec] t_max[usec] t_avg[usec] Mbytes/sec\n"
+            "0 1000 1.0e-1 1.2e-1 1.1e-1 0.0\n"
+            "1 1000 2.5e-1 2.7e-1 2.6e-1 3.1e+0\n",
+        )
     )
 
     sendrecv = [item for item in parse_imb_mpi1(text) if item.benchmark == "Sendrecv"]

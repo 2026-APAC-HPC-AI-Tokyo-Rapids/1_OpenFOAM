@@ -75,12 +75,15 @@ def collect(context: Context) -> list[Metric]:
         for key, (path, entry) in DICTIONARY_SPECS.items()
     )
 
-    velocity = vector_components(
-        read_entry(case_dir, "0.orig/include/initialConditions", "flowVelocity")
+    velocity_raw = read_entry(
+        case_dir, "0.orig/include/initialConditions", "flowVelocity"
     )
-    result.extend(
-        Metric(f"case.freestream_velocity_m_per_sec.{index}", value)
-        for index, value in enumerate(velocity)
+    velocity = vector_components(velocity_raw)
+    result.append(
+        Metric(
+            "case.freestream_velocity_m_per_sec",
+            velocity if velocity else "",
+        )
     )
     result.append(
         Metric(

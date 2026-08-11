@@ -108,6 +108,14 @@ def submit_run(
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
+    for name in (
+        "EXPERIMENT_METRICS_BIGQUERY_CONFIG",
+        "EXPERIMENT_METRICS_DIRECT_SEND",
+        "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE",
+    ):
+        value = os.environ.get(name)
+        if value:
+            environment[name] = value
     if any("," in value for value in environment.values()):
         raise ValueError("PJM exported values cannot contain commas")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
@@ -255,9 +263,7 @@ def parse_scheduler_accounting(
     expected_columns = len(_ACCOUNTING_FIELDS)
     if len(values) == expected_columns + _ACCOUNTING_DUPLICATE_TAIL:
         duplicate = values[-_ACCOUNTING_DUPLICATE_TAIL:]
-        original = values[
-            -2 * _ACCOUNTING_DUPLICATE_TAIL : -_ACCOUNTING_DUPLICATE_TAIL
-        ]
+        original = values[-2 * _ACCOUNTING_DUPLICATE_TAIL : -_ACCOUNTING_DUPLICATE_TAIL]
         if duplicate != original:
             raise ValueError("scheduler accounting has conflicting duplicate columns")
         values = values[:-_ACCOUNTING_DUPLICATE_TAIL]

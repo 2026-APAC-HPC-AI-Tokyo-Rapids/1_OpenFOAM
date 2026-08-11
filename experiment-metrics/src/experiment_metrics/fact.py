@@ -53,6 +53,24 @@ def encode_value(value: LogicalValue, logical_type: str) -> str:
     raise ValueError(f"unsupported logical type: {logical_type}")
 
 
+def encode_logical_value(value: LogicalValue) -> str:
+    """Encode a fact without consulting an owner/type registry."""
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise TypeError("decimal facts require finite Decimal values")
+        return _decimal_text(value)
+    if isinstance(value, bytes):
+        return base64.b64encode(value).decode("ascii")
+    return canonical_json(value)
+
+
 def canonical_json(value: object) -> str:
     """Encode strict RFC 8785 JSON; decimal facts stay outside JSON numbers."""
 

@@ -59,7 +59,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert text.index(export_path) < text.index("stage profile_hardware_capture")
 
 
-def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
+def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
     assert "submit-run --manifest" in workflow
@@ -67,24 +67,20 @@ def test_workflow_keeps_credentials_at_runner_publish_boundary_only() -> None:
     assert "record-scheduler-terminal --manifest" in workflow
     assert "record-execution-context --manifest" in workflow
     assert "record-profile-perf --manifest" in workflow
-    assert "env.MERGE_STATUS == '0'" in workflow
+    assert "Merge terminal fragments" not in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow
-    assert "Publish v2 raw facts to BigQuery" in workflow
+    assert "Publish v2 raw facts to BigQuery" not in workflow
+    assert "install -m 0600" in workflow
+    assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" in workflow
+    assert 'smoke-send --run "${RUN_ID}" --source runner' in workflow
     assert "Prepare OpenFOAM case cache" in workflow
     prepare_concurrency = (
-        "genkai-openfoam-case-"
-        "${{ needs.select-build.outputs.prepare_script_sha256 }}"
+        "genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}"
     )
     assert prepare_concurrency in workflow
     assert workflow.count("- name: Record v2 terminal sources") == 1
-    assert "steps.upload_v2.outcome == 'success'" in workflow
-    publish = workflow.index("Publish v2 raw facts to BigQuery")
-    assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON" in workflow[publish:]
-    # Schema deployment is an explicit control-plane operation.  Steady-state
-    # publication must need only insertAll permissions, not query-job creation.
-    publish_step = workflow[publish : workflow.index("Upload cavity3D result")]
-    assert "--schema-sql" not in publish_step
+    assert "metrics.jsonl" not in workflow
     assert "-name 'node-*.json'" in workflow
     assert "! -name 'node-*.json'" in workflow
 
@@ -95,7 +91,7 @@ def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
     ).read_text(encoding="utf-8")
 
     assert "writeJsonString(output, locator.sha256);" in source
-    assert '<< locator.sha256 << "\\\"}"' not in source
+    assert '<< locator.sha256 << "\\"}"' not in source
 
 
 def test_builder_verifies_only_upstream_in_process_sources() -> None:
@@ -122,8 +118,8 @@ def test_overhead_check_repeats_primary_solver_and_keeps_diagnostics() -> None:
     ]
     assert order == sorted(order)
     assert "primary_on_over_off_trim_ratio" in script
-    assert '(on1 + on2) / (off1 + off2)' in script
-    assert 'ratio <= 1.05' in script
+    assert "(on1 + on2) / (off1 + off2)" in script
+    assert "ratio <= 1.05" in script
     assert "sha256sum --check" in script
     assert "markers_equal=true" in script
     assert "for rank in $(seq 0 119)" in script

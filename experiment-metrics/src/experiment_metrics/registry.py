@@ -57,34 +57,6 @@ class FactSpec:
 
 
 @dataclass(frozen=True, slots=True)
-class ArtifactProjectionSpec:
-    identifier: str
-    base_table_id: str
-    relation_id: str
-    conflict_relation_id: str
-    source_artifact_id: str
-    source_schema_id: str
-    row_schema_id: str
-    row_grain: tuple[str, ...]
-    subject_scopes: tuple[tuple[str, frozenset[str]], ...]
-    publisher_id: str
-    transform_id: str
-    conflict_rule: str
-    source_member_field: str | None
-    source_sha256_field: str | None
-    source_instance_grain: tuple[str, ...] | None
-    source_instance_sha256_field: str | None
-    parent_projection_id: str | None
-    parent_join_columns: tuple[str, ...] | None
-
-    def applies_to(self, purpose: str) -> bool:
-        return any(
-            owner == "build" or purpose in purposes
-            for owner, purposes in self.subject_scopes
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class ContractSpec:
     schema_version: str
     repository_id: str
@@ -110,7 +82,6 @@ class Registry:
     producer_contracts: tuple[ProducerContractSpec, ...] = ()
     sources: tuple[SourceSpec, ...] = ()
     facts: tuple[FactSpec, ...] = ()
-    artifact_projections: tuple[ArtifactProjectionSpec, ...] = ()
     contract: ContractSpec | None = None
     artifact_roles: ArtifactRoleSpec | None = None
 
@@ -136,13 +107,9 @@ class Registry:
         )
         sources = tuple(_source_spec(item) for item in document.get("source", []))
         facts = tuple(_fact_spec(item) for item in document.get("fact", []))
-        projections = tuple(
-            _artifact_projection_spec(item)
-            for item in document.get("artifact_projection", [])
-        )
         contract = _contract_spec(document.get("contract"))
         artifact_roles = _artifact_role_spec(document.get("artifact_roles"))
-        if sources or facts or projections:
+        if sources or facts:
             if contract is None or artifact_roles is None:
                 raise ValueError(
                     "canonical registry requires contract and artifact roles"
@@ -153,7 +120,6 @@ class Registry:
                 keys,
                 sources,
                 facts,
-                projections,
                 artifact_roles,
             )
         return cls(
@@ -163,7 +129,6 @@ class Registry:
             producer_contracts,
             sources,
             facts,
-            projections,
             contract,
             artifact_roles,
         )
@@ -391,7 +356,6 @@ def _artifact_role_spec(item: object) -> ArtifactRoleSpec | None:
         return None
     required = {
         "run_bundle",
-        "metrics",
         "profile_raw",
         "artifact_manifest",
         "run_bundle_source_roles",
@@ -400,7 +364,6 @@ def _artifact_role_spec(item: object) -> ArtifactRoleSpec | None:
         raise ValueError("artifact roles must be a closed v1 object")
     expected = {
         "run_bundle": "run-artifacts.tar.zst",
-        "metrics": "metrics.jsonl",
         "profile_raw": "profile-raw.tar.zst",
         "artifact_manifest": "artifact-manifest.json",
     }
@@ -451,128 +414,6 @@ def _fact_spec(item: object) -> FactSpec:
     )
 
 
-def _artifact_projection_spec(item: object) -> ArtifactProjectionSpec:
-    if not isinstance(item, dict):
-        raise ValueError("artifact projections must be objects")
-    required = {
-        "id",
-        "base_table_id",
-        "relation_id",
-        "conflict_relation_id",
-        "source_artifact_id",
-        "source_schema_id",
-        "row_schema_id",
-        "row_grain",
-        "subject_scopes",
-        "publisher_id",
-        "transform_id",
-        "conflict_rule",
-        "duplication_justification",
-    }
-    optional = {
-        "source_member_field",
-        "source_sha256_field",
-        "source_instance_grain",
-        "source_instance_sha256_field",
-        "parent_projection_id",
-        "parent_join_columns",
-    }
-    if not required.issubset(item) or set(item) - required - optional:
-        raise ValueError("artifact projection has invalid v1 fields")
-    for name in required - {"row_grain", "subject_scopes"}:
-        if not isinstance(item[name], str) or not item[name]:
-            raise ValueError("artifact projection string fields are required")
-    row_grain = item["row_grain"]
-    if (
-        not isinstance(row_grain, list)
-        or not row_grain
-        or not all(isinstance(value, str) and value for value in row_grain)
-        or len(row_grain) != len(set(row_grain))
-    ):
-        raise ValueError("artifact projection row grain is required")
-    raw_scopes = item["subject_scopes"]
-    if not isinstance(raw_scopes, list) or not raw_scopes:
-        raise ValueError("artifact projection subject scope is required")
-    scopes: list[tuple[str, frozenset[str]]] = []
-    for scope in raw_scopes:
-        if not isinstance(scope, dict) or scope.get("owner_scope") not in {
-            "run",
-            "build",
-        }:
-            raise ValueError("artifact projection subject scope is invalid")
-        owner = scope["owner_scope"]
-        if owner == "build":
-            if set(scope) != {"owner_scope"}:
-                raise ValueError("build projection scope is not closed")
-            purposes = frozenset()
-        else:
-            if set(scope) != {"owner_scope", "applicable_run_variants"}:
-                raise ValueError("run projection scope is not closed")
-            purposes = _purposes(scope["applicable_run_variants"])
-        scopes.append((owner, purposes))
-    direct = {
-        "source_member_field",
-        "source_sha256_field",
-        "source_instance_grain",
-        "source_instance_sha256_field",
-    }
-    parent = {"parent_projection_id", "parent_join_columns"}
-    present_direct = direct.intersection(item)
-    present_parent = parent.intersection(item)
-    if present_direct and present_parent:
-        raise ValueError("projection lineage must be either direct or parent")
-    if present_direct != direct and present_parent != parent:
-        raise ValueError("projection lineage fields are incomplete")
-    if not present_direct and present_parent != parent:
-        raise ValueError("projection lineage is required")
-    for name in direct - {"source_instance_grain"}:
-        if name in item and (not isinstance(item[name], str) or not item[name]):
-            raise ValueError("projection direct lineage field is invalid")
-    source_instance_grain = None
-    if "source_instance_grain" in item:
-        raw_instance_grain = item["source_instance_grain"]
-        if not isinstance(raw_instance_grain, str) or not raw_instance_grain:
-            raise ValueError("projection source instance grain is invalid")
-        source_instance_grain = tuple(raw_instance_grain.split(","))
-        if any(not value or value != value.strip() for value in source_instance_grain):
-            raise ValueError("projection source instance grain is invalid")
-    parent_columns = None
-    if "parent_join_columns" in item:
-        raw_parent_columns = item["parent_join_columns"]
-        if (
-            not isinstance(raw_parent_columns, list)
-            or not raw_parent_columns
-            or not all(isinstance(value, str) and value for value in raw_parent_columns)
-        ):
-            raise ValueError("projection parent join columns are invalid")
-        parent_columns = tuple(raw_parent_columns)
-    if item["conflict_rule"] not in {
-        "source_instance_then_row_grain/v1",
-        "parent_then_row_grain/v1",
-    }:
-        raise ValueError("projection conflict rule is unsupported")
-    return ArtifactProjectionSpec(
-        item["id"],
-        item["base_table_id"],
-        item["relation_id"],
-        item["conflict_relation_id"],
-        item["source_artifact_id"],
-        item["source_schema_id"],
-        item["row_schema_id"],
-        tuple(row_grain),
-        tuple(scopes),
-        item["publisher_id"],
-        item["transform_id"],
-        item["conflict_rule"],
-        item.get("source_member_field"),
-        item.get("source_sha256_field"),
-        source_instance_grain,
-        item.get("source_instance_sha256_field"),
-        item.get("parent_projection_id"),
-        parent_columns,
-    )
-
-
 def _path_template(value: object) -> tuple[tuple[str, str], ...]:
     if not isinstance(value, list) or not value:
         raise ValueError("source path template must be nonempty")
@@ -605,7 +446,6 @@ def _validate_contract_graph(
     keys: tuple[KeySpec, ...],
     sources: tuple[SourceSpec, ...],
     facts: tuple[FactSpec, ...],
-    projections: tuple[ArtifactProjectionSpec, ...],
     artifact_roles: ArtifactRoleSpec,
 ) -> None:
     producer_ids = {item.identifier for item in producers}
@@ -655,24 +495,6 @@ def _validate_contract_graph(
             raise ValueError(
                 f"runtime key type differs from canonical fact: {key.pattern}"
             )
-    if len({item.identifier for item in projections}) != len(projections):
-        raise ValueError("artifact projection IDs must be unique")
-    if any(item.source_artifact_id not in source_ids for item in projections):
-        raise ValueError("artifact projection references an unknown source")
-    projection_ids = {item.identifier for item in projections}
-    for projection in projections:
-        source = source_by_id[projection.source_artifact_id]
-        if source.schema_id != projection.source_schema_id:
-            raise ValueError("artifact projection source schema differs from registry")
-        if projection.publisher_id != "runner.publisher":
-            raise ValueError("artifact projection has an unknown publisher")
-        if projection.parent_projection_id is not None:
-            if projection.parent_projection_id not in projection_ids:
-                raise ValueError("artifact projection references an unknown parent")
-            if projection.conflict_rule != "parent_then_row_grain/v1":
-                raise ValueError("parent projection has the wrong conflict rule")
-        elif projection.conflict_rule != "source_instance_then_row_grain/v1":
-            raise ValueError("direct projection has the wrong conflict rule")
 
 
 def _purposes(value: object) -> frozenset[str]:

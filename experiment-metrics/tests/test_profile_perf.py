@@ -128,7 +128,7 @@ def test_profile_projection_has_rank_completeness_and_rank_facts(
     _write_rank(tmp_path, 0)
     _write_rank(tmp_path, 1)
     projection = project_profile_perf(tmp_path, run_id=RUN_ID, expected_ranks=3)
-    assert not projection.collection_complete
+    assert not projection.is_complete
     assert projection.missing_ranks == (2,)
     assert len(projection.rows) == 10
     assert len(projection.rank_facts) == 2

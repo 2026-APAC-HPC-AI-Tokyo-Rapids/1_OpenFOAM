@@ -17,11 +17,9 @@ AERO_KEYS = [
 ]
 
 SOLVER_KEYS = [
-    *[
-        f"solver.linear.u.{component}.{suffix}"
-        for component in range(3)
-        for suffix in ("initial_residual", "final_residual", "iterations")
-    ],
+    "solver.linear.u.initial_residual",
+    "solver.linear.u.final_residual",
+    "solver.linear.u.iterations",
     "solver.linear.u.converged",
     "solver.linear.p.initial_residual",
     "solver.linear.p.final_residual",
@@ -44,9 +42,8 @@ FIELD_KEYS = [
     "result.flux.inlet.final_m3_per_sec",
     "result.flux.outlet.final_m3_per_sec",
     *[
-        f"result.probe.{probe}.u.final_m_per_sec.{component}"
+        f"result.probe.{probe}.u.final_m_per_sec"
         for probe in ("wake_near", "wake_upper", "wake_far")
-        for component in range(3)
     ],
     *[
         f"result.probe.{probe}.kinematic_pressure.final_m2_per_sec2"
@@ -103,16 +100,20 @@ def _aero(case_dir: Path, values: dict[str, str]) -> None:
 
 def _solver(case_dir: Path, values: dict[str, str]) -> None:
     row = read_table(case_dir / "postProcessing/solverInfo1/0/solverInfo.dat").last()
+    vector_columns = {
+        "solver.linear.u.initial_residual": (
+            "Ux_initial",
+            "Uy_initial",
+            "Uz_initial",
+        ),
+        "solver.linear.u.final_residual": ("Ux_final", "Uy_final", "Uz_final"),
+        "solver.linear.u.iterations": ("Ux_iters", "Uy_iters", "Uz_iters"),
+    }
+    for key, columns in vector_columns.items():
+        components = [row.get(column, "") for column in columns]
+        values[key] = str(components) if all(components) else ""
+
     columns = {
-        "solver.linear.u.0.initial_residual": "Ux_initial",
-        "solver.linear.u.0.final_residual": "Ux_final",
-        "solver.linear.u.0.iterations": "Ux_iters",
-        "solver.linear.u.1.initial_residual": "Uy_initial",
-        "solver.linear.u.1.final_residual": "Uy_final",
-        "solver.linear.u.1.iterations": "Uy_iters",
-        "solver.linear.u.2.initial_residual": "Uz_initial",
-        "solver.linear.u.2.final_residual": "Uz_final",
-        "solver.linear.u.2.iterations": "Uz_iters",
         "solver.linear.u.converged": "U_converged",
         "solver.linear.p.initial_residual": "p_initial",
         "solver.linear.p.final_residual": "p_final",
@@ -166,9 +167,10 @@ def _fields(case_dir: Path, values: dict[str, str]) -> None:
     u_row = read_table(case_dir / "postProcessing/wakeProbeMetrics/0/U").last()
     p_row = read_table(case_dir / "postProcessing/wakeProbeMetrics/0/p").last()
     for index, probe in enumerate(probe_names):
-        components = vector(u_row.get(str(index), ""))
-        for component, raw in enumerate(components):
-            values[f"result.probe.{probe}.u.final_m_per_sec.{component}"] = raw
+        raw_velocity = u_row.get(str(index), "")
+        velocity = vector(raw_velocity)
+        if velocity:
+            values[f"result.probe.{probe}.u.final_m_per_sec"] = str(velocity)
         values[f"result.probe.{probe}.kinematic_pressure.final_m2_per_sec2"] = (
             p_row.get(str(index), "")
         )

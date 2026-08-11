@@ -1,0 +1,34 @@
+-- Destructive one-time migration. Run before enabling direct producer sends.
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_run_consumer_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_run_fact_conflicts_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_run_facts_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.mpi_network_results_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.mpi_network_results_conflicts_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_perf_counters_v2`;
+DROP VIEW IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_perf_counters_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.mpi_network_results_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provenance_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provenance_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provenance_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provisions_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provisions_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_build_provisions_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_minimal_hardware_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_minimal_hardware_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_minimal_hardware_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_perf_counters_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_profile_hardware_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_profile_hardware_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_profile_hardware_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_source_tracks_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_source_tracks_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_source_tracks_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_manifests_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_manifests_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_manifests_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_members_base_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_members_conflicts_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_workload_members_raw_v2`;
+DROP TABLE IF EXISTS `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_metrics`;
+CREATE TABLE `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_metrics`
+(run STRING NOT NULL, key STRING NOT NULL, value STRING NOT NULL);

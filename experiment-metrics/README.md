@@ -1,26 +1,18 @@
 # experiment-metrics v2
 
-This package is the compute-local v2 collection core. It creates an immutable
-run manifest, validates facts against a versioned registry, writes one atomic
-fragment per producer, records exact stage execution facts, parses durable
-OpenFOAM/Pstream/post-run sources, and merges fragments into `metrics.jsonl`.
+Each OpenFOAM producer writes a diagnostic JSONL fragment with atomic rename
+and immediately appends the same `run`, `key`, `value` rows to BigQuery. Values
+are encoded without an owner/type registry. BigQuery writes use 500-row chunks,
+no `insertId`, no retry, and allow duplicates. Transport failures are warnings
+and never change solver or workflow results.
 
-The compute-facing paths are credential-free and write only the run directory.
-Runner-only CLI branches lazily load artifact packaging and optional BigQuery
-publication code; workflow submission and cloud credentials never cross into
-PJM. Native OpenFOAM utilities and the Pstream hook produce source files only;
-their parsers reduce those files to Facts after the timed stages finish.
+The workflow creates a mode-0600 credential file inside the run directory and
+passes only its path to PJM. Credential transport variables are omitted from
+environment snapshots and the file is excluded from artifacts and removed at
+cleanup. Runner and compute smoke rows verify both network paths before solver
+work. Producer fragments remain diagnostic artifacts; there is no merge,
+`metrics.jsonl`, physical projection, consumer view, conflict table, or replay.
 
-Core interfaces include:
-
-```python
-init_run(...)
-Recorder.open(...)
-collect_once(...)
-run_stage(...)
-merge_run(...)
-```
-
-The registry is at `registry/openfoam-v2.toml`, and the fixed run protocol is
-at `registry/openfoam-v2-protocol.toml`. Their ownership, logical types, and
-expected stage instances are part of the on-disk fact contract.
+The run protocol remains separate because node/rank/stage settings are required
+to execute the job. OpenFOAM case preparation continues to use only the
+prepare-script SHA cache identity.

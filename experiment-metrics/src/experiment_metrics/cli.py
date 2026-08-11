@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .fact import Fact
 from .manifest import init_run
-from .merge import merge_run
 from .recording import collect_once
 from .stage_runner import run_stage
 
@@ -142,12 +141,6 @@ def parser() -> argparse.ArgumentParser:
     stage.add_argument("--fragment-id")
     stage.add_argument("argv", nargs=argparse.REMAINDER)
 
-    merge = commands.add_parser("merge")
-    merge.add_argument("--manifest", type=Path, required=True)
-    merge.add_argument("--runtime-dir", type=Path, required=True)
-    merge.add_argument("--registry", type=Path, required=True)
-    merge.add_argument("--protocol", type=Path)
-
     solver_log = commands.add_parser("record-solver-log")
     _runtime_common(solver_log)
     solver_log.add_argument("--log", type=Path, required=True)
@@ -187,17 +180,13 @@ def parser() -> argparse.ArgumentParser:
     package.add_argument("--member", action="append", default=[])
     package.add_argument("--profile-member", action="append", default=[])
 
-    publish = commands.add_parser("publish")
-    publish.add_argument("--manifest", type=Path, required=True)
-    publish.add_argument("--artifact-manifest", type=Path, required=True)
-    publish.add_argument("--pyproject", type=Path, required=True)
-    publish.add_argument("--registry", type=Path, required=True)
-    publish.add_argument("--protocol", type=Path, required=True)
-    publish.add_argument("--schema-sql", type=Path)
-
     artifact_index = commands.add_parser("record-artifact-index")
     _runtime_common(artifact_index)
     artifact_index.add_argument("--build-sidecar", type=Path, required=True)
+
+    smoke = commands.add_parser("smoke-send")
+    smoke.add_argument("--run", required=True)
+    smoke.add_argument("--source", choices=["runner", "compute"], required=True)
     return root
 
 
@@ -487,15 +476,6 @@ def main(argv: list[str] | None = None) -> int:
         if termination.kind == "signal":
             return 128 + (termination.signal or 0)
         return 127
-    if arguments.command == "merge":
-        outcome = merge_run(
-            arguments.manifest,
-            arguments.runtime_dir,
-            registry_path=arguments.registry,
-            protocol_path=arguments.protocol,
-        )
-        print(outcome.metrics_path)
-        return 0 if outcome.collection_complete else 1
     if arguments.command == "record-solver-log":
         from .reducers import solver_log_facts
         from .solver_log import parse_solver_log
@@ -593,6 +573,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == "record-postrun":
         from .postrun import minimal_hardware_fact, partition_requested_fact
+
         hardware_facts: list[Fact]
         if arguments.hardware_root is not None and arguments.protocol is not None:
             from .manifest import RunManifest
@@ -671,21 +652,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(result.manifest_path)
         return 0
-    if arguments.command == "publish":
-        # This is the sole CLI branch allowed to load credential-aware code.
-        from .publish import BigQueryConfig, publish_metrics
+    if arguments.command == "smoke-send":
+        from .publish import send_raw
 
-        print(
-            publish_metrics(
-                arguments.manifest,
-                arguments.artifact_manifest,
-                BigQueryConfig.load(arguments.pyproject),
-                registry_path=arguments.registry,
-                protocol_path=arguments.protocol,
-                schema_sql_path=arguments.schema_sql,
+        return (
+            0
+            if send_raw(
+                arguments.run,
+                [
+                    {
+                        "run": arguments.run,
+                        "key": f"smoke.{arguments.source}",
+                        "value": "true",
+                    }
+                ],
             )
+            else 1
         )
-        return 0
     raise AssertionError(f"unhandled command: {arguments.command}")
 
 
