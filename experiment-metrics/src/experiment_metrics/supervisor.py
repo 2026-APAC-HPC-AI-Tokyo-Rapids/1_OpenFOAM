@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from .environment import capture_snapshot, parse_snapshot
+from .environment import capture_snapshot
 from .fact import Fact, canonical_json
 from .manifest import RunManifest
 from .recording import Recorder
@@ -85,8 +85,6 @@ def finish_supervisor(
     if finished_ns < started_ns:
         raise ValueError("supervisor monotonic clock moved backwards")
     entry = _json(run_dir / "control/job-entry.json")
-    snapshot = run_dir / entry["environment_snapshot"]["path"]
-    environment = parse_snapshot(snapshot.read_bytes())
     facts: list[Fact] = [
         Fact("run.started_at", state["started_at"]),
         Fact("run.finished_at", _utc_now()),
@@ -106,10 +104,6 @@ def finish_supervisor(
                 Decimal(pipeline_finish - pipeline_start) / Decimal(1_000_000_000),
             )
         )
-    for name, value in environment.items():
-        from .environment import escape_name
-
-        facts.append(Fact(f"env.job_entry.{escape_name(name)}", value))
     with Recorder.open(
         manifest.path,
         registry_path,

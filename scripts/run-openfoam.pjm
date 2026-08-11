@@ -24,6 +24,7 @@ OPENFOAM_MPI_PPN=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 export OPENFOAM_MPI_PROCS OPENFOAM_MPI_PPN OPENFOAM_PROFILE_MODE
 
 CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
+CASE_INPUT_DIR="${RUN_DIR}/work/cavity3D-64M-input"
 LOG_DIR="${RUN_DIR}/logs"
 SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
@@ -78,6 +79,23 @@ stage() {
     --producer stage.runner \
     --stage "${stage_name}" \
     --cwd "${CASE_DIR}" \
+    --stderr-mode stdout \
+    --stdout-path "${stdout_path}" \
+    -- "$@"
+}
+
+stage_at() {
+  local stage_name=$1
+  local stdout_path=$2
+  local cwd=$3
+  shift 3
+  "${METRICS_CLI}" run-stage \
+    --manifest "${RUN_MANIFEST}" \
+    --runtime-dir "${RUN_DIR}" \
+    --registry "${REGISTRY}" \
+    --producer stage.runner \
+    --stage "${stage_name}" \
+    --cwd "${cwd}" \
     --stderr-mode stdout \
     --stdout-path "${stdout_path}" \
     -- "$@"
@@ -145,41 +163,28 @@ if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
 
-cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_DIR}"
-cd "${CASE_DIR}"
+test "${OPENFOAM_MPI_PROCS}" -eq 120
+cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 # Seal the exact seven workload-defining files after setup and before the
 # first OpenFOAM stage reads the case.
 "${METRICS_CLI}" capture-workload \
   --manifest "${RUN_MANIFEST}" \
-  --case-root "${CASE_DIR}" \
+  --case-root "${CASE_INPUT_DIR}" \
   --output-root "${SOURCE_DIR}/workload"
-
-cat > "${DECOMPOSE_PAR_DICT}" <<EOF
-FoamFile
-{
-    version 2.0;
-    format ascii;
-    class dictionary;
-    object decomposeParDict;
-}
-
-numberOfSubdomains ${OPENFOAM_MPI_PROCS};
-method scotch;
-EOF
-
-# This is the exact generated dictionary consumed by decomposePar, preserved
-# before its spawn and reduced later from the same immutable bytes.
-install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 
 "${METRICS_CLI}" supervisor-mark-pipeline \
   --state "${SUPERVISOR_STATE}" --mark start
-stage block_mesh "${LOG_DIR}/blockMesh.log" \
-  "${BLOCK_MESH}" -fileHandler uncollated
-stage decompose_par "${LOG_DIR}/decomposePar.log" \
-  "${DECOMPOSE_PAR}" -fileHandler uncollated \
-  -decomposeParDict "${DECOMPOSE_PAR_DICT}" -force
+stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" \
+  "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
+  "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}"
+cd "${CASE_DIR}"
+install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
+install -m 0644 logs/blockMesh.log "${LOG_DIR}/blockMesh.log"
+install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
+install -m 0644 "${HOME}/../share/openfoam-case-cache/$(sha256sum "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" | awk '{print $1}')/manifest.json" \
+  "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 install -d -m 0700 "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}"
 printf '%s\n' \
@@ -234,9 +239,6 @@ fi
 grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
 grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
-stage check_mesh "${LOG_DIR}/checkMesh.log" \
-  "${CHECK_MESH}" -fileHandler uncollated -constant
-
 minimal_hardware_argv=(
   "${CAPTURE_HARDWARE}"
   --mode minimal
@@ -256,14 +258,6 @@ else
 fi
 stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" \
   "${minimal_hardware_argv[@]}"
-
-stage mesh_facts "${LOG_DIR}/mesh-facts.log" \
-  "${MESH_FACTS}" -case "${CASE_DIR}" -fileHandler uncollated -constant \
-  -output "${SOURCE_DIR}/mesh/topology.json"
-
-stage partition_audit "${LOG_DIR}/partition-audit.log" \
-  "${PARTITION_AUDIT}" -case "${CASE_DIR}" -fileHandler uncollated -constant \
-  -output "${SOURCE_DIR}/mesh/partition-observed.json"
 
 if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
   stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \

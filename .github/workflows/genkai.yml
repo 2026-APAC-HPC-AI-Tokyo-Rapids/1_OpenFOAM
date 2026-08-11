@@ -183,6 +183,7 @@ jobs:
           test "$(sha256sum "${archive}" | awk '{print $1}')" = "${expected_sha}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
+            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/openfoam-rank-wrapper.py" \
             "${provision_dir}/scripts/"
@@ -265,7 +266,8 @@ jobs:
               --control-plane-file benchmark/parse_result.sh \
               --control-plane-file experiment-metrics/registry/openfoam-v2-protocol.toml \
               --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
-              --control-plane-file scripts/run-openfoam.pjm
+              --control-plane-file scripts/run-openfoam.pjm \
+              --control-plane-file scripts/prepare-openfoam-case.sh
           )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
@@ -412,17 +414,13 @@ jobs:
         run: |
           source_root="${RUN_DIR}/source"
           if [[ -d "${source_root}/hardware" && \
-                -f "${source_root}/mesh/topology.json" && \
-                -f "${source_root}/mesh/decomposeParDict" && \
-                -f "${source_root}/mesh/partition-observed.json" ]]; then
+                -f "${source_root}/mesh/decomposeParDict" ]]; then
             "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
               record-postrun --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
               --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
               --hardware-root "${source_root}/hardware" \
               --protocol "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol.toml" \
-              --topology "${source_root}/mesh/topology.json" \
-              --decompose-dict "${source_root}/mesh/decomposeParDict" \
-              --partition-observed "${source_root}/mesh/partition-observed.json"
+              --decompose-dict "${source_root}/mesh/decomposeParDict"
           else
             echo 'one or more v2 post-run sources are absent; collection will be incomplete' >&2
           fi
@@ -460,7 +458,6 @@ jobs:
             'logs/solver.log:solver_log' \
             "logs/${PJM_JOB_ID}.pjm.log:pjm_log" \
             'logs/profile-location.txt:profile_location' \
-            'logs/checkMesh.log:check_mesh_log' \
             'results/result.txt:official_result' \
             'source/env/host-exec.snapshot:host_exec_environment' \
             'source/env/job-entry.snapshot:job_entry_environment' \
