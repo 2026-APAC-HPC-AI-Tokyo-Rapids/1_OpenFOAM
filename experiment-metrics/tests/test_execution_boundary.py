@@ -76,6 +76,14 @@ def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
     assert '<< locator.sha256 << "\\\"}"' not in source
 
 
+def test_builder_verifies_only_upstream_in_process_sources() -> None:
+    script = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
+
+    assert 'select(.kind == "in_process_hook")' in script
+    assert "| .source_path" in script
+    assert "jq -r '.source_paths[]'" not in script
+
+
 def test_overhead_check_repeats_primary_solver_and_keeps_diagnostics() -> None:
     script_path = ROOT / "scripts/v2-overhead-check.pjm"
     script = script_path.read_text(encoding="utf-8")
