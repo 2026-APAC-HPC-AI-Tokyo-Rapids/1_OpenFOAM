@@ -232,8 +232,18 @@ def test_closed_source_track_workload_and_hardware_parsers_bind_lineage(
     hardware = _member(
         "source/hardware/node-0.json", "minimal_hardware", hardware_content
     )
+    hardware_stderr = _member(
+        "source/hardware/lscpu-node-0.stderr.txt", "minimal_hardware", b""
+    )
     members = ArtifactMembers(
-        (manifest_member, workload, *workload_sources, hardware), ()
+        (
+            manifest_member,
+            workload,
+            *workload_sources,
+            hardware,
+            hardware_stderr,
+        ),
+        (),
     )
 
     source = _source_track(
