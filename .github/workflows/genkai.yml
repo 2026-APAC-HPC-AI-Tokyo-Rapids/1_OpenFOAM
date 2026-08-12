@@ -34,6 +34,7 @@ on:
           - hierarchical-4n-480r
           - multilevel-node-numa-4n-480r
           - multilevel-node-numa-r346-4n-480r
+          - multilevel-node-numa-4n-448r
   push:
     paths-ignore:
       - 'research/**'
@@ -204,6 +205,7 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-geometric-case.sh" \
+            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-multilevel-448-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
@@ -271,6 +273,7 @@ jobs:
             scotch-*) prepare_decomposition_profile=scotch ;;
             hierarchical-4n-480r) prepare_decomposition_profile=hierarchical-6x8x10 ;;
             multilevel-node-numa-4n-480r | multilevel-node-numa-r346-4n-480r) prepare_decomposition_profile=multilevel-node-numa-4n480 ;;
+            multilevel-node-numa-4n-448r) prepare_decomposition_profile=multilevel-node-numa-4n448 ;;
             *) echo "unsupported decomposition preset: ${OPENFOAM_EXPERIMENT_PRESET}" >&2; exit 64 ;;
           esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -381,6 +384,7 @@ jobs:
             --control-plane-file scripts/prepare-openfoam-case.pjm
             --control-plane-file scripts/prepare-openfoam-case.sh
             --control-plane-file scripts/prepare-openfoam-geometric-case.sh
+            --control-plane-file scripts/prepare-openfoam-multilevel-448-case.sh
             --control-plane-file scripts/run-openfoam.pjm
           )
           identities="$(

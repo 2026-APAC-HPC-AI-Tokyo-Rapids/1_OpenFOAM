@@ -22,6 +22,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
     assert "prepare-openfoam-geometric-case.sh" in text
+    assert "prepare-openfoam-multilevel-448-case.sh" in text
     assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
@@ -63,6 +64,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(geometric_prepare)], check=True)
     assert "hierarchical-6x8x10" in geometric_prepare.read_text(encoding="utf-8")
     assert "multilevel-node-numa-4n480" in geometric_prepare.read_text(
+        encoding="utf-8"
+    )
+    multilevel_448_prepare = ROOT / "scripts/prepare-openfoam-multilevel-448-case.sh"
+    subprocess.run(["bash", "-n", str(multilevel_448_prepare)], check=True)
+    assert "numberOfSubdomains 448" in multilevel_448_prepare.read_text(
         encoding="utf-8"
     )
 

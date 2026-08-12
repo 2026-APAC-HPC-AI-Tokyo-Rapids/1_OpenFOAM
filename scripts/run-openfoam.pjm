@@ -216,6 +216,10 @@ case "${PROTOCOL_NAME}" in
     PREPARE_SCRIPT=prepare-openfoam-geometric-case.sh
     PREPARE_ARGUMENT=multilevel-node-numa-4n480
     ;;
+  *-multilevel-node-numa-4n-448r)
+    PREPARE_SCRIPT=prepare-openfoam-multilevel-448-case.sh
+    PREPARE_ARGUMENT=
+    ;;
   *-scotch-*)
     PREPARE_SCRIPT=prepare-openfoam-case.sh
     PREPARE_ARGUMENT=${OPENFOAM_MPI_PROCS}
@@ -225,7 +229,7 @@ esac
 stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" \
   "${PROVISION_DIR}/scripts/${PREPARE_SCRIPT}" \
   "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" \
-  "${PREPARE_ARGUMENT}" --require-cache
+  ${PREPARE_ARGUMENT:+"${PREPARE_ARGUMENT}"} --require-cache
 cd "${CASE_DIR}"
 install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/blockMesh.log "${LOG_DIR}/blockMesh.log"
