@@ -162,6 +162,24 @@ only in the raw source copy and identified by its SHA-256.  Both geometric
 candidates must be rerun through the updated E2E parser before an adoption
 decision.
 
+The v2 reruns have reached `run-success` with complete partition facts:
+
+| Method / run | Official result | Solver/pipeline wall | Total interface faces | Cross-node faces | Cross-15-rank-group faces |
+|---|---:|---:|---:|---:|---:|
+| direct hierarchical / `r-a5b01db9af5238c920e6897afbc7c4f8` | VALID, 6.7815 M, 9.438 s/step | 57.945 / 59.685 s | 3,402,564 | 537,572 | 1,989,739 |
+| node-NUMA multi-level / `r-e212e71fb3656f6c9b86d31299f30085` | VALID, 7.9306 M, 8.070 s/step | 52.506 / 54.179 s | 3,399,744 | 320,000 | 1,440,000 |
+
+Both partitions are essentially perfectly cell-balanced.  Compared with the
+480-way Scotch partition, multi-level reduces total interface faces by 26.9%,
+rank-pair count from 2,998 to 2,108, mean neighbours from 12.49 to 8.78, and
+cross-node faces by 56.0%.  The v2 multi-level result agrees within 0.12% with
+its pre-v2 valid solver result of 7.9404 M, while the direct-hierarchical v2
+result fell to 6.7815 M despite its similar total interface count.  This shows
+that rank numbering/topology correspondence, not total interface count alone,
+is material.  Multi-level advances; direct hierarchical is rejected.  Actions
+and home-archive terminal status are checked separately when GitHub's temporary
+API rate limit resets.
+
 ## Experiment template
 
 ### Experiment ID
