@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import tempfile
 from pathlib import Path
 
 from .fact import Fact
@@ -163,19 +162,31 @@ def parser() -> argparse.ArgumentParser:
     pstream.add_argument("--protocol", type=Path, required=True)
     pstream.add_argument("--fragment-id", default="pstream")
 
-    postrun = commands.add_parser("record-postrun")
-    _runtime_common(postrun)
-    postrun.add_argument("--hardware", type=Path)
-    postrun.add_argument("--hardware-source-member")
-    postrun.add_argument("--hardware-root", type=Path)
-    postrun.add_argument("--protocol", type=Path)
-    postrun.add_argument("--decompose-dict", type=Path, required=True)
-    postrun.add_argument("--fragment-id", default="postrun")
+    build_provision = commands.add_parser("record-build-provision")
+    _runtime_common(build_provision)
+    build_provision.add_argument("--build-provision", type=Path, required=True)
+
+    hardware = commands.add_parser("record-minimal-hardware")
+    _runtime_common(hardware)
+    hardware.add_argument("--hardware-root", type=Path, required=True)
+    hardware.add_argument("--protocol", type=Path, required=True)
+
+    mesh = commands.add_parser("record-mesh")
+    _runtime_common(mesh)
+    mesh.add_argument("--decompose-dict", type=Path, required=True)
+    mesh.add_argument("--block-mesh-log", type=Path, required=True)
+    mesh.add_argument("--decompose-log", type=Path, required=True)
+
+    profile_hardware = commands.add_parser("record-profile-hardware")
+    _runtime_common(profile_hardware)
+    profile_hardware.add_argument("--profile-hardware-root", type=Path, required=True)
+    profile_hardware.add_argument("--protocol", type=Path, required=True)
 
     workload = commands.add_parser("capture-workload")
     workload.add_argument("--manifest", type=Path, required=True)
     workload.add_argument("--case-root", type=Path, required=True)
     workload.add_argument("--output-root", type=Path, required=True)
+    workload.add_argument("--registry", type=Path, required=True)
 
     package = commands.add_parser("package")
     package.add_argument("--manifest", type=Path, required=True)
@@ -502,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
         from .imb import validate_imb_capture
         from .manifest import RunManifest
         from .protocol import RunProtocol
-        from .reducers import network_config_facts, network_projection_rows
+        from .reducers import network_config_facts
 
         manifest = RunManifest.load(arguments.manifest)
         run_dir = manifest.path.parents[1]
@@ -526,12 +537,6 @@ def main(argv: list[str] | None = None) -> int:
             stderr_path=arguments.stderr,
             argv_path=arguments.argv_json,
             protocol=RunProtocol.load(arguments.protocol, manifest.purpose),
-        )
-        _write_network_rows(
-            arguments.runtime_dir / "domain/network-imb-mpi1-results.jsonl",
-            network_projection_rows(
-                manifest.run_id, capture.results, arguments.source_member
-            ),
         )
         print(
             collect_once(
@@ -573,45 +578,91 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    if arguments.command == "record-postrun":
-        from .postrun import minimal_hardware_fact, partition_requested_fact
+    if arguments.command == "record-build-provision":
+        from .manifest import RunManifest
+        from .postrun import build_provision_fact
 
-        hardware_facts: list[Fact]
-        if arguments.hardware_root is not None and arguments.protocol is not None:
-            from .manifest import RunManifest
-            from .protocol import RunProtocol
-
-            manifest = RunManifest.load(arguments.manifest)
-            protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
-            hardware_facts = [
-                minimal_hardware_fact(
-                    arguments.hardware_root / f"node-{ordinal}.json",
-                    run_id=manifest.run_id,
-                    source_member=f"source/hardware/node-{ordinal}.json",
-                )
-                for ordinal in range(protocol.nodes)
-            ]
-        elif arguments.hardware is not None and arguments.hardware_source_member:
-            hardware_facts = [
-                minimal_hardware_fact(
-                    arguments.hardware,
-                    run_id=_run_id(arguments.manifest),
-                    source_member=arguments.hardware_source_member,
-                )
-            ]
-        else:
-            raise ValueError(
-                "record-postrun requires hardware-root/protocol or hardware/member"
-            )
-        facts = (*hardware_facts, partition_requested_fact(arguments.decompose_dict))
+        manifest = RunManifest.load(arguments.manifest)
         print(
             collect_once(
                 arguments.manifest,
                 arguments.runtime_dir,
-                "runner.postrun_parser",
+                "compute.build_provision_parser",
+                lambda: (
+                    build_provision_fact(
+                        arguments.build_provision, purpose=manifest.purpose
+                    ),
+                ),
+                registry_path=arguments.registry,
+                fragment_id="build-provision",
+            )
+        )
+        return 0
+    if arguments.command == "record-minimal-hardware":
+        from .manifest import RunManifest
+        from .postrun import minimal_hardware_fact
+        from .protocol import RunProtocol
+
+        manifest = RunManifest.load(arguments.manifest)
+        protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
+        facts = tuple(
+            minimal_hardware_fact(
+                arguments.hardware_root / f"node-{ordinal}.json",
+                run_id=manifest.run_id,
+                source_member=f"source/hardware/node-{ordinal}.json",
+            )
+            for ordinal in range(protocol.nodes)
+        )
+        print(
+            collect_once(
+                arguments.manifest,
+                arguments.runtime_dir,
+                "compute.minimal_hardware_parser",
                 lambda: facts,
                 registry_path=arguments.registry,
-                fragment_id=arguments.fragment_id,
+                fragment_id="minimal-hardware",
+            )
+        )
+        return 0
+    if arguments.command == "record-mesh":
+        from .postrun import mesh_facts_from_logs
+
+        facts = mesh_facts_from_logs(
+            arguments.block_mesh_log,
+            arguments.decompose_log,
+            arguments.decompose_dict,
+        )
+        print(
+            collect_once(
+                arguments.manifest,
+                arguments.runtime_dir,
+                "compute.mesh_parser",
+                lambda: facts,
+                registry_path=arguments.registry,
+                fragment_id="mesh",
+            )
+        )
+        return 0
+    if arguments.command == "record-profile-hardware":
+        from .manifest import RunManifest
+        from .postrun import profile_hardware_facts
+        from .protocol import RunProtocol
+
+        manifest = RunManifest.load(arguments.manifest)
+        protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
+        facts = profile_hardware_facts(
+            arguments.profile_hardware_root,
+            run_id=manifest.run_id,
+            expected_nodes=protocol.nodes,
+        )
+        print(
+            collect_once(
+                arguments.manifest,
+                arguments.runtime_dir,
+                "compute.profile_hardware_parser",
+                lambda: facts,
+                registry_path=arguments.registry,
+                fragment_id="profile-hardware",
             )
         )
         return 0
@@ -620,22 +671,23 @@ def main(argv: list[str] | None = None) -> int:
 
         print(
             capture_workload(
-                arguments.manifest, arguments.case_root, arguments.output_root
+                arguments.manifest,
+                arguments.case_root,
+                arguments.output_root,
+                registry_path=arguments.registry,
             )
         )
         return 0
     if arguments.command == "record-artifact-index":
-        from .build_provenance import build_artifact_index_fact
+        from .build_provenance import build_artifact_facts
 
         print(
             collect_once(
                 arguments.manifest,
                 arguments.runtime_dir,
                 "runner.artifact_index",
-                lambda: (
-                    build_artifact_index_fact(
-                        arguments.manifest, arguments.build_sidecar
-                    ),
+                lambda: build_artifact_facts(
+                    arguments.manifest, arguments.build_sidecar
                 ),
                 registry_path=arguments.registry,
                 fragment_id="artifact-index",
@@ -705,17 +757,3 @@ def _run_id(manifest_path: Path) -> str:
     from .manifest import RunManifest
 
     return RunManifest.load(manifest_path).run_id
-
-
-def _write_network_rows(path: Path, rows: tuple[dict[str, object], ...]) -> None:
-    if path.exists():
-        raise FileExistsError(path)
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=path.parent, prefix=".network-", delete=False
-    ) as stream:
-        for row in rows:
-            stream.write(
-                json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
-            )
-        temporary = Path(stream.name)
-    temporary.replace(path)

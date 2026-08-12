@@ -11,7 +11,7 @@ Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法
 
 ## VTune hotspots と Perfetto trace
 
-`OpenFOAM on genkai` を手動実行するとき、`profile_mode` に `vtune-hotspots` を選ぶと MPI rank 0 を Intel VTune で計測します。
+`OpenFOAM on genkai` を手動実行するとき、`profile_mode` に `vtune-hotspots` を選ぶと MPI rank 0 へ60秒間 Intel VTune を attach して計測します。
 計測後、上位 hotspot は GitHub Actions の run summary に表として表示されます。
 同じ VTune result から CPU time の時系列、時間帯別の上位関数、solver iteration、残差を含む Perfetto 用 JSON を生成します。
 JSON と変換元の timeline、hotspots は `openfoam-vtune-perfetto-<run-id>` artifact からダウンロードできます。

@@ -81,7 +81,7 @@ expected_workload_identity = "{digest}"
     accounting.write_text(
         canonical_json(
             {
-                "schema_version": "scheduler-accounting/v1",
+                "schema_version": "scheduler-accounting/v2",
                 "nnumu": {"lexeme": "2", "value": 2},
             }
         )

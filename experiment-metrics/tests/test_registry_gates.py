@@ -7,19 +7,25 @@ import pytest
 from experiment_metrics.registry import Registry
 
 
-def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
+def test_default_registry_requires_one_validated_pstream_consensus() -> None:
     registry = Registry.load(Path(__file__).parents[1] / "registry/openfoam-v2.toml")
     required = registry.required_keys("bench", expected_pstream_ranks=120)
 
-    assert len([key for key in required if key.startswith("solver.pstream.")]) == 360
-    assert "solver.pstream.startup_applied.rank.0" in required
-    assert "solver.pstream.runtime_current.rank.119" in required
-    assert "solver.pstream.change_events.rank.119" in required
+    assert {key for key in required if key.startswith("solver.pstream.")} == {
+        "solver.pstream.startup_applied",
+        "solver.pstream.runtime_current",
+        "solver.pstream.change_events",
+    }
     assert {
         "solver.runtime_header",
         "solver.step_timings",
         "solver.pressure_solves",
         "solver.log_markers",
+        "result.official",
+        "source.track.head_commit",
+        "build.provenance",
+        "build.provision",
+        "workload.manifest",
         "network.imb_mpi1.process_count",
         "network.imb_mpi1.message_size.min_bytes",
         "network.imb_mpi1.message_size.max_bytes",
@@ -28,6 +34,8 @@ def test_default_registry_expands_all_required_pstream_rank_axes() -> None:
         "network.imb_mpi1.iteration.policy",
         "hardware.minimal.node.0",
         "mesh.partition.requested",
+        "mesh.partition.observed",
+        "mesh.topology",
     }.issubset(required)
     assert "software.imb_mpi1.version" in required
 
