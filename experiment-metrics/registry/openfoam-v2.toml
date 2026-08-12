@@ -10,6 +10,10 @@ id = "runner.artifact_index"
 required_for = ["bench", "profile"]
 
 [[producers]]
+id = "runner.workload_manifest"
+required_for = ["bench", "profile"]
+
+[[producers]]
 id = "stage.runner"
 required_for = ["bench", "profile"]
 
@@ -22,8 +26,20 @@ id = "network.parser"
 required_for = ["bench", "profile"]
 
 [[producers]]
-id = "runner.postrun_parser"
+id = "compute.build_provision_parser"
 required_for = ["bench", "profile"]
+
+[[producers]]
+id = "compute.minimal_hardware_parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "compute.mesh_parser"
+required_for = ["bench", "profile"]
+
+[[producers]]
+id = "compute.profile_hardware_parser"
+required_for = ["profile"]
 
 [[producers]]
 id = "runner.pstream_parser"
@@ -74,10 +90,34 @@ logical_type = "string"
 required_for = ["bench", "profile"]
 
 [[keys]]
+pattern = "source.track.head_commit"
+owner = "runner.manifest"
+logical_type = "string"
+required_for = ["bench", "profile"]
+
+[[keys]]
 pattern = "artifact.build_manifest_sha256"
 owner = "runner.artifact_index"
 logical_type = "string"
 required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "build.provenance"
+owner = "runner.artifact_index"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "workload.manifest"
+owner = "runner.workload_manifest"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "workload.member.*"
+owner = "runner.workload_manifest"
+logical_type = "bytes_base64"
+required_for = []
 
 [[keys]]
 pattern = "run.started_at"
@@ -194,6 +234,12 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
+pattern = "result.official"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
 pattern = "network.imb_mpi1.process_count"
 owner = "network.parser"
 logical_type = "integer"
@@ -236,34 +282,70 @@ logical_type = "string"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "solver.pstream.startup_applied.rank.*"
+pattern = "network.imb_mpi1.result.*"
+owner = "network.parser"
+logical_type = "json"
+required_for = []
+
+[[keys]]
+pattern = "solver.pstream.startup_applied"
 owner = "runner.pstream_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "solver.pstream.runtime_current.rank.*"
+pattern = "solver.pstream.runtime_current"
 owner = "runner.pstream_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "solver.pstream.change_events.rank.*"
+pattern = "solver.pstream.change_events"
 owner = "runner.pstream_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "solver.pstream.rank_exceptions"
+owner = "runner.pstream_parser"
+logical_type = "json"
+required_for = []
 
 [[keys]]
 pattern = "hardware.minimal.node.*"
-owner = "runner.postrun_parser"
+owner = "compute.minimal_hardware_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "mesh.partition.requested"
-owner = "runner.postrun_parser"
+owner = "compute.mesh_parser"
 logical_type = "json"
 required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "build.provision"
+owner = "compute.build_provision_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "mesh.topology"
+owner = "compute.mesh_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "mesh.partition.observed"
+owner = "compute.mesh_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
+pattern = "profile.hardware.node.*"
+owner = "compute.profile_hardware_parser"
+logical_type = "json"
+required_for = []
 
 # Canonical v2 ownership graph. The compact [[producers]]/[[keys]] projection
 # above is consumed by the current Recorder API; registry loading requires it
@@ -285,7 +367,6 @@ run_bundle_source_roles = [
   "decompose_par_log",
   "host_exec_environment",
   "imb_mpi1_argv",
-  "imb_mpi1_projection",
   "imb_mpi1_stderr",
   "imb_mpi1_stdout",
   "instrumentation_bundle",
@@ -295,9 +376,7 @@ run_bundle_source_roles = [
   "official_result",
   "pjm_log",
   "postrun_source",
-  "profile_location",
   "pstream_source",
-  "rank_environment",
   "rank_placement",
   "run_manifest",
   "scheduler_accounting",
@@ -398,9 +477,30 @@ activation = { kind = "always" }
 instances = { kind = "singleton" }
 
 [[producer]]
-id = "runner.postrun_parser"
+id = "compute.build_provision_parser"
 owner_scope = "run"
 applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "compute.minimal_hardware_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "compute.mesh_parser"
+owner_scope = "run"
+applicable_run_variants = ["bench", "profile"]
+activation = { kind = "always" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "compute.profile_hardware_parser"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
 activation = { kind = "always" }
 instances = { kind = "singleton" }
 
@@ -461,6 +561,15 @@ producer_id = "runner.artifact_index"
 source_role = "artifact_index_fact_fragment"
 storage = "fact_fragment"
 path_template = [{ literal = "domain/fragments/runner.artifact_index--artifact-index.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.workload"
+producer_id = "runner.workload_manifest"
+source_role = "workload_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.workload_manifest--workload.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -537,11 +646,38 @@ schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
 [[source]]
-id = "facts.postrun"
-producer_id = "runner.postrun_parser"
-source_role = "postrun_fact_fragment"
+id = "facts.build_provision"
+producer_id = "compute.build_provision_parser"
+source_role = "build_provision_fact_fragment"
 storage = "fact_fragment"
-path_template = [{ literal = "domain/fragments/runner.postrun_parser--postrun.jsonl" }]
+path_template = [{ literal = "domain/fragments/compute.build_provision_parser--build-provision.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.minimal_hardware"
+producer_id = "compute.minimal_hardware_parser"
+source_role = "minimal_hardware_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/compute.minimal_hardware_parser--minimal-hardware.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.mesh"
+producer_id = "compute.mesh_parser"
+source_role = "mesh_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/compute.mesh_parser--mesh.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = true
+
+[[source]]
+id = "facts.profile_hardware"
+producer_id = "compute.profile_hardware_parser"
+source_role = "profile_hardware_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/compute.profile_hardware_parser--profile-hardware.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -632,7 +768,7 @@ producer_id = "runner.scheduler_postrun"
 source_role = "scheduler_accounting"
 storage = "run_bundle"
 path_template = [{ literal = "control/scheduler-accounting.json" }]
-schema_id = "scheduler-accounting/v1"
+schema_id = "scheduler-accounting/v2"
 required_when_applicable = true
 
 [[source]]
@@ -660,15 +796,6 @@ source_role = "host_exec_environment"
 storage = "run_bundle"
 path_template = [{ literal = "source/env/host-exec.snapshot" }]
 schema_id = "nul-environment/v1"
-required_when_applicable = true
-
-[[source]]
-id = "artifact.rank_environment"
-producer_id = "exec.wrapper"
-source_role = "rank_environment"
-storage = "run_bundle"
-path_template = [{ literal = "source/env/rank-" }, { token = "global_rank" }, { literal = ".delta.json" }]
-schema_id = "rank-env-delta/v1"
 required_when_applicable = true
 
 [[source]]
@@ -700,7 +827,7 @@ required_when_applicable = true
 
 [[source]]
 id = "artifact.build_provision"
-producer_id = "runner.postrun_parser"
+producer_id = "compute.build_provision_parser"
 source_role = "build_provision_validation"
 storage = "run_bundle"
 path_template = [{ literal = "control/build-provision-validation.json" }]
@@ -846,6 +973,18 @@ validator_id = "artifact_index/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
+id = "source.track.head_commit"
+key_pattern = "source.track.head_commit"
+source_id = "facts.manifest"
+schema_id = "git-commit/v1"
+logical_type = "string"
+unit = "none"
+cardinality = "run"
+capture_id = "manifest/v1"
+validator_id = "git_commit/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
 id = "artifact.build_manifest_sha256"
 key_pattern = "artifact.build_manifest_sha256"
 source_id = "facts.artifact_index"
@@ -855,6 +994,42 @@ unit = "none"
 cardinality = "run"
 capture_id = "artifact_index/v1"
 validator_id = "artifact_index/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "build.provenance"
+key_pattern = "build.provenance"
+source_id = "facts.artifact_index"
+schema_id = "build-sidecar/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "build_sidecar/v1"
+validator_id = "build_sidecar/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "workload.manifest"
+key_pattern = "workload.manifest"
+source_id = "facts.workload"
+schema_id = "workload-manifest-fact/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "workload_capture/v1"
+validator_id = "workload_manifest/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "workload.members"
+key_pattern = "workload.member.*"
+source_id = "facts.workload"
+schema_id = "opaque-bytes/v1"
+logical_type = "bytes_base64"
+unit = "none"
+cardinality = "run_workload_member"
+capture_id = "workload_capture/v1"
+validator_id = "workload_member/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
@@ -957,12 +1132,12 @@ reducer_id = "identity/v1"
 id = "scheduler.accounting"
 key_pattern = "scheduler.accounting"
 source_id = "facts.scheduler_postrun"
-schema_id = "scheduler-accounting/v1"
+schema_id = "scheduler-accounting/v2"
 logical_type = "json"
 unit = "none"
 cardinality = "run"
 capture_id = "pjstat_history/v1"
-validator_id = "scheduler_accounting/v1"
+validator_id = "scheduler_accounting/v2"
 reducer_id = "identity/v1"
 
 [[fact]]
@@ -1086,6 +1261,18 @@ validator_id = "official_marker/v1"
 reducer_id = "official_marker/v1"
 
 [[fact]]
+id = "result.official"
+key_pattern = "result.official"
+source_id = "facts.solver_log"
+schema_id = "openfoam-official-result/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "solver_log/v1"
+validator_id = "official_result/v1"
+reducer_id = "official_result/v1"
+
+[[fact]]
 id = "network.process_count"
 key_pattern = "network.imb_mpi1.process_count"
 source_id = "facts.network"
@@ -1170,45 +1357,69 @@ validator_id = "imb_config/v1"
 reducer_id = "identity_projection/v1"
 
 [[fact]]
+id = "network.results"
+key_pattern = "network.imb_mpi1.result.*"
+source_id = "facts.network"
+schema_id = "imb-network-result/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_benchmark_message_size"
+capture_id = "imb_stdout/v1"
+validator_id = "imb_result/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
 id = "pstream.startup"
-key_pattern = "solver.pstream.startup_applied.rank.*"
+key_pattern = "solver.pstream.startup_applied"
 source_id = "facts.pstream"
 schema_id = "pstream-startup/v1"
 logical_type = "json"
 unit = "none"
-cardinality = "run_rank"
+cardinality = "run"
 capture_id = "pstream_jsonl/v1"
 validator_id = "pstream_rank/v1"
 reducer_id = "pstream_rank/v1"
 
 [[fact]]
 id = "pstream.runtime"
-key_pattern = "solver.pstream.runtime_current.rank.*"
+key_pattern = "solver.pstream.runtime_current"
 source_id = "facts.pstream"
 schema_id = "pstream-runtime/v1"
 logical_type = "json"
 unit = "none"
-cardinality = "run_rank"
+cardinality = "run"
 capture_id = "pstream_jsonl/v1"
 validator_id = "pstream_rank/v1"
 reducer_id = "pstream_rank/v1"
 
 [[fact]]
 id = "pstream.changes"
-key_pattern = "solver.pstream.change_events.rank.*"
+key_pattern = "solver.pstream.change_events"
 source_id = "facts.pstream"
 schema_id = "pstream-changes/v1"
 logical_type = "json"
 unit = "none"
-cardinality = "run_rank"
+cardinality = "run"
 capture_id = "pstream_jsonl/v1"
 validator_id = "pstream_rank/v1"
 reducer_id = "pstream_rank/v1"
 
 [[fact]]
+id = "pstream.rank_exceptions"
+key_pattern = "solver.pstream.rank_exceptions"
+source_id = "facts.pstream"
+schema_id = "pstream-rank-exceptions/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "pstream_jsonl/v1"
+validator_id = "pstream_rank/v1"
+reducer_id = "pstream_consensus/v1"
+
+[[fact]]
 id = "hardware.minimal.compatibility"
 key_pattern = "hardware.minimal.node.*"
-source_id = "facts.postrun"
+source_id = "facts.minimal_hardware"
 schema_id = "minimal-hardware-projection/v1"
 logical_type = "json"
 unit = "none"
@@ -1220,7 +1431,7 @@ reducer_id = "identity/v1"
 [[fact]]
 id = "mesh.partition.requested"
 key_pattern = "mesh.partition.requested"
-source_id = "facts.postrun"
+source_id = "facts.mesh"
 schema_id = "partition-requested/v1"
 logical_type = "json"
 unit = "none"
@@ -1228,3 +1439,51 @@ cardinality = "run"
 capture_id = "decompose_dictionary/v1"
 validator_id = "partition_requested/v1"
 reducer_id = "partition_requested/v1"
+
+[[fact]]
+id = "build.provision"
+key_pattern = "build.provision"
+source_id = "facts.build_provision"
+schema_id = "build-provision-validation/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "build_provision/v1"
+validator_id = "build_provision/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "mesh.topology"
+key_pattern = "mesh.topology"
+source_id = "facts.mesh"
+schema_id = "mesh-topology/v2"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "block_mesh_log/v1"
+validator_id = "mesh_topology/v2"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "mesh.partition.observed"
+key_pattern = "mesh.partition.observed"
+source_id = "facts.mesh"
+schema_id = "partition-observed/v2"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "decompose_par_log/v1"
+validator_id = "partition_observed/v2"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "profile.hardware"
+key_pattern = "profile.hardware.node.*"
+source_id = "facts.profile_hardware"
+schema_id = "profile-hardware-fact/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run_node_record"
+capture_id = "profile_hardware/v1"
+validator_id = "profile_hardware/v1"
+reducer_id = "identity/v1"

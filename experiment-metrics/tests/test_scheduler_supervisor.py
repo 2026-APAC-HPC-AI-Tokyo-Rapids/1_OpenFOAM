@@ -157,14 +157,48 @@ def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:
         "seconds": 24729.34,
     }
     assert accounting["sctmut"] == {"lexeme": "627660 ms", "seconds": 627.66}
+    assert accounting["node_usage"] == [
+        {
+            "node_ordinal": 0,
+            "mmszu": {
+                "lexeme": "81876.1 MiB (85853274112)",
+                "bytes": 85853274112,
+            },
+            "uctmut": {"lexeme": "24729340 ms", "seconds": 24729.34},
+            "sctmut": {"lexeme": "627660 ms", "seconds": 627.66},
+        }
+    ]
 
 
-def test_parse_scheduler_accounting_rejects_conflicting_genkai_duplicates() -> None:
+def test_parse_scheduler_accounting_accepts_per_node_genkai_values() -> None:
     raw = (
-        b"\t6438276\tEND\t2026/08/10 22:07:30\t1\t0\t0\t0\t1\t4096\t2\t3\t8192\t2\t3\n"
+        b"\t6438276\tEND\t2026/08/10 22:07:30\t1\t0\t0\t0\t2\t"
+        b"8192\t40 ms\t6 ms\t4096\t21 ms\t2 ms\t4000\t19 ms\t4 ms\n"
     )
 
-    with pytest.raises(ValueError, match="conflicting duplicate columns"):
+    accounting = parse_scheduler_accounting(raw, expected_job_id="6438276")
+
+    assert accounting["nnumu"]["value"] == 2
+    assert accounting["node_usage"] == [
+        {
+            "node_ordinal": 0,
+            "mmszu": {"lexeme": "4096", "bytes": 4096},
+            "uctmut": {"lexeme": "21 ms", "seconds": 0.021},
+            "sctmut": {"lexeme": "2 ms", "seconds": 0.002},
+        },
+        {
+            "node_ordinal": 1,
+            "mmszu": {"lexeme": "4000", "bytes": 4000},
+            "uctmut": {"lexeme": "19 ms", "seconds": 0.019},
+            "sctmut": {"lexeme": "4 ms", "seconds": 0.004},
+        },
+    ]
+
+
+def test_parse_scheduler_accounting_rejects_wrong_per_node_column_count() -> None:
+    raw = b"\t6438276\tEND\tdate\t1\t0\t0\t0\t2\t8192\t40\t6\t4096\t21\t2\n"
+
+    with pytest.raises(ValueError, match="invalid per-node columns"):
         parse_scheduler_accounting(raw, expected_job_id="6438276")
 
 

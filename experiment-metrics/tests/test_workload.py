@@ -67,10 +67,27 @@ def test_capture_workload_cli(
                 str(case),
                 "--output-root",
                 str(manifest.parents[1] / "source/workload"),
+                "--registry",
+                str(registry_path),
             ]
         )
         == 0
     )
+    fragment = (
+        manifest.parents[1]
+        / "domain/fragments/runner.workload_manifest--workload.jsonl"
+    )
+    rows = [json.loads(line) for line in fragment.read_text().splitlines()]
+    assert rows[0]["key"] == "workload.manifest"
+    assert [row["key"] for row in rows[1:]] == [
+        "workload.member.initial_u",
+        "workload.member.initial_p",
+        "workload.member.transport_properties",
+        "workload.member.block_mesh_dict",
+        "workload.member.control_dict",
+        "workload.member.fv_schemes",
+        "workload.member.fv_solution",
+    ]
 
 
 def test_manifest_rejects_noncanonical_repository_identity(

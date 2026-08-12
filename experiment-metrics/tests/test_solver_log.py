@@ -38,6 +38,7 @@ def test_solver_log_parser_and_reducer_preserve_complete_records() -> None:
         "solver.step_timings",
         "solver.pressure_solves",
         "solver.log_markers",
+        "result.official",
     }
     assert "10" in encode_value(facts[1].logical_value, "json")
 

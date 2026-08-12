@@ -176,6 +176,7 @@ def manifest_facts(manifest: RunManifest) -> tuple[object, ...]:
         Fact("run.identity.run_id", manifest.run_id),
         Fact("run.identity.run_purpose", manifest.purpose),
         Fact("run.identity.repository_id", manifest.repository_id),
+        Fact("source.track.head_commit", str(manifest.source_track["head_commit"])),
         Fact(
             "run.instrumentation_bundle_sha256",
             manifest.instrumentation_bundle_sha256,
