@@ -40,7 +40,6 @@ case "${OPENFOAM_PROFILE_MODE:-direct}" in
     set +e
     vtune -collect hotspots \
       -knob sampling-mode=sw \
-      -knob sampling-interval=50 \
       -knob enable-stack-collection=false \
       -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
       -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" \
