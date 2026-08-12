@@ -22,21 +22,22 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
     assert "--require-cache" in text
-    assert "stage mesh_facts" not in text
-    assert "stage partition_audit" not in text
+    assert "stage mesh_facts" in text
+    assert "stage partition_audit" in text
     assert "stage check_mesh" not in text
     assert "native tool is not provisioned" not in text
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
-    assert "export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID" in text
-    assert text.index("export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID") < text.index(
-        "stage solver"
-    )
+    assert "OPENFOAM_PROFILE_DIR" not in text
     assert "capture-workload" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
+    assert "exec-profiler.sh" not in text
+    assert "record-build-provision" in text
+    assert "record-minimal-hardware" in text
+    assert "record-mesh" in text
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)

@@ -112,7 +112,6 @@ def _write_rank(runtime: Path, rank: int, *, metadata: bool = True) -> None:
             "{"
             '"argv":["/opt/perf","stat"],'
             f'"cpu_affinity":[{rank}],'
-            f'"environment":{{"PMI_RANK":"{rank}"}},'
             f'"global_rank":{rank},"hostname":"node-a",'
             '"local_rank":0,"local_size":2,"numa_mems":"0",'
             f'"output_member":"profile/raw/perf/rank-{rank}.csv",'

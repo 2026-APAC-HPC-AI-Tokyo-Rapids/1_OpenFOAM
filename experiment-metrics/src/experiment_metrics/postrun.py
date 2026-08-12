@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 # ruff: noqa: E501
 import hashlib
 import json
@@ -38,6 +40,184 @@ def minimal_hardware_fact(path: Path, *, run_id: str, source_member: str) -> Fac
 
 def partition_requested_fact(dictionary: Path) -> Fact:
     return Fact("mesh.partition.requested", _requested_partition(dictionary))
+
+
+def build_provision_fact(path: Path, *, purpose: str) -> Fact:
+    from .provision import validate_provision_document
+
+    document = _json(path)
+    validate_provision_document(document, purpose=purpose)
+    run_dir = path.parents[1]
+    ldd_sources = [
+        {
+            "role": item["role"],
+            "source": _expanded_member(item["source"], run_dir),
+        }
+        for item in document["ldd_raw"]
+    ]
+    expanded = {
+        **document,
+        "ldd_raw": ldd_sources,
+        "launcher_version": _expanded_version(document["launcher_version"], run_dir),
+    }
+    if purpose == "profile":
+        expanded["profiler_version"] = _expanded_version(
+            document["profiler_version"], run_dir
+        )
+    return Fact("build.provision", expanded)
+
+
+def profile_hardware_facts(
+    root: Path, *, run_id: str, expected_nodes: int
+) -> tuple[Fact, ...]:
+    facts: list[Fact] = []
+    run_dir = root.resolve().parents[2]
+    if root.resolve() != run_dir / "profile/raw/hardware":
+        raise ValueError("profile hardware root is outside the bound run")
+    for ordinal in range(expected_nodes):
+        capture_path = root / f"node-{ordinal}/capture.json"
+        document = _json(capture_path)
+        if (
+            set(document)
+            != {"schema_version", "run_id", "node_ordinal", "hostname", "members"}
+            or document["schema_version"] != "profile-hardware-capture/v1"
+            or document["run_id"] != run_id
+            or document["node_ordinal"] != ordinal
+            or not isinstance(document["hostname"], str)
+            or not document["hostname"]
+            or not isinstance(document["members"], list)
+        ):
+            raise ValueError("profile hardware capture is invalid")
+        members = document["members"]
+        proc = [item for item in members if item.get("role") == "proc_meminfo"]
+        if len(proc) != 1 or proc[0].get("numa_node_id") is not None:
+            raise ValueError("profile hardware proc meminfo is incomplete")
+        proc_raw = _profile_member(proc[0], run_dir)
+        available = _single_kb(proc_raw, rb"^MemAvailable:\s+([0-9]+)\s+kB$")
+        facts.append(
+            Fact(
+                f"profile.hardware.node.{ordinal}.summary",
+                {
+                    "hostname": document["hostname"],
+                    "postrun_mem_available_bytes": available * 1024,
+                },
+            )
+        )
+        node_ids = sorted(
+            {
+                item.get("numa_node_id")
+                for item in members
+                if item.get("role") in {"numa_cpulist", "numa_meminfo"}
+            }
+        )
+        if any(
+            not isinstance(node_id, int) or isinstance(node_id, bool)
+            for node_id in node_ids
+        ):
+            raise ValueError("profile hardware NUMA node ID is invalid")
+        for node_id in node_ids:
+            cpulists = [
+                item
+                for item in members
+                if item.get("role") == "numa_cpulist"
+                and item.get("numa_node_id") == node_id
+            ]
+            meminfos = [
+                item
+                for item in members
+                if item.get("role") == "numa_meminfo"
+                and item.get("numa_node_id") == node_id
+            ]
+            if len(cpulists) != 1 or len(meminfos) != 1:
+                raise ValueError("profile hardware NUMA members are incomplete")
+            cpulist = _canonical_cpu_list(_profile_member(cpulists[0], run_dir))
+            meminfo = _profile_member(meminfos[0], run_dir)
+            total = _single_kb(
+                meminfo, rf"^Node {node_id} MemTotal:\s+([0-9]+)\s+kB$".encode()
+            )
+            free = _single_kb(
+                meminfo, rf"^Node {node_id} MemFree:\s+([0-9]+)\s+kB$".encode()
+            )
+            facts.append(
+                Fact(
+                    f"profile.hardware.node.{ordinal}.numa.{node_id}",
+                    {
+                        "cpulist": cpulist,
+                        "mem_total_bytes": total * 1024,
+                        "mem_free_bytes": free * 1024,
+                    },
+                )
+            )
+    return tuple(facts)
+
+
+def _profile_member(value: object, root: Path) -> bytes:
+    if not isinstance(value, dict) or set(value) != {
+        "role",
+        "numa_node_id",
+        "path",
+        "size_bytes",
+        "sha256",
+    }:
+        raise ValueError("profile hardware member is invalid")
+    path = (root / str(value["path"])).resolve(strict=True)
+    if not path.is_relative_to(root.resolve()) or not path.is_file():
+        raise ValueError("profile hardware member is outside the bound run")
+    raw = path.read_bytes()
+    if (
+        len(raw) != value["size_bytes"]
+        or hashlib.sha256(raw).hexdigest() != value["sha256"]
+    ):
+        raise ValueError("profile hardware member differs from its identity")
+    return raw
+
+
+def _single_kb(raw: bytes, pattern: bytes) -> int:
+    matches = re.findall(pattern, raw, re.MULTILINE)
+    if len(matches) != 1:
+        raise ValueError("profile hardware memory source is invalid")
+    return int(matches[0])
+
+
+def _canonical_cpu_list(raw: bytes) -> list[int]:
+    text = raw.decode("ascii").strip()
+    cpus: list[int] = []
+    for token in text.split(",") if text else []:
+        lower, separator, upper = token.partition("-")
+        if not lower.isdecimal() or (separator and not upper.isdecimal()):
+            raise ValueError("profile hardware CPU list is invalid")
+        start = int(lower)
+        end = int(upper) if separator else start
+        if end < start:
+            raise ValueError("profile hardware CPU range is reversed")
+        cpus.extend(range(start, end + 1))
+    if cpus != sorted(set(cpus)):
+        raise ValueError("profile hardware CPU list is not canonical")
+    return cpus
+
+
+def _expanded_version(value: object, root: Path) -> dict[str, object]:
+    assert isinstance(value, dict)
+    return {
+        **value,
+        "stdout": _expanded_member(value["stdout"], root),
+        "stderr": _expanded_member(value["stderr"], root),
+    }
+
+
+def _expanded_member(value: object, root: Path) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"path", "size_bytes", "sha256"}:
+        raise ValueError("provision source member is invalid")
+    path = (root / str(value["path"])).resolve(strict=True)
+    if not path.is_relative_to(root.resolve()) or not path.is_file():
+        raise ValueError("provision source member is outside the bound run")
+    raw = path.read_bytes()
+    if (
+        len(raw) != value["size_bytes"]
+        or hashlib.sha256(raw).hexdigest() != value["sha256"]
+    ):
+        raise ValueError("provision source member differs from its identity")
+    return {**value, "content_b64": base64.b64encode(raw).decode("ascii")}
 
 
 def mesh_topology_fact(path: Path) -> Fact:

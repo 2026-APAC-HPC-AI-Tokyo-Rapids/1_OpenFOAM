@@ -7,7 +7,7 @@ from .manifest import RunManifest, init_run, manifest_facts
 from .protocol import RunProtocol
 from .pstream import pstream_facts
 from .recording import Recorder, collect_once
-from .reducers import network_config_facts, network_projection_rows, solver_log_facts
+from .reducers import network_config_facts, solver_log_facts
 from .solver_log import (
     OfficialEvaluation,
     ParsedSolverLog,
@@ -36,7 +36,6 @@ __all__ = [
     "install_bundle",
     "load_bundle",
     "manifest_facts",
-    "network_projection_rows",
     "network_config_facts",
     "parse_imb_mpi1",
     "parse_solver_log",

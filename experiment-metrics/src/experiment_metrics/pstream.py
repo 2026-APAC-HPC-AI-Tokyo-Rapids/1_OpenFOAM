@@ -58,38 +58,54 @@ def pstream_facts(
         files[rank] = path
     if set(files) != set(expected_ranks):
         raise ValueError("Pstream source ranks do not match expected ranks")
-    facts: list[Fact] = []
+    observations: list[
+        tuple[int, dict[str, object], dict[str, object], list[dict[str, object]]]
+    ] = []
     for rank in expected_ranks:
         startup, runtime, changes = _rank_events(files[rank], run_id, rank)
-        source_member = f"domain/pstream/rank-{rank}.jsonl"
-        facts.extend(
-            (
-                Fact(
-                    f"solver.pstream.startup_applied.rank.{rank}",
-                    {
-                        "schema_version": "pstream-startup/v1",
-                        "source_member": source_member,
-                        "payload": startup,
-                    },
-                ),
-                Fact(
-                    f"solver.pstream.runtime_current.rank.{rank}",
-                    {
-                        "schema_version": "pstream-runtime/v1",
-                        "source_member": source_member,
-                        "payload": runtime,
-                    },
-                ),
-                Fact(
-                    f"solver.pstream.change_events.rank.{rank}",
-                    {
-                        "schema_version": "pstream-changes/v1",
-                        "source_member": source_member,
-                        "events": changes,
-                    },
-                ),
-            )
-        )
+        observations.append((rank, startup, runtime, changes))
+    reference_rank, startup, runtime, changes = observations[0]
+    exceptions = [
+        {
+            "rank": rank,
+            **({"startup_applied": rank_startup} if rank_startup != startup else {}),
+            **({"runtime_current": rank_runtime} if rank_runtime != runtime else {}),
+            **({"change_events": rank_changes} if rank_changes != changes else {}),
+        }
+        for rank, rank_startup, rank_runtime, rank_changes in observations[1:]
+        if (rank_startup, rank_runtime, rank_changes) != (startup, runtime, changes)
+    ]
+    facts = [
+        Fact(
+            "solver.pstream.startup_applied",
+            {
+                "schema_version": "pstream-startup-consensus/v1",
+                "reference_rank": reference_rank,
+                "verified_rank_count": len(observations),
+                "payload": startup,
+            },
+        ),
+        Fact(
+            "solver.pstream.runtime_current",
+            {
+                "schema_version": "pstream-runtime-consensus/v1",
+                "reference_rank": reference_rank,
+                "verified_rank_count": len(observations),
+                "payload": runtime,
+            },
+        ),
+        Fact(
+            "solver.pstream.change_events",
+            {
+                "schema_version": "pstream-changes-consensus/v1",
+                "reference_rank": reference_rank,
+                "verified_rank_count": len(observations),
+                "events": changes,
+            },
+        ),
+    ]
+    if exceptions:
+        facts.append(Fact("solver.pstream.rank_exceptions", exceptions))
     return tuple(facts)
 
 

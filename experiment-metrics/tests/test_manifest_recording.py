@@ -33,6 +33,7 @@ def test_init_persists_closed_manifest_and_manifest_fragment(
         "run.identity.run_purpose",
         "run.identity.repository_id",
         "run.instrumentation_bundle_sha256",
+        "source.track.head_commit",
     }
 
 

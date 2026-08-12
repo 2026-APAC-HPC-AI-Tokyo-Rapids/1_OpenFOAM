@@ -4,7 +4,7 @@
 This is deliberately a direct ``execvpe`` wrapper: no shell, retry, fallback
 solver, or second measurement path is permitted.  The launch sidecar is
 written before replacement by perf and contains the exact child argv and
-launch-effective environment/affinity.
+launch-effective affinity, but never a rank environment snapshot.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import os
 import socket
 import tempfile
 from pathlib import Path
-
 
 EVENTS = "cycles,instructions,branches,branch-misses,cache-misses"
 
@@ -78,7 +77,6 @@ def main(argv: list[str] | None = None) -> int:
             "cpu_affinity": sorted(os.sched_getaffinity(0)),
             "numa_mems": _numa_mems(),
             "argv": list(child_argv),
-            "environment": dict(sorted(os.environ.items())),
             "output_member": _member_for_output(output, rank),
         },
     )
@@ -160,9 +158,10 @@ def _write_sidecar(path: Path, value: dict[str, object]) -> None:
     if path.exists():
         raise FileExistsError(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ) + "\n"
+    payload = (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    )
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
