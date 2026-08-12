@@ -274,7 +274,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 case "$report" in
-  timeline) cat "$VTUNE_TIMELINE_FIXTURE" ;;
+  timeline) echo 'timeline report unavailable' >&2; exit 1 ;;
   hotspots) cat "$VTUNE_HOTSPOTS_FIXTURE" ;;
   *) exit 2 ;;
 esac
@@ -291,7 +291,6 @@ esac
             "RUN_DIR": str(run_dir),
             "RUN_LABEL": "rank-zero",
             "VTUNE_RESULT_DIR": str(result_dir),
-            "VTUNE_TIMELINE_FIXTURE": str(FIXTURES / "vtune-timeline.csv"),
             "VTUNE_HOTSPOTS_FIXTURE": str(FIXTURES / "vtune-hotspots.csv"),
         }
     )
@@ -306,9 +305,10 @@ esac
     assert (artifact / "summary.json").is_file()
     assert (artifact / "openfoam-vtune-perfetto.json").is_file()
     assert (artifact / "timeline.csv").is_file()
+    assert (artifact / "timeline.stderr").is_file()
     assert (artifact / "hotspots.csv").is_file()
     metadata = json.loads((artifact / "summary.json").read_text(encoding="utf-8"))
-    assert metadata["timeline_available"] is True
+    assert metadata["timeline_available"] is False
     assert metadata["source_sample_windows"] == 2
     assert metadata["source_function_values"] == 8
     assert metadata["solver_iterations"] == 3

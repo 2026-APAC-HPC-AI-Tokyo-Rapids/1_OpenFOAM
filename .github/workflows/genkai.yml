@@ -497,6 +497,7 @@ jobs:
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/openfoam-vtune-perfetto.json
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/summary.json
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.csv
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.stderr
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/hotspots.csv
           if-no-files-found: error
           compression-level: 6

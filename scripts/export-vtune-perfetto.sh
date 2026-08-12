@@ -13,9 +13,10 @@ TOP_FUNCTIONS=${OPENFOAM_VTUNE_TOP_FUNCTIONS:-50}
 TIME_SERIES_FUNCTIONS=${OPENFOAM_VTUNE_TIME_SERIES_FUNCTIONS:-12}
 FUNCTIONS_PER_WINDOW=${OPENFOAM_VTUNE_FUNCTIONS_PER_WINDOW:-8}
 MAX_TRACE_BYTES=${OPENFOAM_VTUNE_MAX_TRACE_BYTES:-5000000}
+COLLECTION_DURATION=${OPENFOAM_VTUNE_DURATION_SEC:-60}
 
 for value_name in MAX_TIME_BINS FUNCTION_BINS TOP_FUNCTIONS \
-  TIME_SERIES_FUNCTIONS FUNCTIONS_PER_WINDOW MAX_TRACE_BYTES
+  TIME_SERIES_FUNCTIONS FUNCTIONS_PER_WINDOW MAX_TRACE_BYTES COLLECTION_DURATION
 do
   value=${!value_name}
   [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
@@ -37,12 +38,14 @@ install -d -m 0700 "${output_dir}" "${slices_dir}"
 # VTune 2025 may leave -report-output empty, so keep stdout as the canonical
 # CSV input. The timeline and fixed windows provide chronological data instead
 # of stretching aggregate hotspot totals across the whole solver run.
+timeline_status=0
 vtune -quiet -report timeline \
   -result-dir "${VTUNE_RESULT_DIR}" \
   -report-knob column-by=CPUTime \
   -report-knob "bin-count=${MAX_TIME_BINS}" \
   -format csv -csv-delimiter comma \
-  > "${output_dir}/timeline.csv"
+  > "${output_dir}/timeline.csv" \
+  2> "${output_dir}/timeline.stderr" || timeline_status=$?
 
 vtune -quiet -report hotspots \
   -result-dir "${VTUNE_RESULT_DIR}" \
@@ -55,7 +58,15 @@ timeline_start=$(awk -F, '/^[0-9]+,/ { print $2; exit }' \
   "${output_dir}/timeline.csv")
 timeline_end=$(awk -F, '/^[0-9]+,/ { end=$3 } END { print end }' \
   "${output_dir}/timeline.csv")
-[[ -n "${timeline_start}" && -n "${timeline_end}" ]]
+if [[ "${timeline_status}" -ne 0 || -z "${timeline_start}" || -z "${timeline_end}" ]]; then
+  if [[ -s "${output_dir}/timeline.stderr" ]]; then
+    printf '%s\n' 'VTune timeline report is unavailable; using the collection window.' >&2
+    sed -n '1,80p' "${output_dir}/timeline.stderr" >&2
+  fi
+  : > "${output_dir}/timeline.csv"
+  timeline_start=0
+  timeline_end=${COLLECTION_DURATION}
+fi
 
 printf 'file,start_sec,end_sec\n' > "${slices_dir}/windows.csv"
 for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do

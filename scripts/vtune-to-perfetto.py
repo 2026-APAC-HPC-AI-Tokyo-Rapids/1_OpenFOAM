@@ -141,7 +141,7 @@ def read_function_windows(
     paths = sorted(
         path for path in directory.glob("*.csv") if path.name != "windows.csv"
     )
-    if not paths or not timeline:
+    if not paths:
         return []
     boundaries: dict[str, tuple[float, float]] = {}
     manifest = directory / "windows.csv"
@@ -152,8 +152,14 @@ def read_function_windows(
             name = (row.get("file") or "").strip()
             if name and start is not None and end is not None and end >= start:
                 boundaries[name] = (start, end)
-    timeline_start = timeline[0].start_sec
-    duration = timeline[-1].end_sec - timeline_start
+    if timeline:
+        timeline_start = timeline[0].start_sec
+        duration = timeline[-1].end_sec - timeline_start
+    elif boundaries:
+        timeline_start = min(start for start, _ in boundaries.values())
+        duration = max(end for _, end in boundaries.values()) - timeline_start
+    else:
+        return []
     result: list[FunctionWindow] = []
     for offset, path in enumerate(paths):
         start, end = boundaries.get(
