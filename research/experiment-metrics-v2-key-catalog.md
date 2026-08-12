@@ -72,7 +72,7 @@ IMBとprofile hardwareはsolver終了後の独立stageであり、solver性能�
 ### `mesh.partition.requested`
 
 ```json
-{"schema_version":"partition-requested/v1","source_sha256":"...","subdomains":120,"method":"scotch"}
+{"schema_version":"partition-requested/v2","source_sha256":"...","subdomains":120,"method":"scotch"}
 ```
 
 ### `mesh.partition.observed`

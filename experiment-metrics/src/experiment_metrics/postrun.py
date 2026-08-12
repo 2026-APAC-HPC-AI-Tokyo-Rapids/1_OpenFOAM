@@ -344,13 +344,19 @@ def _requested_partition(path: Path) -> dict[str, object]:
     text = raw.decode("utf-8", errors="strict")
     number = re.search(r"\bnumberOfSubdomains\s+([0-9]+)\s*;", text)
     method = re.search(r"\bmethod\s+(\S+)\s*;", text)
-    if number is None or method is None or method[1] != "scotch" or int(number[1]) <= 0:
-        raise ValueError("decomposeParDict is not the closed scotch configuration")
+    supported_methods = {"scotch", "hierarchical", "multiLevel"}
+    if (
+        number is None
+        or method is None
+        or method[1] not in supported_methods
+        or int(number[1]) <= 0
+    ):
+        raise ValueError("decomposeParDict is not a supported closed configuration")
     return {
-        "schema_version": "partition-requested/v1",
+        "schema_version": "partition-requested/v2",
         "source_sha256": hashlib.sha256(raw).hexdigest(),
         "subdomains": int(number[1]),
-        "method": "scotch",
+        "method": method[1],
     }
 
 

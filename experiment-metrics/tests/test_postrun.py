@@ -14,6 +14,7 @@ from experiment_metrics.postrun import (
     mesh_topology_fact,
     minimal_hardware_fact,
     partition_facts,
+    partition_requested_fact,
     profile_hardware_facts,
 )
 from experiment_metrics.probes.capture_hardware import main as capture_hardware
@@ -84,6 +85,7 @@ def test_mesh_facts_are_parsed_from_existing_small_logs(tmp_path: Path) -> None:
     }
     assert requested.logical_value["subdomains"] == 2
     assert requested.logical_value["method"] == "scotch"
+    assert requested.logical_value["schema_version"] == "partition-requested/v2"
     assert observed.logical_value["schema_version"] == "partition-observed/v2"
     assert observed.logical_value["subdomains"] == [
         {
@@ -212,6 +214,19 @@ def test_closed_postrun_reducers_validate_hardware_mesh_and_partition(
     )
     facts = partition_facts(dictionary, observed, topology=topology_fact.logical_value)
     assert facts[0].logical_value["method"] == "scotch"
+
+
+def test_requested_partition_accepts_tracked_geometric_methods(tmp_path: Path) -> None:
+    for method in ("hierarchical", "multiLevel"):
+        dictionary = tmp_path / f"decomposeParDict-{method}"
+        dictionary.write_text(f"numberOfSubdomains 480;\nmethod {method};\n")
+        fact = partition_requested_fact(dictionary)
+        assert fact.logical_value == {
+            "schema_version": "partition-requested/v2",
+            "source_sha256": hashlib.sha256(dictionary.read_bytes()).hexdigest(),
+            "subdomains": 480,
+            "method": method,
+        }
 
 
 def test_postrun_rejects_partition_cell_count_mismatch(tmp_path: Path) -> None:

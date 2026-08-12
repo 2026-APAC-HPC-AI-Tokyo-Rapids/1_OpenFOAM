@@ -149,6 +149,19 @@ would change its script digest and unnecessarily invalidate the published
 geometric candidates remain serialized with other shared-filesystem
 preparation, and a solver failure cannot delete their valid immutable caches.
 
+The first direct-hierarchical run, Actions 287 (`31635570359`), completed its
+solver and official parser successfully at 7.8745 M FVOPS and 8.127 s/step
+(`r-0724eeff7878fb21867b61f6f7e2f1f5`, solver PJM `6467689`).  Solver and
+pipeline walls were 52.711 and 54.402 s, and artifacts were archived.  However,
+the separate mesh-facts stage rejected the effective dictionary because the
+requested-partition v1 contract admitted only Scotch.  Thus the score is valid
+but the run is incomplete for partition comparison.  The observed failure is
+addressed by requested-partition v2, whose method enum is exactly `scotch`,
+`hierarchical`, or `multiLevel`; method-specific dictionaries remain preserved
+only in the raw source copy and identified by its SHA-256.  Both geometric
+candidates must be rerun through the updated E2E parser before an adoption
+decision.
+
 ## Experiment template
 
 ### Experiment ID
