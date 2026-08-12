@@ -245,8 +245,9 @@ def test_workflow_retains_perfetto_artifact_on_github() -> None:
 
 
 def test_exporter_writes_run_scoped_perfetto_artifact(tmp_path: Path) -> None:
-    result_dir = tmp_path / "vtune.compute-node"
-    result_dir.mkdir()
+    result_dir = tmp_path / "vtune"
+    resolved_result_dir = tmp_path / "vtune.compute-node"
+    resolved_result_dir.mkdir()
     run_dir = tmp_path / "run"
     (run_dir / "logs").mkdir(parents=True)
     (run_dir / "logs" / "solver.log").write_text(
@@ -267,12 +268,15 @@ def test_exporter_writes_run_scoped_perfetto_artifact(tmp_path: Path) -> None:
         """#!/usr/bin/env bash
 set -euo pipefail
 report=
+result_dir=
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -report) report=$2; shift 2 ;;
+    -result-dir) result_dir=$2; shift 2 ;;
     *) shift ;;
   esac
 done
+[[ "$result_dir" == "$VTUNE_RESOLVED_RESULT_DIR" ]]
 case "$report" in
   timeline) echo 'timeline report unavailable' >&2; exit 1 ;;
   hotspots) cat "$VTUNE_HOTSPOTS_FIXTURE" ;;
@@ -291,6 +295,7 @@ esac
             "RUN_DIR": str(run_dir),
             "RUN_LABEL": "rank-zero",
             "VTUNE_RESULT_DIR": str(result_dir),
+            "VTUNE_RESOLVED_RESULT_DIR": str(resolved_result_dir),
             "VTUNE_HOTSPOTS_FIXTURE": str(FIXTURES / "vtune-hotspots.csv"),
         }
     )

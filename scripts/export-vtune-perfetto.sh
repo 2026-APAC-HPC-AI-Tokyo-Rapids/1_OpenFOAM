@@ -26,7 +26,17 @@ do
   }
 done
 
-[[ -d "${VTUNE_RESULT_DIR}" ]]
+result_dirs=()
+for candidate in "${VTUNE_RESULT_DIR}" "${VTUNE_RESULT_DIR}".*
+do
+  [[ -d "${candidate}" ]] && result_dirs+=("${candidate}")
+done
+[[ "${#result_dirs[@]}" -eq 1 ]] || {
+  printf 'Expected one VTune result directory for %s, found %d\n' \
+    "${VTUNE_RESULT_DIR}" "${#result_dirs[@]}" >&2
+  exit 2
+}
+resolved_result_dir=${result_dirs[0]}
 command -v vtune >/dev/null
 python_path="${PROVISION_DIR}/experiment-metrics/.venv/bin/python"
 [[ -x "${python_path}" ]]
@@ -40,7 +50,7 @@ install -d -m 0700 "${output_dir}" "${slices_dir}"
 # of stretching aggregate hotspot totals across the whole solver run.
 timeline_status=0
 vtune -quiet -report timeline \
-  -result-dir "${VTUNE_RESULT_DIR}" \
+  -result-dir "${resolved_result_dir}" \
   -report-knob column-by=CPUTime \
   -report-knob "bin-count=${MAX_TIME_BINS}" \
   -format csv -csv-delimiter comma \
@@ -48,7 +58,7 @@ vtune -quiet -report timeline \
   2> "${output_dir}/timeline.stderr" || timeline_status=$?
 
 vtune -quiet -report hotspots \
-  -result-dir "${VTUNE_RESULT_DIR}" \
+  -result-dir "${resolved_result_dir}" \
   -group-by function,module \
   -column time \
   -format csv -csv-delimiter comma \
@@ -84,7 +94,7 @@ for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do
   printf '%s,%s,%s\n' "${slice_name}" "${slice_start}" "${slice_end}" \
     >> "${slices_dir}/windows.csv"
   vtune -quiet -report hotspots \
-    -result-dir "${VTUNE_RESULT_DIR}" \
+    -result-dir "${resolved_result_dir}" \
     -group-by function,module \
     -column time \
     -time-filter "${slice_start}:${slice_end}" \
