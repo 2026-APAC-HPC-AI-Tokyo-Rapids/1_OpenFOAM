@@ -5,6 +5,8 @@ set -euo pipefail
 
 : "${PROVISION_DIR:?provision directory is required}"
 : "${PREPARE_TARGET:?temporary materialization path is required}"
+: "${PREPARE_SUBDOMAINS:?requested decomposition size is required}"
+[[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
 
 module purge
 module load intel/2025.1.3 impi
@@ -23,5 +25,6 @@ rm -f -- "${PREPARE_TARGET}"
 trap 'rm -f -- "${PREPARE_TARGET}"' EXIT
 "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
   "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
-  "${BLOCK_MESH}" "${DECOMPOSE_PAR}"
-[[ -L "${PREPARE_TARGET}" && -d "${PREPARE_TARGET}/processor119" ]]
+  "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${PREPARE_SUBDOMAINS}"
+[[ -L "${PREPARE_TARGET}" && \
+   -d "${PREPARE_TARGET}/processor$((PREPARE_SUBDOMAINS - 1))" ]]

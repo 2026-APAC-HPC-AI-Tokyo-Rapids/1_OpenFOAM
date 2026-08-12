@@ -21,15 +21,15 @@ on:
         options:
           - bench
           - profile
-      nodes:
-        description: Allocated nodes while keeping the total MPI rank count at 120
+      experiment_preset:
+        description: Tracked node, rank, and decomposition configuration
         required: true
-        default: '1'
+        default: scotch-1n-120r
         type: choice
         options:
-          - '1'
-          - '2'
-          - '4'
+          - scotch-1n-120r
+          - scotch-2n-240r
+          - scotch-4n-480r
   push:
     paths-ignore:
       - 'research/**'
@@ -249,6 +249,7 @@ jobs:
 
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
+      OPENFOAM_EXPERIMENT_PRESET: ${{ inputs.experiment_preset || 'scotch-1n-120r' }}
 
     steps:
       - name: Run blockMesh and decomposePar when uncached
@@ -256,6 +257,11 @@ jobs:
           expected_sha='${{ needs.select-build.outputs.prepare_script_sha256 }}'
           actual_sha="$(sha256sum "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" | awk '{print $1}')"
           test "${actual_sha}" = "${expected_sha}"
+          [[ "${OPENFOAM_EXPERIMENT_PRESET}" =~ ^[a-z0-9-]+$ ]]
+          protocol_path="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2-protocol-${OPENFOAM_EXPERIMENT_PRESET}.toml"
+          test -f "${protocol_path}"
+          prepare_subdomains="$(sed -n 's/^ranks = \([0-9][0-9]*\)$/\1/p' "${protocol_path}" | sort -u)"
+          [[ "${prepare_subdomains}" =~ ^[1-9][0-9]*$ ]]
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${prepare_root}"
           prepare_target="${prepare_root}/case"
@@ -272,7 +278,7 @@ jobs:
           }
           trap cleanup EXIT
           submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 \
-            -x "PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" \
+            -x "PREPARE_SUBDOMAINS=${prepare_subdomains},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" \
             -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare \
             "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
           printf '%s\n' "${submission}"
@@ -281,7 +287,9 @@ jobs:
           pjwait -z "${job_id}"
           pjwait "${job_id}"
           cat "${prepare_root}/${job_id}.pjm.log"
-          test -f "${HOME}/../share/openfoam-case-cache/${expected_sha}/READY"
+          cache_dir="$(sed -n 's/^cache_dir=//p' "${prepare_root}/${job_id}.pjm.log" | tail -n 1)"
+          [[ "${cache_dir}" == "${HOME}/../share/openfoam-case-cache/"* ]]
+          test -f "${cache_dir}/READY"
 
   run:
     name: Run OpenFOAM
@@ -298,7 +306,7 @@ jobs:
       # Pushes are always benchmark runs. Only an explicit workflow dispatch
       # may create a profile run.
       OPENFOAM_RUN_PURPOSE: ${{ github.event_name == 'push' && 'bench' || inputs.run_purpose }}
-      OPENFOAM_NODE_COUNT: ${{ inputs.nodes || '1' }}
+      OPENFOAM_EXPERIMENT_PRESET: ${{ inputs.experiment_preset || 'scotch-1n-120r' }}
 
     steps:
       - name: Checkout control-plane identity
@@ -321,11 +329,8 @@ jobs:
           export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${staging_credential}"
           export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
           uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
-          case "${OPENFOAM_NODE_COUNT}" in
-            1) protocol_relative=experiment-metrics/registry/openfoam-v2-protocol.toml ;;
-            2|4) protocol_relative="experiment-metrics/registry/openfoam-v2-protocol-${OPENFOAM_NODE_COUNT}n.toml" ;;
-            *) echo "unsupported node count: ${OPENFOAM_NODE_COUNT}" >&2; exit 2 ;;
-          esac
+          [[ "${OPENFOAM_EXPERIMENT_PRESET}" =~ ^[a-z0-9-]+$ ]]
+          protocol_relative="experiment-metrics/registry/openfoam-v2-protocol-${OPENFOAM_EXPERIMENT_PRESET}.toml"
           protocol_path="${PROVISION_DIR}/${protocol_relative}"
           test -f "${protocol_path}"
           head_commit="$(git rev-parse HEAD)"
