@@ -139,7 +139,7 @@ export PATH="${PROBE_PYTHON_DIR}:${PATH}"
 
 unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
 unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC
-unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
+unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN I_MPI_TUNING_BIN_DUMP
 
 # The 112-rank/node experiment reserves one physical core in each of the
 # eight 15-core NUMA domains observed on Genkai compute nodes.  Intel MPI
@@ -148,6 +148,34 @@ unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
 if (( OPENFOAM_MPI_PPN == 112 )); then
   export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
 fi
+
+# Application autotuning is deliberately split into generation and consumption
+# protocols.  The generated binary is topology-specific and immutable; the
+# consumed copy is captured with the run instead of relying on an unrecorded
+# mutable file.  The fixed v1 name represents Intel 2025.1.3, 4 nodes, 448
+# ranks, 112 ranks/node, Scotch, and shm:ofi.
+MPI_TUNING_ROOT="${HOME}/../share/openfoam-mpi-tuning"
+MPI_TUNING_PUBLISHED="${MPI_TUNING_ROOT}/impi-2025.1.3-scotch-4n-448r-shm-ofi-v1.dat"
+MPI_TUNING_GENERATED="${SOURCE_DIR}/env/mpi-tuning-generated.dat"
+MPI_TUNING_CONSUMED="${SOURCE_DIR}/env/mpi-tuning-consumed.dat"
+case "${PROTOCOL_NAME}" in
+  *-scotch-4n-448r-mpi-autotune-generate)
+    [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]
+    [[ ! -e "${MPI_TUNING_PUBLISHED}" ]]
+    install -d -m 0755 "${SOURCE_DIR}/env"
+    export I_MPI_TUNING_MODE=auto
+    export I_MPI_TUNING_AUTO_SYNC=1
+    export I_MPI_TUNING_AUTO_ITER_NUM=5
+    export I_MPI_TUNING_BIN_DUMP="${MPI_TUNING_GENERATED}"
+    ;;
+  *-scotch-4n-448r-mpi-autotune-consume)
+    [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]
+    [[ -s "${MPI_TUNING_PUBLISHED}" ]]
+    install -d -m 0755 "${SOURCE_DIR}/env"
+    install -m 0644 "${MPI_TUNING_PUBLISHED}" "${MPI_TUNING_CONSUMED}"
+    export I_MPI_TUNING_BIN="${MPI_TUNING_CONSUMED}"
+    ;;
+esac
 
 MPIEXEC=$(command -v mpirun)
 BLOCK_MESH=$(command -v blockMesh)
@@ -281,6 +309,27 @@ set -e
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
+
+case "${PROTOCOL_NAME}" in
+  *-scotch-4n-448r-mpi-autotune-generate)
+    [[ -s "${MPI_TUNING_GENERATED}" ]]
+    install -d -m 0755 "${MPI_TUNING_ROOT}"
+    tuning_publish_tmp="${MPI_TUNING_PUBLISHED}.${RUN_ID}.tmp"
+    install -m 0644 "${MPI_TUNING_GENERATED}" "${tuning_publish_tmp}"
+    if ! ln "${tuning_publish_tmp}" "${MPI_TUNING_PUBLISHED}"; then
+      rm -f -- "${tuning_publish_tmp}"
+      echo "MPI tuning binary already published: ${MPI_TUNING_PUBLISHED}" >&2
+      exit 73
+    fi
+    rm -f -- "${tuning_publish_tmp}"
+    sha256sum "${MPI_TUNING_GENERATED}" > "${SOURCE_DIR}/env/mpi-tuning-generated.sha256"
+    ;;
+  *-scotch-4n-448r-mpi-autotune-consume)
+    sha256sum "${MPI_TUNING_CONSUMED}" > "${SOURCE_DIR}/env/mpi-tuning-consumed.sha256"
+    ;;
+esac
+unset I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC I_MPI_TUNING_AUTO_ITER_NUM
+unset I_MPI_TUNING_BIN I_MPI_TUNING_BIN_DUMP
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e

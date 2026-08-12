@@ -40,6 +40,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,'
         '60-73,75-88,90-103,105-118"'
     ) in text
+    assert "scotch-4n-448r-mpi-autotune-generate" in text
+    assert "scotch-4n-448r-mpi-autotune-consume" in text
+    assert "I_MPI_TUNING_MODE=auto" in text
+    assert 'export I_MPI_TUNING_BIN="${MPI_TUNING_CONSUMED}"' in text
+    assert '[[ ! -e "${MPI_TUNING_PUBLISHED}" ]]' in text
     assert "OPENFOAM_PROFILE_DIR" not in text
     assert "capture-workload" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text

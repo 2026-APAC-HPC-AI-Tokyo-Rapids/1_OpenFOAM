@@ -31,6 +31,8 @@ on:
           - scotch-2n-240r
           - scotch-4n-480r
           - scotch-4n-448r
+          - scotch-4n-448r-mpi-autotune-generate
+          - scotch-4n-448r-mpi-autotune-consume
           - hierarchical-4n-480r
           - multilevel-node-numa-4n-480r
           - multilevel-node-numa-r346-4n-480r
