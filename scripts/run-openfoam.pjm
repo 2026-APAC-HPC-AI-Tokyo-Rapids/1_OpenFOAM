@@ -275,6 +275,9 @@ fi
 
 if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
   "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
+  VTUNE_RESULT_DIR="${OPENFOAM_VTUNE_RESULT_DIR}" \
+  RUN_LABEL="${RUN_ID}" \
+    "${PROVISION_DIR}/scripts/export-vtune-perfetto.sh"
 fi
 
 "${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" > "${RESULTS_DIR}/result.txt"

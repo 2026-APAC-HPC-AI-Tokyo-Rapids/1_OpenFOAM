@@ -475,17 +475,16 @@ jobs:
             printf -- '- `%s`\n' "${vtune_result_dir}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Generate rich VTune Perfetto JSON
+      - name: Verify rich VTune Perfetto JSON
         if: success() && inputs.profile_mode == 'vtune-hotspots'
         run: |
-          vtune_result_dir="$(sed -n 's/^vtune_result_dir=//p' \
-            "${RUN_DIR}/logs/profile-location.txt")"
-          test -n "${vtune_result_dir}"
-          VTUNE_RESULT_DIR="${vtune_result_dir}" \
-          RUN_LABEL="${RUN_ID}" \
-          PROVISION_DIR="${PROVISION_DIR}" \
-          RUN_DIR="${RUN_DIR}" \
-            "${PROVISION_DIR}/scripts/export-vtune-perfetto.sh"
+          artifact_dir="${RUN_DIR}/profile/raw/vtune-perfetto"
+          test -s "${artifact_dir}/openfoam-vtune-perfetto.json"
+          test -s "${artifact_dir}/summary.json"
+          jq -e '.traceEvents | type == "array"' \
+            "${artifact_dir}/openfoam-vtune-perfetto.json" > /dev/null
+          jq -e '.schema_version == 6 and .trace_bytes > 0' \
+            "${artifact_dir}/summary.json" > /dev/null
 
       - name: Upload rich VTune Perfetto artifact
         id: upload_vtune_perfetto
