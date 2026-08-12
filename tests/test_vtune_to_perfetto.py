@@ -236,6 +236,14 @@ def test_cli_accepts_empty_timeline_report(tmp_path: Path) -> None:
     assert metadata["elapsed_sec"] is None
 
 
+def test_workflow_retains_perfetto_artifact_on_github() -> None:
+    workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
+
+    assert "openfoam-vtune-perfetto-${{ steps.v2_context.outputs.run_id }}" in workflow
+    assert "retention-days: 90" in workflow
+    assert 'startswith("openfoam-vtune-perfetto-") | not' in workflow
+
+
 def test_exporter_writes_run_scoped_perfetto_artifact(tmp_path: Path) -> None:
     result_dir = tmp_path / "vtune.compute-node"
     result_dir.mkdir()

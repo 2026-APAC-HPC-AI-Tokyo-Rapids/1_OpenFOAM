@@ -79,7 +79,8 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert "record-profile-perf --manifest" in workflow
     assert "Publish VTune hotspots to Actions summary" in workflow
     assert "vtune-hotspots" in workflow
-    assert "Perfetto" not in workflow
+    assert "Generate rich VTune Perfetto JSON" in workflow
+    assert "Upload rich VTune Perfetto artifact" in workflow
     assert "Merge terminal fragments" not in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" in workflow

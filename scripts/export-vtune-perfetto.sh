@@ -47,6 +47,7 @@ vtune -quiet -report timeline \
 vtune -quiet -report hotspots \
   -result-dir "${VTUNE_RESULT_DIR}" \
   -group-by function,module \
+  -column time \
   -format csv -csv-delimiter comma \
   > "${output_dir}/hotspots.csv"
 
@@ -74,6 +75,7 @@ for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do
   vtune -quiet -report hotspots \
     -result-dir "${VTUNE_RESULT_DIR}" \
     -group-by function,module \
+    -column time \
     -time-filter "${slice_start}:${slice_end}" \
     -format csv -csv-delimiter comma \
     > "${slices_dir}/${slice_name}"
