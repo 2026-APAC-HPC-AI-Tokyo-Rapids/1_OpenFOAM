@@ -127,7 +127,7 @@ jobs:
 
     concurrency:
       group: genkai-openfoam-build
-      queue: single
+      queue: max
 
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -243,7 +243,7 @@ jobs:
 
     concurrency:
       group: genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}
-      queue: single
+      queue: max
 
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}

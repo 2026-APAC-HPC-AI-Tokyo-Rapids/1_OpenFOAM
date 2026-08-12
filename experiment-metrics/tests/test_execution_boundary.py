@@ -84,6 +84,8 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
         "genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}"
     )
     assert prepare_concurrency in workflow
+    assert workflow.count("queue: max") == 2
+    assert "queue: single" not in workflow
     assert workflow.count("- name: Record v2 terminal sources") == 1
     assert "metrics.jsonl" not in workflow
     assert "-name 'node-*.json'" in workflow
