@@ -52,7 +52,6 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
-        profile_mode="direct",
         pjsub_path=pjsub,
         execute=lambda argv: subprocess.CompletedProcess(
             argv, 0, b"Job 12345 submitted.\n", b""
@@ -64,6 +63,9 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert request["ranks"] == 120
     assert request["argv"][0] == str(pjsub)
     assert "OPENFOAM_RANKS=120" in next(
+        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
+    )
+    assert "OPENFOAM_RUN_PURPOSE=bench" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
 
@@ -86,7 +88,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert terminal["argv"][0] == str(pjstat)
 
 
-def test_submission_accepts_vtune_for_a_profile_run(
+def test_submission_derives_vtune_profile_purpose_from_manifest(
     tmp_path: Path, identities: dict[str, object]
 ) -> None:
     profile_identities = json.loads(json.dumps(identities))
@@ -115,7 +117,6 @@ def test_submission_accepts_vtune_for_a_profile_run(
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
-        profile_mode="vtune-hotspots",
         pjsub_path=pjsub,
         execute=lambda argv: subprocess.CompletedProcess(
             argv, 0, b"Job 23456 submitted.\n", b""
@@ -127,7 +128,7 @@ def test_submission_accepts_vtune_for_a_profile_run(
     exported = next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
-    assert "OPENFOAM_PROFILE_MODE=vtune-hotspots" in exported
+    assert "OPENFOAM_RUN_PURPOSE=profile" in exported
 
 
 def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:

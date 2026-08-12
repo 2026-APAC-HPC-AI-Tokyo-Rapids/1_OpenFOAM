@@ -78,11 +78,6 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--pjm-script-repository-path", required=True)
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
-    submit.add_argument(
-        "--profile-mode",
-        choices=["direct", "perf-stat", "vtune-hotspots"],
-        required=True,
-    )
 
     supervisor_start = commands.add_parser("supervisor-start")
     supervisor_start.add_argument("--manifest", type=Path, required=True)
@@ -120,10 +115,6 @@ def parser() -> argparse.ArgumentParser:
     execution_context.add_argument("--scheduler-accounting", type=Path, required=True)
     execution_context.add_argument("--decompose-dict", type=Path, required=True)
     execution_context.add_argument("--solver-log", type=Path, required=True)
-
-    profile_perf = commands.add_parser("record-profile-perf")
-    _runtime_common(profile_perf)
-    profile_perf.add_argument("--protocol", type=Path, required=True)
 
     record = commands.add_parser("record-json")
     _common(record)
@@ -181,6 +172,15 @@ def parser() -> argparse.ArgumentParser:
     _runtime_common(profile_hardware)
     profile_hardware.add_argument("--profile-hardware-root", type=Path, required=True)
     profile_hardware.add_argument("--protocol", type=Path, required=True)
+
+    profile_vtune = commands.add_parser("record-profile-vtune")
+    _runtime_common(profile_vtune)
+    profile_vtune.add_argument("--report", type=Path, required=True)
+    profile_vtune.add_argument("--status", type=Path, required=True)
+    profile_vtune.add_argument("--summary", type=Path, required=True)
+    profile_vtune.add_argument("--markdown", type=Path, required=True)
+    profile_vtune.add_argument("--profiled-rank", type=int, required=True)
+    profile_vtune.add_argument("--collection-duration-sec", type=int, required=True)
 
     workload = commands.add_parser("capture-workload")
     workload.add_argument("--manifest", type=Path, required=True)
@@ -328,7 +328,6 @@ def main(argv: list[str] | None = None) -> int:
             pjm_script_repository_path=arguments.pjm_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
-            profile_mode=arguments.profile_mode,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)
@@ -413,43 +412,6 @@ def main(argv: list[str] | None = None) -> int:
                 solver_log=arguments.solver_log,
             )
         )
-        return 0
-    if arguments.command == "record-profile-perf":
-        from .manifest import RunManifest
-        from .profile_perf import profile_perf_fact_values, project_profile_perf
-        from .protocol import RunProtocol
-        from .recording import Recorder
-
-        manifest = RunManifest.load(arguments.manifest)
-        if manifest.purpose != "profile":
-            raise ValueError("perf facts apply only to profile runs")
-        protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
-        projection = project_profile_perf(
-            arguments.runtime_dir,
-            run_id=manifest.run_id,
-            expected_ranks=protocol.ranks,
-        )
-        projection.require_complete()
-        hosts = {fact.hostname for fact in projection.rank_facts}
-        if len(hosts) != protocol.nodes or any(
-            fact.local_size != protocol.ranks_per_node for fact in projection.rank_facts
-        ):
-            raise ValueError("perf rank axes differ from the protocol")
-        values = profile_perf_fact_values(
-            arguments.runtime_dir,
-            run_id=manifest.run_id,
-            expected_ranks=protocol.ranks,
-        )
-        with Recorder.open(
-            manifest.path,
-            arguments.registry,
-            "runner.perf_parser",
-            arguments.runtime_dir,
-            fragment_id="perf",
-        ) as recorder:
-            for rank, value in enumerate(values):
-                recorder.record(Fact(f"profile.perf_stat.rank.{rank}", value))
-        print(recorder.fragment_path)
         return 0
     if arguments.command == "record-json":
         facts = _facts(arguments.facts)
@@ -663,6 +625,23 @@ def main(argv: list[str] | None = None) -> int:
                 lambda: facts,
                 registry_path=arguments.registry,
                 fragment_id="profile-hardware",
+            )
+        )
+        return 0
+    if arguments.command == "record-profile-vtune":
+        from .profile_vtune import record_vtune_hotspots
+
+        print(
+            record_vtune_hotspots(
+                manifest_path=arguments.manifest,
+                runtime_dir=arguments.runtime_dir,
+                registry_path=arguments.registry,
+                report_path=arguments.report,
+                status_path=arguments.status,
+                summary_path=arguments.summary,
+                markdown_path=arguments.markdown,
+                profiled_rank=arguments.profiled_rank,
+                collection_duration_sec=arguments.collection_duration_sec,
             )
         )
         return 0

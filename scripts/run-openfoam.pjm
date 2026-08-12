@@ -17,13 +17,17 @@ set -euo pipefail
 : "${OPENFOAM_TRANSPORT_POLICY:?protocol transport policy is required}"
 : "${OPENFOAM_PROTOCOL_PATH:?effective protocol path is required}"
 
-OPENFOAM_PROFILE_MODE=${OPENFOAM_PROFILE_MODE:-direct}
+OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_RANK:=0}"
+case "${OPENFOAM_RUN_PURPOSE}" in
+  bench|profile) ;;
+  *) printf 'Unsupported OPENFOAM_RUN_PURPOSE: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
+esac
 OPENFOAM_MPI_PROCS=${OPENFOAM_RANKS}
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 OPENFOAM_MPI_PPN=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
-export OPENFOAM_MPI_PROCS OPENFOAM_MPI_PPN OPENFOAM_PROFILE_MODE
+export OPENFOAM_MPI_PROCS OPENFOAM_MPI_PPN OPENFOAM_RUN_PURPOSE
 export OPENFOAM_VTUNE_RANK
 
 CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
@@ -40,11 +44,10 @@ DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 PROFILE_RUN_ID="${RUN_ID}-${PJM_JOBID}"
-OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"
 OPENFOAM_VTUNE_ROOT="${HOME}/openfoam-vtune/${PROFILE_RUN_ID}"
 OPENFOAM_VTUNE_RESULT_DIR="${OPENFOAM_VTUNE_ROOT}/rank-${OPENFOAM_VTUNE_RANK}"
-export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID
-export OPENFOAM_VTUNE_RESULT_DIR
+OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
+export PROFILE_RUN_ID OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
 export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
 export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
@@ -164,16 +167,13 @@ provision_args=(
   --executable "capture-hardware=${CAPTURE_HARDWARE}"
   --executable "mpirun=${MPIEXEC}"
 )
-if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
-  OPENFOAM_PERF_PATH=$(command -v perf)
-  [[ "${OPENFOAM_PERF_PATH}" == /* && -x "${OPENFOAM_PERF_PATH}" ]]
-  export OPENFOAM_PERF_PATH
-  provision_args+=(--executable "perf=${OPENFOAM_PERF_PATH}")
-fi
-if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
   (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
-  command -v vtune >/dev/null
+  OPENFOAM_VTUNE_PATH=$(command -v vtune)
+  [[ "${OPENFOAM_VTUNE_PATH}" == /* && -x "${OPENFOAM_VTUNE_PATH}" ]]
+  export OPENFOAM_VTUNE_PATH
+  provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
 "${METRICS_CLI}" record-build-provision \
@@ -207,38 +207,17 @@ install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "${HOME}/../share/openfoam-case-cache/$(sha256sum "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" | awk '{print $1}')/manifest.json" \
   "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
-if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   install -d -m 0700 \
-    "${HOME}/openfoam-profile" "${OPENFOAM_PROFILE_DIR}" \
-    "${HOME}/openfoam-vtune" "${OPENFOAM_VTUNE_ROOT}"
-  printf '%s\n' \
-    "PJM_JOBID=${PJM_JOBID}" \
-    "run_id=${RUN_ID}" \
-    "launch_host=$(hostname)" \
-    "mpi_procs=${OPENFOAM_MPI_PROCS}" \
-    "profile_mode=${OPENFOAM_PROFILE_MODE}" \
-    "created_at=$(date --iso-8601=seconds)" \
-    > "${OPENFOAM_PROFILE_DIR}/run.txt"
-  cp system/decomposeParDict.6 system/controlDict "${OPENFOAM_PROFILE_DIR}/"
-  env | sort > "${OPENFOAM_PROFILE_DIR}/environment.txt"
-  { printf 'host=%s\n' "$(hostname)"; lscpu; } \
-    > "${OPENFOAM_PROFILE_DIR}/nodes.txt"
+    "${HOME}/openfoam-vtune" "${OPENFOAM_VTUNE_ROOT}" \
+    "${RUN_DIR}/profile/raw/vtune-summary"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec \
   --manifest "${RUN_MANIFEST}" \
   --output "${SOURCE_DIR}/env/host-exec.snapshot"
 set +e
-if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
-  install -d -m 0700 "${RUN_DIR}/profile/raw/perf"
-  stage solver "${SOLVER_LOG}" \
-    "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${OPENFOAM_MPI_PPN}" \
-    "${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py" \
-    --run-id "${RUN_ID}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
-    --output "${RUN_DIR}/profile/raw/perf/rank-{rank}.csv" \
-    --perf "${OPENFOAM_PERF_PATH}" --solver "${ICO_FOAM}" -- \
-    -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
-elif [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
   # profiler, which launches icoFoam directly so VTune follows the solver
   # rather than the Python placement process.
@@ -273,8 +252,15 @@ if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
 
-if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
+  set +e
   "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
+  vtune_export_status=$?
+  set -e
+  if [[ "${vtune_export_status}" -ne 0 ]]; then
+    printf 'VTune hotspot export failed (%d); solver result remains authoritative\n' \
+      "${vtune_export_status}" >&2
+  fi
 fi
 
 "${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" > "${RESULTS_DIR}/result.txt"
@@ -324,7 +310,7 @@ else
     || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
 fi
 
-if [[ "${OPENFOAM_PROFILE_MODE}" != direct ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e
   stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \
     "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" \
@@ -389,21 +375,21 @@ else
   printf '%s\n' 'IMB-MPI1 is unavailable; collection will be incomplete' >&2
 fi
 
-if [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
-  install -d -m 0700 "${RUN_DIR}/profile/raw"
-  cp -a "${OPENFOAM_PROFILE_DIR}/." "${RUN_DIR}/profile/raw/"
-  du -sh "${OPENFOAM_PROFILE_DIR}" > "${LOG_DIR}/profile-location.txt"
-  printf 'profile_dir=%s\n' "${OPENFOAM_PROFILE_DIR}" \
-    >> "${LOG_DIR}/profile-location.txt"
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
+  : > "${LOG_DIR}/profile-location.txt"
   vtune_result_dirs=()
   for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
   do
     [[ -d "${candidate}" ]] && vtune_result_dirs+=("${candidate}")
   done
-  [[ "${#vtune_result_dirs[@]}" -eq 1 ]]
-  du -sh "${OPENFOAM_VTUNE_ROOT}" >> "${LOG_DIR}/profile-location.txt"
-  printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" \
-    >> "${LOG_DIR}/profile-location.txt"
+  du -sh "${OPENFOAM_VTUNE_ROOT}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
+  if [[ "${#vtune_result_dirs[@]}" -eq 1 ]]; then
+    printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" \
+      >> "${LOG_DIR}/profile-location.txt"
+  else
+    printf 'Expected one VTune result directory for %s, found %d\n' \
+      "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
+  fi
 fi
 # Only solver validity controls the scheduler/job success marker.
 touch "${RUN_DIR}/run-success"
