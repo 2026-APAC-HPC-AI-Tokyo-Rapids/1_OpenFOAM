@@ -285,6 +285,18 @@ Scotch control.  A generation failure or a consumed result at or below the
 control terminates this axis; no hand-forced collective algorithm sweep will
 follow.
 
+Actions `31646485229` generated the application tuning binary with the existing
+build and cached 448-way Scotch case.  Solver PJM `6468020` produced official
+VALID result 7.9061 M FVOPS and 8.095 s/step, with 52.044/53.864 s
+solver/pipeline wall.  The score is excluded from adoption comparisons because
+the application search is active during this run.  The exact 4 x 112-rank
+placement was observed, all Actions and archive jobs succeeded, and no PJM job
+remained.  The generated 889,965-byte binary has SHA-256
+`cc1ee2e1ce1181298a10cc60bb1dd38971a9ecce5a6fb6b215a8e6d30211c3f0`;
+the run-captured copy and immutable shared copy match.  Actions `31647180395`
+will consume this exact binary, while concurrently submitted Actions
+`31647182300` is the unchanged Scotch control at the same commit and build.
+
 ## Experiment template
 
 ### Experiment ID
