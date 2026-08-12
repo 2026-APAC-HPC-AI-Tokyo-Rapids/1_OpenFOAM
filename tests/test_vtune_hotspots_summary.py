@@ -54,7 +54,9 @@ def test_cli_writes_json_and_actions_markdown(tmp_path: Path) -> None:
     rendered = markdown.read_text(encoding="utf-8")
     assert document["schema_version"] == "openfoam-vtune-hotspots-summary/v1"
     assert document["exported_hotspots"] == 2
+    assert document["collection_duration_sec"] == 60
     assert document["reported_cpu_time_sec"] == 21.58
     assert "## Intel VTune hotspots" in rendered
     assert "PMPI_Allreduce" in rendered
+    assert "Attached sampling window: 60 s" in rendered
     assert "Perfetto" not in rendered

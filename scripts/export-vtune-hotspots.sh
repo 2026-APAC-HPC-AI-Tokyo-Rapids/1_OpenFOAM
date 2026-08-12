@@ -6,6 +6,7 @@ set -euo pipefail
 : "${OPENFOAM_VTUNE_RANK:?}"
 : "${PROVISION_DIR:?}"
 : "${RUN_DIR:?}"
+: "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
 
 result_dirs=()
 for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
@@ -39,7 +40,8 @@ if ! "${python_path}" "${PROVISION_DIR}/scripts/vtune-hotspots-summary.py" \
   --hotspots "${summary_dir}/hotspots.csv" \
   --summary "${summary_dir}/summary.json" \
   --markdown "${summary_dir}/summary.md" \
-  --profiled-rank "${OPENFOAM_VTUNE_RANK}"
+  --profiled-rank "${OPENFOAM_VTUNE_RANK}" \
+  --collection-duration-sec "${OPENFOAM_VTUNE_DURATION_SEC}"
 then
   sed -n '1,80p' "${summary_dir}/hotspots.csv" >&2
   exit 1

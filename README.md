@@ -11,7 +11,7 @@ Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法
 
 ## VTune hotspots summary
 
-`OpenFOAM on genkai` を手動実行するとき、`profile_mode` に `vtune-hotspots` を選ぶと MPI rank 0 を Intel VTune で計測します。
+`OpenFOAM on genkai` を手動実行するとき、`profile_mode` に `vtune-hotspots` を選ぶと MPI rank 0 へ60秒間 Intel VTune を attach して計測します。
 計測後、上位 hotspot は GitHub Actions の run summary に表として表示されます。
 このモードでは Perfetto 用 trace を生成しません。
 VTune の完全な result directory は Genkai の `~/openfoam-vtune/` 以下に保持され、Actions summary に保存先が記録されます。

@@ -70,6 +70,7 @@ def render_markdown(summary: dict[str, object]) -> str:
         "## Intel VTune hotspots",
         "",
         f"- Profiled MPI rank: {summary['profiled_rank']}",
+        f"- Attached sampling window: {summary['collection_duration_sec']} s",
         f"- Reported functions: {summary['source_hotspots']}",
         f"- Total reported CPU time: {summary['reported_cpu_time_sec']:.6f} s",
         "",
@@ -96,7 +97,11 @@ def render_markdown(summary: dict[str, object]) -> str:
 
 
 def build_summary(
-    hotspots: list[dict[str, object]], *, profiled_rank: int, limit: int
+    hotspots: list[dict[str, object]],
+    *,
+    profiled_rank: int,
+    collection_duration_sec: int,
+    limit: int,
 ) -> dict[str, object]:
     total = sum(float(item["cpu_time_sec"]) for item in hotspots)
     top = []
@@ -111,6 +116,7 @@ def build_summary(
     return {
         "schema_version": "openfoam-vtune-hotspots-summary/v1",
         "profiled_rank": profiled_rank,
+        "collection_duration_sec": collection_duration_sec,
         "source_hotspots": len(hotspots),
         "exported_hotspots": len(top),
         "reported_cpu_time_sec": total,
@@ -124,14 +130,20 @@ def main() -> None:
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--markdown", type=Path, required=True)
     parser.add_argument("--profiled-rank", type=int, default=0)
+    parser.add_argument("--collection-duration-sec", type=int, default=60)
     parser.add_argument("--limit", type=int, default=30)
     arguments = parser.parse_args()
-    if arguments.profiled_rank < 0 or arguments.limit <= 0:
+    if (
+        arguments.profiled_rank < 0
+        or arguments.collection_duration_sec <= 0
+        or arguments.limit <= 0
+    ):
         parser.error("profiled rank must be non-negative and limit must be positive")
 
     summary = build_summary(
         read_hotspots(arguments.hotspots),
         profiled_rank=arguments.profiled_rank,
+        collection_duration_sec=arguments.collection_duration_sec,
         limit=arguments.limit,
     )
     arguments.summary.write_text(
