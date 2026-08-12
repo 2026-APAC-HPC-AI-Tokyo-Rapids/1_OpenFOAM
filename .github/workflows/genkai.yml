@@ -31,6 +31,8 @@ on:
           - scotch-2n-240r
           - scotch-4n-480r
           - scotch-4n-448r
+          - hierarchical-4n-480r
+          - multilevel-node-numa-4n-480r
   push:
     paths-ignore:
       - 'research/**'
@@ -200,6 +202,7 @@ jobs:
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
+            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-geometric-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
@@ -263,6 +266,12 @@ jobs:
           test -f "${protocol_path}"
           prepare_subdomains="$(sed -n 's/^ranks = \([0-9][0-9]*\)$/\1/p' "${protocol_path}" | sort -u)"
           [[ "${prepare_subdomains}" =~ ^[1-9][0-9]*$ ]]
+          case "${OPENFOAM_EXPERIMENT_PRESET}" in
+            scotch-*) prepare_decomposition_profile=scotch ;;
+            hierarchical-4n-480r) prepare_decomposition_profile=hierarchical-6x8x10 ;;
+            multilevel-node-numa-4n-480r) prepare_decomposition_profile=multilevel-node-numa-4n480 ;;
+            *) echo "unsupported decomposition preset: ${OPENFOAM_EXPERIMENT_PRESET}" >&2; exit 64 ;;
+          esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${prepare_root}"
           prepare_target="${prepare_root}/case"
@@ -279,7 +288,7 @@ jobs:
           }
           trap cleanup EXIT
           submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 \
-            -x "PREPARE_SUBDOMAINS=${prepare_subdomains},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" \
+            -x "PREPARE_DECOMPOSITION_PROFILE=${prepare_decomposition_profile},PREPARE_SUBDOMAINS=${prepare_subdomains},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" \
             -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare \
             "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
           printf '%s\n' "${submission}"
@@ -370,6 +379,7 @@ jobs:
           control_plane_args+=(
             --control-plane-file scripts/prepare-openfoam-case.pjm
             --control-plane-file scripts/prepare-openfoam-case.sh
+            --control-plane-file scripts/prepare-openfoam-geometric-case.sh
             --control-plane-file scripts/run-openfoam.pjm
           )
           identities="$(

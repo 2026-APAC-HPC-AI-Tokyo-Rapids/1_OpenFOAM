@@ -21,6 +21,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "--node-ordinal-from-env PMI_RANK" in text
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
+    assert "prepare-openfoam-geometric-case.sh" in text
     assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
@@ -56,6 +57,12 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(prepare)], check=True)
     assert "blockMesh" in prepare.read_text(encoding="utf-8")
     assert "decomposePar" in prepare.read_text(encoding="utf-8")
+    geometric_prepare = ROOT / "scripts/prepare-openfoam-geometric-case.sh"
+    subprocess.run(["bash", "-n", str(geometric_prepare)], check=True)
+    assert "hierarchical-6x8x10" in geometric_prepare.read_text(encoding="utf-8")
+    assert "multilevel-node-numa-4n480" in geometric_prepare.read_text(
+        encoding="utf-8"
+    )
 
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must
