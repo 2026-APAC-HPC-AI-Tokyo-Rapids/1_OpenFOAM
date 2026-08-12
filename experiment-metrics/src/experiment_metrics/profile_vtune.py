@@ -34,13 +34,15 @@ _REPORT_HEADER = [
 
 @dataclass(frozen=True, slots=True)
 class Hotspot:
+    report_row: int
     function: str
     module: str
     cpu_time_lexeme: str
     cpu_time_sec: Decimal
 
-    def fact_value(self) -> dict[str, str]:
+    def fact_value(self) -> dict[str, object]:
         return {
+            "report_row": self.report_row,
             "function": self.function,
             "module": self.module,
             "cpu_time_lexeme": self.cpu_time_lexeme,
@@ -59,8 +61,9 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
     if len(headers) != 1:
         raise ValueError("VTune hotspot CSV must contain one exact header")
     rows: list[Hotspot] = []
-    seen: set[tuple[str, str]] = set()
-    for record in records[headers[0] + 1 :]:
+    for report_row, record in enumerate(
+        records[headers[0] + 1 :], start=headers[0] + 2
+    ):
         if not record:
             continue
         if len(record) != len(_REPORT_HEADER):
@@ -68,13 +71,9 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
         function, module, lexeme, *breakdown = (item.strip() for item in record)
         if not function:
             raise ValueError("VTune hotspot function is empty")
-        identity = (function, module)
-        if identity in seen:
-            raise ValueError("VTune hotspot function/module rows must be unique")
-        seen.add(identity)
         for value in breakdown:
             _seconds(value)
-        rows.append(Hotspot(function, module, lexeme, _seconds(lexeme)))
+        rows.append(Hotspot(report_row, function, module, lexeme, _seconds(lexeme)))
     if not rows:
         raise ValueError("VTune hotspot CSV contains no function rows")
     return tuple(
@@ -84,6 +83,7 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
                 -item.cpu_time_sec,
                 item.function.encode(),
                 item.module.encode(),
+                item.report_row,
             ),
         )
     )
