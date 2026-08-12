@@ -79,7 +79,9 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
     submit.add_argument(
-        "--profile-mode", choices=["direct", "perf-stat"], required=True
+        "--profile-mode",
+        choices=["direct", "perf-stat", "vtune-hotspots"],
+        required=True,
     )
 
     supervisor_start = commands.add_parser("supervisor-start")
