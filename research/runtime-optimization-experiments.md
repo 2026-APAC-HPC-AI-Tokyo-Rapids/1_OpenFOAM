@@ -33,6 +33,9 @@ investigation.  Timing claims use official valid bench results only.
 | Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2 nodes, 240 Scotch ranks | VALID, 3.3997 M FVOPS, 18.825 s/step | 7.2% above the old 2-node/120-rank canary; repeat before accepting because current one-node range is 4.4% |
 | Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4 nodes, 480 Scotch ranks | VALID, 6.8139 M FVOPS, 9.393 s/step | 37.7% above the old 4-node/120-rank canary; retain full-core layout |
 | Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1-node named-preset repeat, cache hit | VALID, 1.6996 M FVOPS, 37.655 s/step | unexpectedly fast but valid; use the observed 4.4% range as the provisional noise threshold |
+| Actions 284 / run `r-c500507dc433575dde90bfcb4073be8f` | 2-node/240-rank repeat, cache hit | VALID, 3.4015 M FVOPS, 18.815 s/step | agrees with the first 3.3997 M result within 0.05%; accept full-core two-node layout |
+| Actions 285 / run `r-95df043fc37d34b11df231699019ce85` | 4-node/480-rank repeat, cache hit | VALID, 7.8264 M FVOPS, 8.178 s/step | 14.9% above the first repeat; full-core gain is certain but four-node noise requires alternating repeats |
+| Actions 286 / run `r-8bf1d07cc38e52ced65c4cf1095bfc52` | 4 nodes, 448 Scotch ranks, balanced NUMA reserve | VALID, 8.0025 M FVOPS, 7.997 s/step | 2.25% above the adjacent 480-rank result but within observed four-node range; repeat before adoption |
 
 ## Infrastructure observation: Actions 280
 
@@ -107,6 +110,22 @@ of every NUMA domain.  This changes rank count and balanced CPU reservation
 together as the intended Phase 2 resource layout; decomposition remains
 Scotch and transport remains `shm:ofi`.  Captured per-rank placement must show
 exactly this set on all four nodes before its score is compared with 480 ranks.
+
+Actions 286 (`31635007954`) verified the intended placement on all four nodes:
+112 distinct CPUs per node and CPUs 14, 29, 44, 59, 74, 89, 104, and 119
+absent.  Preparation PJM `6467443` published cache `1170485d...`; solver PJM
+`6467537` produced run `r-8bf1d07cc38e52ced65c4cf1095bfc52` with official
+`STATUS: VALID`, 8.0025 M FVOPS, 51.385 s solver wall, and 53.056 s pipeline
+wall.  The 448-way partition has 4,537,155 interface faces, 2,797 rank pairs,
+139,315--144,285 cells/rank, and 704,792 faces crossing consecutive 112-rank
+node groups.  Actions and home-server artifact archival both succeeded and no
+experiment-owned PJM job remained.
+
+This single result is 2.25% above the adjacent 7.8264 M 480-rank repeat, but
+the two 480-rank results themselves span 14.9%.  Therefore reserving one core
+per NUMA domain remains promising rather than accepted.  It disproves the
+stronger assumption that using fewer than all cores must clearly regress this
+workload and warrants an alternating 448/480 repeat after the partition screen.
 
 ## Phase 3 setup: geometric partition screen
 
