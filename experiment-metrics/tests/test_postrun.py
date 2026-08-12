@@ -3,15 +3,18 @@ from __future__ import annotations
 # ruff: noqa: E501
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import pytest
 
 from experiment_metrics import init_run
 from experiment_metrics.postrun import (
+    mesh_facts_from_logs,
     mesh_topology_fact,
     minimal_hardware_fact,
     partition_facts,
+    profile_hardware_facts,
 )
 from experiment_metrics.probes.capture_hardware import main as capture_hardware
 
@@ -23,6 +26,105 @@ def _locator(path: str) -> dict[str, object]:
         "size_bytes": 1,
         "sha256": "a" * 64,
     }
+
+
+def _write_mesh_logs(tmp_path: Path, ranks: int) -> tuple[Path, Path, Path]:
+    block_log = tmp_path / "blockMesh.log"
+    block_log.write_text(
+        "\n".join(
+            (
+                "Mesh Information",
+                f"  nPoints: {ranks * 2}",
+                f"  nCells: {ranks}",
+                f"  nFaces: {ranks * 3}",
+                f"  nInternalFaces: {ranks * 2}",
+            )
+        )
+    )
+    decompose_log = tmp_path / "decomposePar.log"
+    sections = []
+    for rank in range(ranks):
+        peer = rank + 1 if rank % 2 == 0 else rank - 1
+        sections.append(
+            "\n".join(
+                (
+                    f"Processor {rank}",
+                    "    Number of cells = 1",
+                    "    Number of points = 2",
+                    f"    Number of faces shared with processor {peer} = 7",
+                    "    Number of processor patches = 1",
+                    "    Number of processor faces = 7",
+                    "    Number of boundary faces = 0",
+                )
+            )
+        )
+    # This unindented aggregate appears after the last processor in real logs
+    # and must not be mistaken for the last rank's value.
+    decompose_log.write_text(
+        "\n\n".join(sections) + f"\n\nNumber of processor faces = {ranks * 7}\n"
+    )
+    dictionary = tmp_path / "decomposeParDict"
+    dictionary.write_text(f"numberOfSubdomains {ranks};\nmethod scotch;\n")
+    return block_log, decompose_log, dictionary
+
+
+def test_mesh_facts_are_parsed_from_existing_small_logs(tmp_path: Path) -> None:
+    block_log, decompose_log, dictionary = _write_mesh_logs(tmp_path, 2)
+
+    topology, requested, observed = mesh_facts_from_logs(
+        block_log, decompose_log, dictionary
+    )
+
+    assert topology.logical_value == {
+        "schema_version": "mesh-topology/v2",
+        "cells": 2,
+        "faces": 6,
+        "points": 4,
+        "internal_faces": 4,
+    }
+    assert requested.logical_value["subdomains"] == 2
+    assert requested.logical_value["method"] == "scotch"
+    assert observed.logical_value["schema_version"] == "partition-observed/v2"
+    assert observed.logical_value["subdomains"] == [
+        {
+            "rank": 0,
+            "cell_count": 1,
+            "processor_patch_count": 1,
+            "processor_face_count": 7,
+        },
+        {
+            "rank": 1,
+            "cell_count": 1,
+            "processor_patch_count": 1,
+            "processor_face_count": 7,
+        },
+    ]
+    assert observed.logical_value["interfaces"] == [
+        {"lower_rank": 0, "upper_rank": 1, "face_count": 7}
+    ]
+
+
+def test_mesh_log_parser_is_subsecond_at_120_ranks(tmp_path: Path) -> None:
+    inputs = _write_mesh_logs(tmp_path, 120)
+
+    started = time.monotonic()
+    facts = mesh_facts_from_logs(*inputs)
+    elapsed = time.monotonic() - started
+
+    assert len(facts[2].logical_value["subdomains"]) == 120
+    assert elapsed < 1.0
+
+
+def test_mesh_log_parser_rejects_asymmetric_interfaces(tmp_path: Path) -> None:
+    block_log, decompose_log, dictionary = _write_mesh_logs(tmp_path, 2)
+    decompose_log.write_text(
+        decompose_log.read_text().replace(
+            "faces shared with processor 0 = 7", "faces shared with processor 0 = 8"
+        )
+    )
+
+    with pytest.raises(ValueError, match="asymmetric"):
+        mesh_facts_from_logs(block_log, decompose_log, dictionary)
 
 
 def test_closed_postrun_reducers_validate_hardware_mesh_and_partition(
@@ -200,3 +302,10 @@ def test_hardware_probe_writes_minimal_and_profile_sources(
         == 0
     )
     assert (run_dir / "profile/raw/hardware/node-0/capture.json").is_file()
+    profile_facts = profile_hardware_facts(
+        run_dir / "profile/raw/hardware", run_id=run_dir.name, expected_nodes=1
+    )
+    assert profile_facts[0].key == "profile.hardware.node.0.summary"
+    assert any(
+        fact.key.startswith("profile.hardware.node.0.numa.") for fact in profile_facts
+    )

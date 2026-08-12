@@ -24,15 +24,14 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
+    assert 'stage mesh_facts "${LOG_DIR}/mesh-facts.log"' not in text
+    assert 'stage partition_audit "${LOG_DIR}/partition-audit.log"' not in text
     assert "stage check_mesh" not in text
     assert "native tool is not provisioned" not in text
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
-    assert "export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID" in text
-    assert text.index("export OPENFOAM_PROFILE_DIR PROFILE_RUN_ID") < text.index(
-        "stage solver"
-    )
+    assert 'OPENFOAM_PROFILE_DIR="${HOME}/openfoam-profile/${PROFILE_RUN_ID}"' in text
     assert "capture-workload" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
@@ -43,6 +42,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         (ROOT / "scripts/exec-profiler.sh").read_text()
     )
     assert '"${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"' in text
+    assert "record-build-provision" in text
+    assert "record-minimal-hardware" in text
+    assert "record-mesh" in text
+    assert '--block-mesh-log "${LOG_DIR}/blockMesh.log"' in text
+    assert '--decompose-log "${LOG_DIR}/decomposePar.log"' in text
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)
@@ -88,6 +92,8 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
         "genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}"
     )
     assert prepare_concurrency in workflow
+    assert workflow.count("queue: max") == 2
+    assert "queue: single" not in workflow
     assert workflow.count("- name: Record v2 terminal sources") == 1
     assert "metrics.jsonl" not in workflow
     assert "-name 'node-*.json'" in workflow

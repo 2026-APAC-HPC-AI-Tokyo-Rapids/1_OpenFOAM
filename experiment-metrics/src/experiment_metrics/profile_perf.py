@@ -119,7 +119,7 @@ class PerfStatRecord:
 
 @dataclass(frozen=True, slots=True)
 class RankFact:
-    """Launch-effective rank, argv, environment, and affinity observation."""
+    """Launch-effective rank, argv, and affinity observation."""
 
     run_id: str
     global_rank: int
@@ -129,7 +129,6 @@ class RankFact:
     cpu_affinity: tuple[int, ...]
     numa_mems: str | None
     argv: tuple[str, ...]
-    environment: tuple[tuple[str, str], ...]
     source_member: str
     source_sha256: str
 
@@ -148,11 +147,6 @@ class RankFact:
             not isinstance(item, str) or not item for item in self.argv
         ):
             raise PerfValidationError("rank argv is invalid")
-        if (
-            tuple(sorted(self.environment, key=lambda item: item[0].encode()))
-            != self.environment
-        ):
-            raise PerfValidationError("rank environment is not byte ordered")
         _member(self.source_member)
         _sha256(self.source_sha256)
 
@@ -167,7 +161,6 @@ class RankFact:
             "cpu_affinity": list(self.cpu_affinity),
             "numa_mems": self.numa_mems,
             "argv": list(self.argv),
-            "environment": dict(self.environment),
             "source_member": self.source_member,
             "source_sha256": self.source_sha256,
         }
@@ -406,7 +399,6 @@ def parse_rank_fact(path: Path, *, run_id: str, global_rank: int) -> RankFact:
         "cpu_affinity",
         "numa_mems",
         "argv",
-        "environment",
         "output_member",
     }
     if not isinstance(value, dict) or set(value) != required:
@@ -427,12 +419,6 @@ def parse_rank_fact(path: Path, *, run_id: str, global_rank: int) -> RankFact:
         for item in affinity
     ):
         raise PerfValidationError("rank CPU affinity is invalid")
-    environment = value["environment"]
-    if not isinstance(environment, dict) or any(
-        not isinstance(key, str) or not isinstance(item, str)
-        for key, item in environment.items()
-    ):
-        raise PerfValidationError("rank environment is invalid")
     argv = value["argv"]
     if not isinstance(argv, list) or any(
         not isinstance(item, str) or not item for item in argv
@@ -459,7 +445,6 @@ def parse_rank_fact(path: Path, *, run_id: str, global_rank: int) -> RankFact:
         tuple(affinity),
         numa_mems,
         tuple(argv),
-        tuple(sorted(environment.items(), key=lambda item: item[0].encode())),
         value["output_member"],
         _sha256_file(path),
     )

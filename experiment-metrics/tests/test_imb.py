@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from experiment_metrics.imb import IMBResult, parse_imb_mpi1, validate_imb_results
-from experiment_metrics.reducers import network_config_facts, network_projection_rows
+from experiment_metrics.reducers import network_config_facts
 from experiment_metrics.registry import Registry
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -121,29 +121,6 @@ def test_imb_parser_rejects_truncated_target_output() -> None:
         parse_imb_mpi1(text)
 
 
-def test_network_projection_has_contract_grain_and_relative_source() -> None:
-    results = parse_imb_mpi1((FIXTURES / "imb-complete.txt").read_text())
-    rows = network_projection_rows(
-        "r-" + "a" * 32, results, "source/network/imb-mpi1/stdout.txt"
-    )
-
-    assert set(rows[0]) == {
-        "run_id",
-        "benchmark",
-        "process_count",
-        "message_bytes",
-        "iterations",
-        "time_min_us",
-        "time_avg_us",
-        "time_max_us",
-        "bandwidth_mbytes_per_sec",
-        "source_member",
-    }
-    assert rows[0]["time_max_us"] == 0.1
-    with pytest.raises(ValueError, match="relative"):
-        network_projection_rows("r", results, "/foreign/stdout.txt")
-
-
 def test_network_config_reducer_creates_only_config_facts() -> None:
     results = parse_imb_mpi1((FIXTURES / "imb-complete.txt").read_text())
     facts = network_config_facts(
@@ -154,7 +131,8 @@ def test_network_config_reducer_creates_only_config_facts() -> None:
         iteration_policy="dynamic",
     )
 
-    assert {(fact.key, fact.logical_value) for fact in facts} == {
+    scalar = [fact for fact in facts if ".result." not in fact.key]
+    assert {(fact.key, fact.logical_value) for fact in scalar} == {
         ("network.imb_mpi1.process_count", 2),
         ("network.imb_mpi1.message_size.min_bytes", 0),
         ("network.imb_mpi1.message_size.max_bytes", 1),
@@ -163,6 +141,9 @@ def test_network_config_reducer_creates_only_config_facts() -> None:
         ("network.imb_mpi1.iteration.policy", "dynamic"),
         ("software.imb_mpi1.version", "2021.3"),
     }
+    result_facts = [fact for fact in facts if ".result." in fact.key]
+    assert len(result_facts) == len(results)
+    assert result_facts[0].key == "network.imb_mpi1.result.pingpong.0"
 
 
 def test_network_fact_keys_are_owned_by_the_network_parser() -> None:
