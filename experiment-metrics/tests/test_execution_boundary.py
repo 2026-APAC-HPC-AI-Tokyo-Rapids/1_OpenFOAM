@@ -23,6 +23,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "prepare-openfoam-case.sh" in text
     assert "prepare-openfoam-geometric-case.sh" in text
     assert "prepare-openfoam-multilevel-448-case.sh" in text
+    assert "prepare-openfoam-renumbered-case.sh" in text
+    assert "renumber-cuthill-4n448" in text
+    assert "renumber-block32768-4n448" in text
     assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
@@ -76,6 +79,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "numberOfSubdomains 448" in multilevel_448_prepare.read_text(
         encoding="utf-8"
     )
+    renumber_prepare = ROOT / "scripts/prepare-openfoam-renumbered-case.sh"
+    subprocess.run(["bash", "-n", str(renumber_prepare)], check=True)
+    assert "blockSize 32768;" in renumber_prepare.read_text(encoding="utf-8")
 
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must

@@ -19,12 +19,24 @@ set -eu
 
 BLOCK_MESH=$(command -v blockMesh)
 DECOMPOSE_PAR=$(command -v decomposePar)
+RENUMBER_MESH=$(command -v renumberMesh)
+MPIEXEC=$(command -v mpirun)
 [[ "${BLOCK_MESH}" == /* && -x "${BLOCK_MESH}" ]]
 [[ "${DECOMPOSE_PAR}" == /* && -x "${DECOMPOSE_PAR}" ]]
+[[ "${RENUMBER_MESH}" == /* && -x "${RENUMBER_MESH}" ]]
+[[ "${MPIEXEC}" == /* && -x "${MPIEXEC}" ]]
 
 rm -f -- "${PREPARE_TARGET}"
 trap 'rm -f -- "${PREPARE_TARGET}"' EXIT
-if [[ "${PREPARE_DECOMPOSITION_PROFILE}" == scotch ]]; then
+if [[ "${PREPARE_DECOMPOSITION_PROFILE}" == renumber-*-4n448 ]]; then
+  [[ "${PREPARE_SUBDOMAINS}" == 448 ]]
+  export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
+  "${PROVISION_DIR}/scripts/prepare-openfoam-renumbered-case.sh" \
+    "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
+    "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
+    "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${RENUMBER_MESH}" "${MPIEXEC}" \
+    "${PREPARE_DECOMPOSITION_PROFILE}"
+elif [[ "${PREPARE_DECOMPOSITION_PROFILE}" == scotch ]]; then
   "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
     "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
     "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${PREPARE_SUBDOMAINS}"
