@@ -357,6 +357,36 @@ control, below the 1% adoption threshold, so it does not advance alone.
 Actions `31649727744` screens the structurally distinct 32768-cell block-local
 ordering with same-build unchanged control `31649729689`.
 
+The block-local pair also completed E2E.  Actions `31649727744`, preparation
+PJM `6468189`, solver PJM `6468193`, used derivative cache
+`7f685f00...c480359a` and produced official VALID 8.0655 M FVOPS,
+7.935 s/step, and 31.74 s trimmed time.  Same-build unchanged control Actions
+`31649729689`, preparation PJM `6468192`, solver PJM `6468194`, produced
+official VALID 7.9900 M FVOPS, 8.010 s/step, and 32.04 s trimmed time.  Both
+had 81 s scheduler elapsed, exact 4 x 112 placement, successful archival, and
+no residual PJM job.  Block-local ordering is 0.94% above its paired control,
+again below the 1% adoption threshold and nearly identical to ordinary
+Cuthill-McKee's 0.91% result.
+
+Neither ordering candidate meets the adoption rule, and the 32768-cell
+candidate does not meet the prerequisite for a 65536-cell trial.  The phase
+therefore terminates after two well-formed non-advancing candidates, consistent
+with the published neutral-to-negative ordinary-renumber evidence.  No
+renumbering remains adopted.  The ordered immutable caches and raw logs are
+retained as research evidence; solver qualification uses the unchanged Scotch
+cache.
+
+## Phase 6 setup: same-build final qualification
+
+The selected reproducible configurations are 120 ranks on one node, 240 ranks
+on two nodes, and balanced 448 ranks on four nodes, all Scotch, default Intel
+MPI collective selection, no cell renumbering, and `shm` for one node or
+`shm:ofi` for multiple nodes.  Final distributions use only build archive 301;
+older build results remain contextual.  Collect five independent official
+VALID submissions per node count, reusing immutable case caches and allowing
+different node allocations.  Report medians, ranges, and 4-node/1-node strong
+scaling without interpreting a single run as the result.
+
 ## Experiment template
 
 ### Experiment ID
