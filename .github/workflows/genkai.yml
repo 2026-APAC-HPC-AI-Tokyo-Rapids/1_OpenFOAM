@@ -193,7 +193,9 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
+            "${GITHUB_WORKSPACE}/scripts/export-vtune-perfetto.sh" \
             "${GITHUB_WORKSPACE}/scripts/vtune-hotspots-summary.py" \
+            "${GITHUB_WORKSPACE}/scripts/vtune-to-perfetto.py" \
             "${GITHUB_WORKSPACE}/scripts/openfoam-rank-wrapper.py" \
             "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
@@ -337,10 +339,12 @@ jobs:
               --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
               --control-plane-file scripts/exec-profiler.sh \
               --control-plane-file scripts/export-vtune-hotspots.sh \
+              --control-plane-file scripts/export-vtune-perfetto.sh \
               --control-plane-file scripts/prepare-openfoam-case.pjm \
               --control-plane-file scripts/prepare-openfoam-case.sh \
               --control-plane-file scripts/run-openfoam.pjm \
-              --control-plane-file scripts/vtune-hotspots-summary.py
+              --control-plane-file scripts/vtune-hotspots-summary.py \
+              --control-plane-file scripts/vtune-to-perfetto.py
           )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
@@ -438,6 +442,45 @@ jobs:
           {
             printf '\nVTune result on Genkai:\n\n'
             printf -- '- `%s`\n' "${vtune_result_dir}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Generate rich VTune Perfetto JSON
+        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        run: |
+          vtune_result_dir="$(sed -n 's/^vtune_result_dir=//p' \
+            "${RUN_DIR}/logs/profile-location.txt")"
+          test -n "${vtune_result_dir}"
+          VTUNE_RESULT_DIR="${vtune_result_dir}" \
+          RUN_LABEL="${RUN_ID}" \
+          PROVISION_DIR="${PROVISION_DIR}" \
+          RUN_DIR="${RUN_DIR}" \
+            "${PROVISION_DIR}/scripts/export-vtune-perfetto.sh"
+
+      - name: Upload rich VTune Perfetto artifact
+        id: upload_vtune_perfetto
+        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-vtune-perfetto-${{ steps.v2_context.outputs.run_id }}
+          path: |
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/openfoam-vtune-perfetto.json
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/summary.json
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.csv
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/hotspots.csv
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Add Perfetto artifact to Actions summary
+        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        env:
+          PERFETTO_ARTIFACT_URL: ${{ steps.upload_vtune_perfetto.outputs.artifact-url }}
+        run: |
+          {
+            printf '\n## Perfetto trace\n\n'
+            printf '[Download the rich VTune Perfetto artifact](%s), extract ' \
+              "${PERFETTO_ARTIFACT_URL}"
+            printf '`openfoam-vtune-perfetto.json`, and open it in '
+            printf '[Perfetto](https://ui.perfetto.dev/).\n'
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Record v2 terminal sources

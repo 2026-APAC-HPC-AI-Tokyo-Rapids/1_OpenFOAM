@@ -1,0 +1,24 @@
+profile_label=rank-zero
+started_at=2026-08-01T00:00:00+09:00
+Time = 1
+
+smoothSolver:  Solving for Ux, Initial residual = 0.1, Final residual = 0.01, No Iterations 2
+smoothSolver:  Solving for Uy, Initial residual = 0.2, Final residual = 0.02, No Iterations 2
+time step continuity errors : sum local = 1e-05, global = -2e-06, cumulative = -2e-06
+ExecutionTime = 0.4 s  ClockTime = 0 s
+
+Time = 2
+
+smoothSolver:  Solving for Ux, Initial residual = 0.08, Final residual = 0.008, No Iterations 1
+smoothSolver:  Solving for Uy, Initial residual = 0.12, Final residual = 0.012, No Iterations 1
+time step continuity errors : sum local = 8e-06, global = -1e-06, cumulative = -3e-06
+ExecutionTime = 0.8 s  ClockTime = 1 s
+
+Time = 3
+
+smoothSolver:  Solving for Ux, Initial residual = 0.05, Final residual = 0.005, No Iterations 1
+smoothSolver:  Solving for Uy, Initial residual = 0.09, Final residual = 0.009, No Iterations 1
+time step continuity errors : sum local = 6e-06, global = 5e-07, cumulative = -2.5e-06
+ExecutionTime = 1.6 s  ClockTime = 2 s
+finished_at=2026-08-01T00:00:02+09:00
+
