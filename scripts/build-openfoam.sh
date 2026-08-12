@@ -81,7 +81,7 @@ done < <(
   jq -r \
     '.components[].activation | select(.kind == "in_process_hook") | .source_path' \
     "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" \
-    "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json" |
+    "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json" |
     LC_ALL=C sort -u
 )
 

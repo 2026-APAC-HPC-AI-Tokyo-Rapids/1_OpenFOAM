@@ -1,0 +1,87 @@
+{
+  "schema_version": "instrumentation-bundle/v1",
+  "bundle_track": "profile",
+  "source_paths": [
+    "experiment-metrics/src/experiment_metrics/profile_vtune.py",
+    "scripts/allow-vtune-attach.py",
+    "scripts/exec-profiler.sh",
+    "scripts/export-vtune-hotspots.sh",
+    "src/OpenFOAM/global/metrics/PstreamMetrics.C",
+    "src/OpenFOAM/global/metrics/PstreamMetrics.H",
+    "src/OpenFOAM/global/metrics/PstreamMetricsWriter.C",
+    "src/OpenFOAM/global/metrics/PstreamMetricsWriter.H"
+  ],
+  "components": [
+    {
+      "component_id": "openfoam.pstream-hook/v1",
+      "sink_ids": [
+        "pstream-rank-events"
+      ],
+      "activation": {
+        "kind": "in_process_hook",
+        "source_commit_role": "openfoam_source",
+        "source_path": "src/OpenFOAM/global/metrics/PstreamMetrics.C",
+        "symbol": "Foam::pstreamMetrics::startupApplied",
+        "event_schema_id": "openfoam-pstream-event/v1"
+      }
+    },
+    {
+      "component_id": "openfoam.vtune-hotspots/v1",
+      "sink_ids": [
+        "vtune-hotspots-report"
+      ],
+      "activation": {
+        "kind": "executable",
+        "artifact_relative_path": "scripts/exec-profiler.sh",
+        "content_sha256": "34cfc1269e89ca3488571322380d9652e1288a4490bb9492ef7c6cdb4a70c1cb",
+        "argv_template": [
+          [
+            {
+              "token": "component_executable"
+            }
+          ],
+          [
+            {
+              "token": "stage_executable",
+              "role": "icoFoam"
+            }
+          ]
+        ]
+      }
+    }
+  ],
+  "environment_capture_scopes": [],
+  "sink_bindings": [
+    {
+      "sink_id": "pstream-rank-events",
+      "source_id": "openfoam.pstream-rank-events/v1",
+      "buffering_mode": "line_buffered"
+    },
+    {
+      "sink_id": "vtune-hotspots-report",
+      "source_id": "openfoam.vtune-hotspots-report/v1",
+      "buffering_mode": "stage_buffered"
+    }
+  ],
+  "environment_bindings": [
+    {
+      "name": "OPENFOAM_METRICS_PSTREAM_DIR",
+      "scope": "solver_process_tree",
+      "value_template": [
+        {
+          "token": "absolute_sink_path",
+          "sink_id": "pstream-rank-events"
+        }
+      ]
+    },
+    {
+      "name": "OPENFOAM_METRICS_RUN_ID",
+      "scope": "solver_process_tree",
+      "value_template": [
+        {
+          "token": "subject_run_id"
+        }
+      ]
+    }
+  ]
+}

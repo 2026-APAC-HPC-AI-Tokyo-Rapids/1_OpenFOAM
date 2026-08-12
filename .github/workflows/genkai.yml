@@ -13,14 +13,14 @@ on:
         required: true
         default: false
         type: boolean
-      profile_mode:
-        description: Run directly for scoring or opt in to perf stat profiling
+      run_purpose:
+        description: Run a benchmark directly or collect a bounded VTune profile
         required: true
-        default: direct
+        default: bench
         type: choice
         options:
-          - direct
-          - perf-stat
+          - bench
+          - profile
       nodes:
         description: Allocated nodes while keeping the total MPI rank count at 120
         required: true
@@ -199,7 +199,9 @@ jobs:
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
-            "${GITHUB_WORKSPACE}/scripts/openfoam-rank-wrapper.py" \
+            "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
+            "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" \
+            "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
             "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
           cp -a "${GITHUB_WORKSPACE}/benchmark/cavity3D-64M" "${provision_dir}/task/"
@@ -293,7 +295,9 @@ jobs:
     env:
       OPENFOAM_RUN_ROOT: /fast/pj26000080/openfoam-runs
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
-      OPENFOAM_PROFILE_MODE: ${{ inputs.profile_mode || 'direct' }}
+      # Pushes are always benchmark runs. Only an explicit workflow dispatch
+      # may create a profile run.
+      OPENFOAM_RUN_PURPOSE: ${{ github.event_name == 'push' && 'bench' || inputs.run_purpose }}
       OPENFOAM_NODE_COUNT: ${{ inputs.nodes || '1' }}
 
     steps:
@@ -326,17 +330,42 @@ jobs:
           test -f "${protocol_path}"
           head_commit="$(git rev-parse HEAD)"
           base_commit="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")"
-          purpose=bench
-          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
-            purpose=profile
-            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-v1.json"
-          else
-            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
-          fi
+          purpose="${OPENFOAM_RUN_PURPOSE}"
+          case "${purpose}" in
+            bench)
+              bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
+              ;;
+            profile)
+              bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json"
+              ;;
+            *)
+              echo "unsupported run purpose: ${purpose}" >&2
+              exit 2
+              ;;
+          esac
           bundle_sha256="$(
             "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
               bundle-identity --bundle "${bundle_path}" --purpose "${purpose}"
           )"
+          control_plane_args=(
+            --control-plane-file .github/workflows/genkai.yml
+            --control-plane-file benchmark/parse_result.sh
+            --control-plane-file "${protocol_relative}"
+            --control-plane-file experiment-metrics/registry/openfoam-v2.toml
+          )
+          if [[ "${purpose}" == profile ]]; then
+            control_plane_args+=(
+              --control-plane-file experiment-metrics/src/experiment_metrics/profile_vtune.py
+              --control-plane-file scripts/allow-vtune-attach.py
+              --control-plane-file scripts/exec-profiler.sh
+              --control-plane-file scripts/export-vtune-hotspots.sh
+            )
+          fi
+          control_plane_args+=(
+            --control-plane-file scripts/prepare-openfoam-case.pjm
+            --control-plane-file scripts/prepare-openfoam-case.sh
+            --control-plane-file scripts/run-openfoam.pjm
+          )
           identities="$(
             "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
               source-track-identities \
@@ -344,13 +373,7 @@ jobs:
               --purpose "${purpose}" \
               --base-commit "${base_commit}" \
               --instrumentation-bundle-sha256 "${bundle_sha256}" \
-              --control-plane-file .github/workflows/genkai.yml \
-              --control-plane-file benchmark/parse_result.sh \
-              --control-plane-file "${protocol_relative}" \
-              --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
-              --control-plane-file scripts/prepare-openfoam-case.pjm \
-              --control-plane-file scripts/prepare-openfoam-case.sh \
-              --control-plane-file scripts/run-openfoam.pjm
+              "${control_plane_args[@]}"
           )"
           manifest="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
             init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" \
@@ -397,7 +420,7 @@ jobs:
             --repository-root "${GITHUB_WORKSPACE}" \
             --pjm-script-repository-path scripts/run-openfoam.pjm \
             --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" \
-            --provision-dir "${PROVISION_DIR}" --profile-mode "${OPENFOAM_PROFILE_MODE}")"
+            --provision-dir "${PROVISION_DIR}")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
 
@@ -435,7 +458,37 @@ jobs:
       - name: Verify OpenFOAM job completion
         run: |
           pjwait "${PJM_JOB_ID}"
-          test -e "${RUN_DIR}/run-success"
+          if [[ ! -e "${RUN_DIR}/run-success" ]]; then
+            echo 'OpenFOAM job did not create run-success' >&2
+            for log in \
+              "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" \
+              "${RUN_DIR}/logs/solver.log"; do
+              if [[ -f "${log}" ]]; then
+                echo "===== ${log} =====" >&2
+                tail -n 240 "${log}" >&2
+              fi
+            done
+            exit 1
+          fi
+
+      - name: Publish VTune hotspots to Actions summary
+        if: success() && env.OPENFOAM_RUN_PURPOSE == 'profile'
+        run: |
+          summary="${RUN_DIR}/profile/raw/vtune-summary/summary.md"
+          if [[ -s "${summary}" ]]; then
+            cat "${summary}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '## Intel VTune hotspots\n\nCollection or report generation was unavailable.\n' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          vtune_result_dir="$(sed -n 's/^vtune_result_dir=//p' \
+            "${RUN_DIR}/logs/profile-location.txt" 2>/dev/null || true)"
+          if [[ -n "${vtune_result_dir}" ]]; then
+            {
+              printf '\nVTune result on Genkai:\n\n'
+              printf -- '- `%s`\n' "${vtune_result_dir}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
 
       - name: Record v2 terminal sources
         if: always()
@@ -488,14 +541,6 @@ jobs:
           else
             echo 'execution-context sources are absent; collection will be incomplete' >&2
           fi
-          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
-            "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" \
-              record-profile-perf --manifest "${RUN_MANIFEST}" \
-              --runtime-dir "${RUN_DIR}" \
-              --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" \
-              --protocol "${OPENFOAM_PROTOCOL_PATH}" \
-              || record_status=1
-          fi
           if [[ "${record_status}" -ne 0 ]]; then
             echo 'one or more metric producers failed; workload result is unchanged' >&2
           fi
@@ -517,6 +562,7 @@ jobs:
             'control/submission-result.json:scheduler_submission_result' \
             'logs/blockMesh.log:block_mesh_log' \
             'logs/decomposePar.log:decompose_par_log' \
+            'logs/profile-location.txt:postrun_source' \
             'logs/solver.log:solver_log' \
             "logs/${PJM_JOB_ID}.pjm.log:pjm_log" \
             'results/result.txt:official_result' \
@@ -565,7 +611,7 @@ jobs:
               args+=(--member "${path#"${RUN_DIR}/"}:workload_member")
             done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
           fi
-          if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
+          if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
             while IFS= read -r -d '' path; do
               args+=(--profile-member "${path#"${RUN_DIR}/"}")
             done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)

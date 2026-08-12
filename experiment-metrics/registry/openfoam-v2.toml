@@ -62,7 +62,7 @@ id = "runner.execution_context_parser"
 required_for = ["bench", "profile"]
 
 [[producers]]
-id = "runner.perf_parser"
+id = "compute.vtune_hotspots_parser"
 required_for = ["profile"]
 
 [[keys]]
@@ -186,8 +186,8 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "profile.perf_stat.rank.*"
-owner = "runner.perf_parser"
+pattern = "profile.vtune_hotspots.rank.0"
+owner = "compute.vtune_hotspots_parser"
 logical_type = "json"
 required_for = ["profile"]
 
@@ -449,18 +449,18 @@ activation = { kind = "always" }
 instances = { kind = "cartesian", axes = ["global_rank"] }
 
 [[producer]]
-id = "runner.perf_parser"
+id = "compute.vtune_hotspots_parser"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
-activation = { kind = "always" }
+activation = { kind = "bundle_component", component_id = "openfoam.vtune-hotspots/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
-id = "openfoam.rank-perf-wrapper/v1"
+id = "openfoam.vtune-hotspots/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
-activation = { kind = "bundle_component", component_id = "openfoam.rank-perf-wrapper/v1" }
-instances = { kind = "cartesian", axes = ["global_rank"] }
+activation = { kind = "bundle_component", component_id = "openfoam.vtune-hotspots/v1" }
+instances = { kind = "singleton" }
 
 [[producer]]
 id = "runner.log_parser"
@@ -619,11 +619,11 @@ schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
 [[source]]
-id = "facts.perf"
-producer_id = "runner.perf_parser"
-source_role = "perf_fact_fragment"
+id = "facts.vtune_hotspots"
+producer_id = "compute.vtune_hotspots_parser"
+source_role = "vtune_hotspots_fact_fragment"
 storage = "fact_fragment"
-path_template = [{ literal = "domain/fragments/runner.perf_parser--perf.jsonl" }]
+path_template = [{ literal = "domain/fragments/compute.vtune_hotspots_parser--vtune-hotspots.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -871,21 +871,12 @@ schema_id = "profile-hardware-capture/v1"
 required_when_applicable = true
 
 [[source]]
-id = "openfoam.perf-csv/v1"
-producer_id = "openfoam.rank-perf-wrapper/v1"
-source_role = "perf_csv"
+id = "openfoam.vtune-hotspots-report/v1"
+producer_id = "openfoam.vtune-hotspots/v1"
+source_role = "vtune_hotspots_report"
 storage = "profile_raw"
-path_template = [{ literal = "profile/raw/perf/rank-" }, { token = "global_rank" }, { literal = ".csv" }]
-schema_id = "perf-csv/v1"
-required_when_applicable = true
-
-[[source]]
-id = "openfoam.rank-launch/v1"
-producer_id = "openfoam.rank-perf-wrapper/v1"
-source_role = "perf_rank_launch"
-storage = "profile_raw"
-path_template = [{ literal = "profile/raw/perf/rank-" }, { token = "global_rank" }, { literal = ".json" }]
-schema_id = "openfoam-rank-launch/v1"
+path_template = [{ literal = "profile/raw/vtune-summary/hotspots.csv" }]
+schema_id = "vtune-hotspots-csv/v1"
 required_when_applicable = true
 
 [[source]]
@@ -1165,16 +1156,16 @@ validator_id = "rank_placement_axes/v1"
 reducer_id = "rank_placement_axes/v1"
 
 [[fact]]
-id = "profile.perf_stat"
-key_pattern = "profile.perf_stat.rank.*"
-source_id = "facts.perf"
-schema_id = "perf-stat/v1"
+id = "profile.vtune_hotspots"
+key_pattern = "profile.vtune_hotspots.rank.0"
+source_id = "facts.vtune_hotspots"
+schema_id = "openfoam-vtune-hotspots/v1"
 logical_type = "json"
 unit = "none"
 cardinality = "run_rank"
-capture_id = "perf_csv/v1"
-validator_id = "perf_stat/v1"
-reducer_id = "perf_stat/v1"
+capture_id = "vtune_hotspots_csv/v1"
+validator_id = "vtune_hotspots/v1"
+reducer_id = "identity/v1"
 
 [[fact]]
 id = "run.stage.launch"
