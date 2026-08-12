@@ -250,6 +250,41 @@ Scotch.  Its 1.0% advantage over the 448-way Scotch median is too close to the
 decision threshold for a single run, so Actions `31645708556` (multi-level)
 and `31645711266` (Scotch control) form an alternating cache-hit repeat pair.
 
+The alternating pair also completed E2E with no residual PJM jobs.  Actions
+`31645708556` ran the multi-level cache as solver PJM `6467998`, producing
+`r-2f7657cc91c87bdcda8e68451367701b`: official VALID, 8.0655 M FVOPS,
+7.935 s/step, and 50.694/52.372 s solver/pipeline wall.  Actions
+`31645711266` ran the Scotch control as solver PJM `6467989`, producing
+`r-c3aa0970c4b8792f42f4ff5c02830886`: official VALID, 8.0025 M FVOPS,
+7.997 s/step, and 51.295/53.017 s solver/pipeline wall.  Both had the exact
+4 x 112-rank placement, every required Actions and archive job succeeded, and
+the fixed artifacts were retained by the home-server archive.
+
+The two multi-level results are 8.0757 and 8.0655 M (median 8.0706 M, 0.13%
+range).  The three Scotch results are 8.0025, 7.9850, and 8.0025 M (median
+8.0025 M, 0.22% range).  Multi-level is consistently faster, but its median
+advantage is only 0.85%.  This is below the predeclared 1% minimum adoption
+threshold.  Therefore the partition result is recorded as statistically
+indistinguishable and the simpler 448-rank Scotch setting remains the adopted
+four-node configuration.  The node/NUMA-aware partition remains a documented
+near-tie and a useful explanation of communication topology, not a claimed
+performance win.  Runtime-switch screens will use 448-rank Scotch so that a
+sub-threshold partition effect is not silently combined with the next factor.
+
+## Phase 4 decision: one Intel MPI autotuning screen
+
+The profile gives collective tuning an approximately 10% sampled upper bound,
+with `PMPI_Allreduce` alone at 7.8%, so one controlled screen is justified.
+Intel MPI 2021.16 documentation also states that application autotuning is
+platform-specific and supported only on Intel processors; Genkai group A uses
+Intel Xeon Platinum 8490H processors, so the facility is eligible.  The first
+run will generate a tuning binary on the exact 4-node/448-rank/112-rank-per-node
+Scotch topology.  Its timed result is exploratory because it includes the
+search.  Only a separately consumed binary may be compared with the unchanged
+Scotch control.  A generation failure or a consumed result at or below the
+control terminates this axis; no hand-forced collective algorithm sweep will
+follow.
+
 ## Experiment template
 
 ### Experiment ID
