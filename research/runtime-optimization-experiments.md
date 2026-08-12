@@ -297,6 +297,41 @@ the run-captured copy and immutable shared copy match.  Actions `31647180395`
 will consume this exact binary, while concurrently submitted Actions
 `31647182300` is the unchanged Scotch control at the same commit and build.
 
+Both paired runs completed successfully.  Consumption Actions `31647180395`,
+solver PJM `6468068`, run `r-fc9f80e8263daf85d8412d0ff5499983`, produced
+official VALID 8.0251 M FVOPS and 7.975 s/step with 51.576/53.184 s
+solver/pipeline wall.  The consumed 889,965-byte source copy has the exact
+published SHA-256 above.  Control Actions `31647182300`, solver PJM `6468063`,
+run `r-10b85e0fce6dbe046445562b04fa9ae0`, produced official VALID 7.9652 M
+FVOPS and 8.035 s/step with 51.563/53.950 s solver/pipeline wall.  Both had
+the exact 4 x 112 placement, completed archival, and left no PJM job.
+
+The consumed score is 0.75% above its concurrent control, below the 1%
+minimum adoption threshold.  More importantly, solver wall is 0.03% slower;
+the apparent score difference comes from the trimmed interval rather than an
+end-to-end solver improvement.  Intel MPI application autotuning is therefore
+rejected for this topology.  Default Intel MPI collective selection remains
+adopted, and the predeclared stop rule prevents an algorithm sweep.
+
+## Phase 5 setup: post-decomposition cell ordering
+
+The official task guidance applied `renumberMesh -constant -overwrite
+-parallel` after decomposition, and its published ordinary Cuthill-McKee
+results were neutral to 1.4% slower.  The experiment will preserve that exact
+application position.  The reduced build must add `renumberMesh`, its
+`renumberMethods` library, and the reconstruct dependency, all recorded in the
+build sidecar.  Preparation uses 4 nodes and 448 ranks only when constructing
+an ordered case, then stores an immutable derivative of the existing 448-way
+Scotch cache.  Solver repetitions only materialize that cache and never pay
+renumbering cost.
+
+Two candidates are admitted: ordinary Cuthill-McKee and block-local
+Cuthill-McKee with approximate `blockSize 32768` and Scotch subdivision inside
+each rank.  They retain the same node/rank placement, partition membership,
+MPI settings, workload, and solver.  Both are screened; `blockSize 65536` is
+admitted only if the 32768-cell version improves FVOPS or measured memory
+behaviour.
+
 ## Experiment template
 
 ### Experiment ID
