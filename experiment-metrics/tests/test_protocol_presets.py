@@ -12,6 +12,8 @@ def test_scotch_full_core_presets_are_self_consistent() -> None:
         "scotch-2n-240r": (2, 240, "shm:ofi"),
         "scotch-4n-480r": (4, 480, "shm:ofi"),
         "scotch-4n-448r": (4, 448, "shm:ofi"),
+        "hierarchical-4n-480r": (4, 480, "shm:ofi"),
+        "multilevel-node-numa-4n-480r": (4, 480, "shm:ofi"),
     }
 
     for preset, (nodes, ranks, transport) in expected.items():

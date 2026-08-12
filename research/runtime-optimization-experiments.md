@@ -108,6 +108,28 @@ together as the intended Phase 2 resource layout; decomposition remains
 Scotch and transport remains `shm:ofi`.  Captured per-rank placement must show
 exactly this set on all four nodes before its score is compared with 480 ranks.
 
+## Phase 3 setup: geometric partition screen
+
+Two 480-rank candidates keep node count, rank count, Intel MPI settings, and
+cell arithmetic fixed against the Scotch baseline:
+
+- `hierarchical-4n-480r` uses a direct `(6 8 10)` split with `xyz` order.
+  For the uniform 400-cubed mesh its analytical axis-plane interface count is
+  3,360,000 faces, 27.8% below Scotch's measured 4,653,839, before accounting
+  for processor-boundary representation details.
+- `multilevel-node-numa-4n-480r` applies `(1 2 2)` across the four node rank
+  groups, `(2 4 1)` across eight NUMA groups per node, then `(3 1 5)` across
+  15 ranks per NUMA group.  The product is the same `(6 8 10)` final grid, but
+  its rank numbering is designed to make consecutive 120-rank node placement
+  correspond to the outer geometric domains.
+
+Geometric case generation is intentionally implemented in a separate prepare
+script and cache identity.  Extending the established Scotch prepare script
+would change its script digest and unnecessarily invalidate the published
+120-, 240-, and 480-way Scotch caches or the in-flight 448-way cache.  Both
+geometric candidates remain serialized with other shared-filesystem
+preparation, and a solver failure cannot delete their valid immutable caches.
+
 ## Experiment template
 
 ### Experiment ID

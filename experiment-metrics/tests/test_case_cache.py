@@ -5,6 +5,9 @@ import subprocess
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "prepare-openfoam-case.sh"
+GEOMETRIC_SCRIPT = (
+    Path(__file__).parents[2] / "scripts" / "prepare-openfoam-geometric-case.sh"
+)
 
 
 def _executable(path: Path, body: str) -> Path:
@@ -104,3 +107,34 @@ def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> No
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
     assert (tmp_path / "case-120" / "processor119").is_dir()
     assert (tmp_path / "case-240" / "processor239").is_dir()
+
+
+def test_geometric_profiles_have_separate_immutable_caches(tmp_path: Path) -> None:
+    home = tmp_path / "home" / "user"
+    home.mkdir(parents=True)
+    source = tmp_path / "source"
+    (source / "system").mkdir(parents=True)
+    (source / "system" / "controlDict").write_text("application icoFoam;\n")
+    block_mesh = _executable(tmp_path / "blockMesh", "mkdir -p constant/polyMesh\n")
+    decompose_par = _executable(
+        tmp_path / "decomposePar",
+        "for rank in $(seq 0 479); do mkdir -p \"processor${rank}\"; done\n",
+    )
+    environment = {**os.environ, "HOME": str(home)}
+
+    profiles = {
+        "hierarchical-6x8x10": "n (6 8 10);",
+        "multilevel-node-numa-4n480": "numberOfSubdomains 15;",
+    }
+    for profile, expected_text in profiles.items():
+        target = tmp_path / f"case-{profile}"
+        subprocess.run(
+            [GEOMETRIC_SCRIPT, source, target, block_mesh, decompose_par, profile],
+            check=True,
+            env=environment,
+        )
+        assert expected_text in (target / "system" / "decomposeParDict.6").read_text()
+        assert (target / "processor479").is_dir()
+
+    cache_root = tmp_path / "home" / "share" / "openfoam-case-cache"
+    assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
