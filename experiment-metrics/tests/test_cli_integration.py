@@ -131,11 +131,11 @@ expected_workload_identity = "{digest}"
     )
     rows = [
         json.loads(line)
-        for line in (run_dir / "domain/network-imb-mpi1-results.jsonl")
+        for line in (run_dir / "domain/fragments/network.parser--imb-mpi1.jsonl")
         .read_text()
         .splitlines()
     ]
-    assert rows[0]["source_member"] == "source/network/imb-mpi1/stdout.txt"
+    assert any(row["key"] == "network.imb_mpi1.result.pingpong.0" for row in rows)
 
 
 def test_cli_package_excludes_merged_metrics(

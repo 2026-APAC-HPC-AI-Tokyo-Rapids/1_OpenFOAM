@@ -100,6 +100,7 @@ def submit_run(
     environment = {
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_PROFILE_MODE": profile_mode,
+        "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
         "OPENFOAM_RANKS": str(protocol.ranks),
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,

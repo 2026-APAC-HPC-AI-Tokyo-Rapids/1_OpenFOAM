@@ -1,47 +1,37 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from pathlib import PurePosixPath
 
 from .fact import Fact
 from .imb import IMBResult
-from .solver_log import ParsedSolverLog
+from .solver_log import ParsedSolverLog, evaluate_official
 
 
 def solver_log_facts(parsed: ParsedSolverLog) -> tuple[Fact, ...]:
+    official = evaluate_official(parsed)
     facts: list[Fact] = [
         Fact("solver.step_timings", _json_value(list(parsed.step_timings))),
         Fact("solver.pressure_solves", _json_value(list(parsed.pressure_solves))),
         Fact("solver.log_markers", _json_value(parsed.log_markers)),
+        Fact(
+            "result.official",
+            {
+                "schema_version": "openfoam-official-result/v1",
+                "valid": official.valid,
+                "fvops_trim_m": _decimal_text(official.fvops_trim_m),
+                "seconds_per_step": _decimal_text(official.seconds_per_step),
+                "trim_seconds": _decimal_text(official.trim_seconds),
+                "steps": len(parsed.step_timings),
+                "ranks": parsed.observed_nprocs,
+                "nodes": len(parsed.observed_hosts) if parsed.observed_hosts else None,
+            },
+        ),
     ]
     if parsed.runtime_header is not None:
         facts.insert(
             0, Fact("solver.runtime_header", _json_value(parsed.runtime_header))
         )
     return tuple(facts)
-
-
-def network_projection_rows(
-    run_id: str, results: tuple[IMBResult, ...], source_member: str
-) -> tuple[dict[str, object], ...]:
-    path = PurePosixPath(source_member)
-    if not run_id or path.is_absolute() or ".." in path.parts or not source_member:
-        raise ValueError("network source_member must be a nonempty relative path")
-    return tuple(
-        {
-            "run_id": run_id,
-            "benchmark": item.benchmark,
-            "process_count": item.process_count,
-            "message_bytes": item.message_bytes,
-            "iterations": item.iterations,
-            "time_min_us": _json_value(item.time_min_us),
-            "time_avg_us": _json_value(item.time_avg_us),
-            "time_max_us": _json_value(item.time_max_us),
-            "bandwidth_mbytes_per_sec": _json_value(item.bandwidth_mbytes_per_sec),
-            "source_member": source_member,
-        }
-        for item in results
-    )
 
 
 def network_config_facts(
@@ -68,7 +58,32 @@ def network_config_facts(
     ]
     if version is not None:
         facts.append(Fact("software.imb_mpi1.version", version))
+    for item in results:
+        facts.append(
+            Fact(
+                "network.imb_mpi1.result."
+                f"{item.benchmark.lower()}.{item.message_bytes}",
+                {
+                    "benchmark": item.benchmark,
+                    "process_count": item.process_count,
+                    "message_bytes": item.message_bytes,
+                    "iterations": item.iterations,
+                    "time_min_us": _decimal_text(item.time_min_us),
+                    "time_avg_us": _decimal_text(item.time_avg_us),
+                    "time_max_us": _decimal_text(item.time_max_us),
+                    "bandwidth_mbytes_per_sec": _decimal_text(
+                        item.bandwidth_mbytes_per_sec
+                    ),
+                },
+            )
+        )
     return tuple(facts)
+
+
+def _decimal_text(value: Decimal | None) -> str | None:
+    if value is None:
+        return None
+    return format(value, "f")
 
 
 def _json_value(value: object) -> object:

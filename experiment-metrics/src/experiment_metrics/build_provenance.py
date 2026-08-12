@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -188,8 +189,10 @@ def verify_build_pair(sidecar: Path, archive: Path) -> dict[str, object]:
     return document
 
 
-def build_artifact_index_fact(manifest_path: Path, build_sidecar_path: Path) -> Fact:
-    """Bind the validated build-sidecar identity to one regular run."""
+def build_artifact_facts(
+    manifest_path: Path, build_sidecar_path: Path
+) -> tuple[Fact, Fact]:
+    """Expose the complete validated build provenance without a projection table."""
 
     manifest = RunManifest.load(manifest_path)
     expected = manifest.path.parents[1] / "control/build-sidecar.json"
@@ -198,8 +201,49 @@ def build_artifact_index_fact(manifest_path: Path, build_sidecar_path: Path) -> 
     ):
         raise ValueError("build artifact index source is outside the bound run")
     content = build_sidecar_path.read_bytes()
-    validate_build_sidecar(json.loads(content))
-    return Fact("artifact.build_manifest_sha256", hashlib.sha256(content).hexdigest())
+    document = json.loads(content)
+    validate_build_sidecar(document)
+    run_dir = manifest_path.parents[1]
+    observations: list[dict[str, object]] = []
+    for command in document["toolchain_commands"]:
+        observations.append(
+            {
+                "role": command["role"],
+                "argv": command["argv"],
+                "outcome": command["outcome"],
+                "stdout": _expanded_member(command["stdout"], run_dir),
+                "stderr": _expanded_member(command["stderr"], run_dir),
+            }
+        )
+    provenance = {
+        **document,
+        "toolchain_commands": observations,
+    }
+    return (
+        Fact("artifact.build_manifest_sha256", hashlib.sha256(content).hexdigest()),
+        Fact("build.provenance", provenance),
+    )
+
+
+def build_artifact_index_fact(manifest_path: Path, build_sidecar_path: Path) -> Fact:
+    """Compatibility helper for callers that only need the sidecar identity."""
+
+    return build_artifact_facts(manifest_path, build_sidecar_path)[0]
+
+
+def _expanded_member(value: object, root: Path) -> dict[str, object]:
+    _validate_member(value)
+    assert isinstance(value, dict)
+    path = (root / str(value["path"])).resolve(strict=True)
+    if not path.is_relative_to(root.resolve()) or not path.is_file():
+        raise ValueError("build raw member is outside the bound run")
+    raw = path.read_bytes()
+    if (
+        len(raw) != value["size_bytes"]
+        or hashlib.sha256(raw).hexdigest() != value["sha256"]
+    ):
+        raise ValueError("build raw member differs from its sidecar")
+    return {**value, "content_b64": base64.b64encode(raw).decode("ascii")}
 
 
 def validate_build_sidecar(document: object) -> None:

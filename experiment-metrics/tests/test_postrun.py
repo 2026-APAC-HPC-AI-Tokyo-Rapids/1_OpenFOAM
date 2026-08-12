@@ -12,6 +12,7 @@ from experiment_metrics.postrun import (
     mesh_topology_fact,
     minimal_hardware_fact,
     partition_facts,
+    profile_hardware_facts,
 )
 from experiment_metrics.probes.capture_hardware import main as capture_hardware
 
@@ -200,3 +201,10 @@ def test_hardware_probe_writes_minimal_and_profile_sources(
         == 0
     )
     assert (run_dir / "profile/raw/hardware/node-0/capture.json").is_file()
+    profile_facts = profile_hardware_facts(
+        run_dir / "profile/raw/hardware", run_id=run_dir.name, expected_nodes=1
+    )
+    assert profile_facts[0].key == "profile.hardware.node.0.summary"
+    assert any(
+        fact.key.startswith("profile.hardware.node.0.numa.") for fact in profile_facts
+    )

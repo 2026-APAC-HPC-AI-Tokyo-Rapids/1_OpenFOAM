@@ -69,12 +69,37 @@ def test_pstream_reducer_requires_complete_rank_streams(tmp_path: Path) -> None:
     facts = pstream_facts(source, run_id="r-" + "a" * 32, expected_ranks=(0,))
 
     assert [fact.key for fact in facts] == [
-        "solver.pstream.startup_applied.rank.0",
-        "solver.pstream.runtime_current.rank.0",
-        "solver.pstream.change_events.rank.0",
+        "solver.pstream.startup_applied",
+        "solver.pstream.runtime_current",
+        "solver.pstream.change_events",
     ]
     assert facts[-1].logical_value["events"] == [
         {"field": "max_comms_size", "old": 6, "new": 7}
     ]
+    assert facts[0].logical_value["verified_rank_count"] == 1
     with pytest.raises(ValueError, match="do not match"):
         pstream_facts(source, run_id="r-" + "a" * 32, expected_ranks=(0, 1))
+
+
+def test_pstream_reducer_emits_only_rank_differences(tmp_path: Path) -> None:
+    run_id = "r-" + "a" * 32
+    source = tmp_path / "pstream"
+    source.mkdir()
+    _write_rank(source / "rank-0.jsonl", run_id)
+    raw = (source / "rank-0.jsonl").read_text().replace('"rank": 0', '"rank": 1')
+    (source / "rank-1.jsonl").write_text(
+        raw.replace('"max_comms_size": 6', '"max_comms_size": 8')
+    )
+
+    facts = pstream_facts(source, run_id=run_id, expected_ranks=(0, 1))
+
+    assert [fact.key for fact in facts][-1] == "solver.pstream.rank_exceptions"
+    assert facts[-1].logical_value == [
+        {
+            "rank": 1,
+            "runtime_current": {
+                **facts[1].logical_value["payload"],
+                "max_comms_size": 8,
+            },
+        }
+    ]

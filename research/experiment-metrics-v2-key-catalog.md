@@ -18,6 +18,28 @@ record field は「収集方法」に記す。
 - 実行設定をまとめるID/objectは作らない。`nodes`、`ranks`、`resource_group`、`transport_policy`は
   独立keyで保持し、スプレッドシートでも一key一列にする。
 
+## 2026-08-12 direct raw contract
+
+BigQueryは`openfoam_metrics(run STRING, key STRING, value STRING)`一表だけを使用し、
+projection table/viewは作らない。旧artifact projectionが持っていた情報は、次のraw keyで
+producer確定直後に直接送る。
+
+- source trackは`source.track.head_commit`だけを送る。base commit、object hash方式、
+  control-plane/manifest SHAは送らない。buildに使用したOpenFOAM/ThirdParty commitは
+  `build.provenance`内に保持する。
+- `build.provenance`、`build.provision`、`workload.manifest`、
+  `hardware.minimal.node.<node>`、`mesh.topology`、`mesh.partition.requested`、
+  `mesh.partition.observed`、`result.official`をcanonical JSONで送る。
+- workload本文は`workload.member.{initial_u,initial_p,transport_properties,block_mesh_dict,
+  control_dict,fv_schemes,fv_solution}`としてBase64送信する。
+- IMBの各実測rowは`network.imb_mpi1.result.<benchmark>.<message_bytes>`として送る。
+- Pstreamは全rank sourceをproducer内で検証した後、
+  `solver.pstream.{startup_applied,runtime_current,change_events}`を各1行送る。
+  rank差が実在するときだけ`solver.pstream.rank_exceptions`を追加する。
+- rank別に保持する通常実行情報は、全rankを一つのJSONにした
+  `parallel.rank_placement`だけである。rank別environmentは生成・保存しない。
+- profileはperf-statだけを対象とし、VTuneはこのrepositoryの収集・実験対象外とする。
+
 ## 1. Run、stage、artifact
 
 | キー | 意味 | 収集方法（コマンド／関数） | 適用・種別 |
