@@ -180,6 +180,19 @@ is material.  Multi-level advances; direct hierarchical is rejected.  Actions
 and home-archive terminal status are checked separately when GitHub's temporary
 API rate limit resets.
 
+## Phase 4 setup: topology-boundary profile
+
+The complete multi-level partition facts identify ranks 346, 345, 149, 148,
+331, 330, 134, and 133 as the largest inter-node participants, each with 6,030
+cross-node faces.  Named profile preset
+`multilevel-node-numa-r346-4n-480r` therefore retains the winning decomposition
+and all runtime settings but instruments rank 346 instead of the default rank
+0.  This keeps the profile population separate from bench scores and targets a
+measured boundary rank.  It will determine whether MPI wait/transfer is large
+enough to justify new Intel MPI or OpenFOAM communication experiments.  The
+known-negative `topoControl=16` and `nPollProcInterfaces=-1` settings remain
+excluded unless this new profile supplies contrary evidence.
+
 ## Experiment template
 
 ### Experiment ID

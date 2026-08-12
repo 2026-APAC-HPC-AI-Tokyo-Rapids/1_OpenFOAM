@@ -32,6 +32,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
+    assert 'OPENFOAM_VTUNE_RANK=346' in text
+    assert "multilevel-node-numa-r346-4n-480r" in text
     assert "if (( OPENFOAM_MPI_PPN == 112 )); then" in text
     assert (
         'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,'

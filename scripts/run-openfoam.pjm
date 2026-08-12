@@ -19,6 +19,10 @@ set -euo pipefail
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_RANK:=0}"
+PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
+if [[ "${PROTOCOL_NAME}" == *-multilevel-node-numa-r346-4n-480r ]]; then
+  OPENFOAM_VTUNE_RANK=346
+fi
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
   *) printf 'Unsupported OPENFOAM_RUN_PURPOSE: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
@@ -203,13 +207,12 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 "${METRICS_CLI}" supervisor-mark-pipeline \
   --state "${SUPERVISOR_STATE}" --mark start
-protocol_name=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
-case "${protocol_name}" in
+case "${PROTOCOL_NAME}" in
   *-hierarchical-4n-480r)
     PREPARE_SCRIPT=prepare-openfoam-geometric-case.sh
     PREPARE_ARGUMENT=hierarchical-6x8x10
     ;;
-  *-multilevel-node-numa-4n-480r)
+  *-multilevel-node-numa-4n-480r | *-multilevel-node-numa-r346-4n-480r)
     PREPARE_SCRIPT=prepare-openfoam-geometric-case.sh
     PREPARE_ARGUMENT=multilevel-node-numa-4n480
     ;;
@@ -217,7 +220,7 @@ case "${protocol_name}" in
     PREPARE_SCRIPT=prepare-openfoam-case.sh
     PREPARE_ARGUMENT=${OPENFOAM_MPI_PROCS}
     ;;
-  *) echo "unsupported protocol decomposition: ${protocol_name}" >&2; exit 64 ;;
+  *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
 stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" \
   "${PROVISION_DIR}/scripts/${PREPARE_SCRIPT}" \

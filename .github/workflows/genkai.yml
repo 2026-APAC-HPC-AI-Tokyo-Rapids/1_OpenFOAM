@@ -33,6 +33,7 @@ on:
           - scotch-4n-448r
           - hierarchical-4n-480r
           - multilevel-node-numa-4n-480r
+          - multilevel-node-numa-r346-4n-480r
   push:
     paths-ignore:
       - 'research/**'
@@ -269,7 +270,7 @@ jobs:
           case "${OPENFOAM_EXPERIMENT_PRESET}" in
             scotch-*) prepare_decomposition_profile=scotch ;;
             hierarchical-4n-480r) prepare_decomposition_profile=hierarchical-6x8x10 ;;
-            multilevel-node-numa-4n-480r) prepare_decomposition_profile=multilevel-node-numa-4n480 ;;
+            multilevel-node-numa-4n-480r | multilevel-node-numa-r346-4n-480r) prepare_decomposition_profile=multilevel-node-numa-4n480 ;;
             *) echo "unsupported decomposition preset: ${OPENFOAM_EXPERIMENT_PRESET}" >&2; exit 64 ;;
           esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
