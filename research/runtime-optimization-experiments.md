@@ -12,10 +12,9 @@ investigation.  Timing claims use official valid bench results only.
 - Active hypothesis: the fixed 120-rank canary configuration underuses two- and
   four-node allocations; full physical-core layouts should dominate before
   smaller MPI runtime adjustments matter.
-- Active Actions runs at commit `948e11f`: `31629648195` (2 nodes/240 ranks),
-  `31629651069` (4 nodes/480 ranks), and `31629672240` (1-node noise repeat).
-  They were dispatched concurrently; the shared-filesystem preparation stage
-  remains serialized by the workflow's existing `queue: max` concurrency rule.
+- The first full-core screen at commit `948e11f` is complete.  Two nodes/240
+  ranks produced 3.3997 M FVOPS and four nodes/480 ranks produced 6.8139 M;
+  both were valid.  A concurrent one-node repeat produced 1.6996 M.
 
 ## Prior evidence admitted to the study
 
@@ -28,6 +27,9 @@ investigation.  Timing claims use official valid bench results only.
 | Actions 278 / run `r-49e4a417a55f2278a211f483d720b391` | VTune rank 0 | VALID profile; DIC 45.8%, Amul 26.1% | locality dominates sampled rank |
 | Actions 279 / run `r-6227d22fbc780cd0ad71df88fd19ed2c` | post-merge 1 node/120 | VALID, 1.6270 M FVOPS | baseline sample; about 0.8% below 1.6398 M |
 | Actions 280 / run `r-321efbd20828499c944ad987c4170a68` | named `scotch-1n-120r` preset and content-addressed 120-way case cache | VALID, 1.6400 M FVOPS, 39.025 s/step | new preset path agrees with prior baseline; advance to concurrent full-core screening |
+| Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2 nodes, 240 Scotch ranks | VALID, 3.3997 M FVOPS, 18.825 s/step | 7.2% above the old 2-node/120-rank canary; repeat before accepting because current one-node range is 4.4% |
+| Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4 nodes, 480 Scotch ranks | VALID, 6.8139 M FVOPS, 9.393 s/step | 37.7% above the old 4-node/120-rank canary; retain full-core layout |
+| Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1-node named-preset repeat, cache hit | VALID, 1.6996 M FVOPS, 37.655 s/step | unexpectedly fast but valid; use the observed 4.4% range as the provisional noise threshold |
 
 ## Infrastructure observation: Actions 280
 
@@ -52,6 +54,44 @@ investigation.  Timing claims use official valid bench results only.
 - Decision: retain this result as a Phase 0 sample and proceed without a build
   to `scotch-2n-240r` and `scotch-4n-480r`.  One additional 1-node repeat was
   submitted to complete the planned current-workflow noise sample count.
+
+## Phase 0 result: provisional noise range
+
+The five comparable valid one-node results currently available are 1.6270,
+1.6392, 1.6398, 1.6400, and 1.6996 M FVOPS.  Their median is 1.6398 M and their
+minimum-to-maximum span is 4.4% of the median.  The most recent result is 3.6%
+above the median, so it cannot be discarded as an invalid outlier without a
+measured environmental cause.  Until alternating repeats narrow this range,
+candidate improvements below 4.4% are treated as indistinguishable.
+
+## Phase 1 screen: full physical cores
+
+All three concurrently dispatched workflows reached terminal success,
+including official parsing, fixed artifact upload, and home-server archival.
+The preparation jobs remained serialized to protect the shared filesystem;
+solver work could proceed as soon as its own immutable cache was published.
+
+| Actions | Nodes/ranks | Prepare PJM/cache | Solver PJM/run | Official result | Solver/pipeline wall |
+|---:|---:|---|---|---|---|
+| 281 (`31629648195`) | 2 / 240 | `6467212`, cache miss, `a69a992f...` | `6467289`, `r-0af1f803cd25cfc680fed74ca4a2e067` | VALID, 3.3997 M, 18.825 s/step | 121.824 / 123.490 s |
+| 282 (`31629651069`) | 4 / 480 | `6467287`, cache miss, `25d0ec32...` | `6467377`, `r-91ee8cc4584bd7464cfc3a82b2a405fa` | VALID, 6.8139 M, 9.393 s/step | 56.860 / 58.525 s |
+| 283 (`31629672240`) | 1 / 120 | `6467376`, cache hit, `daba43a5...` | `6467389`, `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | VALID, 1.6996 M, 37.655 s/step | 202.274 / 203.950 s |
+
+The 240-way Scotch partition has 3,529,391 unique interface faces, 1,372 rank
+pairs, 11.43 mean and 19 maximum neighbours, 264,000--269,332 cells/rank, and
+303,351 faces crossing the consecutive 120-rank node boundary.  The 480-way
+partition has 4,653,839 unique interface faces, 2,998 rank pairs, 12.49 mean
+and 23 maximum neighbours, 131,931--134,666 cells/rank, and 727,567 faces
+crossing the three consecutive 120-rank node boundaries.  Captured placement
+confirms exactly 120 local ranks and one distinct CPU per rank on each node.
+
+Relative to the old fixed-120-rank canaries, 240 ranks improved two-node FVOPS
+by 7.2%, while 480 ranks improved four-node FVOPS by 37.7%.  Relative to the
+1.6400 M validation run, the first full-core results scale by 2.07x and 4.15x.
+The four-node result is decisively beyond measured noise and full-core rank
+occupancy is retained.  The smaller two-node gain requires a repeat.  The next
+decomposition phase should target the rapidly increasing interface count and
+make rank groups correspond to node and NUMA geometry.
 
 ## Experiment template
 
