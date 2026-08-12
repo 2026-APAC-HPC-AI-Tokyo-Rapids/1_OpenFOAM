@@ -126,7 +126,7 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     concurrency:
-      group: genkai-openfoam-build-${{ github.ref }}
+      group: genkai-openfoam-build
       queue: max
 
     env:
@@ -242,7 +242,7 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     concurrency:
-      group: genkai-openfoam-case-${{ github.ref }}-${{ needs.select-build.outputs.prepare_script_sha256 }}
+      group: genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}
       queue: max
 
     env:
