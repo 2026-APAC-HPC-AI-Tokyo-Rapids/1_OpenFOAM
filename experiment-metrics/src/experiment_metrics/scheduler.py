@@ -79,8 +79,8 @@ def submit_run(
     if run_dir != manifest.path.parents[1]:
         raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
-    if profile_mode not in {"direct", "perf-stat"} or (
-        (profile_mode == "perf-stat") != (manifest.purpose == "profile")
+    if profile_mode not in {"direct", "perf-stat", "vtune-hotspots"} or (
+        (profile_mode != "direct") != (manifest.purpose == "profile")
     ):
         raise ValueError("profile mode differs from run purpose")
     relative = PurePosixPath(pjm_script_repository_path)
