@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
+
+report_failure() {
+  local status=$?
+  printf 'Perfetto export failed at line %s with status %s\n' \
+    "${BASH_LINENO[0]}" "${status}" >&2
+}
+trap report_failure ERR
 
 : "${VTUNE_RESULT_DIR:?VTune result directory is required}"
 : "${PROVISION_DIR:?Provision directory is required}"

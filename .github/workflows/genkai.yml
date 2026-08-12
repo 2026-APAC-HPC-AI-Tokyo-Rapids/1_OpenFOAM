@@ -489,7 +489,7 @@ jobs:
 
       - name: Upload rich VTune Perfetto artifact
         id: upload_vtune_perfetto
-        if: success() && inputs.profile_mode == 'vtune-hotspots'
+        if: always() && inputs.profile_mode == 'vtune-hotspots'
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-vtune-perfetto-${{ steps.v2_context.outputs.run_id }}
@@ -500,7 +500,7 @@ jobs:
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.stderr
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/hotspots.csv
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/function-slices.stderr
-          if-no-files-found: error
+          if-no-files-found: warn
           compression-level: 6
           retention-days: 90
 
