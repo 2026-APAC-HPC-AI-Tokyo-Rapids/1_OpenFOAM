@@ -44,6 +44,22 @@ python_path="${PROVISION_DIR}/experiment-metrics/.venv/bin/python"
 output_dir="${RUN_DIR}/profile/raw/vtune-perfetto"
 slices_dir="${output_dir}/function-slices"
 install -d -m 0700 "${output_dir}" "${slices_dir}"
+: > "${output_dir}/function-slices.stderr"
+
+# The summary exporter has already produced this report from the same result.
+# Reuse it when available so optional chronological reports cannot prevent the
+# Perfetto artifact from containing the aggregate VTune hotspot data.
+summary_hotspots="${RUN_DIR}/profile/raw/vtune-summary/hotspots.csv"
+if [[ -s "${summary_hotspots}" ]]; then
+  cp -- "${summary_hotspots}" "${output_dir}/hotspots.csv"
+else
+  vtune -quiet -report hotspots \
+    -result-dir "${resolved_result_dir}" \
+    -group-by function,module \
+    -column time \
+    -format csv -csv-delimiter comma \
+    > "${output_dir}/hotspots.csv"
+fi
 
 # VTune 2025 may leave -report-output empty, so keep stdout as the canonical
 # CSV input. The timeline and fixed windows provide chronological data instead
@@ -56,13 +72,6 @@ vtune -quiet -report timeline \
   -format csv -csv-delimiter comma \
   > "${output_dir}/timeline.csv" \
   2> "${output_dir}/timeline.stderr" || timeline_status=$?
-
-vtune -quiet -report hotspots \
-  -result-dir "${resolved_result_dir}" \
-  -group-by function,module \
-  -column time \
-  -format csv -csv-delimiter comma \
-  > "${output_dir}/hotspots.csv"
 
 timeline_start=$(awk -F, '/^[0-9]+,/ { print $2; exit }' \
   "${output_dir}/timeline.csv")
@@ -93,13 +102,21 @@ for ((slice_index = 0; slice_index < FUNCTION_BINS; slice_index++)); do
   printf -v slice_name '%04d.csv' "${slice_index}"
   printf '%s,%s,%s\n' "${slice_name}" "${slice_start}" "${slice_end}" \
     >> "${slices_dir}/windows.csv"
+  slice_status=0
   vtune -quiet -report hotspots \
     -result-dir "${resolved_result_dir}" \
     -group-by function,module \
     -column time \
     -time-filter "${slice_start}:${slice_end}" \
     -format csv -csv-delimiter comma \
-    > "${slices_dir}/${slice_name}"
+    > "${slices_dir}/${slice_name}" \
+    2>> "${output_dir}/function-slices.stderr" || slice_status=$?
+  if [[ "${slice_status}" -ne 0 ]]; then
+    printf 'window %s (%s:%s) exited %d\n' \
+      "${slice_name}" "${slice_start}" "${slice_end}" "${slice_status}" \
+      >> "${output_dir}/function-slices.stderr"
+    rm -f -- "${slices_dir}/${slice_name}"
+  fi
 done
 
 converter_args=(

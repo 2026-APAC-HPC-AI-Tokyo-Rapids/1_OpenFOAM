@@ -499,6 +499,7 @@ jobs:
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.csv
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/timeline.stderr
             ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/hotspots.csv
+            ${{ steps.v2_context.outputs.run_dir }}/profile/raw/vtune-perfetto/function-slices.stderr
           if-no-files-found: error
           compression-level: 6
           retention-days: 90

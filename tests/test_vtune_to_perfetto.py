@@ -269,17 +269,25 @@ def test_exporter_writes_run_scoped_perfetto_artifact(tmp_path: Path) -> None:
 set -euo pipefail
 report=
 result_dir=
+time_filter=
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -report) report=$2; shift 2 ;;
     -result-dir) result_dir=$2; shift 2 ;;
+    -time-filter) time_filter=$2; shift 2 ;;
     *) shift ;;
   esac
 done
 [[ "$result_dir" == "$VTUNE_RESOLVED_RESULT_DIR" ]]
 case "$report" in
   timeline) echo 'timeline report unavailable' >&2; exit 1 ;;
-  hotspots) cat "$VTUNE_HOTSPOTS_FIXTURE" ;;
+  hotspots)
+    if [[ -n "$time_filter" ]]; then
+      echo 'time-filter report unavailable' >&2
+      exit 1
+    fi
+    cat "$VTUNE_HOTSPOTS_FIXTURE"
+    ;;
   *) exit 2 ;;
 esac
 """,
@@ -312,9 +320,13 @@ esac
     assert (artifact / "timeline.csv").is_file()
     assert (artifact / "timeline.stderr").is_file()
     assert (artifact / "hotspots.csv").is_file()
+    assert (artifact / "function-slices.stderr").is_file()
     metadata = json.loads((artifact / "summary.json").read_text(encoding="utf-8"))
     assert metadata["timeline_available"] is False
-    assert metadata["source_sample_windows"] == 2
-    assert metadata["source_function_values"] == 8
+    assert metadata["source_sample_windows"] == 0
+    assert metadata["source_function_values"] == 0
     assert metadata["solver_iterations"] == 3
     assert metadata["source_exact_task_events"] == 0
+    assert "time-filter report unavailable" in (
+        artifact / "function-slices.stderr"
+    ).read_text(encoding="utf-8")
