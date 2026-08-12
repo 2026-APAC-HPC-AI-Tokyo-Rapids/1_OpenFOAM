@@ -8,6 +8,9 @@ SCRIPT = Path(__file__).parents[2] / "scripts" / "prepare-openfoam-case.sh"
 GEOMETRIC_SCRIPT = (
     Path(__file__).parents[2] / "scripts" / "prepare-openfoam-geometric-case.sh"
 )
+MULTILEVEL_448_SCRIPT = (
+    Path(__file__).parents[2] / "scripts" / "prepare-openfoam-multilevel-448-case.sh"
+)
 
 
 def _executable(path: Path, body: str) -> Path:
@@ -107,6 +110,50 @@ def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> No
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
     assert (tmp_path / "case-120" / "processor119").is_dir()
     assert (tmp_path / "case-240" / "processor239").is_dir()
+
+
+def test_multilevel_448_profile_is_exact_and_cacheable(tmp_path: Path) -> None:
+    home = tmp_path / "home" / "user"
+    home.mkdir(parents=True)
+    source = tmp_path / "source"
+    (source / "system").mkdir(parents=True)
+    (source / "system" / "controlDict").write_text("application icoFoam;\n")
+    block_mesh = _executable(tmp_path / "blockMesh", "mkdir -p constant/polyMesh\n")
+    decompose_par = _executable(
+        tmp_path / "decomposePar",
+        "for rank in $(seq 0 447); do mkdir -p \"processor${rank}\"; done\n",
+    )
+    environment = {**os.environ, "HOME": str(home)}
+
+    first = subprocess.run(
+        [MULTILEVEL_448_SCRIPT, source, tmp_path / "case-1", block_mesh, decompose_par],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    second = subprocess.run(
+        [
+            MULTILEVEL_448_SCRIPT,
+            source,
+            tmp_path / "case-2",
+            block_mesh,
+            decompose_par,
+            "--require-cache",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    dictionary = (tmp_path / "case-2/system/decomposeParDict.6").read_text()
+    assert "cache_hit=false" in first.stdout
+    assert "cache_hit=true" in second.stdout
+    assert "numberOfSubdomains 448;" in dictionary
+    assert "coeffs { n (1 2 2);" in dictionary
+    assert "coeffs { n (1 2 4);" in dictionary
+    assert "coeffs { n (7 2 1);" in dictionary
+    assert (tmp_path / "case-2/processor447").is_dir()
 
 
 def test_geometric_profiles_have_separate_immutable_caches(tmp_path: Path) -> None:

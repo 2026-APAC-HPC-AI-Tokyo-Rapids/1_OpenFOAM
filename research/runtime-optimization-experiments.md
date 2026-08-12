@@ -202,6 +202,41 @@ were submitted concurrently as `31642564622` (multi-level), `31642567524`
 (448-rank Scotch), and `31642570205` (480-rank Scotch).  Only the three bench
 runs enter score distributions.
 
+All four workflows reached terminal success and archived their artifacts.  The
+multi-level repeat produced 7.8745 M FVOPS, agreeing with its two earlier
+7.9306/7.9404 M results within 0.8%.  The 448-rank Scotch repeat produced
+7.9850 M, agreeing with 8.0025 M within 0.22%.  In contrast the 480-rank Scotch
+repeat produced 6.7315 M; its three results are 6.7315, 6.8139, and 7.8264 M.
+The 448-rank median is 7.9938 M versus the 480-rank median 6.8139 M, a 17.3%
+advantage, while also being much more stable.  Balanced 112 ranks/node is
+therefore adopted over 120 ranks/node.
+
+The profile run `r-50ed9d8a6f67bc10dee84032df2e5c57` was valid but remains
+excluded from score comparisons.  Rank 346's 31.190 s reported CPU time is
+46.4% DIC preconditioning, 24.8% `lduMatrix::Amul`, 10.0% PCG scalar solve,
+7.8% `PMPI_Allreduce`, and about 1.6% other explicit MPI/UCX send, wait, and
+progress functions.  The boundary rank is still compute/locality dominated;
+MPI collective tuning has roughly a 10% sampled upper bound.  Intel documents
+application autotuning as topology-specific and supports generating with
+`I_MPI_TUNING_MODE=auto` plus `I_MPI_TUNING_BIN_DUMP`, then consuming the file
+with `I_MPI_TUNING_BIN`.  It is deferred until the combined 448-rank
+topology-aware partition is measured, and will be stopped after one negative
+screen because prior 120/240-rank trials were mixed.  Reference: Intel MPI
+[Autotuning](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/current/autotuning.html)
+and [tuning environment variables](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-15/tuning-environment-variables.html).
+
+## Combined Phase 2/3 candidate: 448-rank node-NUMA multi-level
+
+The stable resource layout and topology-aware partition combine exactly as
+four node groups, eight NUMA groups per node, and 14 ranks per NUMA group.
+Their geometric factors `(1 2 2)`, `(1 2 4)`, and `(7 2 1)` multiply to a
+balanced final `(7 8 8)` grid and preserve consecutive 112-rank node groups and
+14-rank NUMA groups.  Preset `multilevel-node-numa-4n-448r` changes only the
+partition relative to adopted 448-rank Scotch and only rank count/placement
+relative to the advancing 480-rank multi-level result.  Its case has an
+independent immutable cache so neither prior geometric nor Scotch caches are
+invalidated.
+
 ## Experiment template
 
 ### Experiment ID
