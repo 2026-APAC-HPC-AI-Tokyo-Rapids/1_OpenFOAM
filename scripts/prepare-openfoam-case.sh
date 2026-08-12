@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 4 || $# -gt 5 || ( $# -eq 5 && $5 != --require-cache ) ]]; then
-    echo "usage: $0 SOURCE_CASE TARGET_CASE BLOCK_MESH DECOMPOSE_PAR [--require-cache]" >&2
+if [[ $# -lt 5 || $# -gt 6 || ( $# -eq 6 && $6 != --require-cache ) ]]; then
+    echo "usage: $0 SOURCE_CASE TARGET_CASE BLOCK_MESH DECOMPOSE_PAR SUBDOMAINS [--require-cache]" >&2
     exit 64
 fi
 
@@ -10,17 +10,43 @@ SOURCE_CASE=$1
 TARGET_CASE=$2
 BLOCK_MESH=$3
 DECOMPOSE_PAR=$4
-REQUIRE_CACHE=${5:-}
+NUMBER_OF_SUBDOMAINS=$5
+REQUIRE_CACHE=${6:-}
 CACHE_ROOT="${HOME}/../share/openfoam-case-cache"
-NUMBER_OF_SUBDOMAINS=120
 
 [[ -d "${SOURCE_CASE}" ]] || { echo "source case not found: ${SOURCE_CASE}" >&2; exit 66; }
 [[ ! -e "${TARGET_CASE}" ]] || { echo "target case already exists: ${TARGET_CASE}" >&2; exit 73; }
 [[ -x "${BLOCK_MESH}" ]] || { echo "blockMesh is not executable: ${BLOCK_MESH}" >&2; exit 69; }
 [[ -x "${DECOMPOSE_PAR}" ]] || { echo "decomposePar is not executable: ${DECOMPOSE_PAR}" >&2; exit 69; }
+[[ "${NUMBER_OF_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]] || {
+    echo "subdomains must be a positive integer: ${NUMBER_OF_SUBDOMAINS}" >&2
+    exit 64
+}
 
 SCRIPT_SHA256=$(sha256sum "$0" | awk '{print $1}')
-CACHE_DIR="${CACHE_ROOT}/${SCRIPT_SHA256}"
+SOURCE_IDENTITY=$(
+    cd "${SOURCE_CASE}"
+    find . -type f -print0 |
+        sort -z |
+        xargs -0 sha256sum |
+        sha256sum |
+        awk '{print $1}'
+)
+BLOCK_MESH_SHA256=$(sha256sum "${BLOCK_MESH}" | awk '{print $1}')
+DECOMPOSE_PAR_SHA256=$(sha256sum "${DECOMPOSE_PAR}" | awk '{print $1}')
+CACHE_IDENTITY=$(
+    printf '%s\n' \
+        "prepare=${SCRIPT_SHA256}" \
+        "source=${SOURCE_IDENTITY}" \
+        "blockMesh=${BLOCK_MESH_SHA256}" \
+        "decomposePar=${DECOMPOSE_PAR_SHA256}" \
+        "subdomains=${NUMBER_OF_SUBDOMAINS}" \
+        'method=scotch' \
+        'fileHandler=uncollated' |
+        sha256sum |
+        awk '{print $1}'
+)
+CACHE_DIR="${CACHE_ROOT}/${CACHE_IDENTITY}"
 mkdir -p "${CACHE_ROOT}"
 
 write_generation_files() {
@@ -61,7 +87,7 @@ boundary
 mergePatchPairs ();
 BLOCK_MESH_DICT
 
-    cat > "${case_dir}/system/decomposeParDict.6" <<'DECOMPOSE_PAR_DICT'
+    cat > "${case_dir}/system/decomposeParDict.6" <<DECOMPOSE_PAR_DICT
 FoamFile
 {
     version     2.0;
@@ -70,14 +96,14 @@ FoamFile
     object      decomposeParDict;
 }
 
-numberOfSubdomains 120;
+numberOfSubdomains ${NUMBER_OF_SUBDOMAINS};
 method scotch;
 DECOMPOSE_PAR_DICT
 }
 
 cache_valid() {
     [[ -f "${CACHE_DIR}/READY" ]] &&
-        [[ $(<"${CACHE_DIR}/READY") == "${SCRIPT_SHA256}" ]] &&
+        [[ $(<"${CACHE_DIR}/READY") == "${CACHE_IDENTITY}" ]] &&
         [[ -d "${CACHE_DIR}/case/constant/polyMesh" ]] &&
         [[ -d "${CACHE_DIR}/case/processor0" ]] &&
         [[ -d "${CACHE_DIR}/case/processor$((NUMBER_OF_SUBDOMAINS - 1))" ]]
@@ -103,9 +129,15 @@ if ! cache_valid; then
             -decomposeParDict system/decomposeParDict.6 -force \
             > logs/decomposePar.log 2>&1
     )
-    printf '%s\n' "${SCRIPT_SHA256}" > "${TEMP_DIR}/READY"
-    jq -n --arg prepare_script_sha256 "${SCRIPT_SHA256}" \
-        '{schema_version:"openfoam-case-cache/v1",prepare_script_sha256:$prepare_script_sha256,number_of_subdomains:120,method:"scotch",file_handler:"uncollated"}' \
+    printf '%s\n' "${CACHE_IDENTITY}" > "${TEMP_DIR}/READY"
+    jq -n \
+        --arg cache_identity "${CACHE_IDENTITY}" \
+        --arg prepare_script_sha256 "${SCRIPT_SHA256}" \
+        --arg source_identity "${SOURCE_IDENTITY}" \
+        --arg block_mesh_sha256 "${BLOCK_MESH_SHA256}" \
+        --arg decompose_par_sha256 "${DECOMPOSE_PAR_SHA256}" \
+        --argjson number_of_subdomains "${NUMBER_OF_SUBDOMAINS}" \
+        '{schema_version:"openfoam-case-cache/v2",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,source_identity:$source_identity,block_mesh_sha256:$block_mesh_sha256,decompose_par_sha256:$decompose_par_sha256,number_of_subdomains:$number_of_subdomains,method:"scotch",file_handler:"uncollated"}' \
         > "${TEMP_DIR}/manifest.json"
     find "${TEMP_DIR}/case" -type f -exec chmod a-w {} +
     find "${TEMP_DIR}/case" -type d -exec chmod a-w {} +

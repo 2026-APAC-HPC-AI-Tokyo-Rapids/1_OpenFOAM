@@ -13,7 +13,7 @@ def _executable(path: Path, body: str) -> Path:
     return path
 
 
-def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
+def test_prepare_case_uses_content_and_rank_specific_cache(tmp_path: Path) -> None:
     home = tmp_path / "home" / "user"
     home.mkdir(parents=True)
     source = tmp_path / "source"
@@ -35,14 +35,14 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
     environment = {**os.environ, "HOME": str(home)}
 
     first = subprocess.run(
-        [SCRIPT, source, tmp_path / "case-1", block_mesh, decompose_par],
+        [SCRIPT, source, tmp_path / "case-1", block_mesh, decompose_par, "120"],
         check=True,
         capture_output=True,
         text=True,
         env=environment,
     )
     second = subprocess.run(
-        [SCRIPT, source, tmp_path / "case-2", block_mesh, decompose_par],
+        [SCRIPT, source, tmp_path / "case-2", block_mesh, decompose_par, "120"],
         check=True,
         capture_output=True,
         text=True,
@@ -68,6 +68,7 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
             tmp_path / "case-3",
             block_mesh,
             decompose_par,
+            "120",
             "--require-cache",
         ],
         check=True,
@@ -76,3 +77,30 @@ def test_prepare_case_uses_script_sha_cache(tmp_path: Path) -> None:
         env=environment,
     )
     assert "cache_hit=true" in required.stdout
+
+
+def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> None:
+    home = tmp_path / "home" / "user"
+    home.mkdir(parents=True)
+    source = tmp_path / "source"
+    (source / "system").mkdir(parents=True)
+    (source / "system" / "controlDict").write_text("application icoFoam;\n")
+    block_mesh = _executable(tmp_path / "blockMesh", "mkdir -p constant/polyMesh\n")
+    decompose_par = _executable(
+        tmp_path / "decomposePar",
+        "ranks=$(sed -n 's/^numberOfSubdomains \\([0-9][0-9]*\\);/\\1/p' system/decomposeParDict.6)\n"
+        "for rank in $(seq 0 $((ranks - 1))); do mkdir -p \"processor${rank}\"; done\n",
+    )
+    environment = {**os.environ, "HOME": str(home)}
+
+    for ranks in ("120", "240"):
+        subprocess.run(
+            [SCRIPT, source, tmp_path / f"case-{ranks}", block_mesh, decompose_par, ranks],
+            check=True,
+            env=environment,
+        )
+
+    cache_root = tmp_path / "home" / "share" / "openfoam-case-cache"
+    assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
+    assert (tmp_path / "case-120" / "processor119").is_dir()
+    assert (tmp_path / "case-240" / "processor239").is_dir()

@@ -182,7 +182,6 @@ fi
   --build-provision "${RUN_DIR}/control/build-provision-validation.json" \
   || printf '%s\n' 'build provision metrics could not be recorded' >&2
 
-test "${OPENFOAM_MPI_PROCS}" -eq 120
 cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
@@ -199,12 +198,12 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" \
   "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
   "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" \
-  --require-cache
+  "${OPENFOAM_MPI_PROCS}" --require-cache
 cd "${CASE_DIR}"
 install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/blockMesh.log "${LOG_DIR}/blockMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
-install -m 0644 "${HOME}/../share/openfoam-case-cache/$(sha256sum "${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" | awk '{print $1}')/manifest.json" \
+install -m 0644 "$(readlink -f -- "${CASE_DIR}")/../manifest.json" \
   "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
