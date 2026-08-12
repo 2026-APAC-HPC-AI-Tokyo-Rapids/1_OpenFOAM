@@ -332,6 +332,19 @@ MPI settings, workload, and solver.  Both are screened; `blockSize 65536` is
 admitted only if the 32768-cell version improves FVOPS or measured memory
 behaviour.
 
+Commit `f3958b7` requested the required new build.  Push Actions
+`31647838535` built rather than reused an archive in 7m31s and published build
+archive 301 (476,685,265 bytes, SHA-256
+`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`).
+Its closed sidecar and provision validation contain `renumberMesh` and the
+`renumberMethods`/reconstruct dependency closure.  The default one-node E2E
+run, solver PJM `6468124`, run `r-864a780dc7b9f19d5dbc1b377ddfaf4c`, was
+official VALID at 1.7019 M FVOPS and 37.605 s/step with 120 ranks on one node.
+Every Actions and archive job succeeded and no PJM work remained.  Actions
+`31649038444` now screens ordinary Cuthill-McKee, paired with same-build
+unchanged Scotch control `31649040528`; old-build scores are not direct
+controls for the ordering phase.
+
 ## Experiment template
 
 ### Experiment ID
