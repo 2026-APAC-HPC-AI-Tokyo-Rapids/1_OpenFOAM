@@ -15,6 +15,9 @@ investigation.  Timing claims use official valid bench results only.
 - The first full-core screen at commit `948e11f` is complete.  Two nodes/240
   ranks produced 3.3997 M FVOPS and four nodes/480 ranks produced 6.8139 M;
   both were valid.  A concurrent one-node repeat produced 1.6996 M.
+- Repeat full-core workflows `31634782784` (2/240) and `31634785406`
+  (4/480) are active at commit `a5390da`.  The next controlled factor is
+  four nodes/448 ranks, with one CPU deliberately reserved in each NUMA domain.
 
 ## Prior evidence admitted to the study
 
@@ -92,6 +95,18 @@ The four-node result is decisively beyond measured noise and full-core rank
 occupancy is retained.  The smaller two-node gain requires a repeat.  The next
 decomposition phase should target the rapidly increasing interface count and
 make rank groups correspond to node and NUMA geometry.
+
+## Phase 2 setup: balanced 112 ranks/node
+
+The compute-node hardware capture maps NUMA nodes 0--7 to consecutive 15-CPU
+ranges `0-14`, `15-29`, ..., `105-119`.  A generic 448-rank launch would use
+CPUs 0--111 and concentrate all eight idle CPUs at the end of the final NUMA
+domain.  Preset `scotch-4n-448r` instead binds local ranks to
+`0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118`, reserving the final CPU
+of every NUMA domain.  This changes rank count and balanced CPU reservation
+together as the intended Phase 2 resource layout; decomposition remains
+Scotch and transport remains `shm:ofi`.  Captured per-rank placement must show
+exactly this set on all four nodes before its score is compared with 480 ranks.
 
 ## Experiment template
 

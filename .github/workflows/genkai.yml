@@ -30,6 +30,7 @@ on:
           - scotch-1n-120r
           - scotch-2n-240r
           - scotch-4n-480r
+          - scotch-4n-448r
   push:
     paths-ignore:
       - 'research/**'

@@ -137,6 +137,14 @@ unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
 unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC
 unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN_DUMP
 
+# The 112-rank/node experiment reserves one physical core in each of the
+# eight 15-core NUMA domains observed on Genkai compute nodes.  Intel MPI
+# interprets this processor list independently on every node.  Other rank
+# counts retain the measured default one-rank-per-core placement.
+if (( OPENFOAM_MPI_PPN == 112 )); then
+  export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
+fi
+
 MPIEXEC=$(command -v mpirun)
 BLOCK_MESH=$(command -v blockMesh)
 DECOMPOSE_PAR=$(command -v decomposePar)
