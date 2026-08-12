@@ -192,6 +192,7 @@ jobs:
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
+            "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
             "${GITHUB_WORKSPACE}/scripts/vtune-hotspots-summary.py" \
             "${GITHUB_WORKSPACE}/scripts/openfoam-rank-wrapper.py" \
@@ -334,8 +335,9 @@ jobs:
               --control-plane-file .github/workflows/genkai.yml \
               --control-plane-file benchmark/parse_result.sh \
               --control-plane-file experiment-metrics/registry/openfoam-v2-protocol.toml \
-              --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
-              --control-plane-file scripts/exec-profiler.sh \
+            --control-plane-file experiment-metrics/registry/openfoam-v2.toml \
+            --control-plane-file scripts/allow-vtune-attach.py \
+            --control-plane-file scripts/exec-profiler.sh \
               --control-plane-file scripts/export-vtune-hotspots.sh \
               --control-plane-file scripts/prepare-openfoam-case.pjm \
               --control-plane-file scripts/prepare-openfoam-case.sh \
@@ -424,7 +426,18 @@ jobs:
       - name: Verify OpenFOAM job completion
         run: |
           pjwait "${PJM_JOB_ID}"
-          test -e "${RUN_DIR}/run-success"
+          if [[ ! -e "${RUN_DIR}/run-success" ]]; then
+            echo 'OpenFOAM job did not create run-success' >&2
+            for log in \
+              "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" \
+              "${RUN_DIR}/logs/solver.log"; do
+              if [[ -f "${log}" ]]; then
+                echo "===== ${log} =====" >&2
+                tail -n 240 "${log}" >&2
+              fi
+            done
+            exit 1
+          fi
 
       - name: Publish VTune hotspots to Actions summary
         if: success() && inputs.profile_mode == 'vtune-hotspots'

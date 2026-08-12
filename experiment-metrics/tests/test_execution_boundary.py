@@ -39,6 +39,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '"${PROVISION_DIR}/scripts/openfoam-rank-wrapper.py"' in text
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
     assert '--profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh"' in text
+    assert '"${PROVISION_DIR}/scripts/allow-vtune-attach.py"' in (
+        (ROOT / "scripts/exec-profiler.sh").read_text()
+    )
     assert '"${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"' in text
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"

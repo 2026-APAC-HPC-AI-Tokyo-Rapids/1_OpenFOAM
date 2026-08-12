@@ -23,10 +23,13 @@ case "${OPENFOAM_PROFILE_MODE:-direct}" in
     ;;
   vtune-hotspots)
     : "${OPENFOAM_VTUNE_RESULT_DIR:?VTune result directory is required}"
+    : "${PROVISION_DIR:?provision directory is required}"
     command -v vtune >/dev/null
     : "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
     [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
-    "$@" &
+    target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
+    [[ -x "${target_launcher}" ]]
+    "${target_launcher}" "$@" &
     target_pid=$!
     terminate_target() {
       kill -TERM "${target_pid}" 2>/dev/null || true
