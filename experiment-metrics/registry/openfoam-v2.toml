@@ -768,7 +768,7 @@ producer_id = "runner.scheduler_postrun"
 source_role = "scheduler_accounting"
 storage = "run_bundle"
 path_template = [{ literal = "control/scheduler-accounting.json" }]
-schema_id = "scheduler-accounting/v1"
+schema_id = "scheduler-accounting/v2"
 required_when_applicable = true
 
 [[source]]
@@ -1132,12 +1132,12 @@ reducer_id = "identity/v1"
 id = "scheduler.accounting"
 key_pattern = "scheduler.accounting"
 source_id = "facts.scheduler_postrun"
-schema_id = "scheduler-accounting/v1"
+schema_id = "scheduler-accounting/v2"
 logical_type = "json"
 unit = "none"
 cardinality = "run"
 capture_id = "pjstat_history/v1"
-validator_id = "scheduler_accounting/v1"
+validator_id = "scheduler_accounting/v2"
 reducer_id = "identity/v1"
 
 [[fact]]

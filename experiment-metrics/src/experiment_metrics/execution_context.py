@@ -34,7 +34,7 @@ def record_execution_context(
     request = _json(scheduler_request)
     accounting = _json(scheduler_accounting)
     _validate_request(request, protocol)
-    if accounting.get("schema_version") != "scheduler-accounting/v1" or (
+    if accounting.get("schema_version") != "scheduler-accounting/v2" or (
         accounting.get("nnumu", {}).get("value") != protocol.nodes
     ):
         raise ValueError("scheduler allocation node count differs from protocol")

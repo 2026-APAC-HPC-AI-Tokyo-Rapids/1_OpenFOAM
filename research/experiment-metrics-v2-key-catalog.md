@@ -27,7 +27,7 @@ JSON値もBigQuery上ではcanonical JSON文字列として格納する。
 | `workload.member.{initial_u,initial_p,transport_properties,block_mesh_dict,control_dict,fv_schemes,fv_solution}` | solver入力7 fileの原byte（Base64） | compute-side workload capture |
 | `scheduler.request` | nodes、ranks、resource group、transport、submit argv/script identity | runner submission |
 | `scheduler.{submit_job_id,job_entry_job_id}` | scheduler job ID | runner / compute |
-| `scheduler.accounting` | terminal state、elapsed、exit、node数、memory、CPU accounting | runner postrun |
+| `scheduler.accounting` | terminal state、elapsed、exit、node数、全体memory/CPU accountingとnode別usage配列 | runner postrun |
 | `run.{started_at,finished_at,elapsed_sec,exit_code}` | PJM lifecycle | compute supervisor |
 | `run.stage.<stage>.{launch,termination}` | exact argv/cwdとexit/signal結果 | compute StageRunner |
 | `perf.stage.<stage>.wall_time_sec` | stage外側wall time | compute StageRunner |
