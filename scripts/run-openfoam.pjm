@@ -231,16 +231,18 @@ if [[ "${OPENFOAM_PROFILE_MODE}" == perf-stat ]]; then
     --perf "${OPENFOAM_PERF_PATH}" --solver "${ICO_FOAM}" -- \
     -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 elif [[ "${OPENFOAM_PROFILE_MODE}" == vtune-hotspots ]]; then
-  # Profiling mpirun only observes Hydra. Intel MPI gtool wraps the selected
-  # rank after launch, while every rank still records its normal placement.
+  # Every rank records its placement first. The selected rank then execs the
+  # profiler, which launches icoFoam directly so VTune follows the solver
+  # rather than the Python placement process.
   stage solver "${SOLVER_LOG}" \
     "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${OPENFOAM_MPI_PPN}" \
-    -gtool "${PROVISION_DIR}/scripts/exec-profiler.sh:${OPENFOAM_VTUNE_RANK}" \
     "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" \
     -m experiment_metrics.rank_wrapper \
     --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
     --expected-nodes "${OPENFOAM_NODES}" \
-    --placement-root "${SOURCE_DIR}/placement" -- \
+    --placement-root "${SOURCE_DIR}/placement" \
+    --profile-rank "${OPENFOAM_VTUNE_RANK}" \
+    --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- \
     "${ICO_FOAM}" -parallel \
     -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 else
