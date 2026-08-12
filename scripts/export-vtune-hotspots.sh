@@ -29,13 +29,18 @@ install -d -m 0700 "${summary_dir}"
 vtune -quiet -report hotspots \
   -result-dir "${result_dirs[0]}" \
   -group-by function,module \
+  -column time \
   -format csv \
   -csv-delimiter comma \
   > "${summary_dir}/hotspots.csv"
 vtune --version > "${summary_dir}/vtune-version.txt"
 
-"${python_path}" "${PROVISION_DIR}/scripts/vtune-hotspots-summary.py" \
+if ! "${python_path}" "${PROVISION_DIR}/scripts/vtune-hotspots-summary.py" \
   --hotspots "${summary_dir}/hotspots.csv" \
   --summary "${summary_dir}/summary.json" \
   --markdown "${summary_dir}/summary.md" \
   --profiled-rank "${OPENFOAM_VTUNE_RANK}"
+then
+  sed -n '1,80p' "${summary_dir}/hotspots.csv" >&2
+  exit 1
+fi
