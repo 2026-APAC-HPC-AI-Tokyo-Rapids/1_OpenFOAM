@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Build only the OpenFOAM components used by the cavity3D task pipeline:
-# blockMesh, decomposePar with Scotch, and icoFoam.
+# blockMesh, decomposePar with Scotch, renumberMesh, and icoFoam.
 set -euo pipefail
 
 : "${OPENFOAM_BUILD_PARALLELISM:?}"
@@ -24,7 +24,7 @@ src/OSspecific/"${WM_OSTYPE:-POSIX}"/Allwmake
 src/Pstream/Allwmake
 wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/OpenFOAM
 
-# Shared mesh and finite-volume libraries required by all three commands.
+# Shared mesh and finite-volume libraries required by the task commands.
 for library in \
   src/fileFormats \
   src/surfMesh \
@@ -51,11 +51,14 @@ do
   wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "src/dummyThirdParty/${backend}"
 done
 src/parallel/decompose/Allwmake
+wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/parallel/reconstruct/reconstruct
+wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/renumber/renumberMethods
 
 for application in \
   applications/utilities/mesh/generation/blockMesh \
   applications/utilities/parallelProcessing/decomposePar \
   applications/utilities/mesh/manipulation/checkMesh \
+  applications/utilities/mesh/manipulation/renumberMesh \
   applications/solvers/incompressible/icoFoam
 do
   wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${application}"
@@ -74,7 +77,7 @@ done
 
 # Fail the build here instead of discovering a missing binary during runtime
 # provisioning. Also ensure all shared-library dependencies resolve.
-for application in blockMesh decomposePar icoFoam checkMesh mesh-facts partition-audit
+for application in blockMesh decomposePar renumberMesh icoFoam checkMesh mesh-facts partition-audit
 do
   executable="${FOAM_APPBIN}/${application}"
   test -x "${executable}"

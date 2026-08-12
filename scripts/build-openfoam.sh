@@ -116,7 +116,7 @@ set -eu
 cd "${WM_PROJECT_DIR}"
 
 # ccache の統計をリセットしてから、cavity3D の前処理と実行に必要な
-# blockMesh、decomposePar、icoFoam とその依存だけをビルドする。
+# blockMesh、decomposePar、renumberMesh、icoFoam とその依存だけをビルドする。
 ccache --zero-stats
 "${GITHUB_WORKSPACE}/scripts/build-profiler.sh" \
   "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" \
@@ -155,6 +155,7 @@ build_state="${BUILD_DIR}/build-state.json"
   --executable "icoFoam=${FOAM_APPBIN}/icoFoam" \
   --executable "blockMesh=${FOAM_APPBIN}/blockMesh" \
   --executable "decomposePar=${FOAM_APPBIN}/decomposePar" \
+  --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" \
   --executable "checkMesh=${FOAM_APPBIN}/checkMesh" \
   --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" \
   --executable "partition-audit=${FOAM_APPBIN}/partition-audit" \

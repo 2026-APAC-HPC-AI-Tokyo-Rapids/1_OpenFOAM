@@ -18,6 +18,7 @@ EXECUTABLE_ROLES = (
     "icoFoam",
     "blockMesh",
     "decomposePar",
+    "renumberMesh",
     "checkMesh",
     "mesh-facts",
     "partition-audit",

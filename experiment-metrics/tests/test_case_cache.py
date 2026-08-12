@@ -11,6 +11,9 @@ GEOMETRIC_SCRIPT = (
 MULTILEVEL_448_SCRIPT = (
     Path(__file__).parents[2] / "scripts" / "prepare-openfoam-multilevel-448-case.sh"
 )
+RENUMBER_SCRIPT = (
+    Path(__file__).parents[2] / "scripts" / "prepare-openfoam-renumbered-case.sh"
+)
 
 
 def _executable(path: Path, body: str) -> Path:
@@ -185,3 +188,57 @@ def test_geometric_profiles_have_separate_immutable_caches(tmp_path: Path) -> No
 
     cache_root = tmp_path / "home" / "share" / "openfoam-case-cache"
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
+
+
+def test_renumber_profiles_derive_separate_immutable_scotch_caches(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home" / "user"
+    home.mkdir(parents=True)
+    source = tmp_path / "source"
+    (source / "system").mkdir(parents=True)
+    (source / "system" / "controlDict").write_text("application icoFoam;\n")
+    block_mesh = _executable(tmp_path / "blockMesh", "mkdir -p constant/polyMesh\n")
+    decompose_par = _executable(
+        tmp_path / "decomposePar",
+        "for rank in $(seq 0 447); do "
+        'mkdir -p "processor${rank}/constant/polyMesh"; done\n',
+    )
+    renumber_mesh = _executable(
+        tmp_path / "renumberMesh",
+        'printf "%s\\n" "$(sed -n \'s/^blockSize /blockSize /p\' '
+        'system/renumberMeshDict)" > processor0/constant/polyMesh/ordering\n',
+    )
+    mpiexec = _executable(
+        tmp_path / "mpirun",
+        "shift 4\nexec \"$@\"\n",
+    )
+    environment = {**os.environ, "HOME": str(home)}
+
+    for profile in ("renumber-cuthill-4n448", "renumber-block32768-4n448"):
+        target = tmp_path / f"case-{profile}"
+        first = subprocess.run(
+            [
+                RENUMBER_SCRIPT,
+                source,
+                target,
+                SCRIPT,
+                block_mesh,
+                decompose_par,
+                renumber_mesh,
+                mpiexec,
+                profile,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        assert "cache_hit=false" in first.stdout
+        assert (target / "logs/renumberMesh.log").is_file()
+        dictionary = (target / "system/renumberMeshDict").read_text()
+        assert ("blockSize 32768;" in dictionary) == profile.endswith("block32768-4n448")
+
+    cache_root = tmp_path / "home" / "share" / "openfoam-case-cache"
+    entries = [path for path in cache_root.iterdir() if path.is_dir()]
+    assert len(entries) == 3  # one shared Scotch base and two ordered derivatives
