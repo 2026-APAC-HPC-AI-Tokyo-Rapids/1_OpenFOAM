@@ -48,7 +48,7 @@ _ACCOUNTING_HEADER = (
     "USER CPU TIME (USE)",
     "SYSTEM CPU TIME (USE)",
 )
-_ACCOUNTING_DUPLICATE_TAIL = 3
+_ACCOUNTING_NODE_FIELDS = ("mmszu", "uctmut", "sctmut")
 _JOB_ID = re.compile(r"^[0-9]+$")
 
 
@@ -261,18 +261,47 @@ def parse_scheduler_accounting(
     values = lines[0]
     if values and not values[0]:
         values = values[1:]
-    expected_columns = len(_ACCOUNTING_FIELDS)
-    if len(values) == expected_columns + _ACCOUNTING_DUPLICATE_TAIL:
-        duplicate = values[-_ACCOUNTING_DUPLICATE_TAIL:]
-        original = values[-2 * _ACCOUNTING_DUPLICATE_TAIL : -_ACCOUNTING_DUPLICATE_TAIL]
-        if duplicate != original:
-            raise ValueError("scheduler accounting has conflicting duplicate columns")
-        values = values[:-_ACCOUNTING_DUPLICATE_TAIL]
-    if len(values) != len(_ACCOUNTING_FIELDS) or values[0] != expected_job_id:
+    common = values[: len(_ACCOUNTING_FIELDS)]
+    node_values = values[len(_ACCOUNTING_FIELDS) :]
+    if len(common) != len(_ACCOUNTING_FIELDS) or common[0] != expected_job_id:
         raise ValueError("scheduler accounting row has invalid columns or job ID")
-    row = dict(zip(_ACCOUNTING_FIELDS, values, strict=True))
+    row = dict(zip(_ACCOUNTING_FIELDS, common, strict=True))
+    node_count = _integer_value(row["nnumu"])
+    if node_values and (
+        node_count is None
+        or node_count < 1
+        or len(node_values) != node_count * len(_ACCOUNTING_NODE_FIELDS)
+    ):
+        raise ValueError("scheduler accounting has invalid per-node columns")
+    node_usage = []
+    for ordinal in range(node_count if node_values and node_count is not None else 0):
+        offset = ordinal * len(_ACCOUNTING_NODE_FIELDS)
+        node = dict(
+            zip(
+                _ACCOUNTING_NODE_FIELDS,
+                node_values[offset : offset + len(_ACCOUNTING_NODE_FIELDS)],
+                strict=True,
+            )
+        )
+        node_usage.append(
+            {
+                "node_ordinal": ordinal,
+                "mmszu": {
+                    "lexeme": node["mmszu"],
+                    "bytes": _unsigned_value(node["mmszu"]),
+                },
+                "uctmut": {
+                    "lexeme": node["uctmut"],
+                    "seconds": _milliseconds_value(node["uctmut"]),
+                },
+                "sctmut": {
+                    "lexeme": node["sctmut"],
+                    "seconds": _milliseconds_value(node["sctmut"]),
+                },
+            }
+        )
     return {
-        "schema_version": "scheduler-accounting/v1",
+        "schema_version": "scheduler-accounting/v2",
         "jid": row["jid"],
         "st": row["st"],
         "sdt": row["sdt"],
@@ -293,6 +322,7 @@ def parse_scheduler_accounting(
             "lexeme": row["sctmut"],
             "seconds": _milliseconds_value(row["sctmut"]),
         },
+        "node_usage": node_usage,
     }
 
 
