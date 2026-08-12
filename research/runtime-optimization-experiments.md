@@ -345,6 +345,18 @@ Every Actions and archive job succeeded and no PJM work remained.  Actions
 unchanged Scotch control `31649040528`; old-build scores are not direct
 controls for the ordering phase.
 
+The ordinary pair completed E2E.  Cuthill Actions `31649038444`, preparation
+PJM `6468155`, solver PJM `6468164`, used immutable derivative cache
+`70ab1aa4...82d968` of base Scotch cache `1170485d...365c56`.  Its official
+result was VALID, 8.0630 M FVOPS, 7.938 s/step, and 31.75 s trimmed time.
+Same-build unchanged control Actions `31649040528`, solver PJM `6468166`, was
+official VALID, 7.9900 M FVOPS, 8.010 s/step, and 32.04 s trimmed time.  Both
+used exact 4 x 112 placement, had 82 s scheduler elapsed, archived all fixed
+artifacts, and left no PJM job.  Cuthill-McKee is 0.91% above this paired
+control, below the 1% adoption threshold, so it does not advance alone.
+Actions `31649727744` screens the structurally distinct 32768-cell block-local
+ordering with same-build unchanged control `31649729689`.
+
 ## Experiment template
 
 ### Experiment ID
