@@ -217,3 +217,19 @@ equivalent.
 - Required BigQuery facts are present.
 - The experiment ledger records the hypothesis, changed factor, result,
   interpretation, and next decision.
+
+## Completion status
+
+The planned campaign completed on 2026-08-13.  Named presets, immutable case
+caches, full-core and balanced-rank screens, topology-aware partitions, a
+boundary-rank VTune profile, exact-topology Intel MPI autotuning, two
+post-decomposition ordering candidates, and same-build five-run 1/2/4-node
+qualification all traversed the required E2E path.  Decisions and complete
+run populations are recorded in `runtime-optimization-experiments.md`.
+
+The reproducible selected layouts are 1 x 120, 2 x 120, and 4 x 112 ranks
+using Scotch, with the 4-node processor list reserving one CPU per NUMA domain.
+Default Intel MPI collectives and no renumbering remain selected.  No further
+candidate is admitted under the original stop conditions: MPI autotuning and
+both ordering variants were below 1%, the conditional 65536-cell ordering
+trial was not triggered, and the final qualification population is complete.

@@ -387,6 +387,43 @@ VALID submissions per node count, reusing immutable case caches and allowing
 different node allocations.  Report medians, ranges, and 4-node/1-node strong
 scaling without interpreting a single run as the result.
 
+## Final qualification results
+
+All fifteen selected-configuration runs completed the full
+Actions -> PJM -> official parser -> fixed artifact -> home archive path.  All
+were official VALID, had exact placement, used the same build content, and
+left no experiment-owned PJM job.  Later archive numbers such as 305 are
+hardlinks to archive 301: archive size 476,685,265 bytes and SHA-256
+`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`
+are identical, as are sidecar identity and inode.
+
+| Selected layout | Actions runs | FVOPS samples (M) | Median | Min--max | Relative range |
+|---|---|---|---:|---:|---:|
+| 1 node, 120 ranks, Scotch | `31647838535`, `31650357613`, `31650362362`, `31650359704`, `31650364015` | 1.7019, 1.6433, 1.7021, 1.7009, 1.6410 | 1.7009 M | 1.6410--1.7021 M | 3.59% |
+| 2 nodes, 240 ranks, Scotch | `31650366010`, `31650367910`, `31650369815`, `31650371822`, `31650373910` | 3.4129, 3.3939, 3.4006, 3.1817, 3.1730 | 3.3939 M | 3.1730--3.4129 M | 7.07% |
+| 4 nodes, 448 ranks, balanced Scotch | `31649040528`, `31649729689`, `31650375882`, `31650377899`, `31650379863` | 7.9900, 7.9900, 8.0050, 7.9850, 7.9875 | 7.9900 M | 7.9850--8.0050 M | 0.25% |
+
+Median 2-node/1-node strong scaling is 1.995x.  Median 4-node/1-node strong
+scaling is 4.697x, and 4-node/2-node scaling is 2.354x.  The apparent
+superlinear four-node scaling is reported as an observation of this fixed
+workload and selected rank counts, not generalized beyond these runs.  The
+four-node distribution is exceptionally tight, while the one- and two-node
+ranges show why medians rather than individual best scores are authoritative.
+
+The final selected presets are therefore:
+
+- `scotch-1n-120r`: 120 ranks/node, default binding, `I_MPI_FABRICS=shm`.
+- `scotch-2n-240r`: 120 ranks/node, default binding, `I_MPI_FABRICS=shm:ofi`.
+- `scotch-4n-448r`: 112 ranks/node, one reserved CPU in each 15-core NUMA
+  domain via the explicit balanced processor list, `I_MPI_FABRICS=shm:ofi`.
+
+All use default Intel MPI collective selection and no cell renumbering.  The
+four-node node/NUMA multi-level partition, MPI autotuning, ordinary
+Cuthill-McKee, and block-local Cuthill-McKee remain retained experimental
+evidence but are not adopted because their repeated gains did not clear the
+predeclared 1% threshold.  Direct hierarchical and 480-rank Scotch are
+rejected on measured solver performance and/or stability.
+
 ## Experiment template
 
 ### Experiment ID
