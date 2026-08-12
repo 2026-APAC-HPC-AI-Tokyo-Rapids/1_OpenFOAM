@@ -11,6 +11,15 @@ from experiment_metrics.manifest import init_run
 from experiment_metrics.profile_vtune import parse_hotspots, record_vtune_hotspots
 
 ROOT = Path(__file__).parents[2]
+HEADER = (
+    "Function,Module,CPU Time,CPU Time:Effective Time,CPU Time:Spin Time,"
+    "CPU Time:Spin Time:MPI Busy Wait Time,CPU Time:Spin Time:Other,"
+    "CPU Time:Overhead Time,CPU Time:Overhead Time:Other\n"
+)
+
+
+def _row(function: str, module: str, cpu_time: str) -> str:
+    return f"{function},{module},{cpu_time},{cpu_time},0.0,0.0,0.0,0.0,0.0\n"
 
 
 def _profile_run(
@@ -29,11 +38,12 @@ def _profile_run(
 
 def test_parser_preserves_exact_lexemes_and_orders_hotspots() -> None:
     hotspots = parse_hotspots(
-        "metadata\nFunction,Module,CPU Time\nslow,lib.so,120ms\nfast,lib.so,1.5s\n"
+        "metadata\n" + HEADER + _row("slow", "lib.so", "0.120")
+        + _row("fast", "lib.so", "1.5")
     )
 
     assert [item.function for item in hotspots] == ["fast", "slow"]
-    assert hotspots[1].cpu_time_lexeme == "120ms"
+    assert hotspots[1].cpu_time_lexeme == "0.120"
     assert str(hotspots[1].cpu_time_sec) == "0.120"
 
 
@@ -41,9 +51,10 @@ def test_parser_preserves_exact_lexemes_and_orders_hotspots() -> None:
     "source",
     [
         "Function,Module,CPU Time\nf,m,1\n",
-        "Function,Module,CPU Time,Extra\nf,m,1s,x\n",
-        "Function,Module,CPU Time\nf,m,1s\nf,m,2s\n",
-        "Function,Module,CPU Time\n,m,1s\n",
+        HEADER + "f,m,1,1,0,0,0,0\n",
+        HEADER + _row("f", "m", "1") + _row("f", "m", "2"),
+        HEADER + _row("", "m", "1"),
+        HEADER + "f,m,1,1,not-a-number,0,0,0,0\n",
     ],
 )
 def test_parser_rejects_lossy_or_ambiguous_reports(source: str) -> None:
@@ -63,9 +74,9 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     summary = root / "summary.json"
     markdown = root / "summary.md"
     report.write_text(
-        "Function,Module,CPU Time\n"
-        "name`with|syntax,lib|x.so,1.25s\n"
-        "wait,libmpi.so,250ms\n"
+        HEADER
+        + _row("name`with|syntax", "lib|x.so", "1.25")
+        + _row("wait", "libmpi.so", "0.250")
     )
     status.write_text(
         '{"schema_version":"vtune-collection-status/v1",'
@@ -107,7 +118,7 @@ def test_collection_failure_does_not_publish_a_fact(
     root.mkdir()
     report = root / "hotspots.csv"
     status = root / "collection-status.json"
-    report.write_text("Function,Module,CPU Time\nf,m,1s\n")
+    report.write_text(HEADER + _row("f", "m", "1"))
     status.write_text(
         '{"schema_version":"vtune-collection-status/v1",'
         '"target_exit_code":0,"vtune_exit_code":1}\n'

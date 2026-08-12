@@ -16,16 +16,20 @@ from .fact import Fact, canonical_json
 from .manifest import RunManifest
 from .recording import Recorder
 
-_TIME = re.compile(
-    r"^([+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)\s*"
-    r"(ns|us|ms|s)$"
+_NUMBER = re.compile(
+    r"^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"
 )
-_MULTIPLIERS = {
-    "ns": Decimal("1e-9"),
-    "us": Decimal("1e-6"),
-    "ms": Decimal("1e-3"),
-    "s": Decimal(1),
-}
+_REPORT_HEADER = [
+    "Function",
+    "Module",
+    "CPU Time",
+    "CPU Time:Effective Time",
+    "CPU Time:Spin Time",
+    "CPU Time:Spin Time:MPI Busy Wait Time",
+    "CPU Time:Spin Time:Other",
+    "CPU Time:Overhead Time",
+    "CPU Time:Overhead Time:Other",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,8 +55,7 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
         records = list(csv.reader(text.splitlines(), strict=True))
     except csv.Error as error:
         raise ValueError("VTune hotspot CSV is malformed") from error
-    header = ["Function", "Module", "CPU Time"]
-    headers = [index for index, row in enumerate(records) if row == header]
+    headers = [index for index, row in enumerate(records) if row == _REPORT_HEADER]
     if len(headers) != 1:
         raise ValueError("VTune hotspot CSV must contain one exact header")
     rows: list[Hotspot] = []
@@ -60,15 +63,17 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
     for record in records[headers[0] + 1 :]:
         if not record:
             continue
-        if len(record) != 3:
-            raise ValueError("VTune hotspot CSV row must contain three columns")
-        function, module, lexeme = (item.strip() for item in record)
+        if len(record) != len(_REPORT_HEADER):
+            raise ValueError("VTune hotspot CSV row has an unexpected column count")
+        function, module, lexeme, *breakdown = (item.strip() for item in record)
         if not function:
             raise ValueError("VTune hotspot function is empty")
         identity = (function, module)
         if identity in seen:
             raise ValueError("VTune hotspot function/module rows must be unique")
         seen.add(identity)
+        for value in breakdown:
+            _seconds(value)
         rows.append(Hotspot(function, module, lexeme, _seconds(lexeme)))
     if not rows:
         raise ValueError("VTune hotspot CSV contains no function rows")
@@ -129,6 +134,7 @@ def record_vtune_hotspots(
             "sampling_mode": "sw",
             "stack_collection": False,
             "requested_duration_sec": collection_duration_sec,
+            "report_time_unit": "seconds",
         },
         "sources": {
             "report": _source(report_path, run_dir),
@@ -223,11 +229,10 @@ def _markdown(summary: dict[str, object]) -> str:
 
 
 def _seconds(value: str) -> Decimal:
-    match = _TIME.fullmatch(value)
-    if match is None:
+    if _NUMBER.fullmatch(value) is None:
         raise ValueError(f"VTune CPU time has an unsupported value: {value!r}")
     try:
-        number = Decimal(match.group(1)) * _MULTIPLIERS[match.group(2)]
+        number = Decimal(value)
     except InvalidOperation as error:
         raise ValueError("VTune CPU time is invalid") from error
     if not number.is_finite() or number < 0:
