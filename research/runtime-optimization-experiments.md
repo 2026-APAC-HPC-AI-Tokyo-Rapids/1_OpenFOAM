@@ -237,6 +237,19 @@ relative to the advancing 480-rank multi-level result.  Its case has an
 independent immutable cache so neither prior geometric nor Scotch caches are
 invalidated.
 
+Actions 295 (`31643727848`) completed the combined candidate E2E.  Preparation
+PJM `6467911` published cache `7366e001...`; solver PJM `6467970` produced
+`r-6f3e551e3c054d9baa58425e2dd6d202`.  The official result was VALID at
+8.0757 M FVOPS and 7.925 s/step, with 51.676 s solver and 53.262 s pipeline
+wall.  Placement matched the adopted 112-rank/node CPU set.  The partition has
+3,226,624 interface faces, 2,008 rank pairs, 8.96 mean and 12 maximum
+neighbours, 142,857--142,858 cells/rank, 320,000 cross-node faces, and
+1,600,000 cross-14-rank-group faces.  This is the current best single score;
+it reduces total faces by 28.9% and cross-node faces by 54.6% against 448-way
+Scotch.  Its 1.0% advantage over the 448-way Scotch median is too close to the
+decision threshold for a single run, so Actions `31645708556` (multi-level)
+and `31645711266` (Scotch control) form an alternating cache-hit repeat pair.
+
 ## Experiment template
 
 ### Experiment ID
