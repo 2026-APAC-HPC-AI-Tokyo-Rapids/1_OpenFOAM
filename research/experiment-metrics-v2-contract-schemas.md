@@ -234,15 +234,15 @@ workflowが得るGitHub artifact ID、SCP outcome、home pathは一attempt一row
 Git管理decision recordへ保存しない。したがって非擾乱確認用のrun/schema/relationは定義しない。
 ## OpenFOAM compound schemas
 
-### requested partition v1
+### requested partition v2
 
 `source/mesh/decomposeParDict`のfile-byte SHA-256をidentityとし、`mesh.partition.requested`は次だけを投影する。
 
 ```text
-schema_version: "partition-requested/v1"
+schema_version: "partition-requested/v2"
 source_sha256: sha256
 subdomains: positive int
-method: enum "scotch"
+method: enum "scotch" | "hierarchical" | "multiLevel"
 ```
 
 これは`decomposePar`をspawnする直前に、実argvが参照するfile bytesから作る。method-specific係数はraw copyにだけ
