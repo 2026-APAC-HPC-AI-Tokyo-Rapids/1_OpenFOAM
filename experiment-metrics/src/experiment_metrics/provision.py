@@ -31,7 +31,7 @@ def validate_provision(
     sidecar_bytes = build_sidecar_path.read_bytes()
     sidecar = json.loads(sidecar_bytes)
     validate_build_sidecar(sidecar)
-    expected_roles = BASE_ROLES + (("perf",) if manifest.purpose == "profile" else ())
+    expected_roles = BASE_ROLES + (("vtune",) if manifest.purpose == "profile" else ())
     if tuple(executable_paths) != expected_roles:
         raise ValueError("provision executable roles are incomplete or unordered")
 
@@ -127,9 +127,9 @@ def validate_provision(
     profiler_version = None
     if manifest.purpose == "profile":
         profiler_version = _capture_version(
-            [str(resolved["perf"]), "--version"],
-            source_root / "perf-version.stdout",
-            source_root / "perf-version.stderr",
+            [str(resolved["vtune"]), "--version"],
+            source_root / "vtune-version.stdout",
+            source_root / "vtune-version.stderr",
             run_dir,
         )
     document = {
@@ -168,7 +168,7 @@ def validate_provision_document(document: object, *, purpose: str) -> None:
         or SHA256.fullmatch(document["build_sidecar_sha256"]) is None
     ):
         raise ValueError("build provision validation is not a closed v1 object")
-    expected_roles = BASE_ROLES + (("perf",) if purpose == "profile" else ())
+    expected_roles = BASE_ROLES + (("vtune",) if purpose == "profile" else ())
     executables = document["executables"]
     if not isinstance(executables, list) or [
         item.get("role") if isinstance(item, dict) else None for item in executables

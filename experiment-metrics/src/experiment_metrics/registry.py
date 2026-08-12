@@ -510,6 +510,5 @@ _RANK_PATTERNS = frozenset(
         "solver.pstream.startup_applied.rank.*",
         "solver.pstream.runtime_current.rank.*",
         "solver.pstream.change_events.rank.*",
-        "profile.perf_stat.rank.*",
     }
 )

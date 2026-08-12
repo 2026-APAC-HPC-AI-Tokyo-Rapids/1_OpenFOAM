@@ -47,13 +47,13 @@ def test_profile_artifacts_retain_raw_profile_archive(
         RunPackager().package(
             manifest, run_members=(("logs/solver.log", "solver_log"),)
         )
-    raw = manifest.parents[1] / "profile/raw/perf/rank-0.csv"
+    raw = manifest.parents[1] / "profile/raw/vtune-summary/hotspots.csv"
     raw.parent.mkdir(parents=True)
     raw.write_text("counter\n", encoding="utf-8")
     result = RunPackager().package(
         manifest,
         run_members=(("logs/solver.log", "solver_log"),),
-        profile_members=("profile/raw/perf/rank-0.csv",),
+        profile_members=("profile/raw/vtune-summary/hotspots.csv",),
     )
     assert [path.name for path in result.files] == [
         "run-artifacts.tar.zst",

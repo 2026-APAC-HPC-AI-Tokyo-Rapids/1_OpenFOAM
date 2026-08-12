@@ -377,7 +377,7 @@ def _argv_template(value: object, sink_ids: set[str]) -> None:
             if (
                 set(segment) == {"token", "role"}
                 and segment["token"] in {"provisioned_executable", "stage_executable"}
-                and segment["role"] in {"perf", "icoFoam"}
+                and segment["role"] in {"vtune", "icoFoam"}
             ):
                 continue
             if (
