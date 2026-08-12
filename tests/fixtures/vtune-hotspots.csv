@@ -1,5 +1,0 @@
-Function,Module,CPU Time
-PMPI_Allreduce,libmpi.so,11.36s
-PMPI_Waitall,libmpi.so,5.57s
-Foam::GaussSeidelSmoother::smooth,libOpenFOAM.so,3.54s
-Foam::lduMatrix::residual,libOpenFOAM.so,1.11s

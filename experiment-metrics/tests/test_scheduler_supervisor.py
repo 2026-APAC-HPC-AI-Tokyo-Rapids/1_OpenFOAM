@@ -86,50 +86,6 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert terminal["argv"][0] == str(pjstat)
 
 
-def test_submission_accepts_vtune_for_a_profile_run(
-    tmp_path: Path, identities: dict[str, object]
-) -> None:
-    profile_identities = json.loads(json.dumps(identities))
-    profile_identities["source_track"]["base_role"] = "profile_base"
-    manifest = init_run(
-        None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile"
-    )
-    run_dir = manifest.parents[1]
-    repository = tmp_path / "repository"
-    provision = tmp_path / "provision"
-    (repository / "scripts").mkdir(parents=True)
-    (provision / "scripts").mkdir(parents=True)
-    source = repository / "scripts/run-openfoam.pjm"
-    execution = provision / "scripts/run-openfoam.pjm"
-    source.write_bytes(b"#!/bin/sh\n")
-    execution.write_bytes(source.read_bytes())
-    pjsub = tmp_path / "pjsub"
-    pjsub.write_bytes(b"fixture")
-
-    submitted = submit_run(
-        manifest_path=manifest,
-        runtime_dir=run_dir,
-        registry_path=REGISTRY,
-        protocol_path=PROTOCOL,
-        repository_root=repository,
-        pjm_script_repository_path="scripts/run-openfoam.pjm",
-        execution_script=execution,
-        provision_dir=provision,
-        profile_mode="vtune-hotspots",
-        pjsub_path=pjsub,
-        execute=lambda argv: subprocess.CompletedProcess(
-            argv, 0, b"Job 23456 submitted.\n", b""
-        ),
-    )
-
-    assert submitted.job_id == "23456"
-    request = json.loads(submitted.request_path.read_text())
-    exported = next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
-    assert "OPENFOAM_PROFILE_MODE=vtune-hotspots" in exported
-
-
 def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:
     raw = (
         b"H\tJOB ID\tSTATE\tJOB START DATE\tELAPSE TIME (USE)\tEXIT CODE\t"

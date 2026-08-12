@@ -14,8 +14,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-ranks", type=int, required=True)
     parser.add_argument("--expected-nodes", type=int, required=True)
     parser.add_argument("--placement-root", type=Path, required=True)
-    parser.add_argument("--profile-rank", type=int)
-    parser.add_argument("--profile-wrapper", type=Path)
     parser.add_argument("solver_argv", nargs=argparse.REMAINDER)
     arguments = parser.parse_args(argv)
     solver = (
@@ -25,15 +23,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not solver or not Path(solver[0]).is_absolute():
         raise ValueError("rank wrapper requires an absolute solver executable")
-    if (arguments.profile_rank is None) != (arguments.profile_wrapper is None):
-        raise ValueError("profile rank and wrapper must be specified together")
-    if arguments.profile_rank is not None and (
-        arguments.profile_rank < 0
-        or arguments.profile_rank >= arguments.expected_ranks
-        or not arguments.profile_wrapper.is_absolute()
-        or not os.access(arguments.profile_wrapper, os.X_OK)
-    ):
-        raise ValueError("rank wrapper profile selection is invalid")
     manifest = RunManifest.load(arguments.manifest)
     run_dir = manifest.path.parents[1]
     placement_root = arguments.placement_root.resolve()
@@ -60,9 +49,6 @@ def main(argv: list[str] | None = None) -> int:
         local_rank=local_rank,
         local_size=local_size,
     )
-    if rank == arguments.profile_rank:
-        wrapper = str(arguments.profile_wrapper)
-        os.execv(wrapper, [wrapper, *solver])
     os.execv(solver[0], solver)
 
 
