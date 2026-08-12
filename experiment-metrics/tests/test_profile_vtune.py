@@ -52,7 +52,6 @@ def test_parser_preserves_exact_lexemes_and_orders_hotspots() -> None:
     [
         "Function,Module,CPU Time\nf,m,1\n",
         HEADER + "f,m,1,1,0,0,0,0\n",
-        HEADER + _row("f", "m", "1") + _row("f", "m", "2"),
         HEADER + _row("", "m", "1"),
         HEADER + "f,m,1,1,not-a-number,0,0,0,0\n",
     ],
@@ -60,6 +59,15 @@ def test_parser_preserves_exact_lexemes_and_orders_hotspots() -> None:
 def test_parser_rejects_lossy_or_ambiguous_reports(source: str) -> None:
     with pytest.raises(ValueError):
         parse_hotspots(source)
+
+
+def test_parser_preserves_duplicate_function_module_rows() -> None:
+    hotspots = parse_hotspots(
+        HEADER + _row("f", "m", "1") + _row("f", "m", "2")
+    )
+
+    assert [item.cpu_time_lexeme for item in hotspots] == ["2", "1"]
+    assert [item.report_row for item in hotspots] == [3, 2]
 
 
 def test_recording_writes_one_fact_and_derives_safe_actions_summary(
