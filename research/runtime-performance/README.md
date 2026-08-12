@@ -7,10 +7,16 @@ OpenFOAM v2606 `simpleFoam` motorBike test on Genkai. The optimization scope is
 limited to MPI layout, MPI/OpenFOAM runtime switches, and profiler launch
 options. No OpenFOAM source optimization is included.
 
-Raw APS and VTune results are kept outside GitHub artifacts:
+Historical APS and VTune results are kept outside GitHub artifacts:
 
 ```text
 ~/openfoam-profile/<github-run-id>-<pjm-job-id>/
+```
+
+New VTune-only profile runs use the purpose-specific location:
+
+```text
+~/openfoam-vtune/<run-id>-<pjm-job-id>/rank-0/
 ```
 
 The profile root and every per-run directory have mode `0700`. At the time of
@@ -240,8 +246,8 @@ locality is the next likely limit after MPI is reduced.
 6. For a new case, begin with a rank-count sweep based on cells/rank, then use
    APS to quantify MPI time and imbalance. Run VTune on the most compute-heavy
    rank after identifying it from APS.
-7. Store raw profiler data in `~/openfoam-profile`; publish only text/CSV
-   summaries through Actions artifacts.
+7. Store full VTune result directories in `~/openfoam-vtune`; publish validated
+   text/CSV summaries through the profile artifact and metrics paths.
 8. If source changes become allowed later, investigate the Gauss-Seidel
    smoother, limited gradient calculation, `lduMatrix` residual/multiply, and
    the very high frequency of global reductions. The current work does not
@@ -260,11 +266,12 @@ through `mpirun -gtool`, process pinning with
 
 ## Profiling implementation
 
-`scripts/exec-profiler.sh` observes the process specified in its arguments. The
-caller passes `mpirun ...` as that target, while the profiler script itself does
-not launch MPI. Normal scoring runs use `OPENFOAM_PROFILE_MODE=direct`; manual
-workflow dispatches can select `perf-stat` without changing the source or the
-build. Comparisons can therefore use the same commit and build archive.
+Push-triggered runs are always benchmarks and launch the solver without an
+external profiler. Manual workflow dispatches select either `bench` or
+`profile`; profile runs attach VTune hotspots collection to MPI rank 0 for a
+bounded window without changing the source or build archive.
 
-VTune and APS results remain under `~/openfoam-profile`. Actions artifacts
-contain only logs, timing files, and generated summaries.
+Full VTune results remain under `~/openfoam-vtune`. The validated report,
+collection status, JSON fact, and bounded Actions summary are retained in the
+profile artifact set and experiment-metrics stream. VTune executable identity
+and version are owned once by the build-provision observation.

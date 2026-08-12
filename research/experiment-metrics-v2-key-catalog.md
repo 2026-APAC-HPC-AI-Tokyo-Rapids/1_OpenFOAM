@@ -8,7 +8,8 @@
 merge、finalize、projection、consumer view、conflict table、`metrics.jsonl`、自動再送は使わない。
 
 source trackは `source.track.head_commit`（このrepositoryのGit commit SHA）だけとする。
-VTuneは担当範囲外であり収集しない。通常runでrank別environmentは収集しない。
+pushは常にbench、手動dispatchだけがbench/profileを選択する。profileはVTune
+hotspotsへ一本化する。通常runでrank別environmentは収集しない。
 
 ## 直接送信するキー
 
@@ -48,7 +49,7 @@ JSON値もBigQuery上ではcanonical JSON文字列として格納する。
 | `network.imb_mpi1.{process_count,message_size.*,iteration.*}` | IMB実行設定 | compute IMB parser |
 | `software.imb_mpi1.version` | IMB version | compute IMB parser |
 | `network.imb_mpi1.result.<benchmark>.<message_bytes>` | PingPong/Sendrecv/Allreduce各測定row | compute IMB parser |
-| `profile.perf_stat.rank.<rank>` | profile-only perf stat 5 event | runner profile parser |
+| `profile.vtune_hotspots.rank.0` | profile-only VTune設定、version、source identity、全function hotspot | compute VTune parser |
 | `profile.hardware.node.<ordinal>` | profile-only postrun memory/NUMA detail | compute profile hardware parser |
 
 通常benchのstage集合は `case_prepare`、`solver`、`minimal_hardware_capture`、
