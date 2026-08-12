@@ -160,7 +160,9 @@ addressed by requested-partition v2, whose method enum is exactly `scotch`,
 `hierarchical`, or `multiLevel`; method-specific dictionaries remain preserved
 only in the raw source copy and identified by its SHA-256.  Both geometric
 candidates must be rerun through the updated E2E parser before an adoption
-decision.
+decision.  The pre-v2 multilevel workflow, Actions 288 (`31635572939`), later
+reached terminal success and archived its valid 7.9404 M result; its partition
+facts remain excluded because they predate the schema fix.
 
 The v2 reruns have reached `run-success` with complete partition facts:
 
@@ -176,9 +178,11 @@ cross-node faces by 56.0%.  The v2 multi-level result agrees within 0.12% with
 its pre-v2 valid solver result of 7.9404 M, while the direct-hierarchical v2
 result fell to 6.7815 M despite its similar total interface count.  This shows
 that rank numbering/topology correspondence, not total interface count alone,
-is material.  Multi-level advances; direct hierarchical is rejected.  Actions
-and home-archive terminal status are checked separately when GitHub's temporary
-API rate limit resets.
+is material.  Both requested-partition v2 workflows reached terminal Actions
+success: Actions 289 (`31639528519`, direct hierarchical) and Actions 290
+(`31639530786`, multi-level).  Every required job, including home-server
+archival, succeeded; both have `run-success`, and no experiment-owned PJM job
+remained.  Multi-level advances; direct hierarchical is rejected.
 
 ## Phase 4 setup: topology-boundary profile
 
@@ -192,6 +196,11 @@ measured boundary rank.  It will determine whether MPI wait/transfer is large
 enough to justify new Intel MPI or OpenFOAM communication experiments.  The
 known-negative `topoControl=16` and `nPollProcInterfaces=-1` settings remain
 excluded unless this new profile supplies contrary evidence.
+
+The rank-346 profile is Actions `31642562397`.  Alternating cache-hit repeats
+were submitted concurrently as `31642564622` (multi-level), `31642567524`
+(448-rank Scotch), and `31642570205` (480-rank Scotch).  Only the three bench
+runs enter score distributions.
 
 ## Experiment template
 
