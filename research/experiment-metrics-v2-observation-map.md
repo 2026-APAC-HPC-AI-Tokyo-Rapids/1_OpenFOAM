@@ -1,4 +1,8 @@
-# OpenFOAM v2 観測マップ
+# OpenFOAM v2 観測マップ（旧設計資料）
+
+> この文書はmerge/projection時代の設計記録であり、現行実装の正本ではない。
+> 直接送信するkeyと収集除外項目は
+> `research/experiment-metrics-v2-key-catalog.md` を参照する。
 
 ## この文書の役割
 

@@ -172,8 +172,8 @@ def parser() -> argparse.ArgumentParser:
     mesh = commands.add_parser("record-mesh")
     _runtime_common(mesh)
     mesh.add_argument("--decompose-dict", type=Path, required=True)
-    mesh.add_argument("--mesh-topology", type=Path, required=True)
-    mesh.add_argument("--partition-observed", type=Path, required=True)
+    mesh.add_argument("--block-mesh-log", type=Path, required=True)
+    mesh.add_argument("--decompose-log", type=Path, required=True)
 
     profile_hardware = commands.add_parser("record-profile-hardware")
     _runtime_common(profile_hardware)
@@ -623,20 +623,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "record-mesh":
-        from .postrun import mesh_topology_fact, partition_facts
+        from .postrun import mesh_facts_from_logs
 
-        topology = mesh_topology_fact(arguments.mesh_topology)
-        requested, observed = partition_facts(
+        facts = mesh_facts_from_logs(
+            arguments.block_mesh_log,
+            arguments.decompose_log,
             arguments.decompose_dict,
-            arguments.partition_observed,
-            topology=topology.logical_value,
         )
         print(
             collect_once(
                 arguments.manifest,
                 arguments.runtime_dir,
                 "compute.mesh_parser",
-                lambda: (topology, requested, observed),
+                lambda: facts,
                 registry_path=arguments.registry,
                 fragment_id="mesh",
             )
