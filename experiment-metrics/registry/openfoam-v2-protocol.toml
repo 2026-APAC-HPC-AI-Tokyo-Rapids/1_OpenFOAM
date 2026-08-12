@@ -11,8 +11,6 @@ expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295a
 expected_stages = [
   "case_prepare",
   "solver",
-  "mesh_facts",
-  "partition_audit",
   "minimal_hardware_capture",
   "network_imb_mpi1",
 ]
@@ -27,8 +25,6 @@ expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295a
 expected_stages = [
   "case_prepare",
   "solver",
-  "mesh_facts",
-  "partition_audit",
   "minimal_hardware_capture",
   "profile_hardware_capture",
   "network_imb_mpi1",

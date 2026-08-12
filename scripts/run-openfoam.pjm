@@ -232,34 +232,15 @@ fi
 grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
 grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
-# These diagnostics execute after the solver timing boundary and therefore do
-# not contribute to measured solver performance.  Their failure is diagnostic
-# only and never changes the already validated solver result.
-set +e
-stage mesh_facts "${LOG_DIR}/mesh-facts.log" \
-  "${MESH_FACTS}" -case "${CASE_DIR}" -constant \
-  -fileHandler uncollated -output "${SOURCE_DIR}/mesh/topology.json"
-mesh_facts_status=$?
-if [[ "${mesh_facts_status}" -eq 0 ]]; then
-  stage partition_audit "${LOG_DIR}/partition-audit.log" \
-    "${PARTITION_AUDIT}" -case "${CASE_DIR}" -constant \
-    -fileHandler uncollated -output "${SOURCE_DIR}/mesh/partition-observed.json"
-  partition_audit_status=$?
-else
-  partition_audit_status=1
-fi
-set -e
-if [[ "${mesh_facts_status}" -ne 0 || "${partition_audit_status}" -ne 0 ]]; then
-  printf '%s\n' 'mesh diagnostics failed; solver result remains valid' >&2
-else
-  "${METRICS_CLI}" record-mesh \
-    --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-    --registry "${REGISTRY}" \
-    --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" \
-    --mesh-topology "${SOURCE_DIR}/mesh/topology.json" \
-    --partition-observed "${SOURCE_DIR}/mesh/partition-observed.json" \
-    || printf '%s\n' 'mesh metrics could not be recorded' >&2
-fi
+# Reuse the small, durable preparation logs.  Never reopen or hash the 64M-cell
+# serial/processor meshes just to collect metrics.
+"${METRICS_CLI}" record-mesh \
+  --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
+  --registry "${REGISTRY}" \
+  --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" \
+  --block-mesh-log "${LOG_DIR}/blockMesh.log" \
+  --decompose-log "${LOG_DIR}/decomposePar.log" \
+  || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
 
 minimal_hardware_argv=(
   "${CAPTURE_HARDWARE}"

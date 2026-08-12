@@ -22,8 +22,10 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
     assert "--require-cache" in text
-    assert "stage mesh_facts" in text
-    assert "stage partition_audit" in text
+    assert "stage mesh_facts" not in text
+    assert "stage partition_audit" not in text
+    assert 'stage mesh_facts "${LOG_DIR}/mesh-facts.log"' not in text
+    assert 'stage partition_audit "${LOG_DIR}/partition-audit.log"' not in text
     assert "stage check_mesh" not in text
     assert "native tool is not provisioned" not in text
     assert "-fileHandler uncollated" in text
@@ -38,6 +40,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "record-build-provision" in text
     assert "record-minimal-hardware" in text
     assert "record-mesh" in text
+    assert '--block-mesh-log "${LOG_DIR}/blockMesh.log"' in text
+    assert '--decompose-log "${LOG_DIR}/decomposePar.log"' in text
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)

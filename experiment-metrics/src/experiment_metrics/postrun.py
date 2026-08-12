@@ -233,6 +233,101 @@ def mesh_topology_fact(path: Path) -> Fact:
     return Fact("mesh.topology", document)
 
 
+def mesh_facts_from_logs(
+    block_mesh_log: Path, decompose_log: Path, dictionary: Path
+) -> tuple[Fact, Fact, Fact]:
+    """Parse already durable preparation logs without reopening the 64M mesh."""
+
+    block_text = block_mesh_log.read_text(encoding="utf-8", errors="replace")
+    topology = {
+        "schema_version": "mesh-topology/v2",
+        "cells": _unique_log_uint(block_text, "nCells"),
+        "faces": _unique_log_uint(block_text, "nFaces"),
+        "points": _unique_log_uint(block_text, "nPoints"),
+        "internal_faces": _unique_log_uint(block_text, "nInternalFaces"),
+    }
+    if topology["internal_faces"] > topology["faces"]:
+        raise ValueError("blockMesh internal face count exceeds total faces")
+    requested = _requested_partition(dictionary)
+    observed = _partition_log(
+        decompose_log.read_text(encoding="utf-8", errors="replace"),
+        requested_subdomains=requested["subdomains"],
+        expected_cells=topology["cells"],
+    )
+    return (
+        Fact("mesh.topology", topology),
+        Fact("mesh.partition.requested", requested),
+        Fact("mesh.partition.observed", observed),
+    )
+
+
+def _unique_log_uint(text: str, name: str) -> int:
+    values = {
+        int(match)
+        for match in re.findall(rf"(?m)^\s*{re.escape(name)}:\s*([0-9]+)\s*$", text)
+    }
+    if len(values) != 1:
+        raise ValueError(f"blockMesh log has no unique {name}")
+    return next(iter(values))
+
+
+def _partition_log(
+    text: str, *, requested_subdomains: object, expected_cells: object
+) -> dict[str, object]:
+    if not isinstance(requested_subdomains, int) or not isinstance(expected_cells, int):
+        raise ValueError("partition log axes are invalid")
+    starts = list(re.finditer(r"(?m)^Processor ([0-9]+)\s*$", text))
+    if len(starts) != requested_subdomains:
+        raise ValueError("decomposePar log processor count differs from request")
+    subdomains: list[dict[str, object]] = []
+    directed_interfaces: dict[tuple[int, int], int] = {}
+    for index, match in enumerate(starts):
+        rank = int(match.group(1))
+        if rank != index:
+            raise ValueError("decomposePar log processor ranks are not canonical")
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+        body = text[match.end() : end]
+        cells = _one_equals_uint(body, "Number of cells")
+        patches = _one_equals_uint(body, "Number of processor patches")
+        processor_faces = _one_equals_uint(body, "Number of processor faces")
+        subdomains.append(
+            {
+                "rank": rank,
+                "cell_count": cells,
+                "processor_patch_count": patches,
+                "processor_face_count": processor_faces,
+            }
+        )
+        for peer, count in re.findall(
+            r"(?m)^\s*Number of faces shared with processor ([0-9]+) = ([0-9]+)\s*$",
+            body,
+        ):
+            directed_interfaces[(rank, int(peer))] = int(count)
+    if sum(item["cell_count"] for item in subdomains) != expected_cells:
+        raise ValueError("decomposePar cell total differs from blockMesh")
+    interfaces: list[dict[str, int]] = []
+    for (rank, peer), count in sorted(directed_interfaces.items()):
+        if rank >= peer:
+            continue
+        if directed_interfaces.get((peer, rank)) != count:
+            raise ValueError("decomposePar interface observations are asymmetric")
+        interfaces.append({"lower_rank": rank, "upper_rank": peer, "face_count": count})
+    return {
+        "schema_version": "partition-observed/v2",
+        "subdomains": subdomains,
+        "interfaces": interfaces,
+    }
+
+
+def _one_equals_uint(text: str, label: str) -> int:
+    matches = re.findall(
+        rf"(?m)^[ \t]+{re.escape(label)}\s*=\s*([0-9]+)\s*$", text
+    )
+    if len(matches) != 1:
+        raise ValueError(f"decomposePar log has no unique {label}")
+    return int(matches[0])
+
+
 def partition_facts(
     dictionary: Path, observed: Path, *, topology: dict[str, object]
 ) -> tuple[Fact, Fact]:
