@@ -78,6 +78,32 @@ def test_prepare_case_uses_content_and_rank_specific_cache(tmp_path: Path) -> No
     )
     assert "cache_hit=true" in required.stdout
 
+    other_block_mesh = _executable(
+        tmp_path / "other-blockMesh",
+        "exit 99\n",
+    )
+    other_decompose_par = _executable(
+        tmp_path / "other-decomposePar",
+        "exit 99\n",
+    )
+    other_build = subprocess.run(
+        [
+            SCRIPT,
+            source,
+            tmp_path / "case-other-build",
+            other_block_mesh,
+            other_decompose_par,
+            "120",
+            "--require-cache",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    assert "cache_hit=true" in other_build.stdout
+    assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 1
+
 
 def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> None:
     home = tmp_path / "home" / "user"
