@@ -21,11 +21,19 @@ optimization_report_flags='-qopt-report=3 -qopt-report-phase=loop,vec,cg'
 export CC=mpiicx
 export CXX=mpiicpx
 build_extra_cxxflags="${build_tuning_flags:+${build_tuning_flags} }${optimization_report_flags}"
+export CMAKE_C_COMPILER_LAUNCHER=ccache
+export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
 # ビルドツリー、ccache、一時 archive の場所を先に決めておく。
 build_tree="${BUILD_DIR}/tree"
+ccache_local_dir="/dev/shm/ccache-${USER:?}"
 publish_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.tar.zst.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
 publish_sidecar_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.build-sidecar.json.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+export CCACHE_BASEDIR="${build_tree}"
+export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
+export CCACHE_DIR="${ccache_local_dir}"
+export CCACHE_RECACHE=true
+export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 
 # ビルドが中断・失敗した場合も、一時 archive を削除する。
 cleanup() {
@@ -40,7 +48,8 @@ trap 'exit 143' TERM
 
 # 前回のビルドツリーを削除し、今回のビルドに必要なディレクトリを作成する。
 rm -rf -- "${BUILD_DIR:?}"
-install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${build_tree}" "${BUILD_DIR}/logs"
+install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${build_tree}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
+install -d -m 0700 "${ccache_local_dir}"
 
 # OpenFOAM v2606 と対応する ThirdParty を、ソースリポジトリ側で更新される
 # 読み取り専用の共有 mirror からローカル clone する。
@@ -81,16 +90,19 @@ ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 module purge
 module load intel/2025.1.3 impi
 
-# 使用するコンパイラが利用可能であることを確認する。
-for build_tool in "${CC}" "${CXX}"
+# 使用するコンパイラとccacheが利用可能であることを確認する。
+for build_tool in "${CC}" "${CXX}" ccache
 do
   "${build_tool}" --version
 done
 
+[[ -r "${CCACHE_CONFIGPATH}" ]]
+ccache --show-config
+
 # OpenFOAM の bashrc は未設定変数や中間コマンドの失敗を許容するため、
 # 初期化中だけ厳格なエラーチェックを緩める。
 set +eu
-source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}"
+source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" WM_COMPILE_CONTROL=+ccache
 set -eu
 export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
 test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"
@@ -100,11 +112,13 @@ cd "${WM_PROJECT_DIR}"
 
 # cavity3D の前処理と実行に必要なblockMesh、decomposePar、checkMesh、
 # icoFoamとその依存だけをビルドする。
+ccache --zero-stats
 "${GITHUB_WORKSPACE}/scripts/build-profiler.sh" "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
   build_status=$?
   grep -Eai -m 200 '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' "${BUILD_DIR}/logs/allwmake.log" >&2 || true
   exit "${build_status}"
 }
+ccache --show-stats
 report_list="${BUILD_DIR}/logs/optimization-report-files.txt"
 find "${build_tree}/OpenFOAM" -type f -name '*.optrpt' -printf '%P\n' | LC_ALL=C sort > "${report_list}"
 test -s "${report_list}"
