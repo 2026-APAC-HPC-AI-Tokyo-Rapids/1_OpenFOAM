@@ -35,7 +35,7 @@ SOURCE_IDENTITY=$(
 BLOCK_MESH_SHA256=$(sha256sum "${BLOCK_MESH}" | awk '{print $1}')
 DECOMPOSE_PAR_SHA256=$(sha256sum "${DECOMPOSE_PAR}" | awk '{print $1}')
 CACHE_IDENTITY=$(
-    printf '%s\n' "prepare=${SCRIPT_SHA256}" "source=${SOURCE_IDENTITY}" "blockMesh=${BLOCK_MESH_SHA256}" "decomposePar=${DECOMPOSE_PAR_SHA256}" "subdomains=${NUMBER_OF_SUBDOMAINS}" 'method=scotch' 'fileHandler=uncollated' |
+    printf '%s\n' "prepare=${SCRIPT_SHA256}" "source=${SOURCE_IDENTITY}" "subdomains=${NUMBER_OF_SUBDOMAINS}" 'method=scotch' 'fileHandler=uncollated' |
         sha256sum |
         awk '{print $1}'
 )
