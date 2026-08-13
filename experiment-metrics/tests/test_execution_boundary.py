@@ -154,8 +154,8 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "jq -r '.source_paths[]'" not in script
     assert "OPENFOAM_BUILD_PARALLELISM" not in script
     assert "EXPERIMENT_METRICS_NATIVE_ROOT" not in script
-    assert "build_condition=opt-avx512" in script
-    assert "build_compile_option=OptAVX512" in script
+    assert "build_condition=baseline" in script
+    assert "build_compile_option=Opt" in script
     assert "build_tuning_flags=" in script
     assert "-qopt-report-phase=loop,vec,cg" in script
     assert 'FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"' in script
