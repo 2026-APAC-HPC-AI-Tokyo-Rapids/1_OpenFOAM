@@ -78,7 +78,7 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
     assert registry.artifact_roles is not None
     assert registry.artifact_roles.filename("run_bundle") == ("run-artifacts.tar.zst")
     assert "workload_member" in registry.artifact_roles.run_bundle_source_roles
-    assert "profile.vtune_hotspots.rank.0" in registry.required_keys(
+    assert "profile.vtune_hotspots" in registry.required_keys(
         "profile", expected_pstream_ranks=2
     )
     assert {

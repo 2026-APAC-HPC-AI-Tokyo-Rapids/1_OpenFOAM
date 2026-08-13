@@ -152,7 +152,7 @@ def record_vtune_hotspots(
         run_dir,
         fragment_id="vtune-hotspots",
     ) as recorder:
-        recorder.record(Fact(f"profile.vtune_hotspots.rank.{profiled_rank}", value))
+        recorder.record(Fact("profile.vtune_hotspots", value))
     return recorder.fragment_path
 
 

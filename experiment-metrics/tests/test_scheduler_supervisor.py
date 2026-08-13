@@ -19,7 +19,9 @@ from experiment_metrics.supervisor import (
 )
 
 REGISTRY = Path(__file__).parents[1] / "registry/openfoam-v2.toml"
-PROTOCOL = Path(__file__).parents[1] / "registry/openfoam-v2-protocol.toml"
+PROTOCOL = (
+    Path(__file__).parents[1] / "registry/openfoam-v2-protocol-scotch-1n-120r.toml"
+)
 
 
 def test_submission_and_terminal_accounting_are_bound_by_job_id(
@@ -61,11 +63,15 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     request = json.loads(submitted.request_path.read_text())
     assert request["nodes"] == 1
     assert request["ranks"] == 120
+    assert request["profile_rank"] == 0
     assert request["argv"][0] == str(pjsub)
     assert "OPENFOAM_RANKS=120" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
     assert "OPENFOAM_RUN_PURPOSE=bench" in next(
+        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
+    )
+    assert "OPENFOAM_VTUNE_RANK=0" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
 
@@ -117,6 +123,7 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
+        profile_rank=37,
         pjsub_path=pjsub,
         execute=lambda argv: subprocess.CompletedProcess(
             argv, 0, b"Job 23456 submitted.\n", b""
@@ -129,6 +136,36 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
     assert "OPENFOAM_RUN_PURPOSE=profile" in exported
+    assert "OPENFOAM_VTUNE_RANK=37" in exported
+    assert request["profile_rank"] == 37
+
+
+def test_submission_rejects_invalid_profile_rank(
+    tmp_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    run_dir = manifest.parents[1]
+    repository = tmp_path / "repository"
+    provision = tmp_path / "provision"
+    (repository / "scripts").mkdir(parents=True)
+    (provision / "scripts").mkdir(parents=True)
+    source = repository / "scripts/run-openfoam.pjm"
+    execution = provision / "scripts/run-openfoam.pjm"
+    source.write_bytes(b"#!/bin/sh\n")
+    execution.write_bytes(source.read_bytes())
+
+    with pytest.raises(ValueError, match="nonzero profile rank"):
+        submit_run(
+            manifest_path=manifest,
+            runtime_dir=run_dir,
+            registry_path=REGISTRY,
+            protocol_path=PROTOCOL,
+            repository_root=repository,
+            pjm_script_repository_path="scripts/run-openfoam.pjm",
+            execution_script=execution,
+            provision_dir=provision,
+            profile_rank=1,
+        )
 
 
 def test_parse_scheduler_accounting_accepts_genkai_history_data() -> None:

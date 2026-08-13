@@ -70,6 +70,7 @@ def submit_run(
     pjm_script_repository_path: str,
     execution_script: Path,
     provision_dir: Path,
+    profile_rank: int = 0,
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
     pjsub_path: Path | None = None,
 ) -> SubmissionOutcome:
@@ -78,6 +79,10 @@ def submit_run(
     if run_dir != manifest.path.parents[1]:
         raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
+    if profile_rank < 0 or profile_rank >= protocol.ranks:
+        raise ValueError("profile rank must be within the protocol rank range")
+    if manifest.purpose != "profile" and profile_rank != 0:
+        raise ValueError("a nonzero profile rank requires a profile run")
     relative = PurePosixPath(pjm_script_repository_path)
     if (
         not pjm_script_repository_path
@@ -95,6 +100,7 @@ def submit_run(
     environment = {
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
+        "OPENFOAM_VTUNE_RANK": str(profile_rank),
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
         "OPENFOAM_RANKS": str(protocol.ranks),
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
@@ -137,6 +143,7 @@ def submit_run(
         "subject_manifest_sha256": _sha256(manifest.path),
         "nodes": protocol.nodes,
         "ranks": protocol.ranks,
+        "profile_rank": profile_rank,
         "resource_group": protocol.resource_group,
         "transport_policy": protocol.transport_policy,
         "pjm_script": {

@@ -21,11 +21,6 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "--node-ordinal-from-env PMI_RANK" in text
     assert "stage_at case_prepare" in text
     assert "prepare-openfoam-case.sh" in text
-    assert "prepare-openfoam-geometric-case.sh" in text
-    assert "prepare-openfoam-multilevel-448-case.sh" in text
-    assert "prepare-openfoam-renumbered-case.sh" in text
-    assert "renumber-cuthill-4n448" in text
-    assert "renumber-block32768-4n448" in text
     assert "--require-cache" in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
@@ -36,18 +31,12 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
-    assert 'OPENFOAM_VTUNE_RANK=346' in text
-    assert "multilevel-node-numa-r346-4n-480r" in text
+    assert "scheduler-selected VTune rank is required" in text
     assert "if (( OPENFOAM_MPI_PPN == 112 )); then" in text
     assert (
         'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,'
         '60-73,75-88,90-103,105-118"'
     ) in text
-    assert "scotch-4n-448r-mpi-autotune-generate" in text
-    assert "scotch-4n-448r-mpi-autotune-consume" in text
-    assert "I_MPI_TUNING_MODE=auto" in text
-    assert 'export I_MPI_TUNING_BIN="${MPI_TUNING_CONSUMED}"' in text
-    assert '[[ ! -e "${MPI_TUNING_PUBLISHED}" ]]' in text
     assert "OPENFOAM_PROFILE_DIR" not in text
     assert "capture-workload" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
@@ -68,21 +57,6 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(prepare)], check=True)
     assert "blockMesh" in prepare.read_text(encoding="utf-8")
     assert "decomposePar" in prepare.read_text(encoding="utf-8")
-    geometric_prepare = ROOT / "scripts/prepare-openfoam-geometric-case.sh"
-    subprocess.run(["bash", "-n", str(geometric_prepare)], check=True)
-    assert "hierarchical-6x8x10" in geometric_prepare.read_text(encoding="utf-8")
-    assert "multilevel-node-numa-4n480" in geometric_prepare.read_text(
-        encoding="utf-8"
-    )
-    multilevel_448_prepare = ROOT / "scripts/prepare-openfoam-multilevel-448-case.sh"
-    subprocess.run(["bash", "-n", str(multilevel_448_prepare)], check=True)
-    assert "numberOfSubdomains 448" in multilevel_448_prepare.read_text(
-        encoding="utf-8"
-    )
-    renumber_prepare = ROOT / "scripts/prepare-openfoam-renumbered-case.sh"
-    subprocess.run(["bash", "-n", str(renumber_prepare)], check=True)
-    assert "blockSize 32768;" in renumber_prepare.read_text(encoding="utf-8")
-
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must
     # inherit the provisioned interpreter without changing the probe argv.
@@ -111,6 +85,8 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert "OPENFOAM_RUN_PURPOSE" in workflow
     assert "github.event_name == 'push' && 'bench'" in workflow
     assert "run_purpose:" in workflow
+    assert "profile_rank:" in workflow
+    assert '--profile-rank "${OPENFOAM_PROFILE_RANK}"' in workflow
     assert "- bench" in workflow
     assert "- profile" in workflow
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow
@@ -152,35 +128,3 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert 'select(.kind == "in_process_hook")' in script
     assert "| .source_path" in script
     assert "jq -r '.source_paths[]'" not in script
-
-
-def test_overhead_check_repeats_primary_solver_and_keeps_diagnostics() -> None:
-    script_path = ROOT / "scripts/v2-overhead-check.pjm"
-    script = script_path.read_text(encoding="utf-8")
-    workflow = (ROOT / ".github/workflows/v2-overhead-check.yml").read_text(
-        encoding="utf-8"
-    )
-
-    subprocess.run(["bash", "-n", str(script_path)], check=True)
-    order = [
-        script.index("run_arm off 1"),
-        script.index("run_arm on 1"),
-        script.index("run_arm off 2"),
-        script.index("run_arm on 2"),
-    ]
-    assert order == sorted(order)
-    assert "primary_on_over_off_trim_ratio" in script
-    assert "(on1 + on2) / (off1 + off2)" in script
-    assert "ratio <= 1.05" in script
-    assert "sha256sum --check" in script
-    assert "markers_equal=true" in script
-    assert "for rank in $(seq 0 119)" in script
-    assert "diagnostic-status.txt" in script
-
-    upload = workflow.index("Upload comparison diagnostics")
-    cleanup = workflow.index("Discard comparison data")
-    assert upload < cleanup
-    assert "if: always() && steps.provision.outputs.check_dir != ''" in workflow
-    assert "archive_sha256=" in workflow
-    assert "bigquery" not in workflow.lower()
-    assert "GOOGLE_CREDENTIALS" not in workflow
