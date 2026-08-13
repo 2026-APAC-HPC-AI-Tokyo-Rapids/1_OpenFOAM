@@ -370,6 +370,56 @@ Cuthill-McKeeは実験evidenceとして保持するが、反復測定した改�
 thresholdを超えなかったため採用しない。Direct hierarchicalと480-rank Scotchは、測定
 したsolver性能または安定性、あるいはその両方を根拠に棄却する。
 
+## Issue #14：採用済み4-node/448-rank構成のVTune profile
+
+DIC cell-gatherとPCG loop fusionを統合した現行sourceで、採用済み
+`scotch-4n-448r`を`run_purpose=profile`としてActions `31683147714`（#332）から
+実行した。比較時にsource変更とnode/rank変更を混同しないため、同じcommit、build、
+workloadおよびVTune設定の`scotch-1n-120r` controlもActions `31683246429`（#333）で
+並行実行した。両runはbuild archive #331をbyte単位で共有している。Archiveは
+475,982,083 byte、SHA-256 `8c6ee3ff25c1894f2c71c6a990b623f379ea3c14192b7c7f0943e422be44d885`
+で、OpenFOAM sourceは`7d59c05ec3af21853d094ef29285e23d27823671`である。
+
+VTuneの起動条件は、1-nodeの既存profileであるActions #278と比較可能にするため変更
+しなかった。Rank 0の`icoFoam`へattachし、`hotspots`、software sampling、stack収集なし、
+要求時間60 sとしている。これは関数別CPU timeを低い擾乱で取得する目的には適切だが、
+全rankのwall-clock通信待ちを測るものではない。下表の「明示的MPI/transport」は
+`libmpi`、UCXおよびOFI moduleに帰属したexclusive CPU timeの合計、「MPI busy wait」は
+VTune CSVの`CPU Time:Spin Time:MPI Busy Wait Time`列の合計であり、sleep中のelapsed timeを
+含まない。
+
+| Profile | DIC | Amul | PCG | 3 kernel合計 | 明示的MPI/transport | MPI busy wait |
+|---|---:|---:|---:|---:|---:|---:|
+| 旧source、1 node、Actions #278 | 45.77% | 26.06% | 16.35% | 88.19% | 3.46% | 0.55% |
+| 現行source、1 node、Actions #333 | 44.84% | 27.51% | 16.37% | 88.72% | 2.40% | 0.28% |
+| 現行source、4 node、Actions #332 | 46.67% | 24.49% | 9.74% | 80.90% | 11.10% | 2.66% |
+
+4-node runの報告CPU timeは35.680 sだった。上位は
+`Foam::DICPreconditioner::precondition` 16.651 s、`Foam::lduMatrix::Amul`
+8.738 s、`Foam::PCG::scalarSolve` 3.475 sで、順位は1、2、3のままである。MPI側では
+`PMPI_Allreduce`が2.858 s、8.01%で4位、`ucp_worker_progress`が0.360 s、1.01%で6位、
+`PMPI_Waitall`が0.180 s、0.50%で9位、`internal_Isend`が0.161 s、0.45%で10位だった。
+1-node controlに対して明示的MPI/transportは8.70 percentage point、MPI busy waitは
+2.38 point増加したため、multi-node化で通信比重が増えたことは確認できる。一方、主要
+3 kernelだけで80.90%を占め、rank 0では依然として計算kernel側が支配的である。
+
+Scotch partitionのrank 0は13 neighbour、processor interface 17,374 faceを持ち、そのうち
+10,144 faceがnode境界を跨ぐ。最大のrank 365は16,967 cross-node faceであるためrank 0は
+最大ではないがinter-node通信を持つboundary rankである。したがって本結果は
+「通信のないinterior rankだけを観測した」ものではない。ただし単一rankから448 rank
+全体のimbalanceを一般化しない。Job-wideのMPI同期やcritical pathが新たな問いになった
+場合は、この比較用Hotspotsの引数を置き換えず、別のprofile runとしてVTune
+`hpc-performance`またはIntel Trace Analyzer and Collectorを使用する。
+
+4-node run `r-f9b7cd355c570d14d93c405819b89df0`、solver PJM `6471054`は公式VALID、
+8.6780 M FVOPS、7.375 s/stepだった。1-node control
+`r-4a887a5dc3def63f1751ea28a7257f27`、solver PJM `6471055`も公式VALID、
+1.8494 M FVOPS、34.605 s/stepだった。Profile scoreはbench distributionから除外する。
+両runともVTune collection/target exit code 0、`run-success`、scheduler `EXT`/exit code 0、
+固定artifact、home archiveまで完了し、PJM jobはterminalである。以上から、MPIは1 node
+より無視できないが次の主対象を通信設定へ移すほど支配的ではなく、DIC/Amul/PCGの
+計算・memory localityを引き続き主要ボトルネックとして扱う。
+
 ## 実験template
 
 ### 実験ID
