@@ -14,7 +14,7 @@ set -euo pipefail
 # ビルド仕様はここへ集約し、workflow からは実行ごとのパスと
 # GitHub Actions のメタデータだけを受け取る。
 export OPENFOAM_VERSION=v2606
-export OPENFOAM_SOURCE_REF=refs/heads/master
+export OPENFOAM_SOURCE_REF=refs/remotes/origin/experiment/pcg-loop-fusion
 export THIRDPARTY_SOURCE_REF=refs/heads/main
 export OPENFOAM_BUILD_PARALLELISM=120
 export CC=mpiicx
