@@ -19,6 +19,11 @@ set -euo pipefail
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
+: "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
+case "${OPENFOAM_VTUNE_ANALYSIS}" in
+  hotspots|hpc-performance) ;;
+  *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
+esac
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
@@ -46,9 +51,10 @@ SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 PROFILE_RUN_ID="${RUN_ID}-${PJM_JOBID}"
 OPENFOAM_VTUNE_ROOT="${HOME}/openfoam-vtune/${PROFILE_RUN_ID}"
-OPENFOAM_VTUNE_RESULT_DIR="${OPENFOAM_VTUNE_ROOT}/rank-${OPENFOAM_VTUNE_RANK}"
+OPENFOAM_VTUNE_RESULT_DIR="${OPENFOAM_VTUNE_ROOT}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export PROFILE_RUN_ID OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
+export OPENFOAM_VTUNE_ANALYSIS
 export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
 export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 

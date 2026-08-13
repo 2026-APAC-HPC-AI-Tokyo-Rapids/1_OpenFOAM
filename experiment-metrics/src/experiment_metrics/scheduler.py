@@ -71,6 +71,7 @@ def submit_run(
     execution_script: Path,
     provision_dir: Path,
     profile_rank: int = 0,
+    profile_analysis: str = "hotspots",
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
     pjsub_path: Path | None = None,
 ) -> SubmissionOutcome:
@@ -83,6 +84,10 @@ def submit_run(
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
         raise ValueError("a nonzero profile rank requires a profile run")
+    if profile_analysis not in {"hotspots", "hpc-performance"}:
+        raise ValueError("unsupported VTune profile analysis")
+    if manifest.purpose != "profile" and profile_analysis != "hotspots":
+        raise ValueError("HPC characterization requires a profile run")
     relative = PurePosixPath(pjm_script_repository_path)
     if (
         not pjm_script_repository_path
@@ -100,6 +105,7 @@ def submit_run(
     environment = {
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
+        "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
         "OPENFOAM_VTUNE_RANK": str(profile_rank),
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
         "OPENFOAM_RANKS": str(protocol.ranks),
@@ -144,6 +150,7 @@ def submit_run(
         "nodes": protocol.nodes,
         "ranks": protocol.ranks,
         "profile_rank": profile_rank,
+        "profile_analysis": profile_analysis,
         "resource_group": protocol.resource_group,
         "transport_policy": protocol.transport_policy,
         "pjm_script": {

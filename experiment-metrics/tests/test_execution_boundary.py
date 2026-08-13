@@ -86,7 +86,9 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert "github.event_name == 'push' && 'bench'" in workflow
     assert "run_purpose:" in workflow
     assert "profile_rank:" in workflow
+    assert "profile_analysis:" in workflow
     assert '--profile-rank "${OPENFOAM_PROFILE_RANK}"' in workflow
+    assert '--profile-analysis "${OPENFOAM_PROFILE_ANALYSIS}"' in workflow
     assert "- bench" in workflow
     assert "- profile" in workflow
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow

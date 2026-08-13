@@ -107,6 +107,8 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     assert row["key"] == "profile.vtune_hotspots"
     value = json.loads(row["value"])
     assert value["collection"]["target_mode"] == "attach"
+    assert value["collection"]["analysis_type"] == "hotspots"
+    assert value["collection"]["sampling_mode"] == "sw"
     assert value["sources"]["report"]["member"] == (
         "profile/raw/vtune-summary/hotspots.csv"
     )
@@ -115,6 +117,38 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     rendered = markdown.read_text()
     assert "name`with\\|syntax" in rendered
     assert "`name`with" not in rendered
+
+
+def test_hpc_characterization_records_hardware_sampling(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    root = run_dir / "profile/raw/vtune-summary"
+    root.mkdir()
+    (root / "hotspots.csv").write_text(HEADER + _row("f", "m", "1"))
+    (root / "collection-status.json").write_text(
+        '{"schema_version":"vtune-collection-status/v1",'
+        '"target_exit_code":0,"vtune_exit_code":0}\n'
+    )
+
+    fragment = record_vtune_hotspots(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        registry_path=registry_path,
+        report_path=root / "hotspots.csv",
+        status_path=root / "collection-status.json",
+        summary_path=root / "summary.json",
+        markdown_path=root / "summary.md",
+        profiled_rank=3,
+        analysis_type="hpc-performance",
+        collection_duration_sec=60,
+    )
+
+    value = json.loads(json.loads(fragment.read_text())["value"])
+    assert value["schema_version"] == "openfoam-vtune-profile/v2"
+    assert value["collection"]["analysis_type"] == "hpc-performance"
+    assert value["collection"]["sampling_mode"] == "hw"
 
 
 def test_collection_failure_does_not_publish_a_fact(
@@ -175,6 +209,7 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
         "OPENFOAM_VTUNE_RESULT_DIR": str(tmp_path / "result"),
         "OPENFOAM_VTUNE_STATUS_PATH": str(status),
         "OPENFOAM_VTUNE_PATH": str(vtune),
+        "OPENFOAM_VTUNE_ANALYSIS": "hotspots",
         "OPENFOAM_VTUNE_DURATION_SEC": "1",
         "PROVISION_DIR": str(tmp_path / "provision"),
     }

@@ -99,6 +99,7 @@ def record_vtune_hotspots(
     summary_path: Path,
     markdown_path: Path,
     profiled_rank: int,
+    analysis_type: str = "hotspots",
     collection_duration_sec: int,
     limit: int = 30,
 ) -> Path:
@@ -108,6 +109,8 @@ def record_vtune_hotspots(
         raise ValueError("VTune facts require the bound profile run")
     if profiled_rank < 0 or collection_duration_sec <= 0 or limit <= 0:
         raise ValueError("VTune rank, duration, and summary limit are invalid")
+    if analysis_type not in {"hotspots", "hpc-performance"}:
+        raise ValueError("VTune analysis type is invalid")
     expected_root = run_dir / "profile/raw/vtune-summary"
     expected = {
         report_path: expected_root / "hotspots.csv",
@@ -126,12 +129,12 @@ def record_vtune_hotspots(
         raise ValueError("VTune collection did not complete successfully")
     hotspots = parse_hotspots(report_path.read_text(encoding="utf-8-sig"))
     value = {
-        "schema_version": "openfoam-vtune-hotspots/v1",
+        "schema_version": "openfoam-vtune-profile/v2",
         "profiled_rank": profiled_rank,
         "collection": {
-            "analysis_type": "hotspots",
+            "analysis_type": analysis_type,
             "target_mode": "attach",
-            "sampling_mode": "sw",
+            "sampling_mode": "sw" if analysis_type == "hotspots" else "hw",
             "stack_collection": False,
             "requested_duration_sec": collection_duration_sec,
             "report_time_unit": "seconds",
@@ -187,6 +190,7 @@ def _summary(
     return {
         "schema_version": "openfoam-vtune-hotspots-summary/v1",
         "profiled_rank": value["profiled_rank"],
+        "analysis_type": collection["analysis_type"],
         "collection_duration_sec": collection["requested_duration_sec"],
         "source_hotspots": len(hotspots),
         "exported_hotspots": len(top),
@@ -202,6 +206,7 @@ def _markdown(summary: dict[str, object]) -> str:
         "## Intel VTune hotspots",
         "",
         f"- Profiled MPI rank: {summary['profiled_rank']}",
+        f"- Analysis: {summary['analysis_type']}",
         f"- Attached sampling window: {summary['collection_duration_sec']} s",
         f"- Reported functions: {summary['source_hotspots']}",
         f"- Total reported CPU time: {summary['reported_cpu_time_sec']} s",

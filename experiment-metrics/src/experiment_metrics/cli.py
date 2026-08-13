@@ -79,6 +79,11 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
     submit.add_argument("--profile-rank", type=int, default=0)
+    submit.add_argument(
+        "--profile-analysis",
+        choices=["hotspots", "hpc-performance"],
+        default="hotspots",
+    )
 
     supervisor_start = commands.add_parser("supervisor-start")
     supervisor_start.add_argument("--manifest", type=Path, required=True)
@@ -181,6 +186,11 @@ def parser() -> argparse.ArgumentParser:
     profile_vtune.add_argument("--summary", type=Path, required=True)
     profile_vtune.add_argument("--markdown", type=Path, required=True)
     profile_vtune.add_argument("--profiled-rank", type=int, required=True)
+    profile_vtune.add_argument(
+        "--analysis-type",
+        choices=["hotspots", "hpc-performance"],
+        required=True,
+    )
     profile_vtune.add_argument("--collection-duration-sec", type=int, required=True)
 
     workload = commands.add_parser("capture-workload")
@@ -330,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
             profile_rank=arguments.profile_rank,
+            profile_analysis=arguments.profile_analysis,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)
@@ -643,6 +654,7 @@ def main(argv: list[str] | None = None) -> int:
                 summary_path=arguments.summary,
                 markdown_path=arguments.markdown,
                 profiled_rank=arguments.profiled_rank,
+                analysis_type=arguments.analysis_type,
                 collection_duration_sec=arguments.collection_duration_sec,
             )
         )

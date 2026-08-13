@@ -13,6 +13,8 @@ Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法
 
 push からの起動は常に benchmark です。`OpenFOAM on genkai` を手動実行するときだけ `run_purpose` で `bench` または `profile` を選択できます。
 `profile` は `profile_rank` で選んだMPI rank（既定値0）へ60秒間Intel VTuneをattachして計測します。
+`profile_analysis=hotspots`は関数別CPU time、`hpc-performance`はCPU pipeline、memory階層、
+DRAM bandwidth、FPU・vectorizationのcharacterizationを取得します。
 計測後、上位 hotspot は GitHub Actions の run summary に表として表示されます。
 このモードでは Perfetto 用 trace を生成しません。
 VTune の完全な result directory は Genkai の `~/openfoam-vtune/` 以下に保持され、Actions summary に保存先が記録されます。
