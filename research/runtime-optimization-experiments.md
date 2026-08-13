@@ -468,7 +468,8 @@ cache missを確認する。
 保存するため、report収集自体は比較因子にならない。
 最初の4 buildでは、OpenFOAM初期化前にexportした`FOAM_EXTRA_CXXFLAGS`がbashrcで消去され、
 compile argvにreport flagが入らなかった。またccacheはcompiler副生成物をartifactとして扱わない。
-比較buildではccacheを外し、bashrcが明示的にunsetした後でtuning/report flagsをexportして実効値を検証する。
+比較buildではbashrcが明示的にunsetした後でtuning/report flagsをexportして実効値を検証する。
+ccache自体がreport生成を妨げた観測はないため維持し、`CCACHE_RECACHE=true`でcompiler実行を強制する。
 これはbuild時間だけに作用し、通常runの比較条件には入らない。
 
 上流v2606 ruleと直近build #348のsidecarを確認した結果、現行C++ baselineはIssue本文にある
