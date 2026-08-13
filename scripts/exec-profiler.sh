@@ -51,7 +51,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
       -knob analyze-openmp=false \
       -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
       -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- \
-      bash -c '"$@"; status=$?; printf "%d\n" "${status}" > "${OPENFOAM_VTUNE_TARGET_STATUS_PATH}"; exit "${status}"' \
+      bash -c '"$@"; status=$?; printf "%d" "${status}" > "${OPENFOAM_VTUNE_TARGET_STATUS_PATH}"; exit "${status}"' \
       bash "$@"
     vtune_status=$?
     if [[ -s "${target_status_path}" ]]; then
