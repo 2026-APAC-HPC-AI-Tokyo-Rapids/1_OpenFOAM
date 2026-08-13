@@ -66,18 +66,11 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert request["profile_rank"] == 0
     assert request["profile_analysis"] == "hotspots"
     assert request["argv"][0] == str(pjsub)
-    assert "OPENFOAM_RANKS=120" in next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
-    assert "OPENFOAM_RUN_PURPOSE=bench" in next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
-    assert "OPENFOAM_VTUNE_RANK=0" in next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
-    assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
+    exported = request["argv"][request["argv"].index("-x") + 1]
+    assert "OPENFOAM_MPI_PROCS=120" in exported
+    assert "OPENFOAM_RUN_PURPOSE=bench" in exported
+    assert "OPENFOAM_VTUNE_RANK=0" in exported
+    assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in exported
 
     (run_dir / "control/job-entry.json").write_text(
         json.dumps({"pjm_job_id": "12345"}) + "\n"
@@ -137,9 +130,7 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
 
     assert submitted.job_id == "23456"
     request = json.loads(submitted.request_path.read_text())
-    exported = next(
-        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
-    )
+    exported = request["argv"][request["argv"].index("-x") + 1]
     assert "OPENFOAM_RUN_PURPOSE=profile" in exported
     assert "OPENFOAM_VTUNE_RANK=37" in exported
     assert "OPENFOAM_VTUNE_ANALYSIS=hpc-performance" in exported

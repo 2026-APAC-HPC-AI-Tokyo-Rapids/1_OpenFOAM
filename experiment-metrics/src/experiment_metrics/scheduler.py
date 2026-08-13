@@ -108,7 +108,7 @@ def submit_run(
         "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
         "OPENFOAM_VTUNE_RANK": str(profile_rank),
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
-        "OPENFOAM_RANKS": str(protocol.ranks),
+        "OPENFOAM_MPI_PROCS": str(protocol.ranks),
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,
         "PROVISION_DIR": str(provision_dir.resolve(strict=True)),

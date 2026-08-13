@@ -31,8 +31,10 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "-fileHandler uncollated" in text
     assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
     assert "OPENFOAM_METRICS_RUN_ID" in text
+    assert "OPENFOAM_RANKS" not in text
+    assert "OPENFOAM_MPI_PPN" not in text
     assert "scheduler-selected VTune rank is required" in text
-    assert "if (( OPENFOAM_MPI_PPN == 112 )); then" in text
+    assert "if (( ranks_per_node == 112 )); then" in text
     assert (
         'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,'
         '60-73,75-88,90-103,105-118"'
@@ -60,10 +62,10 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must
     # inherit the provisioned interpreter without changing the probe argv.
-    python_path = 'PROBE_PYTHON_DIR="${PROVISION_DIR}/experiment-metrics/.venv/bin"'
-    export_path = 'export PATH="${PROBE_PYTHON_DIR}:${PATH}"'
+    python_path = 'probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"'
+    export_path = 'export PATH="${probe_python_dir}:${PATH}"'
     assert python_path in text
-    assert '[[ -x "${PROBE_PYTHON_DIR}/python3" ]]' in text
+    assert '[[ -x "${probe_python_dir}/python3" ]]' in text
     assert export_path in text
     assert text.index('source "${PROVISION_DIR}/OpenFOAM/etc/bashrc"') < text.index(
         python_path
@@ -76,19 +78,23 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
 def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
-    assert "submit-run --manifest" in workflow
+    assert "submit-run" in workflow
+    assert '--manifest "${RUN_MANIFEST}"' in workflow
     assert "--pjm-script-repository-path scripts/run-openfoam.pjm" in workflow
     assert "record-scheduler-terminal --manifest" in workflow
     assert "record-execution-context --manifest" in workflow
     assert "record-profile-vtune" not in workflow
     assert "Publish VTune hotspots to Actions summary" in workflow
-    assert "OPENFOAM_RUN_PURPOSE" in workflow
+    assert 'purpose=\'${{ github.event_name == \'push\' && \'bench\' || inputs.run_purpose }}\'' in workflow
     assert "github.event_name == 'push' && 'bench'" in workflow
     assert "run_purpose:" in workflow
     assert "profile_rank:" in workflow
     assert "profile_analysis:" in workflow
-    assert '--profile-rank "${OPENFOAM_PROFILE_RANK}"' in workflow
-    assert '--profile-analysis "${OPENFOAM_PROFILE_ANALYSIS}"' in workflow
+    assert "OPENFOAM_PROFILE_RANK" not in workflow
+    assert "OPENFOAM_PROFILE_ANALYSIS" not in workflow
+    assert "OPENFOAM_EXPERIMENT_PRESET" not in workflow
+    assert """--profile-rank '${{ github.event_name == 'push' && '0' || inputs.profile_rank }}'""" in workflow
+    assert """--profile-analysis '${{ github.event_name == 'push' && 'hotspots' || inputs.profile_analysis }}'""" in workflow
     assert "- bench" in workflow
     assert "- profile" in workflow
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow
@@ -130,3 +136,5 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert 'select(.kind == "in_process_hook")' in script
     assert "| .source_path" in script
     assert "jq -r '.source_paths[]'" not in script
+    assert "OPENFOAM_BUILD_PARALLELISM" not in script
+    assert "EXPERIMENT_METRICS_NATIVE_ROOT" not in script
