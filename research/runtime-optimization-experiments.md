@@ -483,6 +483,44 @@ ccache自体がreport生成を妨げた観測はないため、通常どおり�
 すべて`scotch-4n-448r`の公式workload、decomposition、MPI layout、runtime optionを固定し、
 公式VALID、FVOPS、s/step、solver/pipeline wall、iteration/residualを比較する。
 
+4条件のbuildはそれぞれ独立commitで作成し、optimization reportとbuild sidecarをhome
+artifactへ保存した。最初のproduction runではcase cache identityに`blockMesh`と
+`decomposePar`のbinary hashが含まれていたため、同一の448-way Scotch caseをcompiler
+条件ごとに再生成していた。caseの再利用単位として細かすぎるため、binary hashは生成時
+manifestのprovenanceには残しつつcache keyから除外した。RepeatではSapphire条件がcache
+`84aa9f2d...`を一度生成し、baselineとOptAVX512が同じcacheへhitした。
+
+4-node / 448-rank production結果は次の通りだった。
+
+| 条件 | Actions / PJM | 公式結果 | FVOPS_trim | s/step |
+|---|---|---|---:|---:|
+| baseline 1 | `31713165873` / `6475489` | VALID | 8.4488 M | 7.575 |
+| baseline 2 | `31727650541` / `6477310` | VALID | 8.4684 M | 7.558 |
+| OptAVX512 1 | `31713071455` / `6474982` | VALID | 8.3907 M | 7.628 |
+| OptAVX512 2 | `31727648006` / `6477311` | VALID | 8.3907 M | 7.628 |
+| Sapphire Rapids 1 | `31713168357` / `6476219` | VALID | 8.3117 M | 7.700 |
+| Sapphire Rapids 2 | `31727652725` / `6477308` | VALID | 8.3660 M | 7.650 |
+| OptAVX512 + ZMM high | `31713074738` / `6475034` | result未生成 | - | - |
+
+FVOPS中央値はbaseline 8.4586 M、OptAVX512 8.3907 M、Sapphire Rapids
+8.3389 Mで、baseline比はそれぞれ-0.80%、-1.42%だった。Baselineの2-run rangeは
+0.23%、Sapphire Rapidsは0.65%、OptAVX512は表示精度内で同値だった。いずれもbaselineを
+改善しないため棄却する。
+
+`-qopt-zmm-usage=high`条件はcase preparationを完了したが、solver開始直後の
+`Reading/calculating face flux field phi`で全rank規模のSIGFPEとなった。共通stackは
+`Foam::operator/`、`processorFvPatch::makeWeights`、
+`basicFvGeometryScheme::weights`で、scheduler exit codeは255、公式resultと
+`run-success`は生成されなかった。各node最大memoryは約23.4--23.6 GiBでOOMではない。
+通常OptAVX512が同じproduction条件でVALIDだったことから、この条件は数値挙動を維持せず
+棄却する。失敗raw artifactもhome serverへ退避済みである。
+
+Optimization reportでは主要loopのvector lengthがbaselineの2からOptAVX512および
+Sapphire Rapidsの4、ZMM highの8へ増えた。一方、ZMM highではPCG scalarSolveのregister
+spillがbaselineの25から39へ増えた。Vector幅の増加はmemory-boundな主要kernelの性能改善へ
+結び付かず、積極的なZMM利用は正しさも満たさなかった。したがってcompiler tuningだけで
+回収できる改善は確認できず、Issue #14の再profile対象も作らない。
+
 ## 実験template
 
 ### 実験ID
