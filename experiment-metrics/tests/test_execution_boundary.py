@@ -72,8 +72,11 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
 
     prepare = ROOT / "scripts/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)
-    assert "blockMesh" in prepare.read_text(encoding="utf-8")
-    assert "decomposePar" in prepare.read_text(encoding="utf-8")
+    prepare_text = prepare.read_text(encoding="utf-8")
+    assert "blockMesh" in prepare_text
+    assert "decomposePar" in prepare_text
+    assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in prepare_text
+    assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in prepare_text
     # The installed hardware probe has an env python3 shebang.  Genkai's
     # system Python is too old, so every direct or MPI-launched probe must
     # inherit the provisioned interpreter without changing the probe argv.
