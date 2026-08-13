@@ -79,3 +79,27 @@ DIC cell-gatherとPCG loop fusionの組合せを採用する。数値不変性�
 4 nodeでの反復改善、artifact archivalおよびcleanupはすべてE2E完了条件を満たした。
 利用側`main`はsource repositoryの一時的なexperiment branchではなく、統合後の`master`を
 checkoutして新規buildする。
+
+## main統合後の資格確認
+
+Source repositoryの`master`へmerge commit `7d59c05ec3af21853d094ef29285e23d27823671`を
+pushし、利用側`main`へmerge commit `aabccc1ffa4beab265360b976c70cc09e987058a`をpushした。
+利用側の最終tree差分は`research/**`だけだったためpush eventはpaths-ignoreとなったが、
+source内容は変わっている。そこでActions `31663467385`を`require_build=true`で明示的に
+dispatchし、過去archiveを再利用しない新規buildから標準1 node E2Eを実行した。
+
+Build sidecarはbuild definition `aabccc1...`、OpenFOAM source `7d59c05ec...`、ThirdParty
+source `ba502701...`を記録している。Run `r-d5241fd4393e3114f4a053e6aa1826ee`、solver PJM
+`6469460`は終了code 0でterminalとなり、公式parserは次を出力した。
+
+```text
+checks: End=1 nan_or_inf=0 steps=5/5 p_solves=10/10 solves_at_321_iters=10/10 ranks=120 nodes=1 cells=unverified
+STATUS: VALID
+RESULT: FVOPS_trim=1.7186M  s_per_step=37.240  trim_time=148.96s  steps=5  ranks=120  nodes=1
+```
+
+Pressure residual列とworkload manifestはbaselineと完全一致し、placement recordは120件、
+scheduler accountingは1 node、`EXT`、exit code 0だった。Build、provision、case preparation、
+solver、home archiveの全jobが成功し、実験由来のPJM jobは残っていない。これにより、
+experiment branchではなく両repositoryの既定ブランチから同じ最適化を再buildし、公式taskを
+完走できることを確認した。
