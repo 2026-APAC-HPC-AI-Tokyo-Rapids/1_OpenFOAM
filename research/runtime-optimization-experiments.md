@@ -416,6 +416,48 @@ renumber、MPI autotune用script/preset、およびそれらだけに必要だ�
 削除した。通常運用は採用済みの3つのScotch presetへ限定し、拒否候補の測定結果は本research
 記録と過去のActions artifactを正本として残す。
 
+### 主要kernelのHPC Performance Characterization
+
+主要kernelがmemory側か演算器側かを判定するため、通常benchとsoftware Hotspotsとは分離して
+VTune `hpc-performance`を同じ#334 build、4 node、448 rank、60秒上限で実行した。最初の
+hardware sampling実装はsoftware Hotspots用のPID attachを流用し、次にVTune直下へ対象rankを
+置いたが、玄界のIntel SEP driverは対象processの関数sampleを残さず、node-wide DRAM bandwidth
+だけで1,000 MB上限へ到達した。Actions #338--#345はこのcollector境界の診断runであり、性能
+結論には用いない。Full resultの`perfrun` logで`system-wide mode=0`、SEP選択、Perf無効化、
+`Total Thread Count=0`、関数CSV headerのみを確認した。
+
+Commit `766d4dd46432fe95e6ee23b9701328ca01d2ae00`では、HPC analysisだけstack collectionを有効に
+した。Intel VTune 2025.3.0はこれによりLinux Perf driverless collectionを選択し、VTune直下の
+`icoFoam` rankへcore eventを帰属できた。Software Hotspotsは従来どおりstackなしattachを維持
+する。確定runはrank 3のActions #346（run
+`r-34d9fc894ca09f4d7c24bc3c542bdb4f`、PJM `6471767`）とrank 365のActions #347
+（run `r-a0fa79f5768bac061c5dde276cb15b10`、PJM `6471920`）で、いずれも公式VALID、5/5 step、
+10/10 solve、collection/target exit 0、artifact回収、PJM cleanupまで完走した。関数reportは
+それぞれ388行、401行の実データを持つ。
+
+以下はVTuneがloopとして分離した同名function内のCPU time正値行を合計し、各指標をそのCPU
+timeで加重平均した値である。Memory Boundとその階層内訳はpipeline stallの分類であり、割合を
+単純加算する指標ではない。
+
+| Rank | Kernel | loop CPU time | Memory Bound | L3 Bound | DRAM Bound | packed FP | CPI |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 3 | DIC precondition | 2.795 s | 67.2% | 20.9% | 48.3% | 0.0% | 1.42 |
+| 3 | `lduMatrix::Amul` | 1.435 s | 64.9% | 23.7% | 43.6% | 14.3% | 1.52 |
+| 3 | PCG scalar solve | 0.620 s | 89.6% | 27.6% | 47.0% | 74.5% | 1.79 |
+| 365 | DIC precondition | 1.245 s | 68.5% | 21.3% | 49.4% | 0.0% | 1.6 |
+| 365 | `lduMatrix::Amul` | 0.625 s | 71.7% | 20.0% | 49.4% | 20.8% | 1.6 |
+| 365 | PCG scalar solve | 0.285 s | 67.3% | 20.9% | 58.2% | 86.9% | 1.8 |
+
+Run全体のMemory Boundもrank 3で58.7%、rank 365で60.4%とVTuneがhigh判定した。主要3 kernelは
+両rankですべて64%以上がMemory Boundで、L3/DRAM stallが大きい。DIC loopはpacked FP 0%、
+Amulも14--21%であり、PCG loopだけが75--87%までvector化されている。したがって現時点では
+演算器 throughputよりmemory hierarchy、特にDRAM/locality側が
+主要制約である。Rank 0だけに依存せず、interior rank 3と最大cross-node boundary rank 365で
+同じ分類になった。一方、summaryのDRAM bandwidth 383--385 GB/sは同居するnode全体のuncore
+値なので、選択rankや個別kernelへ帰属させない。次に深掘りする場合は、通常benchの引数を
+増やさず、同じ複数rank方針の独立したVTune Memory Access analysisでNUMA、local/remote DRAM、
+cache missを確認する。
+
 ## 実験template
 
 ### 実験ID
