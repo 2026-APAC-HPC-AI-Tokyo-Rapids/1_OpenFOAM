@@ -32,7 +32,6 @@ publish_sidecar_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.build-sidecar.js
 export CCACHE_BASEDIR="${build_tree}"
 export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
 export CCACHE_DIR="${ccache_local_dir}"
-export CCACHE_RECACHE=true
 export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 
 # ビルドが中断・失敗した場合も、一時 archive を削除する。

@@ -162,7 +162,7 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert 'test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"' in script
     assert "WM_COMPILE_CONTROL=+ccache" in script
     assert "CMAKE_CXX_COMPILER_LAUNCHER=ccache" in script
-    assert "CCACHE_RECACHE=true" in script
+    assert "CCACHE_RECACHE" not in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:
