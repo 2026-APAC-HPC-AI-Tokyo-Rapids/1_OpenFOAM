@@ -6,6 +6,18 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 
 
+def test_commands_do_not_use_line_continuations() -> None:
+    paths = [ROOT / ".github/workflows/genkai.yml"]
+    paths.extend((ROOT / "scripts").glob("*.sh"))
+    paths.extend((ROOT / "scripts").glob("*.pjm"))
+    paths.extend((ROOT / "benchmark").glob("*.sh"))
+    paths.extend((ROOT / "research").rglob("*.md"))
+
+    for path in paths:
+        continued = [number for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if line.endswith("\\")]
+        assert not continued, f"{path}: command continuation at lines {continued}"
+
+
 def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None:
     script = ROOT / "scripts/run-openfoam.pjm"
     text = script.read_text(encoding="utf-8")
@@ -138,3 +150,9 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "jq -r '.source_paths[]'" not in script
     assert "OPENFOAM_BUILD_PARALLELISM" not in script
     assert "EXPERIMENT_METRICS_NATIVE_ROOT" not in script
+
+
+def test_ruff_does_not_enforce_code_width() -> None:
+    config = (ROOT / "experiment-metrics/pyproject.toml").read_text(encoding="utf-8")
+    assert "line-length" not in config
+    assert 'ignore = ["E501"]' in config
