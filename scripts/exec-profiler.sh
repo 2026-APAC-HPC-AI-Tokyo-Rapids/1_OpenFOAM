@@ -28,8 +28,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     }
     trap terminate_target TERM INT
     set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false \
-      -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}"
+    "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}"
     vtune_status=$?
     wait "${target_pid}"
     target_status=$?
@@ -37,10 +36,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     ;;
   hpc-performance)
     set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance \
-      -knob enable-stack-collection=true -knob collect-memory-bandwidth=true \
-      -knob dram-bandwidth-limits=false -knob analyze-openmp=false \
-      -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
+    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth=true -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
     target_status=$?
     # -return-app-exitcode makes the CLI status authoritative for the target.
     # Report generation below independently validates the collection result.

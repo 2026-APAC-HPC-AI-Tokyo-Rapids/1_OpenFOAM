@@ -44,10 +44,7 @@
 辞書値はOpenFOAM自身に解釈させる。例えば`endTime`は次で取得する。
 
 ```bash
-LC_ALL=C foamDictionary \
-  -entry endTime \
-  -value \
-  system/controlDict
+LC_ALL=C foamDictionary -entry endTime -value system/controlDict
 ```
 
 各commandのstdoutから値を読み、辞書をcollector独自の文法で解析しない。
@@ -135,13 +132,7 @@ solverへ渡したpartitioned meshの厳密な識別子である。
 ### `checkMesh`の実行
 
 ```bash
-LC_ALL=C mpirun -np "${OPENFOAM_MPI_PROCS}" \
-  checkMesh \
-  -parallel \
-  -constant \
-  -allTopology \
-  -allGeometry \
-  -decomposeParDict system/decomposeParDict.6
+LC_ALL=C mpirun -np "${OPENFOAM_MPI_PROCS}" checkMesh -parallel -constant -allTopology -allGeometry -decomposeParDict system/decomposeParDict.6
 ```
 
 stdoutはファイルへ保存せず、pipeから1行ずつ読む。v2606にはJSON等の構造化出力が

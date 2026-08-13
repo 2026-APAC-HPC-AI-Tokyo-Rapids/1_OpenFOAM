@@ -71,8 +71,7 @@ do
   git -C "${build_tree}/OpenFOAM" cat-file -e "HEAD:${source_path}"
   cmp -- "${build_tree}/OpenFOAM/${source_path}" <(git -C "${build_tree}/OpenFOAM" show "HEAD:${source_path}")
 done < <(
-  jq -r '.components[].activation | select(.kind == "in_process_hook") | .source_path' \
-    "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json" |
+  jq -r '.components[].activation | select(.kind == "in_process_hook") | .source_path' "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json" |
     LC_ALL=C sort -u
 )
 
@@ -109,8 +108,7 @@ cd "${WM_PROJECT_DIR}"
 # ccache の統計をリセットしてから、cavity3D の前処理と実行に必要な
 # blockMesh、decomposePar、checkMesh、icoFoam とその依存だけをビルドする。
 ccache --zero-stats
-"${GITHUB_WORKSPACE}/scripts/build-profiler.sh" "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" \
-  "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
+"${GITHUB_WORKSPACE}/scripts/build-profiler.sh" "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
   build_status=$?
   grep -Eai -m 200 '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' "${BUILD_DIR}/logs/allwmake.log" >&2 || true
   exit "${build_status}"
@@ -127,20 +125,11 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" \
-  --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" \
-  --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" \
-  --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" \
-  --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" \
-  --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" \
-  --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" \
-  --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" \
-  --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
-"${metrics_cli}" finalize-build-sidecar \
-  --state "${build_state}" --archive "${publish_tmp}" --output "${publish_sidecar_tmp}"
+"${metrics_cli}" finalize-build-sidecar --state "${build_state}" --archive "${publish_tmp}" --output "${publish_sidecar_tmp}"
 mv -- "${publish_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
 mv -- "${publish_sidecar_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.build-sidecar.json"
 echo "Published ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"

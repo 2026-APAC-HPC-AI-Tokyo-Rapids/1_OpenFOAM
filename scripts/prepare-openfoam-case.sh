@@ -35,9 +35,7 @@ SOURCE_IDENTITY=$(
 BLOCK_MESH_SHA256=$(sha256sum "${BLOCK_MESH}" | awk '{print $1}')
 DECOMPOSE_PAR_SHA256=$(sha256sum "${DECOMPOSE_PAR}" | awk '{print $1}')
 CACHE_IDENTITY=$(
-    printf '%s\n' "prepare=${SCRIPT_SHA256}" "source=${SOURCE_IDENTITY}" \
-        "blockMesh=${BLOCK_MESH_SHA256}" "decomposePar=${DECOMPOSE_PAR_SHA256}" \
-        "subdomains=${NUMBER_OF_SUBDOMAINS}" 'method=scotch' 'fileHandler=uncollated' |
+    printf '%s\n' "prepare=${SCRIPT_SHA256}" "source=${SOURCE_IDENTITY}" "blockMesh=${BLOCK_MESH_SHA256}" "decomposePar=${DECOMPOSE_PAR_SHA256}" "subdomains=${NUMBER_OF_SUBDOMAINS}" 'method=scotch' 'fileHandler=uncollated' |
         sha256sum |
         awk '{print $1}'
 )
@@ -123,11 +121,7 @@ if ! cache_valid; then
         "${DECOMPOSE_PAR}" -fileHandler uncollated -decomposeParDict system/decomposeParDict.6 -force > logs/decomposePar.log 2>&1
     )
     printf '%s\n' "${CACHE_IDENTITY}" > "${TEMP_DIR}/READY"
-    jq -n --arg cache_identity "${CACHE_IDENTITY}" --arg prepare_script_sha256 "${SCRIPT_SHA256}" \
-        --arg source_identity "${SOURCE_IDENTITY}" --arg block_mesh_sha256 "${BLOCK_MESH_SHA256}" \
-        --arg decompose_par_sha256 "${DECOMPOSE_PAR_SHA256}" --argjson number_of_subdomains "${NUMBER_OF_SUBDOMAINS}" \
-        '{schema_version:"openfoam-case-cache/v2",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,source_identity:$source_identity,block_mesh_sha256:$block_mesh_sha256,decompose_par_sha256:$decompose_par_sha256,number_of_subdomains:$number_of_subdomains,method:"scotch",file_handler:"uncollated"}' \
-        > "${TEMP_DIR}/manifest.json"
+    jq -n --arg cache_identity "${CACHE_IDENTITY}" --arg prepare_script_sha256 "${SCRIPT_SHA256}" --arg source_identity "${SOURCE_IDENTITY}" --arg block_mesh_sha256 "${BLOCK_MESH_SHA256}" --arg decompose_par_sha256 "${DECOMPOSE_PAR_SHA256}" --argjson number_of_subdomains "${NUMBER_OF_SUBDOMAINS}" '{schema_version:"openfoam-case-cache/v2",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,source_identity:$source_identity,block_mesh_sha256:$block_mesh_sha256,decompose_par_sha256:$decompose_par_sha256,number_of_subdomains:$number_of_subdomains,method:"scotch",file_handler:"uncollated"}' > "${TEMP_DIR}/manifest.json"
     find "${TEMP_DIR}/case" -type f -exec chmod a-w {} +
     find "${TEMP_DIR}/case" -type d -exec chmod a-w {} +
     if [[ -e "${CACHE_DIR}" ]]; then

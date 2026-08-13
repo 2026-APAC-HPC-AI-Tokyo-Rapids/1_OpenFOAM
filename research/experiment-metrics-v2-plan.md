@@ -340,8 +340,7 @@ bench/profileのsolver本処理が成功した場合に限り、同じallocation
 共通capture runnerはそのargvを変更せず起動する。初版のIMB subcommandは次に固定する。
 
 ```text
-IMB-MPI1 -npmin <solverと同じMPI process数> -msglog 0:22 -iter 1000 -time 1 \
-  -iter_policy dynamic PingPong Sendrecv Allreduce
+IMB-MPI1 -npmin <solverと同じMPI process数> -msglog 0:22 -iter 1000 -time 1 -iter_policy dynamic PingPong Sendrecv Allreduce
 ```
 
 0 byteおよび1 byteから4 MiBまでの2冪を対象とし、IMB stdout/stderr、完全なargvを

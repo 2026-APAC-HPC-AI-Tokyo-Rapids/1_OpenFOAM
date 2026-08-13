@@ -33,13 +33,7 @@ PJMの全環境変数は[実行環境モジュール](03-platform.md)が`env.*`�
 runnerでジョブ終了後、次を実行する。
 
 ```bash
-LC_ALL=C pjstat \
-  --history \
-  -S \
-  --choose jid,st,sdt,elp,ec,sn,pc,nnumu,mmszu,uctmut,sctmut \
-  --data \
-  --delimiter $'\t' \
-  "${PJM_JOB_ID}"
+LC_ALL=C pjstat --history -S --choose jid,st,sdt,elp,ec,sn,pc,nnumu,mmszu,uctmut,sctmut --data --delimiter $'\t' "${PJM_JOB_ID}"
 ```
 
 `--data`はPJMが提供するprocessed formであり、表示桁位置には依存しない。

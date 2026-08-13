@@ -56,16 +56,14 @@ export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
 test -f "${RUN_MANIFEST}"
-install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" \
-  "${OPENFOAM_METRICS_PSTREAM_DIR}" "${RUN_DIR}/domain"
+install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${OPENFOAM_METRICS_PSTREAM_DIR}" "${RUN_DIR}/domain"
 "${METRICS_CLI}" supervisor-start --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}"
 finish_supervisor() {
   local original_status=$?
   local finish_status=0
   trap - EXIT
   set +e
-  "${METRICS_CLI}" supervisor-finish --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" \
-    --registry "${REGISTRY}" --exit-code "${original_status}"
+  "${METRICS_CLI}" supervisor-finish --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --registry "${REGISTRY}" --exit-code "${original_status}"
   finish_status=$?
   if [[ "${original_status}" -eq 0 && "${finish_status}" -ne 0 ]]; then
     original_status=${finish_status}
@@ -73,8 +71,7 @@ finish_supervisor() {
   exit "${original_status}"
 }
 trap finish_supervisor EXIT
-"${METRICS_CLI}" validate-bundle-runtime --manifest "${RUN_MANIFEST}" \
-  --bundle "${RUN_DIR}/control/instrumentation-bundle.json" --registry "${REGISTRY}" --artifact-root "${PROVISION_DIR}"
+"${METRICS_CLI}" validate-bundle-runtime --manifest "${RUN_MANIFEST}" --bundle "${RUN_DIR}/control/instrumentation-bundle.json" --registry "${REGISTRY}" --artifact-root "${PROVISION_DIR}"
 
 # One exact argv is given directly to StageRunner; stdout and stderr are a
 # single durable record rather than a shell pipeline with ambiguous status.
@@ -82,9 +79,7 @@ stage() {
   local stage_name=$1
   local stdout_path=$2
   shift 2
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" \
-    --producer stage.runner --stage "${stage_name}" --cwd "${CASE_DIR}" \
-    --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage "${stage_name}" --cwd "${CASE_DIR}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
 stage_at() {
@@ -92,9 +87,7 @@ stage_at() {
   local stdout_path=$2
   local cwd=$3
   shift 3
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" \
-    --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" \
-    --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
 # This launch-effective value is captured at host-exec and per rank.
@@ -136,17 +129,12 @@ CHECK_MESH=$(command -v checkMesh)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
-for executable in "${MPIEXEC}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${ICO_FOAM}" \
-  "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}" "${CAPTURE_HARDWARE}"
+for executable in "${MPIEXEC}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${ICO_FOAM}" "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}" "${CAPTURE_HARDWARE}"
 do
   [[ "${executable}" == /* && -x "${executable}" ]]
 done
 
-provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" \
-  --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" \
-  --executable "icoFoam=${ICO_FOAM}" --executable "blockMesh=${BLOCK_MESH}" --executable "decomposePar=${DECOMPOSE_PAR}" \
-  --executable "checkMesh=${CHECK_MESH}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" \
-  --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
+provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "icoFoam=${ICO_FOAM}" --executable "blockMesh=${BLOCK_MESH}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
   (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
@@ -156,23 +144,19 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
-"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-  --registry "${REGISTRY}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" \
-  || printf '%s\n' 'build provision metrics could not be recorded' >&2
+"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
 
 cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 # Seal the exact seven workload-defining files after setup and before the
 # first OpenFOAM stage reads the case.
-"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" \
-  --output-root "${SOURCE_DIR}/workload" --registry "${REGISTRY}"
+"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --output-root "${SOURCE_DIR}/workload" --registry "${REGISTRY}"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
   *-scotch-1n-120r | *-scotch-2n-240r | *-scotch-4n-448r)
-    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
-      "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${OPENFOAM_MPI_PROCS}")
+    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${OPENFOAM_MPI_PROCS}")
     ;;
   *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
@@ -193,18 +177,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
   # profiler, which launches icoFoam directly so VTune follows the solver
   # rather than the Python placement process.
-  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" \
-    "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper \
-    --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
-    --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" \
-    --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- \
-    "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 else
-  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" \
-    "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper \
-    --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" \
-    --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" -- \
-    "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 fi
 solver_status=$?
 set -e
@@ -230,12 +205,9 @@ grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
 # Reuse the small, durable preparation logs.  Never reopen or hash the 64M-cell
 # serial/processor meshes just to collect metrics.
-"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" \
-  --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --block-mesh-log "${LOG_DIR}/blockMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" \
-  || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
+"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --block-mesh-log "${LOG_DIR}/blockMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
 
-minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" \
-  --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
+minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then
   minimal_hardware_argv+=(--node-ordinal 0)
 else
@@ -252,26 +224,18 @@ set -e
 if [[ "${minimal_hardware_status}" -ne 0 ]]; then
   printf '%s\n' 'minimal hardware capture failed; solver result remains valid' >&2
 else
-  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-    --registry "${REGISTRY}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" \
-    || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
+  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e
-  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" \
-    "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" \
-    --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" \
-    --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" \
-    --node-ordinal-from-env PMI_RANK
+  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env PMI_RANK
   profile_hardware_status=$?
   set -e
   if [[ "${profile_hardware_status}" -ne 0 ]]; then
     printf '%s\n' 'profile hardware capture failed; solver result remains valid' >&2
   else
-    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-      --registry "${REGISTRY}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" \
-      || printf '%s\n' 'profile hardware metrics could not be recorded' >&2
+    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'profile hardware metrics could not be recorded' >&2
   fi
 fi
 
@@ -291,17 +255,11 @@ if [[ -n "${imb_bin}" ]]; then
   )
   "${METRICS_CLI}" capture-argv --manifest "${RUN_MANIFEST}" --output "${IMB_ARGV}" -- "${imb_argv[@]}"
   set +e
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" \
-    --registry "${REGISTRY}" --producer stage.runner --stage network_imb_mpi1 --cwd "${CASE_DIR}" \
-    --stderr-mode separate --stdout-path "${IMB_STDOUT}" \
-    --stderr-path "${IMB_STDERR}" --timeout-sec 600 -- "${imb_argv[@]}"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage network_imb_mpi1 --cwd "${CASE_DIR}" --stderr-mode separate --stdout-path "${IMB_STDOUT}" --stderr-path "${IMB_STDERR}" --timeout-sec 600 -- "${imb_argv[@]}"
   imb_status=$?
   set -e
   if [[ "${imb_status}" -eq 0 ]]; then
-    "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" \
-      --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" \
-      --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt \
-      ||
+    "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt ||
       printf '%s\n' 'IMB output was not a complete canonical capture' >&2
   else
     printf '%s\n' "IMB-MPI1 stage failed (${imb_status}); collection will be incomplete" >&2

@@ -33,15 +33,9 @@ I_MPI_FABRICS=shm
 ## OpenFOAM辞書の取得
 
 ```bash
-LC_ALL=C foamDictionary \
-  -entry method \
-  -value \
-  system/decomposeParDict.6
+LC_ALL=C foamDictionary -entry method -value system/decomposeParDict.6
 
-LC_ALL=C foamDictionary \
-  -entry numberOfSubdomains \
-  -value \
-  system/decomposeParDict.6
+LC_ALL=C foamDictionary -entry numberOfSubdomains -value system/decomposeParDict.6
 ```
 
 各commandのstdoutから値を読み、`numberOfSubdomains`は整数として保存する。

@@ -31,9 +31,7 @@ src/Pstream/Allwmake
 wmake -j "${build_parallelism}" src/OpenFOAM
 
 # Shared mesh and finite-volume libraries required by the task commands.
-for library in src/fileFormats src/surfMesh src/meshTools src/finiteArea src/finiteVolume \
-  src/mesh/blockMesh src/mesh/extrudeModel src/dynamicMesh src/genericPatchFields \
-  src/parallel/decompose/decompositionMethods src/lagrangian/basic
+for library in src/fileFormats src/surfMesh src/meshTools src/finiteArea src/finiteVolume src/mesh/blockMesh src/mesh/extrudeModel src/dynamicMesh src/genericPatchFields src/parallel/decompose/decompositionMethods src/lagrangian/basic
 do
   wmake -j "${build_parallelism}" "${library}"
 done
@@ -49,9 +47,7 @@ do
 done
 src/parallel/decompose/Allwmake
 
-for application in applications/utilities/mesh/generation/blockMesh \
-  applications/utilities/parallelProcessing/decomposePar applications/utilities/mesh/manipulation/checkMesh \
-  applications/solvers/incompressible/icoFoam
+for application in applications/utilities/mesh/generation/blockMesh applications/utilities/parallelProcessing/decomposePar applications/utilities/mesh/manipulation/checkMesh applications/solvers/incompressible/icoFoam
 do
   wmake -j "${build_parallelism}" "${application}"
 done
