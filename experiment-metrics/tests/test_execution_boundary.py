@@ -158,7 +158,10 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "build_compile_option=Opt" in script
     assert "build_tuning_flags='-march=sapphirerapids -mtune=sapphirerapids'" in script
     assert "-qopt-report-phase=loop,vec,cg" in script
-    assert 'export CCACHE_RECACHE=true' in script
+    assert 'FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"' in script
+    assert 'test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"' in script
+    assert "WM_COMPILE_CONTROL=+ccache" not in script
+    assert "CMAKE_CXX_COMPILER_LAUNCHER" not in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:
