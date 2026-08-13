@@ -1,444 +1,390 @@
-# cavity3D-64M runtime optimization experiment ledger
+# cavity3D-64M runtime最適化実験台帳
 
-This ledger is updated after every completed experiment or decisive static
-investigation.  Timing claims use official valid bench results only.
+本台帳は、実験の完了または決定的なstatic調査のたびに更新する。Timingに関する主張
+には、公式にvalidと判定されたbench結果だけを使用する。
 
-## Status
+## 状況
 
-- Current phase: Phase 0 noise confirmation and Phase 1 full-core screening.
-- Current build: existing OpenFOAM v2606 Icx/Intel MPI archive; reuse intended.
-- Current production preset: one node, 120 total ranks, Scotch,
-  `I_MPI_FABRICS=shm`.
-- Active hypothesis: the fixed 120-rank canary configuration underuses two- and
-  four-node allocations; full physical-core layouts should dominate before
-  smaller MPI runtime adjustments matter.
-- The first full-core screen at commit `948e11f` is complete.  Two nodes/240
-  ranks produced 3.3997 M FVOPS and four nodes/480 ranks produced 6.8139 M;
-  both were valid.  A concurrent one-node repeat produced 1.6996 M.
-- Repeat full-core workflows `31634782784` (2/240) and `31634785406`
-  (4/480) are active at commit `a5390da`.  The next controlled factor is
-  four nodes/448 ranks, with one CPU deliberately reserved in each NUMA domain.
+- 現在のphase：Phase 0のnoise確認およびPhase 1のfull-core screening。
+- 現在のbuild：既存のOpenFOAM v2606 Icx/Intel MPI archive。再利用予定。
+- 現在のproduction preset：1 node、総rank数120、Scotch、`I_MPI_FABRICS=shm`。
+- 現在のhypothesis：120 rank固定のcanary構成では2および4 nodeの割当を十分に利用
+  できない。小さなMPI runtime調整を行う前に、physical coreを使い切るlayoutが優位に
+  なるはずである。
+- commit `948e11f`での最初のfull-core screenは完了した。2 node/240 rankで
+  3.3997 M FVOPS、4 node/480 rankで6.8139 Mを得て、いずれもvalidだった。同時実行
+  した1 node repeatでは1.6996 Mだった。
+- commit `a5390da`でfull-core workflow `31634782784`（2/240）と
+  `31634785406`（4/480）をrepeat中である。次のcontrolled factorは4 node/448 rank
+  で、各NUMA domainにつき1 CPUを意図的に予約する。
 
-## Prior evidence admitted to the study
+## 本研究に採用した既存evidence
 
-| Evidence | Changed factor | Result | Decision |
+| Evidence | 変更要因 | 結果 | 判断 |
 |---|---|---|---|
-| Actions 256 / run `r-c4bb4bb3c51a6a6724aa7177ea1d01e6` | 1 node, 120 Scotch ranks | VALID, 1.6398 M FVOPS | baseline sample |
-| Actions 257 / run `r-fef72f7255e44a077f5fa2b1b115b0df` | 2 nodes, still 120 ranks | VALID, 3.1718 M FVOPS | canary only; not full-core baseline |
-| Actions 258 / run `r-c2aef4bc0f5dd083a8790751af269342` | 4 nodes, still 120 ranks | VALID, 4.9488 M FVOPS | canary only; not full-core baseline |
-| Actions 277 / run `r-efdfb255f9d7c78e7eb9c7df59bcab5c` | repeat 1 node/120 | VALID, 1.6392 M FVOPS | agrees within 0.04% |
-| Actions 278 / run `r-49e4a417a55f2278a211f483d720b391` | VTune rank 0 | VALID profile; DIC 45.8%, Amul 26.1% | locality dominates sampled rank |
-| Actions 279 / run `r-6227d22fbc780cd0ad71df88fd19ed2c` | post-merge 1 node/120 | VALID, 1.6270 M FVOPS | baseline sample; about 0.8% below 1.6398 M |
-| Actions 280 / run `r-321efbd20828499c944ad987c4170a68` | named `scotch-1n-120r` preset and content-addressed 120-way case cache | VALID, 1.6400 M FVOPS, 39.025 s/step | new preset path agrees with prior baseline; advance to concurrent full-core screening |
-| Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2 nodes, 240 Scotch ranks | VALID, 3.3997 M FVOPS, 18.825 s/step | 7.2% above the old 2-node/120-rank canary; repeat before accepting because current one-node range is 4.4% |
-| Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4 nodes, 480 Scotch ranks | VALID, 6.8139 M FVOPS, 9.393 s/step | 37.7% above the old 4-node/120-rank canary; retain full-core layout |
-| Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1-node named-preset repeat, cache hit | VALID, 1.6996 M FVOPS, 37.655 s/step | unexpectedly fast but valid; use the observed 4.4% range as the provisional noise threshold |
-| Actions 284 / run `r-c500507dc433575dde90bfcb4073be8f` | 2-node/240-rank repeat, cache hit | VALID, 3.4015 M FVOPS, 18.815 s/step | agrees with the first 3.3997 M result within 0.05%; accept full-core two-node layout |
-| Actions 285 / run `r-95df043fc37d34b11df231699019ce85` | 4-node/480-rank repeat, cache hit | VALID, 7.8264 M FVOPS, 8.178 s/step | 14.9% above the first repeat; full-core gain is certain but four-node noise requires alternating repeats |
-| Actions 286 / run `r-8bf1d07cc38e52ced65c4cf1095bfc52` | 4 nodes, 448 Scotch ranks, balanced NUMA reserve | VALID, 8.0025 M FVOPS, 7.997 s/step | 2.25% above the adjacent 480-rank result but within observed four-node range; repeat before adoption |
+| Actions 256 / run `r-c4bb4bb3c51a6a6724aa7177ea1d01e6` | 1 node、120 Scotch rank | VALID、1.6398 M FVOPS | baseline sample |
+| Actions 257 / run `r-fef72f7255e44a077f5fa2b1b115b0df` | 2 node、引き続き120 rank | VALID、3.1718 M FVOPS | canaryのみ。full-core baselineではない |
+| Actions 258 / run `r-c2aef4bc0f5dd083a8790751af269342` | 4 node、引き続き120 rank | VALID、4.9488 M FVOPS | canaryのみ。full-core baselineではない |
+| Actions 277 / run `r-efdfb255f9d7c78e7eb9c7df59bcab5c` | 1 node/120のrepeat | VALID、1.6392 M FVOPS | 0.04%以内で一致 |
+| Actions 278 / run `r-49e4a417a55f2278a211f483d720b391` | VTune rank 0 | VALID profile、DIC 45.8%、Amul 26.1% | sampling対象rankはlocality律速 |
+| Actions 279 / run `r-6227d22fbc780cd0ad71df88fd19ed2c` | merge後の1 node/120 | VALID、1.6270 M FVOPS | baseline sample。1.6398 Mより約0.8%低い |
+| Actions 280 / run `r-321efbd20828499c944ad987c4170a68` | named `scotch-1n-120r` presetとcontent-addressed 120-way case cache | VALID、1.6400 M FVOPS、39.025 s/step | 新preset pathは従来baselineと一致。並行full-core screeningへ進む |
+| Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2 node、240 Scotch rank | VALID、3.3997 M FVOPS、18.825 s/step | 従来の2-node/120-rank canaryを7.2%上回る。現在の1-node rangeが4.4%のため、採用前にrepeatする |
+| Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4 node、480 Scotch rank | VALID、6.8139 M FVOPS、9.393 s/step | 従来の4-node/120-rank canaryを37.7%上回る。full-core layoutを維持 |
+| Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1-node named-preset repeat、cache hit | VALID、1.6996 M FVOPS、37.655 s/step | 予想外に速いがvalid。観測した4.4% rangeを暫定noise thresholdとする |
+| Actions 284 / run `r-c500507dc433575dde90bfcb4073be8f` | 2-node/240-rank repeat、cache hit | VALID、3.4015 M FVOPS、18.815 s/step | 最初の3.3997 Mと0.05%以内で一致。full-core 2-node layoutを採用 |
+| Actions 285 / run `r-95df043fc37d34b11df231699019ce85` | 4-node/480-rank repeat、cache hit | VALID、7.8264 M FVOPS、8.178 s/step | 最初のrepeatを14.9%上回る。full-coreの改善は確実だが、4-node noiseのため交互にrepeatする |
+| Actions 286 / run `r-8bf1d07cc38e52ced65c4cf1095bfc52` | 4 node、448 Scotch rank、balanced NUMA reserve | VALID、8.0025 M FVOPS、7.997 s/step | 隣接する480-rank結果を2.25%上回るが、観測済み4-node range内。採用前にrepeatする |
 
-## Infrastructure observation: Actions 280
+## 基盤に関する観測：Actions 280
 
-- Date and commit: 2026-08-13 JST, `948e11f`.
-- Actions / PJM: `31627088350`; preparation job `6467089`; solver job
-  `6467176`.
-- Case preparation: cache miss; `blockMesh` plus 120-way Scotch decomposition
-  completed in the 30-minute PJM limit.  The Actions preparation job took
-  20m29s and published cache
-  `daba43a5b54c39cda0874fdff2f9c7f6d06200d8e34f8266eada33194b3a235f`.
-- Solver: official result `STATUS: VALID`, `FVOPS_trim=1.6400M`,
-  `s_per_step=39.025`, `trim_time=156.1s`, five of five steps and 120 ranks on
-  one node.
-- Integrity: `run-success` exists; all required Actions jobs succeeded; fixed
-  v2 and official result artifacts were uploaded and copied to the home
-  archive; GitHub copies were then removed as designed.  PJM job `6467176` was
-  absent from `pjstat` after completion.
-- Interpretation: the preset/cache generalization did not measurably perturb
-  the reference result.  Case preparation, not the five-step solver, dominated
-  this first cache-miss pipeline, so immutable decomposition reuse is material
-  to the experiment campaign.
-- Decision: retain this result as a Phase 0 sample and proceed without a build
-  to `scotch-2n-240r` and `scotch-4n-480r`.  One additional 1-node repeat was
-  submitted to complete the planned current-workflow noise sample count.
+- 日付とcommit：2026-08-13 JST、`948e11f`。
+- Actions / PJM：`31627088350`、preparation job `6467089`、solver job
+  `6467176`。
+- Case preparation：cache miss。`blockMesh`と120-way Scotch decompositionは
+  30分のPJM制限内に完了した。Actions preparation jobは20m29sを要し、cache
+  `daba43a5b54c39cda0874fdff2f9c7f6d06200d8e34f8266eada33194b3a235f`を公開した。
+- Solver：公式結果は`STATUS: VALID`、`FVOPS_trim=1.6400M`、
+  `s_per_step=39.025`、`trim_time=156.1s`。1 node上で5/5 step、120 rank。
+- 健全性：`run-success`が存在し、必要なActions jobはすべて成功した。固定のv2および
+  公式result artifactはuploadされ、home archiveへcopyされた後、設計どおりGitHub上の
+  copyを削除した。PJM job `6467176`は完了後の`pjstat`に存在しなかった。
+- 解釈：preset/cacheの一般化はreference resultを測定可能な範囲で変化させなかった。
+  最初のcache-miss pipelineでは5-step solverよりcase preparationが支配的であり、
+  immutable decompositionの再利用は実験campaignにとって重要である。
+- 判断：この結果をPhase 0 sampleとして保持し、buildせず`scotch-2n-240r`と
+  `scotch-4n-480r`へ進む。計画した現workflowでのnoise sample数を満たすため、
+  1-node repeatをもう1件投入した。
 
-## Phase 0 result: provisional noise range
+## Phase 0結果：暫定noise range
 
-The five comparable valid one-node results currently available are 1.6270,
-1.6392, 1.6398, 1.6400, and 1.6996 M FVOPS.  Their median is 1.6398 M and their
-minimum-to-maximum span is 4.4% of the median.  The most recent result is 3.6%
-above the median, so it cannot be discarded as an invalid outlier without a
-measured environmental cause.  Until alternating repeats narrow this range,
-candidate improvements below 4.4% are treated as indistinguishable.
+現在利用可能な比較可能かつvalidな1-node結果5件は、1.6270、1.6392、1.6398、
+1.6400、1.6996 M FVOPSである。medianは1.6398 M、minimum-to-maximum spanはmedianの
+4.4%である。最新結果はmedianより3.6%高いため、測定されたenvironmental causeなしに
+invalidなoutlierとして除外できない。交互のrepeatでこのrangeが狭まるまでは、4.4%
+未満のcandidate改善を区別不能として扱う。
 
-## Phase 1 screen: full physical cores
+## Phase 1 screen：physical coreをすべて使用
 
-All three concurrently dispatched workflows reached terminal success,
-including official parsing, fixed artifact upload, and home-server archival.
-The preparation jobs remained serialized to protect the shared filesystem;
-solver work could proceed as soon as its own immutable cache was published.
+同時にdispatchした3 workflowはすべて、公式parse、固定artifact upload、home-server
+archivalを含めterminal successに達した。共有filesystemを保護するためpreparation job
+は直列のままとし、solverは自身のimmutable cacheが公開され次第実行できた。
 
-| Actions | Nodes/ranks | Prepare PJM/cache | Solver PJM/run | Official result | Solver/pipeline wall |
+| Actions | Node/rank | Prepare PJM/cache | Solver PJM/run | 公式結果 | Solver/pipeline wall |
 |---:|---:|---|---|---|---|
-| 281 (`31629648195`) | 2 / 240 | `6467212`, cache miss, `a69a992f...` | `6467289`, `r-0af1f803cd25cfc680fed74ca4a2e067` | VALID, 3.3997 M, 18.825 s/step | 121.824 / 123.490 s |
-| 282 (`31629651069`) | 4 / 480 | `6467287`, cache miss, `25d0ec32...` | `6467377`, `r-91ee8cc4584bd7464cfc3a82b2a405fa` | VALID, 6.8139 M, 9.393 s/step | 56.860 / 58.525 s |
-| 283 (`31629672240`) | 1 / 120 | `6467376`, cache hit, `daba43a5...` | `6467389`, `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | VALID, 1.6996 M, 37.655 s/step | 202.274 / 203.950 s |
+| 281 (`31629648195`) | 2 / 240 | `6467212`、cache miss、`a69a992f...` | `6467289`、`r-0af1f803cd25cfc680fed74ca4a2e067` | VALID、3.3997 M、18.825 s/step | 121.824 / 123.490 s |
+| 282 (`31629651069`) | 4 / 480 | `6467287`、cache miss、`25d0ec32...` | `6467377`、`r-91ee8cc4584bd7464cfc3a82b2a405fa` | VALID、6.8139 M、9.393 s/step | 56.860 / 58.525 s |
+| 283 (`31629672240`) | 1 / 120 | `6467376`、cache hit、`daba43a5...` | `6467389`、`r-0cb4e46f0158a5bf0437f6c1bf5b1106` | VALID、1.6996 M、37.655 s/step | 202.274 / 203.950 s |
 
-The 240-way Scotch partition has 3,529,391 unique interface faces, 1,372 rank
-pairs, 11.43 mean and 19 maximum neighbours, 264,000--269,332 cells/rank, and
-303,351 faces crossing the consecutive 120-rank node boundary.  The 480-way
-partition has 4,653,839 unique interface faces, 2,998 rank pairs, 12.49 mean
-and 23 maximum neighbours, 131,931--134,666 cells/rank, and 727,567 faces
-crossing the three consecutive 120-rank node boundaries.  Captured placement
-confirms exactly 120 local ranks and one distinct CPU per rank on each node.
+240-way Scotch partitionはunique interface face 3,529,391、rank pair 1,372、平均
+neighbour 11.43、最大19、264,000--269,332 cells/rankであり、連続する120-rank node
+境界を跨ぐfaceは303,351だった。480-way partitionはunique interface face 4,653,839、
+rank pair 2,998、平均neighbour 12.49、最大23、131,931--134,666 cells/rankであり、
+連続する3つの120-rank node境界を跨ぐfaceは727,567だった。取得したplacementから、
+各nodeでlocal rankが正確に120個、rankごとに異なるCPUが1個ずつであることを確認した。
 
-Relative to the old fixed-120-rank canaries, 240 ranks improved two-node FVOPS
-by 7.2%, while 480 ranks improved four-node FVOPS by 37.7%.  Relative to the
-1.6400 M validation run, the first full-core results scale by 2.07x and 4.15x.
-The four-node result is decisively beyond measured noise and full-core rank
-occupancy is retained.  The smaller two-node gain requires a repeat.  The next
-decomposition phase should target the rapidly increasing interface count and
-make rank groups correspond to node and NUMA geometry.
+従来の120-rank固定canaryと比べ、240 rankでは2-node FVOPSが7.2%、480 rankでは
+4-node FVOPSが37.7%改善した。1.6400 Mのvalidation runに対し、最初のfull-core結果は
+2.07xおよび4.15xにscaleした。4-node結果は測定noiseを明確に上回るためfull-core rank
+occupancyを維持する。改善幅が小さい2-node結果はrepeatを必要とする。次のdecomposition
+phaseでは、急増するinterface countを対象とし、rank groupをnodeおよびNUMA geometryに
+対応させるべきである。
 
-## Phase 2 setup: balanced 112 ranks/node
+## Phase 2準備：balanced 112 ranks/node
 
-The compute-node hardware capture maps NUMA nodes 0--7 to consecutive 15-CPU
-ranges `0-14`, `15-29`, ..., `105-119`.  A generic 448-rank launch would use
-CPUs 0--111 and concentrate all eight idle CPUs at the end of the final NUMA
-domain.  Preset `scotch-4n-448r` instead binds local ranks to
-`0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118`, reserving the final CPU
-of every NUMA domain.  This changes rank count and balanced CPU reservation
-together as the intended Phase 2 resource layout; decomposition remains
-Scotch and transport remains `shm:ofi`.  Captured per-rank placement must show
-exactly this set on all four nodes before its score is compared with 480 ranks.
+compute-node hardware captureでは、NUMA node 0--7が連続した15-CPU range `0-14`、
+`15-29`、...、`105-119`に対応する。一般的な448-rank launchではCPU 0--111を使い、
+idleな8 CPUすべてが最後のNUMA domain末尾に集中する。Preset `scotch-4n-448r`では
+代わりにlocal rankを`0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118`へbindし、
+各NUMA domainの最後のCPUを予約する。これはPhase 2で意図したresource layoutとして、
+rank数とbalanced CPU reservationを同時に変更する。DecompositionはScotch、transportは
+`shm:ofi`のままとする。480 rankとのscore比較前に、全4 nodeでrankごとのplacementが
+このsetと完全に一致することを確認する。
 
-Actions 286 (`31635007954`) verified the intended placement on all four nodes:
-112 distinct CPUs per node and CPUs 14, 29, 44, 59, 74, 89, 104, and 119
-absent.  Preparation PJM `6467443` published cache `1170485d...`; solver PJM
-`6467537` produced run `r-8bf1d07cc38e52ced65c4cf1095bfc52` with official
-`STATUS: VALID`, 8.0025 M FVOPS, 51.385 s solver wall, and 53.056 s pipeline
-wall.  The 448-way partition has 4,537,155 interface faces, 2,797 rank pairs,
-139,315--144,285 cells/rank, and 704,792 faces crossing consecutive 112-rank
-node groups.  Actions and home-server artifact archival both succeeded and no
-experiment-owned PJM job remained.
+Actions 286（`31635007954`）では、全4 nodeで意図したplacementを確認した。Nodeごとに
+異なる112 CPUを使い、CPU 14、29、44、59、74、89、104、119は不使用だった。
+Preparation PJM `6467443`はcache `1170485d...`を公開し、solver PJM `6467537`は
+run `r-8bf1d07cc38e52ced65c4cf1095bfc52`で公式`STATUS: VALID`、8.0025 M FVOPS、
+solver wall 51.385 s、pipeline wall 53.056 sを得た。448-way partitionはinterface face
+4,537,155、rank pair 2,797、139,315--144,285 cells/rankで、連続する112-rank node
+groupを跨ぐfaceは704,792だった。Actionsとhome-server artifact archivalはいずれも成功し、
+実験が所有するPJM jobは残らなかった。
 
-This single result is 2.25% above the adjacent 7.8264 M 480-rank repeat, but
-the two 480-rank results themselves span 14.9%.  Therefore reserving one core
-per NUMA domain remains promising rather than accepted.  It disproves the
-stronger assumption that using fewer than all cores must clearly regress this
-workload and warrants an alternating 448/480 repeat after the partition screen.
+この単一結果は隣接する7.8264 Mの480-rank repeatを2.25%上回るが、2件の480-rank
+結果自体に14.9%の幅がある。したがって、NUMA domainごとに1 coreを予約する案は有望
+ではあるが未採用である。全coreを使わないと本workloadが明確に悪化するという強い仮定
+は否定され、partition screen後に448/480を交互にrepeatする根拠となった。
 
-## Phase 3 setup: geometric partition screen
+## Phase 3準備：geometric partition screen
 
-Two 480-rank candidates keep node count, rank count, Intel MPI settings, and
-cell arithmetic fixed against the Scotch baseline:
+2件の480-rank candidateでは、Scotch baselineに対してnode数、rank数、Intel MPI設定、
+cell arithmeticを固定する。
 
-- `hierarchical-4n-480r` uses a direct `(6 8 10)` split with `xyz` order.
-  For the uniform 400-cubed mesh its analytical axis-plane interface count is
-  3,360,000 faces, 27.8% below Scotch's measured 4,653,839, before accounting
-  for processor-boundary representation details.
-- `multilevel-node-numa-4n-480r` applies `(1 2 2)` across the four node rank
-  groups, `(2 4 1)` across eight NUMA groups per node, then `(3 1 5)` across
-  15 ranks per NUMA group.  The product is the same `(6 8 10)` final grid, but
-  its rank numbering is designed to make consecutive 120-rank node placement
-  correspond to the outer geometric domains.
+- `hierarchical-4n-480r`は`xyz`順序で直接の`(6 8 10)` splitを使用する。uniformな
+  400-cubed meshに対する解析的なaxis-plane interface countは3,360,000 faceであり、
+  processor-boundary表現の詳細を考慮する前の値でScotchの測定値4,653,839を27.8%
+  下回る。
+- `multilevel-node-numa-4n-480r`は、4つのnode rank groupに`(1 2 2)`、nodeごとの8つの
+  NUMA groupに`(2 4 1)`、NUMA groupごとの15 rankに`(3 1 5)`を適用する。積は同じ
+  最終grid `(6 8 10)`だが、連続する120-rank node placementが外側のgeometric domainと
+  対応するようrank numberingを設計している。
 
-Geometric case generation is intentionally implemented in a separate prepare
-script and cache identity.  Extending the established Scotch prepare script
-would change its script digest and unnecessarily invalidate the published
-120-, 240-, and 480-way Scotch caches or the in-flight 448-way cache.  Both
-geometric candidates remain serialized with other shared-filesystem
-preparation, and a solver failure cannot delete their valid immutable caches.
+Geometric case生成は、意図的に独立したprepare scriptとcache identityで実装する。
+既存のScotch prepare scriptを拡張するとscript digestが変わり、公開済みの120、240、
+480-way Scotch cacheや処理中の448-way cacheを不必要に無効化するためである。両
+geometric candidateのpreparationは、共有filesystem上の他の処理と引き続き直列化する。
+Solverの失敗でvalidなimmutable cacheを削除してはならない。
 
-The first direct-hierarchical run, Actions 287 (`31635570359`), completed its
-solver and official parser successfully at 7.8745 M FVOPS and 8.127 s/step
-(`r-0724eeff7878fb21867b61f6f7e2f1f5`, solver PJM `6467689`).  Solver and
-pipeline walls were 52.711 and 54.402 s, and artifacts were archived.  However,
-the separate mesh-facts stage rejected the effective dictionary because the
-requested-partition v1 contract admitted only Scotch.  Thus the score is valid
-but the run is incomplete for partition comparison.  The observed failure is
-addressed by requested-partition v2, whose method enum is exactly `scotch`,
-`hierarchical`, or `multiLevel`; method-specific dictionaries remain preserved
-only in the raw source copy and identified by its SHA-256.  Both geometric
-candidates must be rerun through the updated E2E parser before an adoption
-decision.  The pre-v2 multilevel workflow, Actions 288 (`31635572939`), later
-reached terminal success and archived its valid 7.9404 M result; its partition
-facts remain excluded because they predate the schema fix.
+最初のdirect-hierarchical runであるActions 287（`31635570359`）は、solverと公式parser
+を正常完了し、7.8745 M FVOPS、8.127 s/stepを得た
+（`r-0724eeff7878fb21867b61f6f7e2f1f5`、solver PJM `6467689`）。Solver wallは
+52.711 s、pipeline wallは54.402 sで、artifactもarchiveされた。しかし独立した
+mesh-facts stageは、requested-partition v1 contractがScotchしか許容しないため、実効
+dictionaryを拒否した。このためscoreはvalidだが、partition比較用runとしては不完全で
+ある。観測した失敗にはrequested-partition v2で対処し、method enumを`scotch`、
+`hierarchical`、`multiLevel`のみにした。Method固有dictionaryはraw source copyだけに
+保持し、そのSHA-256で識別する。採用判断の前に、両geometric candidateを更新後のE2E
+parserで再実行する必要がある。v2以前のmultilevel workflow、Actions 288
+（`31635572939`）も後にterminal successへ達し、validな7.9404 Mをarchiveしたが、
+schema修正前のためpartition factは除外する。
 
-The v2 reruns have reached `run-success` with complete partition facts:
+v2 rerunは完全なpartition factを伴って`run-success`へ到達した。
 
-| Method / run | Official result | Solver/pipeline wall | Total interface faces | Cross-node faces | Cross-15-rank-group faces |
+| Method / run | 公式結果 | Solver/pipeline wall | 総interface face | Cross-node face | Cross-15-rank-group face |
 |---|---:|---:|---:|---:|---:|
-| direct hierarchical / `r-a5b01db9af5238c920e6897afbc7c4f8` | VALID, 6.7815 M, 9.438 s/step | 57.945 / 59.685 s | 3,402,564 | 537,572 | 1,989,739 |
-| node-NUMA multi-level / `r-e212e71fb3656f6c9b86d31299f30085` | VALID, 7.9306 M, 8.070 s/step | 52.506 / 54.179 s | 3,399,744 | 320,000 | 1,440,000 |
+| direct hierarchical / `r-a5b01db9af5238c920e6897afbc7c4f8` | VALID、6.7815 M、9.438 s/step | 57.945 / 59.685 s | 3,402,564 | 537,572 | 1,989,739 |
+| node-NUMA multi-level / `r-e212e71fb3656f6c9b86d31299f30085` | VALID、7.9306 M、8.070 s/step | 52.506 / 54.179 s | 3,399,744 | 320,000 | 1,440,000 |
 
-Both partitions are essentially perfectly cell-balanced.  Compared with the
-480-way Scotch partition, multi-level reduces total interface faces by 26.9%,
-rank-pair count from 2,998 to 2,108, mean neighbours from 12.49 to 8.78, and
-cross-node faces by 56.0%.  The v2 multi-level result agrees within 0.12% with
-its pre-v2 valid solver result of 7.9404 M, while the direct-hierarchical v2
-result fell to 6.7815 M despite its similar total interface count.  This shows
-that rank numbering/topology correspondence, not total interface count alone,
-is material.  Both requested-partition v2 workflows reached terminal Actions
-success: Actions 289 (`31639528519`, direct hierarchical) and Actions 290
-(`31639530786`, multi-level).  Every required job, including home-server
-archival, succeeded; both have `run-success`, and no experiment-owned PJM job
-remained.  Multi-level advances; direct hierarchical is rejected.
+両partitionのcell balanceはほぼ完全である。480-way Scotch partitionに比べ、
+multi-levelでは総interface faceが26.9%、rank-pair countが2,998から2,108、平均
+neighbourが12.49から8.78、cross-node faceが56.0%減少した。v2 multi-level結果は、
+v2以前のvalid solver結果7.9404 Mと0.12%以内で一致した。一方、direct-hierarchical v2
+結果は総interface countが近いにもかかわらず6.7815 Mまで低下した。これは総interface
+countだけでなく、rank numberingとtopologyの対応が重要であることを示す。両
+requested-partition v2 workflowはterminal Actions successへ達した。Actions 289
+（`31639528519`、direct hierarchical）とActions 290（`31639530786`、multi-level）で
+ある。Home-server archivalを含む必要な全jobが成功し、両方に`run-success`があり、
+実験が所有するPJM jobは残らなかった。Multi-levelを次へ進め、direct hierarchicalは
+棄却する。
 
-## Phase 4 setup: topology-boundary profile
+## Phase 4準備：topology-boundary profile
 
-The complete multi-level partition facts identify ranks 346, 345, 149, 148,
-331, 330, 134, and 133 as the largest inter-node participants, each with 6,030
-cross-node faces.  Named profile preset
-`multilevel-node-numa-r346-4n-480r` therefore retains the winning decomposition
-and all runtime settings but instruments rank 346 instead of the default rank
-0.  This keeps the profile population separate from bench scores and targets a
-measured boundary rank.  It will determine whether MPI wait/transfer is large
-enough to justify new Intel MPI or OpenFOAM communication experiments.  The
-known-negative `topoControl=16` and `nPollProcInterfaces=-1` settings remain
-excluded unless this new profile supplies contrary evidence.
+完全なmulti-level partition factから、inter-node faceが最も多いrankは346、345、149、
+148、331、330、134、133で、それぞれ6,030 faceである。そこでnamed profile preset
+`multilevel-node-numa-r346-4n-480r`は、最良のdecompositionと全runtime設定を維持し、
+defaultのrank 0ではなくrank 346をinstrumentする。これによりprofile母集団をbench
+scoreから分離したまま、測定済みのboundary rankを対象にできる。この結果から、MPI
+wait/transferが新しいIntel MPIまたはOpenFOAM communication実験に値するほど大きいか
+判断する。既知のnegative設定`topoControl=16`と`nPollProcInterfaces=-1`は、このprofile
+が反証を示さない限り除外する。
 
-The rank-346 profile is Actions `31642562397`.  Alternating cache-hit repeats
-were submitted concurrently as `31642564622` (multi-level), `31642567524`
-(448-rank Scotch), and `31642570205` (480-rank Scotch).  Only the three bench
-runs enter score distributions.
+Rank-346 profileはActions `31642562397`である。同時に、交互のcache-hit repeatとして
+`31642564622`（multi-level）、`31642567524`（448-rank Scotch）、`31642570205`
+（480-rank Scotch）を並行投入した。Score distributionに含めるのは3件のbench runだけ
+である。
 
-All four workflows reached terminal success and archived their artifacts.  The
-multi-level repeat produced 7.8745 M FVOPS, agreeing with its two earlier
-7.9306/7.9404 M results within 0.8%.  The 448-rank Scotch repeat produced
-7.9850 M, agreeing with 8.0025 M within 0.22%.  In contrast the 480-rank Scotch
-repeat produced 6.7315 M; its three results are 6.7315, 6.8139, and 7.8264 M.
-The 448-rank median is 7.9938 M versus the 480-rank median 6.8139 M, a 17.3%
-advantage, while also being much more stable.  Balanced 112 ranks/node is
-therefore adopted over 120 ranks/node.
+4 workflowはすべてterminal successに達しartifactをarchiveした。Multi-level repeatは
+7.8745 M FVOPSで、以前の2結果7.9306/7.9404 Mと0.8%以内で一致した。448-rank Scotch
+repeatは7.9850 Mで、8.0025 Mと0.22%以内で一致した。対して480-rank Scotch repeatは
+6.7315 Mで、3結果は6.7315、6.8139、7.8264 Mとなった。448-rank medianは7.9938 M、
+480-rank medianは6.8139 Mで、前者が17.3%上回り、より安定している。したがって、
+120 ranks/nodeよりbalanced 112 ranks/nodeを採用する。
 
-The profile run `r-50ed9d8a6f67bc10dee84032df2e5c57` was valid but remains
-excluded from score comparisons.  Rank 346's 31.190 s reported CPU time is
-46.4% DIC preconditioning, 24.8% `lduMatrix::Amul`, 10.0% PCG scalar solve,
-7.8% `PMPI_Allreduce`, and about 1.6% other explicit MPI/UCX send, wait, and
-progress functions.  The boundary rank is still compute/locality dominated;
-MPI collective tuning has roughly a 10% sampled upper bound.  Intel documents
-application autotuning as topology-specific and supports generating with
-`I_MPI_TUNING_MODE=auto` plus `I_MPI_TUNING_BIN_DUMP`, then consuming the file
-with `I_MPI_TUNING_BIN`.  It is deferred until the combined 448-rank
-topology-aware partition is measured, and will be stopped after one negative
-screen because prior 120/240-rank trials were mixed.  Reference: Intel MPI
+Profile run `r-50ed9d8a6f67bc10dee84032df2e5c57`はvalidだったがscore比較から除外する。
+Rank 346のreported CPU time 31.190 sの内訳は、DIC preconditioning 46.4%、
+`lduMatrix::Amul` 24.8%、PCG scalar solve 10.0%、`PMPI_Allreduce` 7.8%、その他の明示的な
+MPI/UCX send、wait、progress functionが約1.6%だった。Boundary rankもcompute/locality
+律速であり、MPI collective tuningのsampled upper boundは約10%である。Intelの文書に
+よれば、application autotuningはtopology固有であり、`I_MPI_TUNING_MODE=auto`と
+`I_MPI_TUNING_BIN_DUMP`で生成し、`I_MPI_TUNING_BIN`でfileを使用できる。これは組み合わせ
+た448-rank topology-aware partitionの測定まで保留し、以前の120/240-rank trialは条件が
+混在していたため、negativeなscreen 1件で終了する。参照：Intel MPI
 [Autotuning](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/current/autotuning.html)
-and [tuning environment variables](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-15/tuning-environment-variables.html).
+および[tuning environment variables](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-15/tuning-environment-variables.html)。
 
-## Combined Phase 2/3 candidate: 448-rank node-NUMA multi-level
+## Phase 2/3の組み合わせcandidate：448-rank node-NUMA multi-level
 
-The stable resource layout and topology-aware partition combine exactly as
-four node groups, eight NUMA groups per node, and 14 ranks per NUMA group.
-Their geometric factors `(1 2 2)`, `(1 2 4)`, and `(7 2 1)` multiply to a
-balanced final `(7 8 8)` grid and preserve consecutive 112-rank node groups and
-14-rank NUMA groups.  Preset `multilevel-node-numa-4n-448r` changes only the
-partition relative to adopted 448-rank Scotch and only rank count/placement
-relative to the advancing 480-rank multi-level result.  Its case has an
-independent immutable cache so neither prior geometric nor Scotch caches are
-invalidated.
+安定したresource layoutとtopology-aware partitionを、4 node group、nodeごとの8 NUMA
+group、NUMA groupごとの14 rankとして正確に組み合わせる。Geometric factor
+`(1 2 2)`、`(1 2 4)`、`(7 2 1)`の積はbalancedな最終grid `(7 8 8)`となり、連続する
+112-rank node groupと14-rank NUMA groupを維持する。Preset
+`multilevel-node-numa-4n-448r`は、採用済み448-rank Scotchに対してpartitionだけを、
+次へ進めた480-rank multi-level結果に対してrank数/placementだけを変更する。このcaseは
+独立したimmutable cacheを持つため、従来のgeometric cacheもScotch cacheも無効化しない。
 
-Actions 295 (`31643727848`) completed the combined candidate E2E.  Preparation
-PJM `6467911` published cache `7366e001...`; solver PJM `6467970` produced
-`r-6f3e551e3c054d9baa58425e2dd6d202`.  The official result was VALID at
-8.0757 M FVOPS and 7.925 s/step, with 51.676 s solver and 53.262 s pipeline
-wall.  Placement matched the adopted 112-rank/node CPU set.  The partition has
-3,226,624 interface faces, 2,008 rank pairs, 8.96 mean and 12 maximum
-neighbours, 142,857--142,858 cells/rank, 320,000 cross-node faces, and
-1,600,000 cross-14-rank-group faces.  This is the current best single score;
-it reduces total faces by 28.9% and cross-node faces by 54.6% against 448-way
-Scotch.  Its 1.0% advantage over the 448-way Scotch median is too close to the
-decision threshold for a single run, so Actions `31645708556` (multi-level)
-and `31645711266` (Scotch control) form an alternating cache-hit repeat pair.
+Actions 295（`31643727848`）は組み合わせcandidateのE2Eを完了した。Preparation PJM
+`6467911`はcache `7366e001...`を公開し、solver PJM `6467970`は
+`r-6f3e551e3c054d9baa58425e2dd6d202`を生成した。公式結果はVALID、8.0757 M FVOPS、
+7.925 s/step、solver wall 51.676 s、pipeline wall 53.262 sだった。Placementは採用済み
+112-rank/node CPU setと一致した。Partitionはinterface face 3,226,624、rank pair 2,008、
+平均neighbour 8.96、最大12、142,857--142,858 cells/rank、cross-node face 320,000、
+cross-14-rank-group face 1,600,000だった。これは現在のbest single scoreであり、448-way
+Scotchに比べ総faceを28.9%、cross-node faceを54.6%削減する。448-way Scotch medianに
+対する1.0%の優位は単一runとして判断thresholdに近すぎるため、Actions `31645708556`
+（multi-level）と`31645711266`（Scotch control）を交互のcache-hit repeat pairとした。
 
-The alternating pair also completed E2E with no residual PJM jobs.  Actions
-`31645708556` ran the multi-level cache as solver PJM `6467998`, producing
-`r-2f7657cc91c87bdcda8e68451367701b`: official VALID, 8.0655 M FVOPS,
-7.935 s/step, and 50.694/52.372 s solver/pipeline wall.  Actions
-`31645711266` ran the Scotch control as solver PJM `6467989`, producing
-`r-c3aa0970c4b8792f42f4ff5c02830886`: official VALID, 8.0025 M FVOPS,
-7.997 s/step, and 51.295/53.017 s solver/pipeline wall.  Both had the exact
-4 x 112-rank placement, every required Actions and archive job succeeded, and
-the fixed artifacts were retained by the home-server archive.
+このpairも残留PJM jobなしでE2Eを完了した。Actions `31645708556`はmulti-level cacheを
+solver PJM `6467998`で実行し、`r-2f7657cc91c87bdcda8e68451367701b`を生成した。公式
+VALID、8.0655 M FVOPS、7.935 s/step、solver/pipeline wallは50.694/52.372 sだった。
+Actions `31645711266`はScotch controlをsolver PJM `6467989`で実行し、
+`r-c3aa0970c4b8792f42f4ff5c02830886`を生成した。公式VALID、8.0025 M FVOPS、
+7.997 s/step、solver/pipeline wallは51.295/53.017 sだった。いずれも正確な4 x 112-rank
+placementを使用し、必要なActions/archive jobはすべて成功し、固定artifactはhome-server
+archiveに保持された。
 
-The two multi-level results are 8.0757 and 8.0655 M (median 8.0706 M, 0.13%
-range).  The three Scotch results are 8.0025, 7.9850, and 8.0025 M (median
-8.0025 M, 0.22% range).  Multi-level is consistently faster, but its median
-advantage is only 0.85%.  This is below the predeclared 1% minimum adoption
-threshold.  Therefore the partition result is recorded as statistically
-indistinguishable and the simpler 448-rank Scotch setting remains the adopted
-four-node configuration.  The node/NUMA-aware partition remains a documented
-near-tie and a useful explanation of communication topology, not a claimed
-performance win.  Runtime-switch screens will use 448-rank Scotch so that a
-sub-threshold partition effect is not silently combined with the next factor.
+2件のmulti-level結果は8.0757、8.0655 M（median 8.0706 M、range 0.13%）だった。
+3件のScotch結果は8.0025、7.9850、8.0025 M（median 8.0025 M、range 0.22%）だった。
+Multi-levelは一貫して高速だが、medianの優位は0.85%にすぎず、事前に定めた最低1%の
+採用thresholdを下回る。したがってpartition結果は統計的に区別不能と記録し、より単純な
+448-rank Scotch設定を4-node構成として採用する。Node/NUMA-aware partitionは、性能改善
+を主張せず、記録済みのnear-tieおよびcommunication topologyの有用な説明として残す。
+Runtime-switch screenには448-rank Scotchを使用し、threshold未満のpartition効果を次の
+要因へ暗黙に混ぜない。
 
-## Phase 4 decision: one Intel MPI autotuning screen
+## Phase 4判断：Intel MPI autotuning screen 1件
 
-The profile gives collective tuning an approximately 10% sampled upper bound,
-with `PMPI_Allreduce` alone at 7.8%, so one controlled screen is justified.
-Intel MPI 2021.16 documentation also states that application autotuning is
-platform-specific and supported only on Intel processors; Genkai group A uses
-Intel Xeon Platinum 8490H processors, so the facility is eligible.  The first
-run will generate a tuning binary on the exact 4-node/448-rank/112-rank-per-node
-Scotch topology.  Its timed result is exploratory because it includes the
-search.  Only a separately consumed binary may be compared with the unchanged
-Scotch control.  A generation failure or a consumed result at or below the
-control terminates this axis; no hand-forced collective algorithm sweep will
-follow.
+Profileではcollective tuningのsampled upper boundが約10%、`PMPI_Allreduce`だけで7.8%
+のため、controlled screen 1件には根拠がある。Intel MPI 2021.16文書ではapplication
+autotuningはplatform固有でIntel processorのみをsupportするとされ、玄界group Aは
+Intel Xeon Platinum 8490Hを使用するため対象となる。最初のrunでは、完全に同じ
+4-node/448-rank/112-rank-per-node Scotch topology上でtuning binaryを生成する。この
+timed resultはsearchを含むため探索的なものとする。別runでbinaryを使用した場合だけ、
+変更なしのScotch controlと比較できる。生成失敗または使用時の結果がcontrol以下なら
+この軸を終了し、collective algorithmを手動で強制するsweepは行わない。
 
-Actions `31646485229` generated the application tuning binary with the existing
-build and cached 448-way Scotch case.  Solver PJM `6468020` produced official
-VALID result 7.9061 M FVOPS and 8.095 s/step, with 52.044/53.864 s
-solver/pipeline wall.  The score is excluded from adoption comparisons because
-the application search is active during this run.  The exact 4 x 112-rank
-placement was observed, all Actions and archive jobs succeeded, and no PJM job
-remained.  The generated 889,965-byte binary has SHA-256
-`cc1ee2e1ce1181298a10cc60bb1dd38971a9ecce5a6fb6b215a8e6d30211c3f0`;
-the run-captured copy and immutable shared copy match.  Actions `31647180395`
-will consume this exact binary, while concurrently submitted Actions
-`31647182300` is the unchanged Scotch control at the same commit and build.
+Actions `31646485229`は既存buildとcached 448-way Scotch caseを使ってapplication tuning
+binaryを生成した。Solver PJM `6468020`は公式VALID、7.9061 M FVOPS、8.095 s/step、
+solver/pipeline wall 52.044/53.864 sを得た。このrunではapplication searchが有効なため、
+scoreを採用比較から除外する。正確な4 x 112-rank placementを確認し、全Actions/archive
+jobが成功し、PJM jobは残らなかった。生成された889,965-byte binaryのSHA-256は
+`cc1ee2e1ce1181298a10cc60bb1dd38971a9ecce5a6fb6b215a8e6d30211c3f0`で、runで取得した
+copyとimmutable shared copyは一致した。Actions `31647180395`でこのbinaryを使用し、
+同時投入したActions `31647182300`を同一commit/buildの変更なしScotch controlとする。
 
-Both paired runs completed successfully.  Consumption Actions `31647180395`,
-solver PJM `6468068`, run `r-fc9f80e8263daf85d8412d0ff5499983`, produced
-official VALID 8.0251 M FVOPS and 7.975 s/step with 51.576/53.184 s
-solver/pipeline wall.  The consumed 889,965-byte source copy has the exact
-published SHA-256 above.  Control Actions `31647182300`, solver PJM `6468063`,
-run `r-10b85e0fce6dbe046445562b04fa9ae0`, produced official VALID 7.9652 M
-FVOPS and 8.035 s/step with 51.563/53.950 s solver/pipeline wall.  Both had
-the exact 4 x 112 placement, completed archival, and left no PJM job.
+Pairの両runは正常完了した。Binary使用側のActions `31647180395`、solver PJM
+`6468068`、run `r-fc9f80e8263daf85d8412d0ff5499983`は、公式VALID 8.0251 M FVOPS、
+7.975 s/step、solver/pipeline wall 51.576/53.184 sだった。使用した889,965-byte source
+copyのSHA-256は上記と完全に一致した。Control側のActions `31647182300`、solver PJM
+`6468063`、run `r-10b85e0fce6dbe046445562b04fa9ae0`は、公式VALID 7.9652 M FVOPS、
+8.035 s/step、solver/pipeline wall 51.563/53.950 sだった。両方とも正確な4 x 112
+placementでarchivalまで完了し、PJM jobを残さなかった。
 
-The consumed score is 0.75% above its concurrent control, below the 1%
-minimum adoption threshold.  More importantly, solver wall is 0.03% slower;
-the apparent score difference comes from the trimmed interval rather than an
-end-to-end solver improvement.  Intel MPI application autotuning is therefore
-rejected for this topology.  Default Intel MPI collective selection remains
-adopted, and the predeclared stop rule prevents an algorithm sweep.
+Binary使用時のscoreは同時実行controlを0.75%上回ったが、最低1%の採用threshold未満
+だった。さらに重要なことに、solver wallは0.03%遅く、見かけのscore差はE2E solverの
+改善ではなくtrimmed intervalによる。したがって、このtopologyではIntel MPI application
+autotuningを棄却する。Default Intel MPI collective selectionを引き続き採用し、事前に
+定めたstop ruleに従ってalgorithm sweepは行わない。
 
-## Phase 5 setup: post-decomposition cell ordering
+## Phase 5準備：decomposition後のcell ordering
 
-The official task guidance applied `renumberMesh -constant -overwrite
--parallel` after decomposition, and its published ordinary Cuthill-McKee
-results were neutral to 1.4% slower.  The experiment will preserve that exact
-application position.  The reduced build must add `renumberMesh`, its
-`renumberMethods` library, and the reconstruct dependency, all recorded in the
-build sidecar.  Preparation uses 4 nodes and 448 ranks only when constructing
-an ordered case, then stores an immutable derivative of the existing 448-way
-Scotch cache.  Solver repetitions only materialize that cache and never pay
-renumbering cost.
+公式task guidanceではdecomposition後に`renumberMesh -constant -overwrite -parallel`を
+適用しており、公開済みの通常Cuthill-McKee結果は同等から1.4%低速だった。実験ではこの
+適用位置を正確に維持する。縮小buildには`renumberMesh`、`renumberMethods` library、
+reconstruct dependencyを追加し、すべてbuild sidecarへ記録する。Ordered caseの構築時
+だけpreparationに4 nodeと448 rankを使い、既存448-way Scotch cacheのimmutable derivative
+として保存する。Solver repeatではこのcacheをmaterializeするだけで、renumbering costを
+負担しない。
 
-Two candidates are admitted: ordinary Cuthill-McKee and block-local
-Cuthill-McKee with approximate `blockSize 32768` and Scotch subdivision inside
-each rank.  They retain the same node/rank placement, partition membership,
-MPI settings, workload, and solver.  Both are screened; `blockSize 65536` is
-admitted only if the 32768-cell version improves FVOPS or measured memory
-behaviour.
+Candidateは通常Cuthill-McKeeと、rank内をScotchで分割する概算`blockSize 32768`の
+block-local Cuthill-McKeeの2件とする。Node/rank placement、partition membership、MPI
+設定、workload、solverは同一に保つ。両方をscreeningし、32768-cell版でFVOPSまたは
+測定したmemory behaviourが改善した場合に限り`blockSize 65536`を試す。
 
-Commit `f3958b7` requested the required new build.  Push Actions
-`31647838535` built rather than reused an archive in 7m31s and published build
-archive 301 (476,685,265 bytes, SHA-256
-`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`).
-Its closed sidecar and provision validation contain `renumberMesh` and the
-`renumberMethods`/reconstruct dependency closure.  The default one-node E2E
-run, solver PJM `6468124`, run `r-864a780dc7b9f19d5dbc1b377ddfaf4c`, was
-official VALID at 1.7019 M FVOPS and 37.605 s/step with 120 ranks on one node.
-Every Actions and archive job succeeded and no PJM work remained.  Actions
-`31649038444` now screens ordinary Cuthill-McKee, paired with same-build
-unchanged Scotch control `31649040528`; old-build scores are not direct
-controls for the ordering phase.
+Commit `f3958b7`で必要な新buildを要求した。Push Actions `31647838535`はarchiveを再利用
+せず7m31sでbuildし、build archive 301（476,685,265 byte、SHA-256
+`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`）を公開した。
+closed sidecarとprovision validationには`renumberMesh`および`renumberMethods`/reconstruct
+dependency closureが含まれる。Default 1-node E2E run、solver PJM `6468124`、run
+`r-864a780dc7b9f19d5dbc1b377ddfaf4c`は、1 node上の120 rankで公式VALID、
+1.7019 M FVOPS、37.605 s/stepだった。全Actions/archive jobが成功し、PJM処理は
+残らなかった。Actions `31649038444`で通常Cuthill-McKeeをscreeningし、同一buildの変更なし
+Scotch control `31649040528`とpairにした。Ordering phaseでは旧buildのscoreを直接の
+controlにしない。
 
-The ordinary pair completed E2E.  Cuthill Actions `31649038444`, preparation
-PJM `6468155`, solver PJM `6468164`, used immutable derivative cache
-`70ab1aa4...82d968` of base Scotch cache `1170485d...365c56`.  Its official
-result was VALID, 8.0630 M FVOPS, 7.938 s/step, and 31.75 s trimmed time.
-Same-build unchanged control Actions `31649040528`, solver PJM `6468166`, was
-official VALID, 7.9900 M FVOPS, 8.010 s/step, and 32.04 s trimmed time.  Both
-used exact 4 x 112 placement, had 82 s scheduler elapsed, archived all fixed
-artifacts, and left no PJM job.  Cuthill-McKee is 0.91% above this paired
-control, below the 1% adoption threshold, so it does not advance alone.
-Actions `31649727744` screens the structurally distinct 32768-cell block-local
-ordering with same-build unchanged control `31649729689`.
+通常orderingのpairはE2Eを完了した。Cuthill側のActions `31649038444`、preparation PJM
+`6468155`、solver PJM `6468164`は、base Scotch cache `1170485d...365c56`からの
+immutable derivative cache `70ab1aa4...82d968`を使用した。公式結果はVALID、
+8.0630 M FVOPS、7.938 s/step、trimmed time 31.75 sだった。同一buildで変更なしのcontrol
+Actions `31649040528`、solver PJM `6468166`は公式VALID、7.9900 M FVOPS、
+8.010 s/step、trimmed time 32.04 sだった。両方とも正確な4 x 112 placement、scheduler
+elapsed 82 sで、固定artifactをすべてarchiveし、PJM jobを残さなかった。Cuthill-McKeeは
+pairのcontrolより0.91%高いが、1%の採用threshold未満のため単独では次へ進めない。
+Actions `31649727744`で構造の異なる32768-cell block-local orderingをscreeningし、同一
+buildで変更なしのcontrol `31649729689`とpairにする。
 
-The block-local pair also completed E2E.  Actions `31649727744`, preparation
-PJM `6468189`, solver PJM `6468193`, used derivative cache
-`7f685f00...c480359a` and produced official VALID 8.0655 M FVOPS,
-7.935 s/step, and 31.74 s trimmed time.  Same-build unchanged control Actions
-`31649729689`, preparation PJM `6468192`, solver PJM `6468194`, produced
-official VALID 7.9900 M FVOPS, 8.010 s/step, and 32.04 s trimmed time.  Both
-had 81 s scheduler elapsed, exact 4 x 112 placement, successful archival, and
-no residual PJM job.  Block-local ordering is 0.94% above its paired control,
-again below the 1% adoption threshold and nearly identical to ordinary
-Cuthill-McKee's 0.91% result.
+Block-localのpairもE2Eを完了した。Actions `31649727744`、preparation PJM `6468189`、
+solver PJM `6468193`はderivative cache `7f685f00...c480359a`を使い、公式VALID
+8.0655 M FVOPS、7.935 s/step、trimmed time 31.74 sを得た。同一buildで変更なしのcontrol
+Actions `31649729689`、preparation PJM `6468192`、solver PJM `6468194`は公式VALID
+7.9900 M FVOPS、8.010 s/step、trimmed time 32.04 sだった。両方ともscheduler elapsed
+81 s、正確な4 x 112 placementでarchivalに成功し、PJM jobを残さなかった。Block-local
+orderingはpairのcontrolより0.94%高いが、やはり1%の採用threshold未満で、通常
+Cuthill-McKeeの0.91%とほぼ同一である。
 
-Neither ordering candidate meets the adoption rule, and the 32768-cell
-candidate does not meet the prerequisite for a 65536-cell trial.  The phase
-therefore terminates after two well-formed non-advancing candidates, consistent
-with the published neutral-to-negative ordinary-renumber evidence.  No
-renumbering remains adopted.  The ordered immutable caches and raw logs are
-retained as research evidence; solver qualification uses the unchanged Scotch
-cache.
+どちらのordering candidateも採用条件を満たさず、32768-cell candidateは65536-cell
+trialの前提も満たさない。したがって、公開済みの通常renumberingが同等からnegative
+だったevidenceとも整合して、このphaseは適切に構成したnon-advancing candidate 2件で
+終了する。Renumberingは採用しない。Ordered immutable cacheとraw logは研究evidenceと
+して保持し、solver qualificationには変更なしのScotch cacheを使用する。
 
-## Phase 6 setup: same-build final qualification
+## Phase 6準備：同一buildでの最終qualification
 
-The selected reproducible configurations are 120 ranks on one node, 240 ranks
-on two nodes, and balanced 448 ranks on four nodes, all Scotch, default Intel
-MPI collective selection, no cell renumbering, and `shm` for one node or
-`shm:ofi` for multiple nodes.  Final distributions use only build archive 301;
-older build results remain contextual.  Collect five independent official
-VALID submissions per node count, reusing immutable case caches and allowing
-different node allocations.  Report medians, ranges, and 4-node/1-node strong
-scaling without interpreting a single run as the result.
+選択した再現可能な構成は、1 nodeで120 rank、2 nodeで240 rank、4 nodeでbalanced
+448 rankであり、すべてScotch、default Intel MPI collective selection、cell renumbering
+なし、1 nodeでは`shm`、複数nodeでは`shm:ofi`を使用する。最終distributionにはbuild
+archive 301だけを使い、古いbuild結果はcontextとして残す。Node数ごとに公式VALIDな
+独立submissionを5件収集し、immutable case cacheを再利用しつつ異なるnode allocationを
+許容する。単一runを結論とせず、median、range、4-node/1-node strong scalingを報告する。
 
-## Final qualification results
+## 最終qualification結果
 
-All fifteen selected-configuration runs completed the full
-Actions -> PJM -> official parser -> fixed artifact -> home archive path.  All
-were official VALID, had exact placement, used the same build content, and
-left no experiment-owned PJM job.  Later archive numbers such as 305 are
-hardlinks to archive 301: archive size 476,685,265 bytes and SHA-256
-`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`
-are identical, as are sidecar identity and inode.
+選択した構成の15 runはすべて、Actions -> PJM -> 公式parser -> 固定artifact -> home
+archiveの全経路を完了した。すべて公式VALIDで、正確なplacementと同じbuild内容を使用し、
+実験が所有するPJM jobを残さなかった。305など後のarchive番号はarchive 301へのhardlink
+である。Archive size 476,685,265 byte、SHA-256
+`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`は同一で、sidecar
+identityとinodeも一致する。
 
-| Selected layout | Actions runs | FVOPS samples (M) | Median | Min--max | Relative range |
+| 選択layout | Actions run | FVOPS sample (M) | Median | Min--max | Relative range |
 |---|---|---|---:|---:|---:|
-| 1 node, 120 ranks, Scotch | `31647838535`, `31650357613`, `31650362362`, `31650359704`, `31650364015` | 1.7019, 1.6433, 1.7021, 1.7009, 1.6410 | 1.7009 M | 1.6410--1.7021 M | 3.59% |
-| 2 nodes, 240 ranks, Scotch | `31650366010`, `31650367910`, `31650369815`, `31650371822`, `31650373910` | 3.4129, 3.3939, 3.4006, 3.1817, 3.1730 | 3.3939 M | 3.1730--3.4129 M | 7.07% |
-| 4 nodes, 448 ranks, balanced Scotch | `31649040528`, `31649729689`, `31650375882`, `31650377899`, `31650379863` | 7.9900, 7.9900, 8.0050, 7.9850, 7.9875 | 7.9900 M | 7.9850--8.0050 M | 0.25% |
+| 1 node、120 rank、Scotch | `31647838535`, `31650357613`, `31650362362`, `31650359704`, `31650364015` | 1.7019, 1.6433, 1.7021, 1.7009, 1.6410 | 1.7009 M | 1.6410--1.7021 M | 3.59% |
+| 2 node、240 rank、Scotch | `31650366010`, `31650367910`, `31650369815`, `31650371822`, `31650373910` | 3.4129, 3.3939, 3.4006, 3.1817, 3.1730 | 3.3939 M | 3.1730--3.4129 M | 7.07% |
+| 4 node、448 rank、balanced Scotch | `31649040528`, `31649729689`, `31650375882`, `31650377899`, `31650379863` | 7.9900, 7.9900, 8.0050, 7.9850, 7.9875 | 7.9900 M | 7.9850--8.0050 M | 0.25% |
 
-Median 2-node/1-node strong scaling is 1.995x.  Median 4-node/1-node strong
-scaling is 4.697x, and 4-node/2-node scaling is 2.354x.  The apparent
-superlinear four-node scaling is reported as an observation of this fixed
-workload and selected rank counts, not generalized beyond these runs.  The
-four-node distribution is exceptionally tight, while the one- and two-node
-ranges show why medians rather than individual best scores are authoritative.
+Medianでの2-node/1-node strong scalingは1.995x、4-node/1-nodeは4.697x、
+4-node/2-nodeは2.354xである。見かけ上superlinearな4-node scalingは、この固定workload
+と選択したrank数での観測として報告し、これらrunを超えて一般化しない。4-node
+distributionは非常にtightであり、1-および2-nodeのrangeは、個々のbest scoreではなく
+medianを正とする理由を示している。
 
-The final selected presets are therefore:
+したがって最終的に選択したpresetは次のとおりである。
 
-- `scotch-1n-120r`: 120 ranks/node, default binding, `I_MPI_FABRICS=shm`.
-- `scotch-2n-240r`: 120 ranks/node, default binding, `I_MPI_FABRICS=shm:ofi`.
-- `scotch-4n-448r`: 112 ranks/node, one reserved CPU in each 15-core NUMA
-  domain via the explicit balanced processor list, `I_MPI_FABRICS=shm:ofi`.
+- `scotch-1n-120r`：120 ranks/node、default binding、`I_MPI_FABRICS=shm`。
+- `scotch-2n-240r`：120 ranks/node、default binding、`I_MPI_FABRICS=shm:ofi`。
+- `scotch-4n-448r`：112 ranks/node。明示的なbalanced processor listにより各15-core
+  NUMA domainで1 CPUを予約し、`I_MPI_FABRICS=shm:ofi`を使用。
 
-All use default Intel MPI collective selection and no cell renumbering.  The
-four-node node/NUMA multi-level partition, MPI autotuning, ordinary
-Cuthill-McKee, and block-local Cuthill-McKee remain retained experimental
-evidence but are not adopted because their repeated gains did not clear the
-predeclared 1% threshold.  Direct hierarchical and 480-rank Scotch are
-rejected on measured solver performance and/or stability.
+すべてdefault Intel MPI collective selectionを使用し、cell renumberingは行わない。
+4-node node/NUMA multi-level partition、MPI autotuning、通常Cuthill-McKee、block-local
+Cuthill-McKeeは実験evidenceとして保持するが、反復測定した改善が事前に定めた1%
+thresholdを超えなかったため採用しない。Direct hierarchicalと480-rank Scotchは、測定
+したsolver性能または安定性、あるいはその両方を根拠に棄却する。
 
-## Experiment template
+## 実験template
 
-### Experiment ID
+### 実験ID
 
-- Date and commit:
-- Actions run / PJM job / run ID:
-- Hypothesis:
-- Comparison baseline:
-- Single changed factor:
-- Nodes / ranks / ranks per node:
-- Decomposition and ordering:
-- MPI/OpenFOAM runtime settings:
-- Official result and validity:
-- Solver and pipeline wall time:
-- Partition and placement observations:
-- Artifact and BigQuery status:
-- Interpretation:
-- Decision and next experiment:
+- 日付とcommit：
+- Actions run / PJM job / run ID：
+- 仮説：
+- 比較baseline：
+- 単一の変更要因：
+- Node数 / rank数 / ranks per node：
+- Decompositionとordering：
+- MPI/OpenFOAM runtime設定：
+- 公式結果とvalidity：
+- Solverおよびpipeline wall time：
+- Partitionおよびplacementの観測：
+- ArtifactおよびBigQueryの状況：
+- 解釈：
+- 判断と次の実験：
