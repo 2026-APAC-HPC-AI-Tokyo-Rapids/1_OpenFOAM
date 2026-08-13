@@ -42,7 +42,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hpc-performance)
     set +e
     "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance \
-      -knob enable-stack-collection=false \
+      -knob enable-stack-collection=true \
       -knob collect-memory-bandwidth=true \
       -knob dram-bandwidth-limits=false \
       -knob analyze-openmp=false \
