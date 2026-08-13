@@ -3,6 +3,7 @@
  - `[require-build]`をコミットメッセージの先頭につけ、これがpush時の最新コミットメッセージに含まれていたらビルド、そうでなければ過去の生成物の再利用としてください。
  - GitHub Actionsの仕様に基づき、`[skip ci]`をコミットメッセージの先頭に付与すると、GitHub Actions自体が実行されなくなります。
  - GitHub Actionsのrunnerは複数起動されており、同時に複数のジョブを投げることができます。同時に投げて実験時間の短縮を図れる場合はそうしてください。
+ - compiler optionなど複数の実験条件を比較するときは、workflowのmatrixやdispatch inputで条件を切り替えず、条件ごとに追跡可能なcommitを作成してpushし、そのcommitからbuildと実行が起動されるようにしてください。
 
 
 # リポジトリに関する指示

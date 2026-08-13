@@ -52,6 +52,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         '60-73,75-88,90-103,105-118"'
     ) in text
     assert "OPENFOAM_PROFILE_DIR" not in text
+    assert 'vtune_root="/home/pj26000080/share/openfoam-vtune/${profile_run_id}"' in text
+    assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in text
+    assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in text
     assert "capture-workload" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
@@ -100,6 +103,7 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert 'purpose=\'${{ github.event_name == \'push\' && \'bench\' || inputs.run_purpose }}\'' in workflow
     assert "github.event_name == 'push' && 'bench'" in workflow
     assert "run_purpose:" in workflow
+    assert "build_preset:" not in workflow
     assert "profile_rank:" in workflow
     assert "profile_analysis:" in workflow
     assert "OPENFOAM_PROFILE_RANK" not in workflow
@@ -150,6 +154,10 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "jq -r '.source_paths[]'" not in script
     assert "OPENFOAM_BUILD_PARALLELISM" not in script
     assert "EXPERIMENT_METRICS_NATIVE_ROOT" not in script
+    assert "build_condition=baseline" in script
+    assert "build_compile_option=Opt" in script
+    assert "build_tuning_flags=" in script
+    assert "-qopt-report-phase=loop,vec,cg" in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:

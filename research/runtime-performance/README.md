@@ -16,11 +16,11 @@ Historical APS and VTune results are kept outside GitHub artifacts:
 New VTune-only profile runs use the purpose-specific location:
 
 ```text
-~/openfoam-vtune/<run-id>-<pjm-job-id>/rank-<profile-rank>/
+/home/pj26000080/share/openfoam-vtune/<run-id>-<pjm-job-id>/rank-<profile-rank>/
 ```
 
-The profile root and every per-run directory have mode `0700`. At the time of
-this report the profile tree occupies approximately 2.5 GiB.
+The shared profile root and every per-run directory have mode `2770`. At the time of
+this report the profile tree occupies approximately 3.0 GiB.
 
 ## Test configuration
 
@@ -246,7 +246,7 @@ locality is the next likely limit after MPI is reduced.
 6. For a new case, begin with a rank-count sweep based on cells/rank, then use
    APS to quantify MPI time and imbalance. Run VTune on the most compute-heavy
    rank after identifying it from APS.
-7. Store full VTune result directories in `~/openfoam-vtune`; publish validated
+7. Store full VTune result directories in `/home/pj26000080/share/openfoam-vtune`; publish validated
    text/CSV summaries through the profile artifact and metrics paths.
 8. If source changes become allowed later, investigate the Gauss-Seidel
    smoother, limited gradient calculation, `lduMatrix` residual/multiply, and
@@ -275,7 +275,7 @@ discovery, but representative communication conclusions require additional
 interior and cross-node-boundary ranks because APS already showed rank 0 is
 atypical.
 
-Full VTune results remain under `~/openfoam-vtune`. The validated report,
+Full VTune results remain under `/home/pj26000080/share/openfoam-vtune`. The validated report,
 collection status, JSON fact, and bounded Actions summary are retained in the
 profile artifact set and experiment-metrics stream. VTune executable identity
 and version are owned once by the build-provision observation.

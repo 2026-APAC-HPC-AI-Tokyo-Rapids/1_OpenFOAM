@@ -24,7 +24,7 @@ on:
       profile_rank:
         description: MPI rank sampled by VTune during a profile run
         required: true
-        default: '0'
+        default: "0"
         type: string
       profile_analysis:
         description: VTune analysis used by a profile run
@@ -45,8 +45,8 @@ on:
           - scotch-4n-448r
   push:
     paths-ignore:
-      - 'research/**'
-      - '**/.md'
+      - "research/**"
+      - "**/.md"
 
 permissions:
   actions: read
@@ -180,7 +180,6 @@ jobs:
       ((needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success') ||
        (needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success'))
     runs-on: [self-hosted, genkai]
-
     outputs:
       provision_dir: ${{ steps.provision_runtime.outputs.provision_dir }}
 
@@ -214,11 +213,12 @@ jobs:
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           # Keep all installed runtime dependencies, excluding source and build trees.
           tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='*.C' --exclude='*.H' --exclude='*.c' --exclude='*.h' --exclude='./OpenFOAM/src' --exclude='./OpenFOAM/applications' --exclude='./OpenFOAM/wmake' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/icoFoam"
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/checkMesh"
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/mesh-facts"
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/partition-audit"
-          test -x "${provision_dir}/OpenFOAM/platforms/linux64IcxDPInt64Opt/bin/capture-hardware"
+          test "$(jq '[.runtime_objects[] | select(.kind == "executable")] | length' "${sidecar}")" = 7
+          while IFS= read -r relative
+          do
+            [[ "${relative}" == OpenFOAM/platforms/* ]]
+            test -x "${provision_dir}/${relative}"
+          done < <(jq -er '.runtime_objects[] | select(.kind == "executable") | .path' "${sidecar}")
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
@@ -289,7 +289,6 @@ jobs:
       needs.provision.result == 'success' &&
       needs.prepare-case.result == 'success'
     runs-on: [self-hosted, genkai]
-
     env:
       OPENFOAM_RUN_ROOT: /fast/pj26000080/openfoam-runs
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
