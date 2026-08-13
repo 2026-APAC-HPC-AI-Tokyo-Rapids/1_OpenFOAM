@@ -17,4 +17,4 @@ push からの起動は常に benchmark です。`OpenFOAM on genkai` を手動�
 DRAM bandwidth、FPU・vectorizationのcharacterizationを取得します。
 計測後、上位 hotspot は GitHub Actions の run summary に表として表示されます。
 このモードでは Perfetto 用 trace を生成しません。
-VTune の完全な result directory は Genkai の `~/openfoam-vtune/` 以下に保持され、Actions summary に保存先が記録されます。
+VTune の完全な result directory は Genkai の `/home/pj26000080/share/openfoam-vtune/` 以下に保持され、Actions summary に保存先が記録されます。

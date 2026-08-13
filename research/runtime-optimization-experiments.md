@@ -458,6 +458,26 @@ Amulも14--21%であり、PCG loopだけが75--87%までvector化されている
 増やさず、同じ複数rank方針の独立したVTune Memory Access analysisでNUMA、local/remote DRAM、
 cache missを確認する。
 
+## Issue #15：compiler tuning比較
+
+条件はworkflow matrixやdispatch inputでは切り替えず、各条件を`main`上の独立commitとして
+`[require-build]`付きでpushする。各commitの`build_condition`、`WM_COMPILE_OPTION`、
+`FOAM_EXTRA_CXXFLAGS`をbuild sidecarへ記録し、run時にもsidecarのcompile optionから同じ
+`WM_OPTIONS`を再構成できたことを検証する。各buildでは同じ
+`-qopt-report=3 -qopt-report-phase=loop,vec,cg`を付け、optimization reportをbuild artifactへ
+保存するため、report収集自体は比較因子にならない。
+
+上流v2606 ruleと直近build #348のsidecarを確認した結果、現行C++ baselineはIssue本文にある
+`-O2`ではなく、`Opt`の`-O3 -fp-model=precise`である。比較順序は次の通りとする。
+
+1. `baseline`: `Opt`、追加target flagなし
+2. `opt-avx512`: `OptAVX512`、`-O3 -xCORE-AVX512`
+3. `opt-avx512-zmm-high`: 2に`-qopt-zmm-usage=high`を追加
+4. `opt-sapphirerapids`: `Opt`に`-march=sapphirerapids -mtune=sapphirerapids`を追加
+
+すべて`scotch-4n-448r`の公式workload、decomposition、MPI layout、runtime optionを固定し、
+公式VALID、FVOPS、s/step、solver/pipeline wall、iteration/residualを比較する。
+
 ## 実験template
 
 ### 実験ID
