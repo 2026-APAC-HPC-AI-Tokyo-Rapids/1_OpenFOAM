@@ -6,7 +6,7 @@
 
 - workflow の commit SHA と patch の内容
 - OpenFOAM、ADIOS2、CGAL、oneAPI、MPI の version
-- `OPENFOAM_BUILD_PARALLELISM`、queue、linker、ccache の設定
+- `WM_NCOMPPROCS` と build script 引数、queue、linker、ccache の設定
 - run の開始時刻、job / step 時間、成功・失敗
 - `ccache --show-stats` の hit 率と call 数
 

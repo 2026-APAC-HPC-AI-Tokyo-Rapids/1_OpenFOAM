@@ -13,8 +13,7 @@ module purge
 module load intel/2025.1.3 impi
 
 set +eu
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" \
-  WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP
 set -eu
 
 BLOCK_MESH=$(command -v blockMesh)
@@ -25,8 +24,6 @@ DECOMPOSE_PAR=$(command -v decomposePar)
 rm -f -- "${PREPARE_TARGET}"
 trap 'rm -f -- "${PREPARE_TARGET}"' EXIT
 [[ "${PREPARE_DECOMPOSITION_PROFILE}" == scotch ]]
-"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" \
-  "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
+"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" \
   "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${PREPARE_SUBDOMAINS}"
-[[ -L "${PREPARE_TARGET}" && \
-   -d "${PREPARE_TARGET}/processor$((PREPARE_SUBDOMAINS - 1))" ]]
+[[ -L "${PREPARE_TARGET}" && -d "${PREPARE_TARGET}/processor$((PREPARE_SUBDOMAINS - 1))" ]]

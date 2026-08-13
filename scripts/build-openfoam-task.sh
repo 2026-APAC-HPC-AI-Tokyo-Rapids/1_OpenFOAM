@@ -4,12 +4,18 @@
 # blockMesh, decomposePar with Scotch, checkMesh, and icoFoam.
 set -euo pipefail
 
-: "${OPENFOAM_BUILD_PARALLELISM:?}"
 : "${WM_PROJECT_DIR:?}"
 : "${WM_THIRD_PARTY_DIR:?}"
-: "${EXPERIMENT_METRICS_NATIVE_ROOT:?}"
 
-export WM_NCOMPPROCS="${OPENFOAM_BUILD_PARALLELISM}"
+if [[ $# -ne 2 || ! $1 =~ ^[1-9][0-9]*$ ]]; then
+  echo "usage: $0 build-parallelism experiment-metrics-native-root" >&2
+  exit 64
+fi
+build_parallelism=$1
+experiment_metrics_native_root=$2
+[[ -d "${experiment_metrics_native_root}" ]]
+
+export WM_NCOMPPROCS="${build_parallelism}"
 cd "${WM_PROJECT_DIR}"
 
 # Bootstrap wmake and the sole external library used by this task.
@@ -22,23 +28,14 @@ wmakeLnInclude -u "src/OSspecific/${WM_OSTYPE:-POSIX}"
 src/OpenFOAM/Alltouch -check 2>/dev/null || true
 src/OSspecific/"${WM_OSTYPE:-POSIX}"/Allwmake
 src/Pstream/Allwmake
-wmake -j "${OPENFOAM_BUILD_PARALLELISM}" src/OpenFOAM
+wmake -j "${build_parallelism}" src/OpenFOAM
 
 # Shared mesh and finite-volume libraries required by the task commands.
-for library in \
-  src/fileFormats \
-  src/surfMesh \
-  src/meshTools \
-  src/finiteArea \
-  src/finiteVolume \
-  src/mesh/blockMesh \
-  src/mesh/extrudeModel \
-  src/dynamicMesh \
-  src/genericPatchFields \
-  src/parallel/decompose/decompositionMethods \
-  src/lagrangian/basic
+for library in src/fileFormats src/surfMesh src/meshTools src/finiteArea src/finiteVolume \
+  src/mesh/blockMesh src/mesh/extrudeModel src/dynamicMesh src/genericPatchFields \
+  src/parallel/decompose/decompositionMethods src/lagrangian/basic
 do
-  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${library}"
+  wmake -j "${build_parallelism}" "${library}"
 done
 
 # decomposePar links generic placeholders and loads the available backend at
@@ -48,17 +45,15 @@ done
 src/parallel/decompose/AllwmakeLnInclude
 for backend in kahipDecomp metisDecomp scotchDecomp
 do
-  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "src/dummyThirdParty/${backend}"
+  wmake -j "${build_parallelism}" "src/dummyThirdParty/${backend}"
 done
 src/parallel/decompose/Allwmake
 
-for application in \
-  applications/utilities/mesh/generation/blockMesh \
-  applications/utilities/parallelProcessing/decomposePar \
-  applications/utilities/mesh/manipulation/checkMesh \
+for application in applications/utilities/mesh/generation/blockMesh \
+  applications/utilities/parallelProcessing/decomposePar applications/utilities/mesh/manipulation/checkMesh \
   applications/solvers/incompressible/icoFoam
 do
-  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${application}"
+  wmake -j "${build_parallelism}" "${application}"
 done
 
 # These v2 probes are compiled against this exact OpenFOAM tree and placed in
@@ -68,8 +63,8 @@ native_tree="${WM_PROJECT_DIR}/applications/utilities/experimentMetricsV2"
 install -d "${native_tree}"
 for utility in mesh-facts partition-audit
 do
-  cp -a "${EXPERIMENT_METRICS_NATIVE_ROOT}/${utility}" "${native_tree}/${utility}"
-  wmake -j "${OPENFOAM_BUILD_PARALLELISM}" "${native_tree}/${utility}"
+  cp -a "${experiment_metrics_native_root}/${utility}" "${native_tree}/${utility}"
+  wmake -j "${build_parallelism}" "${native_tree}/${utility}"
 done
 
 # Fail the build here instead of discovering a missing binary during runtime

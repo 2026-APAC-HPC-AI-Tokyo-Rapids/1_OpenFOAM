@@ -33,7 +33,7 @@
       "activation": {
         "kind": "executable",
         "artifact_relative_path": "scripts/exec-profiler.sh",
-        "content_sha256": "6177267537f8f3447faa6df754987f9501b8664a07b8449afd1aed0a72a37bce",
+        "content_sha256": "4d6bcd92fa2a4e28afb5a38ac9e46b819f2c7f07516107fd41cfa66c43766603",
         "argv_template": [
           [
             {
