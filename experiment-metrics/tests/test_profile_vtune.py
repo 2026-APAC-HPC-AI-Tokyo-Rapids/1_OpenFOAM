@@ -248,6 +248,7 @@ def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> No
         "#!/bin/sh\n"
         "while [ \"$#\" -gt 0 ] && [ \"$1\" != -- ]; do shift; done\n"
         "[ \"$#\" -gt 0 ] && shift\n"
+        "printf '%s' \"$1\" > \"$FAKE_VTUNE_TARGET_PATH\"\n"
         "exec \"$@\"\n"
     )
     vtune.chmod(0o755)
@@ -264,6 +265,7 @@ def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> No
         "OPENFOAM_VTUNE_ANALYSIS": "hpc-performance",
         "OPENFOAM_VTUNE_DURATION_SEC": "1",
         "PROVISION_DIR": str(tmp_path / "provision"),
+        "FAKE_VTUNE_TARGET_PATH": str(tmp_path / "vtune-target"),
     }
 
     completed = subprocess.run(
@@ -274,6 +276,7 @@ def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> No
 
     assert completed.returncode == 0
     assert marker.read_text() == "ran"
+    assert (tmp_path / "vtune-target").read_text() == str(target)
     assert json.loads(status.read_text()) == {
         "schema_version": "vtune-collection-status/v1",
         "target_exit_code": 0,
