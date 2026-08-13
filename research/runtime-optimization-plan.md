@@ -1,235 +1,221 @@
-# cavity3D-64M runtime optimization research plan
+# cavity3D-64M runtime最適化研究計画
 
-## Objective
+## 目的
 
-Optimize the official five-step `cavity3D-64M` workload on Genkai without
-changing its prescribed arithmetic or precision.  The primary result is the
-official `FVOPS_trim` emitted by `benchmark/parse_result.sh`; every accepted
-result must be `STATUS: VALID` and retain the complete Actions, PJM, raw run,
-BigQuery, and artifact provenance paths.
+規定された演算内容や精度を変更せず、玄界上の公式5 step `cavity3D-64M`
+workloadを最適化する。主要な結果は `benchmark/parse_result.sh` が出力する公式の
+`FVOPS_trim` とする。採用するすべての結果は `STATUS: VALID` であり、Actions、
+PJM、raw run、BigQuery、artifactに至る完全なprovenance pathを保持しなければならない。
 
-The initial scope is input decomposition, MPI rank placement, Intel MPI and
-OpenFOAM runtime settings, and cell ordering.  Source-level solver changes are
-deferred until these lower-cost axes have been exhausted.
+当初の対象はinput decomposition、MPI rank placement、Intel MPIおよびOpenFOAMの
+runtime設定、cell orderingとする。source-levelのsolver変更は、これら低コストの
+軸を調べ尽くすまで保留する。
 
-## Established baseline
+## 確立済みのbaseline
 
-The current workflow allocates one, two, or four nodes but always decomposes
-the mesh into 120 Scotch domains.  The latest comparable valid results are:
+現在のworkflowは1、2、または4 nodeを割り当てるが、meshは常に120個のScotch
+domainへ分割する。比較可能な最新のvalid結果は次のとおりである。
 
-| Nodes | Total ranks | Ranks/node | FVOPS_trim | s/step | Run ID |
+| Node数 | 総rank数 | Rank/node | FVOPS_trim | s/step | Run ID |
 |---:|---:|---:|---:|---:|---|
 | 1 | 120 | 120 | 1.6398 M | 39.030 | `r-c4bb4bb3c51a6a6724aa7177ea1d01e6` |
 | 2 | 120 | 60 | 3.1718 M | 20.177 | `r-fef72f7255e44a077f5fa2b1b115b0df` |
 | 4 | 120 | 30 | 4.9488 M | 12.932 | `r-c2aef4bc0f5dd083a8790751af269342` |
 
-PR 12's post-merge one-node run, Actions run `31624279389`, independently
-produced 1.6270 M FVOPS and completed artifact archival.  The 1.6392 M repeat
-(`r-efdfb255f9d7c78e7eb9c7df59bcab5c`) differs from the earlier result by less
-than 0.04%, while the post-merge run was about 0.8% lower.  This is only an
-initial noise indication, not a settled noise floor.
+PR 12のmerge後に実施した1 node run（Actions run `31624279389`）では、独立に
+1.6270 M FVOPSを得てartifact archivalまで完了した。1.6392 Mのrepeat
+（`r-efdfb255f9d7c78e7eb9c7df59bcab5c`）は以前の結果との差が0.04%未満であり、
+merge後のrunは約0.8%低かった。これはnoiseの初期的な目安にすぎず、確定した
+noise floorではない。
 
-The current 120-way Scotch partition has approximately 1.0% maximum cell
-imbalance, 2,650,146 unique interface faces, 633 rank pairs, 10.55 average
-neighbours/rank, and 18 maximum neighbours.  Consecutive-rank placement yields
-291,222 inter-node faces at two nodes and 578,906 at four nodes.
+現在の120-way Scotch partitionは、最大cell imbalanceが約1.0%、unique interface
+faceが2,650,146、rank pairが633、平均neighbour/rankが10.55、最大neighbourが18で
+ある。連続rank placementの場合、inter-node faceは2 nodeで291,222、4 nodeで
+578,906となる。
 
-One-node VTune rank-0 sampling attributes about 45.8% of reported CPU time to
-`DICPreconditioner::precondition`, 26.1% to `lduMatrix::Amul`, and 16.4% to
-`PCG::scalarSolve`; the sampled MPI functions total only a few percent.  This
-supports treating one-node work as memory/locality dominated while measuring,
-rather than assuming, the multi-node communication balance.
+1 nodeでのVTune rank-0 samplingによるreported CPU timeの内訳は、
+`DICPreconditioner::precondition`が約45.8%、`lduMatrix::Amul`が26.1%、
+`PCG::scalarSolve`が16.4%であり、sampled MPI functionの合計は数%にすぎない。
+これは、multi-nodeのcommunication balanceを仮定せず測定しつつ、1 nodeの処理を
+memory/locality律速として扱うことを支持する。
 
-## Invariants and evidence ownership
+## 不変条件とevidenceの管理主体
 
-- Keep the seven workload-defining input files byte-identical.  Mesh geometry,
-  five time steps, two pressure correctors, 321 PCG iterations, double
-  precision, and `floatTransfer=0` are immutable.
-- Use the same OpenFOAM archive until a source, toolchain, build dependency, or
-  required executable changes.  Runtime, workflow, decomposition, parser, and
-  documentation changes reuse the archive.
-- Run experiments through GitHub Actions.  Direct SSH is read-only and limited
-  to inspecting completed runs, scheduler state, caches, and diagnostics.
-- Git/commit bodies own tracked settings and their rationale.  Actions and PJM
-  logs own execution progress.  Genkai run directories and archived artifacts
-  own raw output.  BigQuery owns comparison facts.  This document owns the
-  hypotheses, decisions, and interpretation.
-- Bench and profile runs are separate populations.  Instrumented timings are
-  never used as competition scores.
-- No speculative retry, fallback, locking, or auxiliary metadata is added.
+- workloadを定義する7個のinput fileをbyte単位で同一に保つ。Mesh geometry、5 time
+  step、2 pressure corrector、321 PCG iteration、double precision、
+  `floatTransfer=0`は変更不可とする。
+- source、toolchain、build dependency、または必要なexecutableが変わるまでは、同じ
+  OpenFOAM archiveを使用する。Runtime、workflow、decomposition、parser、文書のみの
+  変更ではarchiveを再利用する。
+- 実験はGitHub Actions経由で実行する。直接SSHはread-onlyとし、完了run、scheduler
+  state、cache、diagnosticsの調査に限定する。
+- Gitおよびcommit bodyは、追跡対象の設定とその理由を管理する。ActionsおよびPJM
+  logは実行経過を、玄界のrun directoryとarchived artifactはraw出力を、BigQueryは
+  比較対象の事実を管理する。本書はhypothesis、decision、interpretationを管理する。
+- Bench runとprofile runは別の母集団とする。Instrumentationを伴うtimingはcompetition
+  scoreに決して使用しない。
+- 推測に基づくretry、fallback、locking、補助metadataは追加しない。
 
-## Experiment infrastructure
+## 実験基盤
 
-Before performance trials, replace the accidental 120-rank coupling with one
-explicit experiment preset selected at workflow dispatch.  A preset completely
-defines nodes, ranks, decomposition, OpenFOAM switches, Intel MPI overrides,
-and optional renumbering.  The effective values are copied into the protocol,
-manifest sources, decomposition dictionary, launch argv, placement capture,
-and metrics.
+性能試験の前に、意図せず固定されている120 rankとの結合を、workflow dispatch時に
+選択する明示的な実験presetへ置き換える。1つのpresetがnode数、rank数、decomposition、
+OpenFOAM switch、Intel MPI override、および任意のrenumberingを完全に定義する。
+実効値はprotocol、manifest source、decomposition dictionary、launch argv、placement
+capture、metricsへ複写する。
 
-Case reuse has two levels:
+Caseの再利用には次の2 levelがある。
 
-1. The immutable 64-million-cell serial `blockMesh` result.
-2. A decomposed/ordered case keyed by the canonical preparation inputs:
-   preparation implementation, total ranks, complete decomposition dictionary,
-   renumbering dictionary (or none), OpenFOAM build identity, and workload
-   identity.
+1. 不変な64-million-cell serial `blockMesh` result。
+2. 次のcanonical preparation inputをkeyとするdecomposed/ordered case：preparation
+   implementation、総rank数、完全なdecomposition dictionary、renumbering dictionary
+   （またはnone）、OpenFOAM build identity、workload identity。
 
-Each prepared case is immutable after publication.  Preparation remains a
-separate serialized Actions/PJM job.  Solver failures do not invalidate a
-valid reusable case.  Static tests must reject rank/protocol/decomposition
-mismatches before a PJM solver job is submitted.
+各prepared caseは公開後に不変とする。Preparationは、独立した直列実行のActions/PJM
+jobのままにする。Solverの失敗によってvalidな再利用可能caseを無効化しない。PJM
+solver jobを投入する前に、static testでrank/protocol/decompositionの不一致を拒否する。
 
-The first implementation supports only named presets needed by this plan; it
-does not expose arbitrary user-supplied MPI environment or dictionaries.
+最初の実装では本計画に必要なnamed presetだけをsupportし、任意のuser-supplied MPI
+environmentやdictionaryは公開しない。
 
-## Phased experiments
+## 段階的な実験
 
-### Phase 0: measurement integrity and noise
+### Phase 0：測定の健全性とnoise
 
-Re-run the unchanged 1-node/120-rank Scotch baseline until at least five valid
-bench samples exist under the current build and workflow.  Record best, median,
-minimum, maximum, and relative range.  This verifies measurement stability and
-the new preset path before expensive multi-node comparisons.
+現在のbuildとworkflowでvalidなbench sampleが最低5件得られるまで、変更のない
+1-node/120-rank Scotch baselineを再実行する。best、median、minimum、maximum、relative
+rangeを記録する。これにより、高価なmulti-node比較の前に測定の安定性と新しいpreset
+pathを検証する。
 
-### Phase 1: fill physical cores
+### Phase 1：physical coreを使い切る
 
-With Scotch and default pinning, compare:
+Scotchとdefault pinningを使用して次を比較する。
 
-| Preset | Nodes | Total ranks | Ranks/node | Purpose |
+| Preset | Node数 | 総rank数 | Rank/node | 目的 |
 |---|---:|---:|---:|---|
-| `scotch-1n-120r` | 1 | 120 | 120 | unchanged baseline |
-| `scotch-2n-240r` | 2 | 240 | 120 | full physical cores |
-| `scotch-4n-480r` | 4 | 480 | 120 | full physical cores |
+| `scotch-1n-120r` | 1 | 120 | 120 | 変更なしのbaseline |
+| `scotch-2n-240r` | 2 | 240 | 120 | physical coreをすべて使用 |
+| `scotch-4n-480r` | 4 | 480 | 120 | physical coreをすべて使用 |
 
-Run each candidate twice for screening and the four-node candidate at least
-five times if it succeeds.  The expected improvement is large enough that a
-negative or negligible result is treated as evidence of a placement,
-transport, or partition defect and investigated before proceeding.
+screeningでは各candidateを2回実行し、4-node candidateが成功した場合は最低5回実行
+する。期待する改善は十分に大きいため、結果が悪化またはほぼ同等ならplacement、
+transport、partitionの欠陥を示すevidenceとして扱い、次へ進む前に調査する。
 
-### Phase 2: reserve one core per NUMA domain
+### Phase 2：NUMA domainごとに1 coreを予約
 
-At four nodes compare 480 ranks against 448 ranks (112/node).  The latter leaves
-one physical core free in each of Genkai's eight 15-core NUMA domains.  Use
-explicit CPU placement only to ensure that both layouts mean what their preset
-claims; do not mix this trial with a decomposition change.  Advance 448 ranks
-only if its median official FVOPS exceeds 480 by more than the measured noise.
+4 nodeで480 rankと448 rank（112/node）を比較する。後者では、玄界の8個の15-core
+NUMA domainそれぞれでphysical coreを1個空ける。両layoutがpresetの定義どおりである
+ことを保証する目的に限って明示的なCPU placementを使用し、この試験にdecomposition
+変更を混ぜない。448 rankのmedian公式FVOPSが測定noiseを超えて480を上回る場合にのみ
+448 rankを次へ進める。
 
-Quarter-node layouts and SMT ranks are excluded initially: published task data
-shows large losses from leaving many physical cores idle, and the allocated
-nodes expose 120 online physical CPUs rather than a useful untested SMT tier.
+Quarter-node layoutとSMT rankは当初の対象外とする。公開済みtask dataでは、多数の
+physical coreをidleにすると大きく性能が低下し、割り当てnodeは有用性未検証のSMT
+tierではなく120個のonline physical CPUを公開しているためである。
 
-### Phase 3: geometric and topology-aware decomposition
+### Phase 3：geometricおよびtopology-aware decomposition
 
-At the best four-node rank count, screen these partitions:
+最良の4-node rank数で、次のpartitionをscreeningする。
 
-1. Scotch baseline.
-2. Direct `hierarchical` geometric split.
-3. Multi-level node-aware geometric split.
-4. Multi-level node-then-NUMA-aware geometric split.
-5. Outer geometric node split followed by inner Scotch, only if the pure
-   geometric variants expose a meaningful cell or interface imbalance.
+1. Scotch baseline。
+2. 直接の`hierarchical` geometric split。
+3. Multi-level node-aware geometric split。
+4. Multi-level node-then-NUMA-aware geometric split。
+5. 純粋なgeometric variantで意味のあるcellまたはinterface imbalanceが生じた場合に
+   限り、外側をgeometric node split、内側をScotchとする構成。
 
-For 480 ranks, use the analytically balanced final grid `(6 8 10)`.  The
-topology-aware candidate maps the first level to four nodes, the second to the
-eight NUMA domains per node, and the third to 15 ranks per NUMA domain:
+480 rankでは、解析的にbalancedな最終grid `(6 8 10)`を使用する。Topology-aware
+candidateは、第1 levelを4 node、第2 levelをnodeごとの8 NUMA domain、第3 levelを
+NUMA domainごとの15 rankへ対応させる。
 
-| Nodes | Node grid | NUMA grid/node | Rank grid/NUMA | Final grid |
+| Node数 | Node grid | NUMA grid/node | Rank grid/NUMA | 最終grid |
 |---:|---|---|---|---|
 | 1 | `(1 1 1)` | `(4 1 2)` | `(1 5 3)` | `(4 5 6)` |
 | 2 | `(1 1 2)` | `(1 2 4)` | `(5 3 1)` | `(5 6 8)` |
 | 4 | `(1 2 2)` | `(2 4 1)` | `(3 1 5)` | `(6 8 10)` |
 
-The exact axis ordering may be changed only after inspecting the actual
-rank-to-CPU/NUMA map and calculating the resulting inter-node and inter-NUMA
-interfaces.  Every prepared partition records cell balance, interface-face
-count, neighbour count, and faces crossing the intended node/NUMA rank groups.
-These are explanatory variables, not acceptance metrics.
+実際のrank-to-CPU/NUMA mapを調べ、その結果生じるinter-nodeおよびinter-NUMA
+interfaceを計算した後に限り、軸の厳密な順序を変更してよい。Prepared partitionごとに
+cell balance、interface-face count、neighbour count、意図したnode/NUMA rank groupを
+跨ぐfaceを記録する。これらは説明変数であり、acceptance metricではない。
 
-Screen each candidate twice.  Compare the best candidate and Scotch with at
-least five independent submissions each, alternating submission order.
+各candidateを2回screeningする。最良candidateとScotchをそれぞれ最低5回独立に投入し、
+投入順を交互にする。
 
-### Phase 4: multi-node runtime switches
+### Phase 4：multi-node runtime switch
 
-Profile the winning four-node layout.  In addition to rank 0, select the rank
-with the highest inter-node face count and one representative interior rank.
-Only pursue MPI switches when MPI wait/collective/transfer time is material.
+最良の4-node layoutをprofileする。Rank 0に加えて、inter-node face数が最大のrankと、
+代表的なinterior rankを1つ選ぶ。MPI wait/collective/transfer timeが実質的な場合にのみ
+MPI switchを追究する。
 
-Test one factor at a time in this order:
+次の順序で一度に1要因を試す。
 
-1. OpenFOAM `topoControl=16` versus default 0.
-2. `commsType=scheduled` versus default `nonBlocking`.
-3. Intel MPI collective autotuning generated and consumed only on the exact
-   same node/rank/fabric topology.
+1. OpenFOAM `topoControl=16`とdefault 0の比較。
+2. `commsType=scheduled`とdefault `nonBlocking`の比較。
+3. 完全に同じnode/rank/fabric topology上だけで生成・使用するIntel MPI collective
+   autotuning。
 
-Do not repeat known negative motorBike trials without new evidence:
-`nPollProcInterfaces=-1`, globally forcing one Allreduce algorithm, disabling
-pinning, or arbitrary compact/scatter changes.  Retain `I_MPI_FABRICS=shm` on
-one node and `shm:ofi` on multiple nodes.
+新たなevidenceがない限り、motorBikeで既知のnegative trialである
+`nPollProcInterfaces=-1`、単一Allreduce algorithmのglobal強制、pinningの無効化、
+任意のcompact/scatter変更を繰り返さない。1 nodeでは`I_MPI_FABRICS=shm`、複数node
+では`shm:ofi`を維持する。
 
-### Phase 5: cell ordering
+### Phase 5：cell ordering
 
-After rank, placement, partition, and MPI settings stabilize, compare:
+rank、placement、partition、MPI設定が安定した後、次を比較する。
 
-1. No renumbering.
-2. Cuthill-McKee.
-3. Block-local Cuthill-McKee with `blockSize=32768`.
-4. `blockSize=65536` only if 32768 improves measured memory behaviour or FVOPS.
+1. Renumberingなし。
+2. Cuthill-McKee。
+3. `blockSize=32768`のblock-local Cuthill-McKee。
+4. 32768でmemory behaviourまたはFVOPSが改善した場合に限り、`blockSize=65536`。
 
-Prior published results found ordinary renumbering neutral to 1.4% slower, so
-two negative candidates terminate this phase.  Adding `renumberMesh` to the
-reduced runtime build is a build-content change and therefore requires a
-`[require-build]` commit and a new archive.
+過去の公開結果では通常のrenumberingは同等から1.4%低速だったため、negativeなcandidate
+が2件続けばこのphaseを終了する。縮小したruntime buildに`renumberMesh`を加えることは
+build内容の変更であるため、`[require-build]` commitと新しいarchiveが必要になる。
 
-### Phase 6: final qualification
+### Phase 6：最終qualification
 
-Run the winning configuration at one, two, and four nodes at least five times
-each.  Report official FVOPS distributions, 4-node/1-node strong scaling,
-partition characteristics, placement, scheduler accounting, and profile-based
-explanation.  Keep node-count-specific tuning only when it has repeated
-evidence; prefer one coherent topology rule when results are statistically
-equivalent.
+最良構成を1、2、4 nodeでそれぞれ最低5回実行する。公式FVOPSのdistribution、
+4-node/1-node strong scaling、partition特性、placement、scheduler accounting、
+profileに基づく説明を報告する。Node数固有のtuningは反復したevidenceがある場合にのみ
+保持し、結果が統計的に同等なら一貫した1つのtopology ruleを優先する。
 
-## Decision rules
+## 判断規則
 
-- A screening candidate advances only when all runs are valid and its median
-  FVOPS exceeds the baseline median.
-- A setting is adopted only when the repeated improvement exceeds the larger
-  of the measured same-system relative range and 1%.  Below that boundary it
-  is recorded as indistinguishable and the simpler setting wins.
-- A proxy improvement alone never advances a candidate.
-- Any invalid result stops that candidate until the first fatal command or
-  error is identified and the full E2E path succeeds again.
-- Stop an axis after two well-formed candidates fail to improve and profiling
-  shows that axis cannot account for a material fraction of runtime.
-- Cap the initial settings-level campaign at 50 bench runs.  Additional runs
-  require a new profile-backed hypothesis.
+- screening candidateは、全runがvalidかつmedian FVOPSがbaseline medianを上回る場合に
+  のみ次へ進める。
+- 設定は、反復測定での改善が、同一systemで測定したrelative rangeと1%のうち大きい
+  方を超える場合にのみ採用する。その境界未満は区別不能と記録し、単純な設定を選ぶ。
+- proxyの改善だけでcandidateを次へ進めない。
+- invalidな結果が出たcandidateは、最初のfatal commandまたはerrorを特定し、完全な
+  E2E pathが再度成功するまで停止する。
+- 適切に構成したcandidateが2件続けて改善せず、profileからその軸がruntimeの実質的な
+  割合を占め得ないと判明した場合、その軸を終了する。
+- 当初のsetting-level campaignはbench run 50件を上限とする。追加runにはprofileに
+  裏付けられた新しいhypothesisを必要とする。
 
-## Per-run completion checklist
+## Runごとの完了checklist
 
-- Actions workflow and every required job reach terminal success.
-- PJM job reaches terminal exit code zero and leaves no residual job.
-- `run-success` exists.
-- Official parser prints `STATUS: VALID` and one `RESULT:` line.
-- Exact nodes, ranks, ranks/node, CPU affinity, and NUMA placement match preset.
-- Workload identity and build provenance match the comparison group.
-- Fixed artifact set is packaged, uploaded, and archived successfully.
-- Required BigQuery facts are present.
-- The experiment ledger records the hypothesis, changed factor, result,
-  interpretation, and next decision.
+- Actions workflowと必要な全jobがterminal successへ到達する。
+- PJM jobがexit code zeroでterminalに達し、残留jobを残さない。
+- `run-success`が存在する。
+- 公式parserが`STATUS: VALID`と1行の`RESULT:`を出力する。
+- 正確なnode数、rank数、rank/node、CPU affinity、NUMA placementがpresetと一致する。
+- Workload identityとbuild provenanceがcomparison group内で一致する。
+- 固定artifact setが正しくpackage、upload、archiveされる。
+- 必要なBigQuery factが存在する。
+- experiment ledgerにhypothesis、変更要因、結果、interpretation、次のdecisionを記録する。
 
-## Completion status
+## 完了状況
 
-The planned campaign completed on 2026-08-13.  Named presets, immutable case
-caches, full-core and balanced-rank screens, topology-aware partitions, a
-boundary-rank VTune profile, exact-topology Intel MPI autotuning, two
-post-decomposition ordering candidates, and same-build five-run 1/2/4-node
-qualification all traversed the required E2E path.  Decisions and complete
-run populations are recorded in `runtime-optimization-experiments.md`.
+計画したcampaignは2026-08-13に完了した。Named preset、immutable case cache、full-core
+およびbalanced-rank screen、topology-aware partition、boundary-rank VTune profile、
+exact-topology Intel MPI autotuning、decomposition後の2種類のordering candidate、同一
+buildによる1/2/4-nodeの5-run qualificationは、すべて必要なE2E pathを通過した。
+判断と完全なrun populationは`runtime-optimization-experiments.md`に記録している。
 
-The reproducible selected layouts are 1 x 120, 2 x 120, and 4 x 112 ranks
-using Scotch, with the 4-node processor list reserving one CPU per NUMA domain.
-Default Intel MPI collectives and no renumbering remain selected.  No further
-candidate is admitted under the original stop conditions: MPI autotuning and
-both ordering variants were below 1%, the conditional 65536-cell ordering
-trial was not triggered, and the final qualification population is complete.
+再現可能な選択済みlayoutは、Scotchを使用する1 x 120、2 x 120、4 x 112 rankであり、
+4-node processor listではNUMA domainごとに1 CPUを予約する。Default Intel MPI
+collectiveとrenumberingなしを引き続き採用する。当初のstop conditionの下でこれ以上の
+candidateは採用しない。MPI autotuningと両ordering variantはいずれも1%未満で、条件
+付きの65536-cell ordering trialは発動せず、最終qualification populationは完了した。
