@@ -137,7 +137,7 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     concurrency:
-      group: genkai-openfoam-build-${{ github.sha }}
+      group: genkai-openfoam-build
       queue: max
 
     env:
