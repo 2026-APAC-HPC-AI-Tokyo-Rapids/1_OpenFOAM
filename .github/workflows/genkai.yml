@@ -21,6 +21,11 @@ on:
         options:
           - bench
           - profile
+      profile_rank:
+        description: MPI rank sampled by VTune during a profile run
+        required: true
+        default: '0'
+        type: string
       experiment_preset:
         description: Tracked node, rank, and decomposition configuration
         required: true
@@ -29,16 +34,7 @@ on:
         options:
           - scotch-1n-120r
           - scotch-2n-240r
-          - scotch-4n-480r
           - scotch-4n-448r
-          - scotch-4n-448r-mpi-autotune-generate
-          - scotch-4n-448r-mpi-autotune-consume
-          - scotch-4n-448r-renumber-cuthill
-          - scotch-4n-448r-renumber-block32768
-          - hierarchical-4n-480r
-          - multilevel-node-numa-4n-480r
-          - multilevel-node-numa-r346-4n-480r
-          - multilevel-node-numa-4n-448r
   push:
     paths-ignore:
       - 'research/**'
@@ -208,9 +204,6 @@ jobs:
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.pjm" \
             "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" \
-            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-geometric-case.sh" \
-            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-multilevel-448-case.sh" \
-            "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-renumbered-case.sh" \
             "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" \
             "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" \
             "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" \
@@ -275,12 +268,7 @@ jobs:
           prepare_subdomains="$(sed -n 's/^ranks = \([0-9][0-9]*\)$/\1/p' "${protocol_path}" | sort -u)"
           [[ "${prepare_subdomains}" =~ ^[1-9][0-9]*$ ]]
           case "${OPENFOAM_EXPERIMENT_PRESET}" in
-            scotch-4n-448r-renumber-cuthill) prepare_decomposition_profile=renumber-cuthill-4n448 ;;
-            scotch-4n-448r-renumber-block32768) prepare_decomposition_profile=renumber-block32768-4n448 ;;
             scotch-*) prepare_decomposition_profile=scotch ;;
-            hierarchical-4n-480r) prepare_decomposition_profile=hierarchical-6x8x10 ;;
-            multilevel-node-numa-4n-480r | multilevel-node-numa-r346-4n-480r) prepare_decomposition_profile=multilevel-node-numa-4n480 ;;
-            multilevel-node-numa-4n-448r) prepare_decomposition_profile=multilevel-node-numa-4n448 ;;
             *) echo "unsupported decomposition preset: ${OPENFOAM_EXPERIMENT_PRESET}" >&2; exit 64 ;;
           esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -298,13 +286,7 @@ jobs:
             fi
           }
           trap cleanup EXIT
-          prepare_nodes=1
-          prepare_procs=1
-          if [[ "${prepare_decomposition_profile}" == renumber-*-4n448 ]]; then
-            prepare_nodes=4
-            prepare_procs=448
-          fi
-          submission="$(pjsub -L rscgrp=a-batch -L node="${prepare_nodes}" --mpi proc="${prepare_procs}" \
+          submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 \
             -x "PREPARE_DECOMPOSITION_PROFILE=${prepare_decomposition_profile},PREPARE_SUBDOMAINS=${prepare_subdomains},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" \
             -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare \
             "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
@@ -333,6 +315,7 @@ jobs:
       # Pushes are always benchmark runs. Only an explicit workflow dispatch
       # may create a profile run.
       OPENFOAM_RUN_PURPOSE: ${{ github.event_name == 'push' && 'bench' || inputs.run_purpose }}
+      OPENFOAM_PROFILE_RANK: ${{ github.event_name == 'push' && '0' || inputs.profile_rank }}
       OPENFOAM_EXPERIMENT_PRESET: ${{ inputs.experiment_preset || 'scotch-1n-120r' }}
 
     steps:
@@ -396,9 +379,6 @@ jobs:
           control_plane_args+=(
             --control-plane-file scripts/prepare-openfoam-case.pjm
             --control-plane-file scripts/prepare-openfoam-case.sh
-            --control-plane-file scripts/prepare-openfoam-geometric-case.sh
-            --control-plane-file scripts/prepare-openfoam-multilevel-448-case.sh
-            --control-plane-file scripts/prepare-openfoam-renumbered-case.sh
             --control-plane-file scripts/run-openfoam.pjm
           )
           identities="$(
@@ -455,7 +435,8 @@ jobs:
             --repository-root "${GITHUB_WORKSPACE}" \
             --pjm-script-repository-path scripts/run-openfoam.pjm \
             --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" \
-            --provision-dir "${PROVISION_DIR}")"
+            --provision-dir "${PROVISION_DIR}" \
+            --profile-rank "${OPENFOAM_PROFILE_RANK}")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
 

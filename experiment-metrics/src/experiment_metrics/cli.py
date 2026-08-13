@@ -78,6 +78,7 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--pjm-script-repository-path", required=True)
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
+    submit.add_argument("--profile-rank", type=int, default=0)
 
     supervisor_start = commands.add_parser("supervisor-start")
     supervisor_start.add_argument("--manifest", type=Path, required=True)
@@ -328,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             pjm_script_repository_path=arguments.pjm_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
+            profile_rank=arguments.profile_rank,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)

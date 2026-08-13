@@ -16,7 +16,7 @@ Historical APS and VTune results are kept outside GitHub artifacts:
 New VTune-only profile runs use the purpose-specific location:
 
 ```text
-~/openfoam-vtune/<run-id>-<pjm-job-id>/rank-0/
+~/openfoam-vtune/<run-id>-<pjm-job-id>/rank-<profile-rank>/
 ```
 
 The profile root and every per-run directory have mode `0700`. At the time of
@@ -268,8 +268,12 @@ through `mpirun -gtool`, process pinning with
 
 Push-triggered runs are always benchmarks and launch the solver without an
 external profiler. Manual workflow dispatches select either `bench` or
-`profile`; profile runs attach VTune hotspots collection to MPI rank 0 for a
-bounded window without changing the source or build archive.
+`profile`; profile runs attach VTune hotspots collection to the MPI rank chosen
+by the `profile_rank` workflow input (default 0) for a bounded window without
+changing the source or build archive. Rank 0 remains useful for compute-hotspot
+discovery, but representative communication conclusions require additional
+interior and cross-node-boundary ranks because APS already showed rank 0 is
+atypical.
 
 Full VTune results remain under `~/openfoam-vtune`. The validated report,
 collection status, JSON fact, and bounded Actions summary are retained in the

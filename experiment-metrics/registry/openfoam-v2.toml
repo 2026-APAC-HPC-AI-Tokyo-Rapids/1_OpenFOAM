@@ -186,7 +186,7 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
-pattern = "profile.vtune_hotspots.rank.0"
+pattern = "profile.vtune_hotspots"
 owner = "compute.vtune_hotspots_parser"
 logical_type = "json"
 required_for = ["profile"]
@@ -1157,7 +1157,7 @@ reducer_id = "rank_placement_axes/v1"
 
 [[fact]]
 id = "profile.vtune_hotspots"
-key_pattern = "profile.vtune_hotspots.rank.0"
+key_pattern = "profile.vtune_hotspots"
 source_id = "facts.vtune_hotspots"
 schema_id = "openfoam-vtune-hotspots/v1"
 logical_type = "json"

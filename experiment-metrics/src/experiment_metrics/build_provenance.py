@@ -18,7 +18,6 @@ EXECUTABLE_ROLES = (
     "icoFoam",
     "blockMesh",
     "decomposePar",
-    "renumberMesh",
     "checkMesh",
     "mesh-facts",
     "partition-audit",
@@ -56,7 +55,7 @@ def capture_build_state(
     root = build_tree.resolve(strict=True)
     definition = build_definition_repo.resolve(strict=True)
     if set(executable_paths) != set(EXECUTABLE_ROLES):
-        raise ValueError("build state requires the seven executable roles")
+        raise ValueError("build state requires the task executable roles")
     if _git(definition, "status", "--porcelain=v1", "--untracked-files=all"):
         raise ValueError("build provenance requires a clean definition checkout")
     definition_algorithm = _git(definition, "rev-parse", "--show-object-format")

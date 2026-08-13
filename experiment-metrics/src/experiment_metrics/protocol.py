@@ -96,4 +96,4 @@ class RunProtocol:
 
 
 def default_protocol_path(registry_path: Path) -> Path:
-    return registry_path.with_name("openfoam-v2-protocol.toml")
+    return registry_path.with_name("openfoam-v2-protocol-scotch-1n-120r.toml")

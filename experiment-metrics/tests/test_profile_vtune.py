@@ -104,7 +104,7 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     )
 
     row = json.loads(fragment.read_text())
-    assert row["key"] == "profile.vtune_hotspots.rank.0"
+    assert row["key"] == "profile.vtune_hotspots"
     value = json.loads(row["value"])
     assert value["collection"]["target_mode"] == "attach"
     assert value["sources"]["report"]["member"] == (
