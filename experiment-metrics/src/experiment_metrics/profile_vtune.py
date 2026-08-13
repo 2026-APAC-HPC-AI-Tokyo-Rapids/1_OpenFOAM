@@ -19,7 +19,7 @@ from .recording import Recorder
 _NUMBER = re.compile(
     r"^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"
 )
-_REPORT_HEADER = [
+_SOFTWARE_REPORT_HEADER = [
     "Function",
     "Module",
     "CPU Time",
@@ -29,6 +29,14 @@ _REPORT_HEADER = [
     "CPU Time:Spin Time:Other",
     "CPU Time:Overhead Time",
     "CPU Time:Overhead Time:Other",
+]
+_HARDWARE_REPORT_HEADER = [
+    "Function",
+    "Module",
+    "CPU Time",
+    "CPU Time:Effective Time",
+    "CPU Time:Spin Time",
+    "CPU Time:Overhead Time",
 ]
 
 
@@ -57,7 +65,11 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
         records = list(csv.reader(text.splitlines(), strict=True))
     except csv.Error as error:
         raise ValueError("VTune hotspot CSV is malformed") from error
-    headers = [index for index, row in enumerate(records) if row == _REPORT_HEADER]
+    headers = [
+        index
+        for index, row in enumerate(records)
+        if row in (_SOFTWARE_REPORT_HEADER, _HARDWARE_REPORT_HEADER)
+    ]
     if len(headers) != 1:
         raise ValueError("VTune hotspot CSV must contain one exact header")
     rows: list[Hotspot] = []
@@ -66,7 +78,8 @@ def parse_hotspots(text: str) -> tuple[Hotspot, ...]:
     ):
         if not record:
             continue
-        if len(record) != len(_REPORT_HEADER):
+        header = records[headers[0]]
+        if len(record) != len(header):
             raise ValueError("VTune hotspot CSV row has an unexpected column count")
         function, module, lexeme, *breakdown = (item.strip() for item in record)
         if not function:

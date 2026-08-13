@@ -17,43 +17,54 @@ target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
 [[ -x "${target_launcher}" ]]
 install -d -m 0700 "$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")"
 
-"${target_launcher}" "$@" &
-target_pid=$!
-terminate_target() {
-  kill -TERM "${target_pid}" 2>/dev/null || true
-  wait "${target_pid}" 2>/dev/null || true
-  exit 143
-}
-trap terminate_target TERM INT
-set +e
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hotspots)
-    vtune_args=(
-      -collect hotspots
-      -knob sampling-mode=sw
-      -knob enable-stack-collection=false
-    )
+    "${target_launcher}" "$@" &
+    target_pid=$!
+    terminate_target() {
+      kill -TERM "${target_pid}" 2>/dev/null || true
+      wait "${target_pid}" 2>/dev/null || true
+      exit 143
+    }
+    trap terminate_target TERM INT
+    set +e
+    "${OPENFOAM_VTUNE_PATH}" -collect hotspots \
+      -knob sampling-mode=sw \
+      -knob enable-stack-collection=false \
+      -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
+      -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" \
+      -target-pid "${target_pid}"
+    vtune_status=$?
+    wait "${target_pid}"
+    target_status=$?
+    set -e
     ;;
   hpc-performance)
-    vtune_args=(
-      -collect hpc-performance
-      -knob enable-stack-collection=false
-      -knob collect-memory-bandwidth=true
-      -knob dram-bandwidth-limits=false
-      -knob analyze-openmp=false
-    )
+    target_status_path="${OPENFOAM_VTUNE_STATUS_PATH}.target"
+    rm -f -- "${target_status_path}"
+    set +e
+    OPENFOAM_VTUNE_TARGET_STATUS_PATH="${target_status_path}" \
+      "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance \
+      -knob enable-stack-collection=false \
+      -knob collect-memory-bandwidth=true \
+      -knob dram-bandwidth-limits=false \
+      -knob analyze-openmp=false \
+      -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
+      -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- \
+      bash -c '"$@"; status=$?; printf "%d\n" "${status}" > "${OPENFOAM_VTUNE_TARGET_STATUS_PATH}"; exit "${status}"' \
+      bash "$@"
+    vtune_status=$?
+    if [[ -s "${target_status_path}" ]]; then
+      target_status=$(<"${target_status_path}")
+    else
+      target_status=0
+    fi
+    rm -f -- "${target_status_path}"
+    set -e
     ;;
   *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
-"${OPENFOAM_VTUNE_PATH}" "${vtune_args[@]}" \
-  -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
-  -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" \
-  -target-pid "${target_pid}"
-vtune_status=$?
-wait "${target_pid}"
-target_status=$?
-set -e
-status_tmp="${OPENFOAM_VTUNE_STATUS_PATH}.tmp-${target_pid}"
+status_tmp="${OPENFOAM_VTUNE_STATUS_PATH}.tmp-$$"
 printf '{"schema_version":"vtune-collection-status/v1","target_exit_code":%d,"vtune_exit_code":%d}\n' \
   "${target_status}" "${vtune_status}" > "${status_tmp}"
 mv -- "${status_tmp}" "${OPENFOAM_VTUNE_STATUS_PATH}"
