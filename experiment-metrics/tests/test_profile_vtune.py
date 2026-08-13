@@ -16,6 +16,10 @@ HEADER = (
     "CPU Time:Spin Time:MPI Busy Wait Time,CPU Time:Spin Time:Other,"
     "CPU Time:Overhead Time,CPU Time:Overhead Time:Other\n"
 )
+HARDWARE_HEADER = (
+    "Function,Module,CPU Time,CPU Time:Effective Time,CPU Time:Spin Time,"
+    "CPU Time:Overhead Time\n"
+)
 
 
 def _row(function: str, module: str, cpu_time: str) -> str:
@@ -68,6 +72,13 @@ def test_parser_preserves_duplicate_function_module_rows() -> None:
 
     assert [item.cpu_time_lexeme for item in hotspots] == ["2", "1"]
     assert [item.report_row for item in hotspots] == [3, 2]
+
+
+def test_parser_accepts_hardware_sampling_hotspot_columns() -> None:
+    hotspots = parse_hotspots(HARDWARE_HEADER + "f,m,1.25,1.25,0.0,0.0\n")
+
+    assert hotspots[0].function == "f"
+    assert hotspots[0].cpu_time_lexeme == "1.25"
 
 
 def test_recording_writes_one_fact_and_derives_safe_actions_summary(
@@ -224,3 +235,47 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
     document = json.loads(status.read_text())
     assert document["vtune_exit_code"] == vtune_exit
     assert document["target_exit_code"] == target_exit
+
+
+def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> None:
+    provision = tmp_path / "provision/scripts"
+    provision.mkdir(parents=True)
+    launcher = provision / "allow-vtune-attach.py"
+    launcher.write_text("#!/bin/sh\nexec \"$@\"\n")
+    launcher.chmod(0o755)
+    vtune = tmp_path / "vtune"
+    vtune.write_text(
+        "#!/bin/sh\n"
+        "while [ \"$#\" -gt 0 ] && [ \"$1\" != -- ]; do shift; done\n"
+        "[ \"$#\" -gt 0 ] && shift\n"
+        "exec \"$@\"\n"
+    )
+    vtune.chmod(0o755)
+    marker = tmp_path / "target-ran"
+    target = tmp_path / "target"
+    target.write_text(f"#!/bin/sh\nprintf ran > {marker}\n")
+    target.chmod(0o755)
+    status = tmp_path / "profile/raw/vtune-summary/collection-status.json"
+    environment = {
+        **os.environ,
+        "OPENFOAM_VTUNE_RESULT_DIR": str(tmp_path / "result"),
+        "OPENFOAM_VTUNE_STATUS_PATH": str(status),
+        "OPENFOAM_VTUNE_PATH": str(vtune),
+        "OPENFOAM_VTUNE_ANALYSIS": "hpc-performance",
+        "OPENFOAM_VTUNE_DURATION_SEC": "1",
+        "PROVISION_DIR": str(tmp_path / "provision"),
+    }
+
+    completed = subprocess.run(
+        ["bash", str(ROOT / "scripts/exec-profiler.sh"), str(target)],
+        env=environment,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert marker.read_text() == "ran"
+    assert json.loads(status.read_text()) == {
+        "schema_version": "vtune-collection-status/v1",
+        "target_exit_code": 0,
+        "vtune_exit_code": 0,
+    }

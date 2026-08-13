@@ -876,7 +876,7 @@ producer_id = "openfoam.vtune-hotspots/v1"
 source_role = "vtune_hotspots_report"
 storage = "profile_raw"
 path_template = [{ literal = "profile/raw/vtune-summary/hotspots.csv" }]
-schema_id = "vtune-hotspots-csv/v1"
+schema_id = "vtune-hotspots-csv/v2"
 required_when_applicable = true
 
 [[source]]
