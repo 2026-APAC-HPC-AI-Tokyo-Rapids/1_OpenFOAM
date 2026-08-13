@@ -158,6 +158,7 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "build_compile_option=Opt" in script
     assert "build_tuning_flags=" in script
     assert "-qopt-report-phase=loop,vec,cg" in script
+    assert 'export CCACHE_RECACHE=true' in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:

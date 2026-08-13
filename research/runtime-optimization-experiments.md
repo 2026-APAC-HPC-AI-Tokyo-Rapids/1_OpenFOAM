@@ -466,6 +466,9 @@ cache missを確認する。
 `WM_OPTIONS`を再構成できたことを検証する。各buildでは同じ
 `-qopt-report=3 -qopt-report-phase=loop,vec,cg`を付け、optimization reportをbuild artifactへ
 保存するため、report収集自体は比較因子にならない。
+ccache hitではcompilerが起動せず副生成物の`.optrpt`が復元されないため、比較buildは
+`CCACHE_RECACHE=true`で全translation unitを実compileする。これはbuild時間だけに作用し、通常runの
+比較条件には入らない。
 
 上流v2606 ruleと直近build #348のsidecarを確認した結果、現行C++ baselineはIssue本文にある
 `-O2`ではなく、`Opt`の`-O3 -fp-model=precise`である。比較順序は次の通りとする。
