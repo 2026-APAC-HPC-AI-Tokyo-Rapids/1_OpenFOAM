@@ -8,6 +8,7 @@ set -euo pipefail
 : "${OPENFOAM_VTUNE_RESULT_DIR:?VTune result directory is required}"
 : "${OPENFOAM_VTUNE_STATUS_PATH:?VTune status path is required}"
 : "${OPENFOAM_VTUNE_PATH:?validated VTune path is required}"
+: "${OPENFOAM_VTUNE_ANALYSIS:?validated VTune analysis is required}"
 : "${PROVISION_DIR:?provision directory is required}"
 : "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
 [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
@@ -25,9 +26,26 @@ terminate_target() {
 }
 trap terminate_target TERM INT
 set +e
-"${OPENFOAM_VTUNE_PATH}" -collect hotspots \
-  -knob sampling-mode=sw \
-  -knob enable-stack-collection=false \
+case "${OPENFOAM_VTUNE_ANALYSIS}" in
+  hotspots)
+    vtune_args=(
+      -collect hotspots
+      -knob sampling-mode=sw
+      -knob enable-stack-collection=false
+    )
+    ;;
+  hpc-performance)
+    vtune_args=(
+      -collect hpc-performance
+      -knob enable-stack-collection=false
+      -knob collect-memory-bandwidth=true
+      -knob dram-bandwidth-limits=false
+      -knob analyze-openmp=false
+    )
+    ;;
+  *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
+esac
+"${OPENFOAM_VTUNE_PATH}" "${vtune_args[@]}" \
   -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
   -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" \
   -target-pid "${target_pid}"

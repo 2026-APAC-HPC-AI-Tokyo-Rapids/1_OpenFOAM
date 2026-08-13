@@ -26,6 +26,14 @@ on:
         required: true
         default: '0'
         type: string
+      profile_analysis:
+        description: VTune analysis used by a profile run
+        required: true
+        default: hotspots
+        type: choice
+        options:
+          - hotspots
+          - hpc-performance
       experiment_preset:
         description: Tracked node, rank, and decomposition configuration
         required: true
@@ -316,6 +324,7 @@ jobs:
       # may create a profile run.
       OPENFOAM_RUN_PURPOSE: ${{ github.event_name == 'push' && 'bench' || inputs.run_purpose }}
       OPENFOAM_PROFILE_RANK: ${{ github.event_name == 'push' && '0' || inputs.profile_rank }}
+      OPENFOAM_PROFILE_ANALYSIS: ${{ github.event_name == 'push' && 'hotspots' || inputs.profile_analysis }}
       OPENFOAM_EXPERIMENT_PRESET: ${{ inputs.experiment_preset || 'scotch-1n-120r' }}
 
     steps:
@@ -436,7 +445,8 @@ jobs:
             --pjm-script-repository-path scripts/run-openfoam.pjm \
             --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" \
             --provision-dir "${PROVISION_DIR}" \
-            --profile-rank "${OPENFOAM_PROFILE_RANK}")"
+            --profile-rank "${OPENFOAM_PROFILE_RANK}" \
+            --profile-analysis "${OPENFOAM_PROFILE_ANALYSIS}")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
 

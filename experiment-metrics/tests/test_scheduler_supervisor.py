@@ -64,6 +64,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert request["nodes"] == 1
     assert request["ranks"] == 120
     assert request["profile_rank"] == 0
+    assert request["profile_analysis"] == "hotspots"
     assert request["argv"][0] == str(pjsub)
     assert "OPENFOAM_RANKS=120" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
@@ -72,6 +73,9 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
     assert "OPENFOAM_VTUNE_RANK=0" in next(
+        item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
+    )
+    assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in next(
         item for item in request["argv"] if item.startswith("OPENFOAM_NODES=")
     )
 
@@ -124,6 +128,7 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
         execution_script=execution,
         provision_dir=provision,
         profile_rank=37,
+        profile_analysis="hpc-performance",
         pjsub_path=pjsub,
         execute=lambda argv: subprocess.CompletedProcess(
             argv, 0, b"Job 23456 submitted.\n", b""
@@ -137,7 +142,9 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
     )
     assert "OPENFOAM_RUN_PURPOSE=profile" in exported
     assert "OPENFOAM_VTUNE_RANK=37" in exported
+    assert "OPENFOAM_VTUNE_ANALYSIS=hpc-performance" in exported
     assert request["profile_rank"] == 37
+    assert request["profile_analysis"] == "hpc-performance"
 
 
 def test_submission_rejects_invalid_profile_rank(
