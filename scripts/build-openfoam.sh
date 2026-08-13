@@ -14,9 +14,9 @@ set -euo pipefail
 openfoam_source_ref=refs/heads/master
 thirdparty_source_ref=refs/heads/main
 build_parallelism=120
-build_condition=opt-sapphirerapids
-build_compile_option=Opt
-build_tuning_flags='-march=sapphirerapids -mtune=sapphirerapids'
+build_condition=opt-avx512-zmm-high
+build_compile_option=OptAVX512
+build_tuning_flags=-qopt-zmm-usage=high
 optimization_report_flags='-qopt-report=3 -qopt-report-phase=loop,vec,cg'
 export CC=mpiicx
 export CXX=mpiicpx
