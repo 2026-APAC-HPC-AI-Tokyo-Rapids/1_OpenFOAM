@@ -40,26 +40,19 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     set -e
     ;;
   hpc-performance)
-    target_status_path="${OPENFOAM_VTUNE_STATUS_PATH}.target"
-    rm -f -- "${target_status_path}"
     set +e
-    OPENFOAM_VTUNE_TARGET_STATUS_PATH="${target_status_path}" \
-      "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance \
+    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance \
       -knob enable-stack-collection=false \
       -knob collect-memory-bandwidth=true \
       -knob dram-bandwidth-limits=false \
       -knob analyze-openmp=false \
       -duration="${OPENFOAM_VTUNE_DURATION_SEC}" \
-      -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- \
-      bash -c '"$@"; status=$?; printf "%d" "${status}" > "${OPENFOAM_VTUNE_TARGET_STATUS_PATH}"; exit "${status}"' \
-      bash "$@"
-    vtune_status=$?
-    if [[ -s "${target_status_path}" ]]; then
-      target_status=$(<"${target_status_path}")
-    else
-      target_status=0
-    fi
-    rm -f -- "${target_status_path}"
+      -return-app-exitcode \
+      -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
+    target_status=$?
+    # -return-app-exitcode makes the CLI status authoritative for the target.
+    # Report generation below independently validates the collection result.
+    vtune_status=0
     set -e
     ;;
   *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
