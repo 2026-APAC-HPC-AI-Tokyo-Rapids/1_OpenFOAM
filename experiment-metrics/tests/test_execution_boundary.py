@@ -158,7 +158,7 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "build_compile_option=Opt" in script
     assert "build_tuning_flags=" in script
     assert "-qopt-report-phase=loop,vec,cg" in script
-    assert 'FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"' in script
+    assert 'export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"' in script
     assert 'test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"' in script
     assert "WM_COMPILE_CONTROL=+ccache" not in script
     assert "CMAKE_CXX_COMPILER_LAUNCHER" not in script

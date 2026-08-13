@@ -90,8 +90,9 @@ done
 # OpenFOAM の bashrc は未設定変数や中間コマンドの失敗を許容するため、
 # 初期化中だけ厳格なエラーチェックを緩める。
 set +eu
-source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
+source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}"
 set -eu
+export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
 test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"
 
 # タスク専用ビルドスクリプトが参照するプロジェクトへ移動する。
