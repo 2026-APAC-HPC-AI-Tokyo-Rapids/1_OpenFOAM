@@ -81,7 +81,7 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--profile-rank", type=int, default=0)
     submit.add_argument(
         "--profile-analysis",
-        choices=["hotspots", "hpc-performance"],
+        choices=["hotspots", "hpc-performance", "memory-access"],
         default="hotspots",
     )
 
@@ -188,7 +188,7 @@ def parser() -> argparse.ArgumentParser:
     profile_vtune.add_argument("--profiled-rank", type=int, required=True)
     profile_vtune.add_argument(
         "--analysis-type",
-        choices=["hotspots", "hpc-performance"],
+        choices=["hotspots", "hpc-performance", "memory-access"],
         required=True,
     )
     profile_vtune.add_argument("--collection-duration-sec", type=int, required=True)

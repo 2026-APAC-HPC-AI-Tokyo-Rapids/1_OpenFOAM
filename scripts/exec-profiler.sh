@@ -43,6 +43,15 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     vtune_status=0
     set -e
     ;;
+  memory-access)
+    set +e
+    "${OPENFOAM_VTUNE_PATH}" -collect memory-access -knob analyze-mem-objects=false -knob dram-bandwidth-limits=true -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
+    target_status=$?
+    # The Memory Access collector launches the selected rank so it can collect
+    # process events together with node-wide uncore bandwidth counters.
+    vtune_status=0
+    set -e
+    ;;
   *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
 status_tmp="${OPENFOAM_VTUNE_STATUS_PATH}.tmp-$$"

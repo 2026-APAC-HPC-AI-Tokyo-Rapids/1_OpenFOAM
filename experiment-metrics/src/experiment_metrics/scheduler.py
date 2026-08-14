@@ -84,10 +84,10 @@ def submit_run(
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
         raise ValueError("a nonzero profile rank requires a profile run")
-    if profile_analysis not in {"hotspots", "hpc-performance"}:
+    if profile_analysis not in {"hotspots", "hpc-performance", "memory-access"}:
         raise ValueError("unsupported VTune profile analysis")
     if manifest.purpose != "profile" and profile_analysis != "hotspots":
-        raise ValueError("HPC characterization requires a profile run")
+        raise ValueError("hardware characterization requires a profile run")
     relative = PurePosixPath(pjm_script_repository_path)
     if (
         not pjm_script_repository_path
