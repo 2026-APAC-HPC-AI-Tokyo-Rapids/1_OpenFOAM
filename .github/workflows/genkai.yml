@@ -34,6 +34,7 @@ on:
         options:
           - hotspots
           - hpc-performance
+          - memory-access
       experiment_preset:
         description: Tracked node, rank, and decomposition configuration
         required: true

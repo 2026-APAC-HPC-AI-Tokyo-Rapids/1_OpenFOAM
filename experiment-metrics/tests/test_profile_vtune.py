@@ -162,6 +162,48 @@ def test_hpc_characterization_records_hardware_sampling(
     assert value["collection"]["sampling_mode"] == "hw"
 
 
+def test_memory_access_requires_and_records_supplemental_reports(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    root = run_dir / "profile/raw/vtune-summary"
+    root.mkdir()
+    (root / "hotspots.csv").write_text(HEADER + _row("f", "m", "1"))
+    (root / "memory-summary.txt").write_text("Memory Bound: 42.0%\n")
+    (root / "memory-functions.csv").write_text(
+        "Function,Module,CPU Time,Memory Bound\nf,m,1.0,42.0%\n"
+    )
+    (root / "collection-status.json").write_text(
+        '{"schema_version":"vtune-collection-status/v1",'
+        '"target_exit_code":0,"vtune_exit_code":0}\n'
+    )
+
+    fragment = record_vtune_hotspots(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        registry_path=registry_path,
+        report_path=root / "hotspots.csv",
+        status_path=root / "collection-status.json",
+        summary_path=root / "summary.json",
+        markdown_path=root / "summary.md",
+        profiled_rank=365,
+        analysis_type="memory-access",
+        collection_duration_sec=60,
+    )
+
+    value = json.loads(json.loads(fragment.read_text())["value"])
+    assert value["collection"]["analysis_type"] == "memory-access"
+    assert value["collection"]["target_mode"] == "launch"
+    assert value["collection"]["dram_bandwidth_limits"] is True
+    assert value["collection"]["core_event_scope"] == "profiled_rank_process"
+    assert value["collection"]["uncore_bandwidth_scope"] == "profiled_rank_compute_node"
+    assert value["sources"]["memory_summary"]["member"].endswith("memory-summary.txt")
+    assert value["sources"]["memory_functions"]["member"].endswith(
+        "memory-functions.csv"
+    )
+
+
 def test_collection_failure_does_not_publish_a_fact(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
@@ -237,7 +279,10 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
     assert document["target_exit_code"] == target_exit
 
 
-def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> None:
+@pytest.mark.parametrize("analysis", ["hpc-performance", "memory-access"])
+def test_hardware_profile_wrapper_launches_target_through_vtune(
+    tmp_path: Path, analysis: str
+) -> None:
     provision = tmp_path / "provision/scripts"
     provision.mkdir(parents=True)
     launcher = provision / "allow-vtune-attach.py"
@@ -262,7 +307,7 @@ def test_hpc_profile_wrapper_launches_target_through_vtune(tmp_path: Path) -> No
         "OPENFOAM_VTUNE_RESULT_DIR": str(tmp_path / "result"),
         "OPENFOAM_VTUNE_STATUS_PATH": str(status),
         "OPENFOAM_VTUNE_PATH": str(vtune),
-        "OPENFOAM_VTUNE_ANALYSIS": "hpc-performance",
+        "OPENFOAM_VTUNE_ANALYSIS": analysis,
         "OPENFOAM_VTUNE_DURATION_SEC": "1",
         "PROVISION_DIR": str(tmp_path / "provision"),
         "FAKE_VTUNE_TARGET_PATH": str(tmp_path / "vtune-target"),
