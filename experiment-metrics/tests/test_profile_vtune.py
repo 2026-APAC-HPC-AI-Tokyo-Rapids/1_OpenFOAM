@@ -196,6 +196,7 @@ def test_memory_access_requires_and_records_supplemental_reports(
     assert value["collection"]["analysis_type"] == "memory-access"
     assert value["collection"]["target_mode"] == "launch"
     assert value["collection"]["dram_bandwidth_limits"] is True
+    assert value["collection"]["data_limit_mb"] == 0
     assert value["collection"]["core_event_scope"] == "profiled_rank_process"
     assert value["collection"]["uncore_bandwidth_scope"] == "profiled_rank_compute_node"
     assert value["sources"]["memory_summary"]["member"].endswith("memory-summary.txt")

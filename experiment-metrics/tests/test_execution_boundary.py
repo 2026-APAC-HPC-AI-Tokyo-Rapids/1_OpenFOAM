@@ -64,6 +64,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         (ROOT / "scripts/exec-profiler.sh").read_text()
     )
     assert '"${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"' in text
+    assert "-data-limit=0" in (ROOT / "scripts/exec-profiler.sh").read_text()
     assert "record-build-provision" in text
     assert "record-minimal-hardware" in text
     assert "record-mesh" in text

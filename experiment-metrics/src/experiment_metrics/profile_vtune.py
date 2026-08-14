@@ -176,6 +176,7 @@ def record_vtune_hotspots(
             {
                 "memory_object_instrumentation": False,
                 "dram_bandwidth_limits": True,
+                "data_limit_mb": 0,
                 "openmp_analysis": False,
                 "core_event_scope": "profiled_rank_process",
                 "uncore_bandwidth_scope": "profiled_rank_compute_node",
