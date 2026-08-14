@@ -458,6 +458,81 @@ Amulも14--21%であり、PCG loopだけが75--87%までvector化されている
 増やさず、同じ複数rank方針の独立したVTune Memory Access analysisでNUMA、local/remote DRAM、
 cache missを確認する。
 
+## Issue #16：VTune Memory Accessによるmemory-boundの分解
+
+Issue #14と同じActions #334 build、`scotch-4n-448r`、rank 3（interior）とrank 365
+（cross-node boundary最大）を使用した。通常benchとprofileを分離し、帯域は測定node全体の
+uncore、関数別のlatency、LLC miss、NUMA、TLBはselected rankのcore eventとして、異なるrunで
+収集した。これらの値を同じscopeの指標として解釈しない。
+
+### Node-wide DRAM bandwidth
+
+VTune標準`memory-access`をSEPで実行し、`dram-bandwidth-limits=true`、
+`data-limit=0`でraw収集上限を無効にした。Rank 3のActions `31783134787`（PJM
+`6487316`、run `r-af670d79c9883aadbace78e9eb161487`）は公式VALID、8.4600 M FVOPS、7.565
+s/step、rank 365のActions `31783136455`（PJM `6487100`、run
+`r-3d241de112baf8bc1d2c2f621809001`）は公式VALID、8.3252 M、7.688 s/stepだった。
+
+| Profile対象rankと同居したnode | DRAM average | observed maximum | high utilization | single-package average / calibrated max | UPI average / high utilization |
+|---:|---:|---:|---:|---:|---:|
+| 3 | 399.420 GB/s | 496.200 GB/s | 91.1% | 202.434 / 248 GB/s | 2.464% / 0.0% |
+| 365 | 399.073 GB/s | 494.600 GB/s | 91.5% | 202.535 / 247 GB/s | 2.501% / 0.0% |
+
+平均は実測されたdual-socket上限の約80%で、elapsed timeの91%以上をVTuneがhigh
+bandwidth utilizationと判定した。一方UPIのhigh utilizationは0%である。理論peakではなく、
+VTuneが同世代nodeでreportした247--248 GB/s/socketのcalibrated maximumと比較できるため、
+別のSTREAM runは追加しなかった。従って、少なくともprofile期間中の同居nodeはDRAM帯域が
+主要制約であり、inter-socket link帯域は主要制約ではない。
+
+SEP collectorは正常終了し、node-wide uncore dataを収集したが、`CPU Time=0`、
+`Total Thread Count=0`でselected processの関数rowは0だった。最初の1,000 MB上限に到達した
+Actions `31781400728` / `31781402372`の警告は`data-limit=0`で解消したが、関数rowは
+復活しなかった。従って、上限はrawの完全性に対する問題ではあったが、関数row欠落の
+原因ではない。
+
+### Selected-rank memory events
+
+関数帰属を得る補完runでは、VTune custom `runsa`とLinux Perf driverless/PEBSを使い、
+load/store、load latency、DTLB walk/STLB miss、LLC missのlocal/remote DRAM/cache eventだけを収集した。
+Node-wide uncoreはこのrunに含めていない。Rank 3のActions `31786010061`（PJM `6487563`）は
+run `r-38f1ca5d80abd006953e379c7467032e`、公式VALID、8.1946 M、7.810 s/step、関数row
+1,328、rank 365のActions `31786819315`（PJM `6487593`）はrun
+`r-4f301fe05677e204d31e3243ae8f0665`、公式VALID、8.0910 M、7.910 s/step、関数row
+1,322だった。両者ともtarget/VTune exit code 0で、native `hw-events`関数reportにDIC、
+`lduMatrix::Amul`、PCGが存在する。最初のrank 365 exporter rerunであるActions
+`31786011992`は1 node上のprocess groupがsignal 9で終了したが、nodeごとの最大memoryは約32--33
+GiBでOOMではなかった。同一commit・同一条件の`31786819315`で完走したため、一過性の
+node/process-group failureと記録し、追加のretry処理は実装しない。
+
+| Rank | Kernel | load / store event (10^9) | avg load latency | latency-qualified load | LLC-to-memory / loads | STLB-miss loads / loads | DTLB walk active / clocks | remote DRAM/cache |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 3 | DIC precondition | 14.709 / 0.992 | 23.15 cycle | 48.29 cycle | 0.513% | 0.00374% | 0.207% | 0 |
+| 3 | `lduMatrix::Amul` | 9.839 / 3.067 | 23.35 cycle | 46.38 cycle | 0.513% | 0% | 0.115% | 0 |
+| 3 | PCG scalar solve | 0.928 / 0.702 | 35.15 cycle | 97.58 cycle | 4.395% | 0.01079% | 0.285% | 1 sampled event |
+| 365 | DIC precondition | 6.062 / 0.929 | 23.62 cycle | 41.78 cycle | 1.281% | 0.00743% | 0.191% | 0 |
+| 365 | `lduMatrix::Amul` | 3.347 / 2.878 | 24.87 cycle | 48.25 cycle | 1.624% | 0.00149% | 0.061% | 0 |
+| 365 | PCG scalar solve | 0.921 / 0.630 | 32.56 cycle | 132.59 cycle | 4.597% | 0.00543% | 0.157% | 0 |
+
+Event countはsampling estimateであり、byte数やrank間の実行時間を直接示すものではない。
+`LLC-to-memory / loads`はlocal DRAM、remote DRAM、remote forward、remote HITM event合計の
+all-load eventに対する比率である。主要3 kernelのremote eventは実質0で、TLB walkは最大でも
+clockの0.285%、STLB-miss loadは0.011%未満だった。NUMA placementの再検討やhuge pageは
+次の優先候補にしない。
+
+PCGはDIC/Amulよりload eventが少ないが、LLC-to-memory率が両rankで4.4--4.6%、
+latency-qualified loadが98--133 cycleで、DIC/Amulよりlatency/localityに敏感である。一方、DICと
+Amulは大量のload/store eventを伴い、同居nodeは同時期に平均約399 GB/sで飽和していた。
+従って次のsource最適化は、第一にDIC/Amulのmemory traffic・footprint削減、第二にPCGの
+indirect access locality改善を候補とする。
+
+Full raw resultはそれぞれ
+`/home/pj26000080/share/openfoam-vtune/r-af670d79c9883aadbace78e9eb161487-6487316/`、
+`r-3d241de112baf8bc1d2c2f621809001-6487100/`、
+`r-38f1ca5d80abd006953e379c7467032e-6487563/`、
+`r-4f301fe05677e204d31e3243ae8f0665-6487593/`に保持する。前二者は各1.1 GiB、後二者は
+265 MiB / 242 MiBである。Bounded reportと公式resultはActions artifactを経由してhome serverに
+archive済みで、すべての確定runに残留PJM jobはない。
+
 ## Issue #15：compiler tuning比較
 
 条件はworkflow matrixやdispatch inputでは切り替えず、各条件を`main`上の独立commitとして
