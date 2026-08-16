@@ -105,7 +105,6 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     fragment = record_vtune_hotspots(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=registry_path,
         report_path=report,
         status_path=status,
         summary_path=summary,
@@ -148,7 +147,6 @@ def test_hpc_characterization_records_hardware_sampling(
     fragment = record_vtune_hotspots(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=registry_path,
         report_path=root / "hotspots.csv",
         status_path=root / "collection-status.json",
         summary_path=root / "summary.json",
@@ -184,7 +182,6 @@ def test_memory_access_requires_and_records_supplemental_reports(
     fragment = record_vtune_hotspots(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=registry_path,
         report_path=root / "hotspots.csv",
         status_path=root / "collection-status.json",
         summary_path=root / "summary.json",
@@ -226,7 +223,6 @@ def test_collection_failure_does_not_publish_a_fact(
         record_vtune_hotspots(
             manifest_path=manifest,
             runtime_dir=run_dir,
-            registry_path=registry_path,
             report_path=report,
             status_path=status,
             summary_path=root / "summary.json",

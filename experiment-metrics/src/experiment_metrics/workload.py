@@ -34,8 +34,6 @@ def capture_workload(
     manifest_path: Path,
     case_root: Path,
     output_root: Path,
-    *,
-    registry_path: Path | None = None,
 ) -> Path:
     """Copy and seal the exact workload-defining case members.
 
@@ -86,30 +84,26 @@ def capture_workload(
             + "\n"
         ).encode("utf-8"),
     )
-    if registry_path is not None:
-        with Recorder.open(
-            manifest.path,
-            registry_path,
-            "runner.workload_manifest",
-            run_dir,
-            fragment_id="workload",
-        ) as recorder:
-            recorder.record(
-                Fact(
-                    "workload.manifest",
-                    {
-                        "schema_version": "workload-manifest-fact/v1",
-                        "workload_identity": identity,
-                        "members": members,
-                    },
-                )
+    with Recorder.open(
+        manifest.path,
+        "runner.workload_manifest",
+        run_dir,
+        fragment_id="workload",
+    ) as recorder:
+        recorder.record(
+            Fact(
+                "workload.manifest",
+                {
+                    "schema_version": "workload-manifest-fact/v1",
+                    "workload_identity": identity,
+                    "members": members,
+                },
             )
-            for relative in WORKLOAD_MEMBERS:
-                recorder.record(
-                    Fact(
-                        f"workload.member.{_MEMBER_KEYS[relative]}", contents[relative]
-                    )
-                )
+        )
+        for relative in WORKLOAD_MEMBERS:
+            recorder.record(
+                Fact(f"workload.member.{_MEMBER_KEYS[relative]}", contents[relative])
+            )
     return manifest_path
 
 

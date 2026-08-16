@@ -110,7 +110,7 @@ cd "${WM_PROJECT_DIR}"
 # cavity3D の前処理と実行に必要なblockMesh、decomposePar、checkMesh、
 # icoFoamとその依存だけをビルドする。
 ccache --zero-stats
-"${GITHUB_WORKSPACE}/scripts/build-profiler.sh" "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
+"${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
   build_status=$?
   grep -Eai -m 200 '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' "${BUILD_DIR}/logs/allwmake.log" >&2 || true
   exit "${build_status}"

@@ -24,7 +24,6 @@ def submit_pbs_run(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     protocol_path: Path,
     pbs_script_repository_path: str,
     execution_script: Path,
@@ -57,7 +56,6 @@ def submit_pbs_run(
     execution = execution_script.resolve(strict=True)
     qsub = _launcher_path(qsub_path or _which("qsub"))
     environment = {
-        "EXPERIMENT_METRICS_DIRECT_SEND": "0",
         "OPENFOAM_MPI_PROCS": str(protocol.ranks),
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
@@ -71,10 +69,6 @@ def submit_pbs_run(
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
-    for name in ("EXPERIMENT_METRICS_BIGQUERY_CONFIG",):
-        value = os.environ.get(name)
-        if value:
-            environment[name] = value
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
@@ -139,7 +133,6 @@ def submit_pbs_run(
     _atomic_json(result_path, result)
     with Recorder.open(
         manifest.path,
-        registry_path,
         "runner.submission",
         run_dir,
         fragment_id="submission",
@@ -154,7 +147,6 @@ def capture_pbs_terminal(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     protocol_path: Path,
     job_id: str,
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
@@ -201,7 +193,6 @@ def capture_pbs_terminal(
     _atomic_json(path, accounting)
     with Recorder.open(
         manifest.path,
-        registry_path,
         "runner.scheduler_postrun",
         run_dir,
         fragment_id="accounting",

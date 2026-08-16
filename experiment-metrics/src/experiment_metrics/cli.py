@@ -113,7 +113,6 @@ def parser() -> argparse.ArgumentParser:
     supervisor_finish = commands.add_parser("supervisor-finish")
     supervisor_finish.add_argument("--manifest", type=Path, required=True)
     supervisor_finish.add_argument("--state", type=Path, required=True)
-    supervisor_finish.add_argument("--registry", type=Path, required=True)
     supervisor_finish.add_argument("--exit-code", type=int, required=True)
 
     host_exec = commands.add_parser("capture-host-exec")
@@ -219,7 +218,6 @@ def parser() -> argparse.ArgumentParser:
     workload.add_argument("--manifest", type=Path, required=True)
     workload.add_argument("--case-root", type=Path, required=True)
     workload.add_argument("--output-root", type=Path, required=True)
-    workload.add_argument("--registry", type=Path, required=True)
 
     package = commands.add_parser("package")
     package.add_argument("--manifest", type=Path, required=True)
@@ -243,14 +241,12 @@ def parser() -> argparse.ArgumentParser:
 def _common(command: argparse.ArgumentParser) -> None:
     command.add_argument("--manifest", type=Path, required=True)
     command.add_argument("--runtime-dir", type=Path, required=True)
-    command.add_argument("--registry", type=Path, required=True)
     command.add_argument("--producer", required=True)
 
 
 def _runtime_common(command: argparse.ArgumentParser) -> None:
     command.add_argument("--manifest", type=Path, required=True)
     command.add_argument("--runtime-dir", type=Path, required=True)
-    command.add_argument("--registry", type=Path, required=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -363,7 +359,6 @@ def main(argv: list[str] | None = None) -> int:
         outcome = submit_run(
             manifest_path=arguments.manifest,
             runtime_dir=arguments.runtime_dir,
-            registry_path=arguments.registry,
             protocol_path=arguments.protocol,
             pjm_script_repository_path=arguments.pjm_script_repository_path,
             execution_script=arguments.execution_script,
@@ -380,7 +375,6 @@ def main(argv: list[str] | None = None) -> int:
         outcome = submit_pbs_run(
             manifest_path=arguments.manifest,
             runtime_dir=arguments.runtime_dir,
-            registry_path=arguments.registry,
             protocol_path=arguments.protocol,
             pbs_script_repository_path=arguments.pbs_script_repository_path,
             execution_script=arguments.execution_script,
@@ -412,7 +406,6 @@ def main(argv: list[str] | None = None) -> int:
             finish_supervisor(
                 arguments.manifest,
                 arguments.state,
-                arguments.registry,
                 exit_code=arguments.exit_code,
             )
         )
@@ -453,7 +446,6 @@ def main(argv: list[str] | None = None) -> int:
             capture_scheduler_terminal(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                registry_path=arguments.registry,
                 job_id=arguments.job_id,
             )
         )
@@ -465,7 +457,6 @@ def main(argv: list[str] | None = None) -> int:
             capture_pbs_terminal(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                registry_path=arguments.registry,
                 protocol_path=arguments.protocol,
                 job_id=arguments.job_id,
             )
@@ -478,7 +469,6 @@ def main(argv: list[str] | None = None) -> int:
             record_execution_context(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                registry_path=arguments.registry,
                 protocol_path=arguments.protocol,
                 host_snapshot=arguments.host_snapshot,
                 placement_root=arguments.placement_root,
@@ -497,7 +487,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 arguments.producer,
                 lambda: facts,
-                registry_path=arguments.registry,
             )
         )
         return 0
@@ -507,7 +496,6 @@ def main(argv: list[str] | None = None) -> int:
         command = arguments.argv[1:] if arguments.argv[:1] == ["--"] else arguments.argv
         with Recorder.open(
             arguments.manifest,
-            arguments.registry,
             arguments.producer,
             arguments.runtime_dir,
             fragment_id=arguments.fragment_id or f"stage.{arguments.stage}",
@@ -542,7 +530,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "runner.log_parser",
                 lambda: facts,
-                registry_path=arguments.registry,
                 fragment_id=arguments.fragment_id,
             )
         )
@@ -588,7 +575,6 @@ def main(argv: list[str] | None = None) -> int:
                     time_limit_sec=capture.time_limit_sec,
                     iteration_policy=capture.iteration_policy,
                 ),
-                registry_path=arguments.registry,
                 fragment_id=arguments.fragment_id,
             )
         )
@@ -611,7 +597,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "runner.pstream_parser",
                 lambda: facts,
-                registry_path=arguments.registry,
                 fragment_id=arguments.fragment_id,
             )
         )
@@ -631,7 +616,6 @@ def main(argv: list[str] | None = None) -> int:
                         arguments.build_provision, purpose=manifest.purpose
                     ),
                 ),
-                registry_path=arguments.registry,
                 fragment_id="build-provision",
             )
         )
@@ -657,7 +641,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "compute.minimal_hardware_parser",
                 lambda: facts,
-                registry_path=arguments.registry,
                 fragment_id="minimal-hardware",
             )
         )
@@ -676,7 +659,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "compute.mesh_parser",
                 lambda: facts,
-                registry_path=arguments.registry,
                 fragment_id="mesh",
             )
         )
@@ -699,7 +681,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.runtime_dir,
                 "compute.profile_hardware_parser",
                 lambda: facts,
-                registry_path=arguments.registry,
                 fragment_id="profile-hardware",
             )
         )
@@ -711,7 +692,6 @@ def main(argv: list[str] | None = None) -> int:
             record_vtune_hotspots(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                registry_path=arguments.registry,
                 report_path=arguments.report,
                 status_path=arguments.status,
                 summary_path=arguments.summary,
@@ -730,7 +710,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.manifest,
                 arguments.case_root,
                 arguments.output_root,
-                registry_path=arguments.registry,
             )
         )
         return 0
@@ -745,7 +724,6 @@ def main(argv: list[str] | None = None) -> int:
                 lambda: build_artifact_facts(
                     arguments.manifest, arguments.build_sidecar
                 ),
-                registry_path=arguments.registry,
                 fragment_id="artifact-index",
             )
         )

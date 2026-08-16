@@ -151,13 +151,8 @@ def init_run(
     # keeps finalization from accepting an orphaned directory as a run.
     from .recording import Recorder
 
-    registry = (
-        registry_path
-        or Path(__file__).resolve().parents[2] / "registry/openfoam-v2.toml"
-    )
     with Recorder.open(
         path,
-        registry,
         "runner.manifest",
         run_dir,
         fragment_id="initial",

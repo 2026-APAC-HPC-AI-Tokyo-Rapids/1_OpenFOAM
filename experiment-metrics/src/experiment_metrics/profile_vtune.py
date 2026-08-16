@@ -106,7 +106,6 @@ def record_vtune_hotspots(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     report_path: Path,
     status_path: Path,
     summary_path: Path,
@@ -194,7 +193,6 @@ def record_vtune_hotspots(
     _atomic_text(markdown_path, _markdown(summary))
     with Recorder.open(
         manifest.path,
-        registry_path,
         "compute.vtune_hotspots_parser",
         run_dir,
         fragment_id="vtune-hotspots",

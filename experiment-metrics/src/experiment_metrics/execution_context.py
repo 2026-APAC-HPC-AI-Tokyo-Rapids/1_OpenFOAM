@@ -17,7 +17,6 @@ def record_execution_context(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     protocol_path: Path,
     host_snapshot: Path,
     placement_root: Path,
@@ -71,7 +70,6 @@ def record_execution_context(
     )
     with Recorder.open(
         manifest.path,
-        registry_path,
         "runner.execution_context_parser",
         run_dir,
         fragment_id="execution-context",

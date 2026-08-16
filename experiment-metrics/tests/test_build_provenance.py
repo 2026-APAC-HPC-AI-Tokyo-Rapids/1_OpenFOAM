@@ -13,7 +13,6 @@ from experiment_metrics.build_provenance import (
     EXECUTABLE_ROLES,
     PARTITION_SOURCE_PATHS,
     build_artifact_facts,
-    build_artifact_index_fact,
     capture_build_state,
     finalize_build_sidecar,
     verify_build_pair,
@@ -119,10 +118,9 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
     shutil.copytree(
         tree / "control/build-raw", manifest.parents[1] / "control/build-raw"
     )
-    fact = build_artifact_index_fact(manifest, installed)
-    assert fact.key == "artifact.build_manifest_sha256"
-    assert fact.logical_value == hashlib.sha256(installed.read_bytes()).hexdigest()
     facts = build_artifact_facts(manifest, installed)
+    assert facts[0].key == "artifact.build_manifest_sha256"
+    assert facts[0].logical_value == hashlib.sha256(installed.read_bytes()).hexdigest()
     assert facts[1].key == "build.provenance"
     assert facts[1].logical_value["precision"] == "DP"
 

@@ -71,7 +71,6 @@ def mark_pipeline(state_path: Path, mark: str) -> Path:
 def finish_supervisor(
     manifest_path: Path,
     state_path: Path,
-    registry_path: Path,
     *,
     exit_code: int,
 ) -> Path:
@@ -106,7 +105,6 @@ def finish_supervisor(
         )
     with Recorder.open(
         manifest.path,
-        registry_path,
         "scheduler.supervisor",
         run_dir,
         fragment_id="supervisor",

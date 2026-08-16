@@ -39,7 +39,7 @@ if [[ "${OPENFOAM_VTUNE_ANALYSIS}" == memory-access ]]; then
   "${OPENFOAM_VTUNE_PATH}" -quiet -report hotspots -result-dir "${result_dirs[0]}" -group-by function,module -format csv -csv-delimiter comma > "${summary_dir}/memory-functions.csv"
 fi
 
-if ! "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-vtune --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --report "${summary_dir}/hotspots.csv" --status "${OPENFOAM_VTUNE_STATUS_PATH}" --summary "${summary_dir}/summary.json" --markdown "${summary_dir}/summary.md" --profiled-rank "${OPENFOAM_VTUNE_RANK}" --analysis-type "${OPENFOAM_VTUNE_ANALYSIS}" --collection-duration-sec "${OPENFOAM_VTUNE_DURATION_SEC}"
+if ! "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-vtune --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report "${summary_dir}/hotspots.csv" --status "${OPENFOAM_VTUNE_STATUS_PATH}" --summary "${summary_dir}/summary.json" --markdown "${summary_dir}/summary.md" --profiled-rank "${OPENFOAM_VTUNE_RANK}" --analysis-type "${OPENFOAM_VTUNE_ANALYSIS}" --collection-duration-sec "${OPENFOAM_VTUNE_DURATION_SEC}"
 then
   sed -n '1,80p' "${summary_dir}/hotspots.csv" >&2
   exit 1

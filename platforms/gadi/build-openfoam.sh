@@ -66,7 +66,7 @@ set -eu
 export FOAM_EXTRA_CXXFLAGS=
 cd "${WM_PROJECT_DIR}"
 ccache --zero-stats
-"${GITHUB_WORKSPACE}/scripts/build-profiler.sh" "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${build_log_dir}/allwmake.log" 2>&1 || {
+"${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${build_log_dir}/allwmake.log" 2>&1 || {
   build_status=$?
   grep -Eai -m 200 '(^|[[:space:]])(fatal[[:space:]]+)?error([[:space:](]|:)|undefined reference|collect2:|make(\[[0-9]+\])?: \*\*\*|wmake error' "${build_log_dir}/allwmake.log" >&2 || true
   exit "${build_status}"

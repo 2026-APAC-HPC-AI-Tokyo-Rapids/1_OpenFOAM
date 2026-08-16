@@ -48,4 +48,4 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 - `ccache --show-stats`。Allwmake の直前に統計を zero clear するため、その build だけの hit 率、cacheable call 数、miss 数、local / remote storage の状態を確認できる。
 - 失敗時の `allwmake.log` と Actions の失敗ログ。workflow は console へ error の要約を出し、完全な log は artifact として残す。
 
-現在 `scripts/build-profiler.sh` はコマンドをそのまま実行する薄い wrapper である。過去の詳細プロファイリングは継続計測には採用していないため、CPU 時間、context switch、perf 結果は最新 run からは得られない。必要な仮説ができたときだけ、比較対象を決めた A/B 計測として復活させる。
+ビルド本体は `scripts/build-openfoam-task.sh` を直接呼び、常設のプロファイラは挟まない。詳細計測が必要な場合は、比較条件を固定した専用の実験コミットで追加する。
