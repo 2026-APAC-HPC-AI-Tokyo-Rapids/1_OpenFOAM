@@ -51,8 +51,14 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate control plane
+    if: ${{ (github.event_name == 'push' && (contains(github.event.head_commit.message, '[cluster:genkai]') || contains(github.event.head_commit.message, '[cluster:gadi]'))) || (github.event_name == 'workflow_dispatch' && (inputs.run_genkai || inputs.run_gadi)) }}
+    uses: ./.github/workflows/validate.yml
+
   genkai:
     name: Genkai
+    needs: validate
     if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[cluster:genkai]')) || (github.event_name == 'workflow_dispatch' && inputs.run_genkai) }}
     uses: ./.github/workflows/genkai.yml
     with:
@@ -64,6 +70,7 @@ jobs:
 
   gadi:
     name: Gadi
+    needs: validate
     if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[cluster:gadi]')) || (github.event_name == 'workflow_dispatch' && inputs.run_gadi) }}
     uses: ./.github/workflows/gadi.yml
     with:
