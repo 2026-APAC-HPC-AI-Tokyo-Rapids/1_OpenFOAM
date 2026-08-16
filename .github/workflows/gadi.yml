@@ -3,6 +3,15 @@ name: OpenFOAM on Gadi
 on:
   workflow_call:
     inputs:
+      profile:
+        required: true
+        type: boolean
+      profile_rank:
+        required: true
+        type: string
+      profile_analysis:
+        required: true
+        type: string
       node_count:
         required: true
         type: string
@@ -22,21 +31,25 @@ defaults:
 
 jobs:
   select-build:
-    name: Select Gadi build
+    name: Select OpenFOAM build
     runs-on: [self-hosted, gadi]
     outputs:
       action: ${{ steps.select.outputs.action }}
       source_archive_key: ${{ steps.select.outputs.source_archive_key }}
       experiment_preset: ${{ steps.protocol.outputs.experiment_preset }}
       ranks: ${{ steps.protocol.outputs.ranks }}
-      prepare_script_sha256: ${{ steps.prepare.outputs.sha256 }}
+      prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
     steps:
       - name: Checkout repository history
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Resolve Gadi experiment protocol
+      - name: Identify case preparation
+        id: prepare_identity
+        run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve experiment protocol
         id: protocol
         run: |
           case '${{ inputs.node_count }}' in
@@ -47,11 +60,7 @@ jobs:
           esac
           printf 'experiment_preset=%s\nranks=%s\n' "${experiment_preset}" "${ranks}" >> "${GITHUB_OUTPUT}"
 
-      - name: Identify case preparation
-        id: prepare
-        run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
-
-      - name: Select target-local archive or build
+      - name: Select an existing archive or a new build
         id: select
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,23 +93,37 @@ jobs:
           echo 'No reusable Gadi archive was found; a new build is required'
           echo 'action=build' >> "${GITHUB_OUTPUT}"
 
-  stage-source:
-    name: Stage Gadi source archives
+  reuse-build:
+    name: Reuse OpenFOAM build
+    needs: select-build
+    if: needs.select-build.outputs.action == 'reuse'
+    runs-on: [self-hosted, gadi]
+    steps:
+      - name: Hardlink selected archive
+        run: |
+          source_key='${{ needs.select-build.outputs.source_archive_key }}'
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.build-sidecar.json" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
+
+  build-openfoam:
+    name: Build OpenFOAM
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, gadi]
-    outputs:
-      openfoam_archive: ${{ steps.stage.outputs.openfoam_archive }}
-      openfoam_archive_sha256: ${{ steps.stage.outputs.openfoam_archive_sha256 }}
-      openfoam_oid: ${{ steps.stage.outputs.openfoam_oid }}
-      thirdparty_archive: ${{ steps.stage.outputs.thirdparty_archive }}
-      thirdparty_archive_sha256: ${{ steps.stage.outputs.thirdparty_archive_sha256 }}
-      thirdparty_oid: ${{ steps.stage.outputs.thirdparty_oid }}
+    concurrency:
+      group: gadi-openfoam-build
+    env:
+      BUILD_DIR: /tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Download immutable source tarballs without extraction
+      - name: Checkout build inputs
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Stage source archives
         id: stage
         run: |
-          # The repository-scoped GITHUB_TOKEN cannot read the two sibling private source repositories. This read-only access uses the existing gh login on the Gadi runner until a dedicated organization credential is provided.
+          # GITHUB_TOKEN cannot read the two sibling private repositories. The Gadi runner's existing read-only gh login stages source before the login-node build.
           install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
           openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/commits/master --jq .sha)
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/commits/main --jq .sha)
@@ -115,54 +138,33 @@ jobs:
           tar -tzf "${thirdparty_archive}" >/dev/null
           printf 'openfoam_archive=%s\nopenfoam_archive_sha256=%s\nopenfoam_oid=%s\nthirdparty_archive=%s\nthirdparty_archive_sha256=%s\nthirdparty_oid=%s\n' "${openfoam_archive}" "$(sha256sum "${openfoam_archive}" | awk '{print $1}')" "${openfoam_oid}" "${thirdparty_archive}" "$(sha256sum "${thirdparty_archive}" | awk '{print $1}')" "${thirdparty_oid}" >> "${GITHUB_OUTPUT}"
 
-  build-openfoam:
-    name: Build OpenFOAM in PBS jobfs
-    needs: [select-build, stage-source]
-    if: needs.select-build.outputs.action == 'build'
-    runs-on: [self-hosted, gadi]
-    concurrency:
-      group: gadi-openfoam-build
-    steps:
-      - name: Checkout build definition
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Submit and wait for Gadi build
+      - name: Build and publish OpenFOAM
+        env:
+          OPENFOAM_SOURCE_ARCHIVE: ${{ steps.stage.outputs.openfoam_archive }}
+          OPENFOAM_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.openfoam_archive_sha256 }}
+          OPENFOAM_SOURCE_OID: ${{ steps.stage.outputs.openfoam_oid }}
+          THIRDPARTY_SOURCE_ARCHIVE: ${{ steps.stage.outputs.thirdparty_archive }}
+          THIRDPARTY_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.thirdparty_archive_sha256 }}
+          THIRDPARTY_SOURCE_OID: ${{ steps.stage.outputs.thirdparty_oid }}
         run: |
-          build_log_dir="${GADI_ROOT}/build-logs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          install -d -m 0750 "${BUILD_ARCHIVE_DIR}" "${build_log_dir}"
-          # Compute nodes cannot reach PyPI. Resolve the build-recording CLI on the login runner before qsub; the PBS job reads this venv through the shared runner workspace.
           uv sync --project experiment-metrics --frozen --no-dev
-          exported="BUILD_ARCHIVE_DIR=${BUILD_ARCHIVE_DIR},BUILD_DEFINITION_REPO=${GITHUB_WORKSPACE},BUILD_LOG_DIR=${build_log_dir},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_RUN_ID=${GITHUB_RUN_ID},OPENFOAM_SOURCE_ARCHIVE=${{ needs.stage-source.outputs.openfoam_archive }},OPENFOAM_SOURCE_ARCHIVE_SHA256=${{ needs.stage-source.outputs.openfoam_archive_sha256 }},OPENFOAM_SOURCE_OID=${{ needs.stage-source.outputs.openfoam_oid }},THIRDPARTY_SOURCE_ARCHIVE=${{ needs.stage-source.outputs.thirdparty_archive }},THIRDPARTY_SOURCE_ARCHIVE_SHA256=${{ needs.stage-source.outputs.thirdparty_archive_sha256 }},THIRDPARTY_SOURCE_OID=${{ needs.stage-source.outputs.thirdparty_oid }}"
-          job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=400GB,jobfs=400GB,storage=scratch/hb15 -v "${exported}" -o "${build_log_dir}/pbs.log" -j oe -N openfoam_build platforms/gadi/build-openfoam.pbs)
-          [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          echo "BUILD_PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
-          platforms/gadi/wait-pbs-job.sh "${job_id}"
+          platforms/gadi/build-openfoam.sh
 
-      - name: Upload Gadi build logs
+      - name: Upload OpenFOAM build log
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: gadi-openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.GADI_ROOT }}/build-logs/${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BUILD_DIR }}/logs
           if-no-files-found: warn
           compression-level: 1
 
-  reuse-build:
-    name: Reuse Gadi OpenFOAM build
-    needs: select-build
-    if: needs.select-build.outputs.action == 'reuse'
-    runs-on: [self-hosted, gadi]
-    steps:
-      - name: Hardlink selected target-local archive
-        run: |
-          source_key='${{ needs.select-build.outputs.source_archive_key }}'
-          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
-          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.build-sidecar.json" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
+      - name: Cleanup OpenFOAM build directory
+        if: always()
+        run: rm -rf -- "${BUILD_DIR:?}"
 
   provision:
-    name: Provision Gadi runtime
+    name: Provision OpenFOAM runtime
     needs: [select-build, build-openfoam, reuse-build]
     if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
     runs-on: [self-hosted, gadi]
@@ -172,7 +174,7 @@ jobs:
       - name: Checkout runtime files
         uses: actions/checkout@v7
 
-      - name: Expand target-local runtime
+      - name: Provision OpenFOAM runtime
         id: provision
         run: |
           provision_root="${GADI_ROOT}/provision"
@@ -185,7 +187,7 @@ jobs:
           test "$(stat -c '%s' "${archive}")" = "$(jq -er '.build_archive.size_bytes' "${sidecar}")"
           test "$(sha256sum "${archive}" | awk '{print $1}')" = "$(jq -er '.build_archive.sha256' "${sidecar}")"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
-          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh "${provision_dir}/scripts/"
+          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh "${provision_dir}/scripts/"
           install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/task/"
           cp -a benchmark/cavity3D-64M "${provision_dir}/task/"
@@ -193,8 +195,14 @@ jobs:
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
           tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='*.C' --exclude='*.H' --exclude='*.c' --exclude='*.h' --exclude='./OpenFOAM/src' --exclude='./OpenFOAM/applications' --exclude='./OpenFOAM/wmake' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
 
+      - name: Cleanup failed OpenFOAM provisioning
+        if: failure() && steps.provision.outputs.provision_dir != ''
+        env:
+          PROVISION_DIR: ${{ steps.provision.outputs.provision_dir }}
+        run: rm -rf -- "${PROVISION_DIR:?}"
+
   prepare-case:
-    name: Prepare Gadi case cache
+    name: Prepare OpenFOAM case cache
     needs: [select-build, provision]
     if: always() && needs.provision.result == 'success'
     runs-on: [self-hosted, gadi]
@@ -203,7 +211,7 @@ jobs:
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
     steps:
-      - name: Build target-local decomposition when absent
+      - name: Run blockMesh and decomposePar when uncached
         run: |
           prepare_root="${GADI_ROOT}/prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           prepare_cache_root="${GADI_ROOT}/case-cache"
@@ -225,12 +233,12 @@ jobs:
           [[ "${cache_dir}" == "${prepare_cache_root}/"* ]]
 
   run:
-    name: Run OpenFOAM on Gadi
+    name: Run OpenFOAM
     needs: [select-build, provision, prepare-case]
     if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
     runs-on: [self-hosted, gadi]
     outputs:
-      artifact_uploaded: ${{ steps.upload.outcome == 'success' }}
+      artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
       OPENFOAM_RUN_ROOT: /scratch/hb15/tk7779/openfoam/gadi/runs
@@ -240,8 +248,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Initialize metrics and submit PBS run
-        id: context
+      - name: Initialize metrics and submit OpenFOAM
+        id: v2_context
         env:
           METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
         run: |
@@ -257,16 +265,23 @@ jobs:
           uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
           protocol_relative="experiment-metrics/registry/openfoam-v2-protocol-${{ needs.select-build.outputs.experiment_preset }}.toml"
           protocol_path="${PROVISION_DIR}/${protocol_relative}"
-          bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
-          bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose bench)
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            purpose=profile
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json"
+          else
+            purpose=bench
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
+          fi
+          bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
           control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/run-openfoam.pbs platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
           for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
-          identities=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" source-track-identities --repository "${GITHUB_WORKSPACE}" --purpose bench --base-commit "${base_commit}" --instrumentation-bundle-sha256 "${bundle_sha256}" "${control_plane_args[@]}")
-          manifest=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose bench --identities-json "${identities}" --repository-id apac2026-openfoam --instrumentation-bundle "${bundle_path}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")
+          identities=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" source-track-identities --repository "${GITHUB_WORKSPACE}" --purpose "${purpose}" --base-commit "${base_commit}" --instrumentation-bundle-sha256 "${bundle_sha256}" "${control_plane_args[@]}")
+          manifest=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" --identities-json "${identities}" --repository-id apac2026-openfoam --instrumentation-bundle "${bundle_path}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")
           run_dir=$(dirname "$(dirname "${manifest}")")
           run_id=$(basename "${run_dir}")
           credential_file="${run_dir}/control/bigquery-credential.json"
@@ -285,12 +300,12 @@ jobs:
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
           trap - EXIT
-          job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/gadi/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/gadi/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}")
+          job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/gadi/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/gadi/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}" --profile-rank '${{ inputs.profile_rank }}' --profile-analysis '${{ inputs.profile_analysis }}')
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
           echo "PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pbs_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
 
-      - name: Wait for PBS run
+      - name: Wait for OpenFOAM job
         run: |
           tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/pbs.log" &
           stream_pid=$!
@@ -298,9 +313,19 @@ jobs:
           platforms/gadi/wait-pbs-job.sh "${PBS_JOB_ID}"
           test -e "${RUN_DIR}/run-success"
 
+      - name: Publish VTune hotspots to Actions summary
+        if: success() && inputs.profile
+        run: |
+          summary="${RUN_DIR}/profile/raw/vtune-summary/summary.md"
+          cat "${summary}" >> "${GITHUB_STEP_SUMMARY}" || printf '## Intel VTune hotspots\n\nCollection or report generation was unavailable.\n' >> "${GITHUB_STEP_SUMMARY}"
+          vtune_result_dir=$(sed -n 's/^vtune_result_dir=//p' "${RUN_DIR}/logs/profile-location.txt" 2>/dev/null || true)
+          if [[ -n "${vtune_result_dir}" ]]; then
+            printf "\nVTune result on Gadi:\n\n- \`%s\`\n" "${vtune_result_dir}" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
       - name: Finalize metrics and package artifacts
-        id: package
-        if: always() && steps.context.outputs.pbs_job_id != ''
+        id: package_v2
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
         run: |
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-pbs-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --protocol "${OPENFOAM_PROTOCOL_PATH}" --job-id "${PBS_JOB_ID}" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --log "${RUN_DIR}/logs/solver.log" || true
@@ -316,22 +341,35 @@ jobs:
           while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:build_raw"); done < <(find "${RUN_DIR}/control/build-raw" -type f -print0 | sort -z)
           args+=(--member 'source/workload-manifest.json:workload_manifest')
           while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:workload_member"); done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            while IFS= read -r -d '' path; do args+=(--profile-member "${path#"${RUN_DIR}/"}"); done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
+          fi
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
-      - name: Upload Gadi run artifact
-        id: upload
-        if: always() && steps.context.outputs.pbs_job_id != ''
+      - name: Upload fixed v2 artifact set
+        id: upload_v2
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-gadi-v2-${{ steps.context.outputs.run_id }}
+          name: openfoam-v2-${{ steps.v2_context.outputs.run_id }}
           path: |
-            ${{ steps.context.outputs.run_dir }}/artifact-manifest.json
-            ${{ steps.context.outputs.run_dir }}/run-artifacts.tar.zst
+            ${{ steps.v2_context.outputs.run_dir }}/artifact-manifest.json
+            ${{ steps.v2_context.outputs.run_dir }}/run-artifacts.tar.zst
+            ${{ steps.v2_context.outputs.run_dir }}/profile-raw.tar.zst
           if-no-files-found: error
           compression-level: 0
 
-      - name: Cleanup Gadi transient runtime
+      - name: Upload cavity3D result
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-cavity3d-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.v2_context.outputs.run_dir }}/results
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Cleanup provisioned runtime
         if: always()
         run: |
           rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}"
@@ -339,7 +377,7 @@ jobs:
           rm -rf -- "${PROVISION_DIR:?}"
 
   archive-artifacts:
-    name: Archive Gadi artifacts on home server
+    name: Archive artifacts on home server
     needs: run
     if: always() && needs.run.outputs.artifact_uploaded == 'true'
     runs-on: ubuntu-latest
@@ -366,10 +404,13 @@ jobs:
           printf '%s\n' "${ARTIFACT_SERVER_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
-      - name: Copy and delete GitHub artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Copy artifacts to home server
         run: |
           ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}"
           scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/"
+
+      - name: Delete copied GitHub artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[].id' | while read -r artifact_id; do gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"; done

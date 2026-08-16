@@ -1,6 +1,6 @@
 # OpenFOAM v2 contract schema handoff（旧merge/projection設計資料）
 
-> この文書は旧contractの履歴資料である。現行のrun/key/value直接送信と、
+> この文書は旧contractの履歴資料である。現行のrun/key/value送信と、
 > 重いmesh再走査を行わないcontractは
 > `research/experiment-metrics-v2-key-catalog.md` を正本とする。
 

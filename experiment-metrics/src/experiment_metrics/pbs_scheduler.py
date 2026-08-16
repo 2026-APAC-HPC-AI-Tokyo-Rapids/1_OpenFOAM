@@ -29,51 +29,86 @@ def submit_pbs_run(
     pbs_script_repository_path: str,
     execution_script: Path,
     provision_dir: Path,
+    profile_rank: int = 0,
+    profile_analysis: str = "hotspots",
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
     qsub_path: Path | None = None,
 ) -> SubmissionOutcome:
     manifest = RunManifest.load(manifest_path)
     run_dir = runtime_dir.resolve(strict=True)
-    if run_dir != manifest.path.parents[1] or manifest.purpose != "bench":
-        raise ValueError("PBS submission requires the bound bench run")
+    if run_dir != manifest.path.parents[1]:
+        raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
+    if profile_rank < 0 or profile_rank >= protocol.ranks:
+        raise ValueError("profile rank must be within the protocol rank range")
+    if manifest.purpose != "profile" and profile_rank != 0:
+        raise ValueError("a nonzero profile rank requires a profile run")
+    if profile_analysis not in {"hotspots", "hpc-performance", "memory-access"}:
+        raise ValueError("unsupported VTune profile analysis")
+    if manifest.purpose != "profile" and profile_analysis != "hotspots":
+        raise ValueError("hardware characterization requires a profile run")
     relative = PurePosixPath(pbs_script_repository_path)
-    if not pbs_script_repository_path or relative.is_absolute() or ".." in relative.parts:
+    if (
+        not pbs_script_repository_path
+        or relative.is_absolute()
+        or ".." in relative.parts
+    ):
         raise ValueError("PBS repository path is invalid")
     execution = execution_script.resolve(strict=True)
     qsub = _launcher_path(qsub_path or _which("qsub"))
     environment = {
+        "EXPERIMENT_METRICS_DIRECT_SEND": "0",
         "OPENFOAM_MPI_PROCS": str(protocol.ranks),
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,
-        "OPENFOAM_VTUNE_ANALYSIS": "hotspots",
-        "OPENFOAM_VTUNE_RANK": "0",
+        "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
+        "OPENFOAM_VTUNE_RANK": str(profile_rank),
         "PROVISION_DIR": str(provision_dir.resolve(strict=True)),
         "RUN_DIR": str(run_dir),
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
-    for name in ("EXPERIMENT_METRICS_BIGQUERY_CONFIG", "EXPERIMENT_METRICS_DIRECT_SEND", "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE"):
+    for name in ("EXPERIMENT_METRICS_BIGQUERY_CONFIG",):
         value = os.environ.get(name)
         if value:
             environment[name] = value
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
-    argv = [str(qsub), "-P", "hb15", "-q", protocol.resource_group, "-l", f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs=1GB,storage=scratch/hb15", "-v", exported, "-o", str(run_dir / "logs/pbs.log"), "-j", "oe", "-N", "openfoam_run", str(execution)]
+    argv = [
+        str(qsub),
+        "-P",
+        "hb15",
+        "-q",
+        protocol.resource_group,
+        "-l",
+        f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs=1GB,storage=scratch/hb15",
+        "-v",
+        exported,
+        "-o",
+        str(run_dir / "logs/pbs.log"),
+        "-j",
+        "oe",
+        "-N",
+        "openfoam_run",
+        str(execution),
+    ]
     request = {
         "schema_version": "scheduler-request/v1",
         "subject_manifest_sha256": _sha256(manifest.path),
         "nodes": protocol.nodes,
         "ranks": protocol.ranks,
-        "profile_rank": 0,
-        "profile_analysis": "hotspots",
+        "profile_rank": profile_rank,
+        "profile_analysis": profile_analysis,
         "resource_group": protocol.resource_group,
         "transport_policy": protocol.transport_policy,
-        "pbs_script": {"repository_path": pbs_script_repository_path, "sha256": _sha256(execution)},
+        "pbs_script": {
+            "repository_path": pbs_script_repository_path,
+            "sha256": _sha256(execution),
+        },
         "argv": argv,
     }
     request_path = run_dir / "control/scheduler-request.json"
@@ -85,7 +120,13 @@ def submit_pbs_run(
     _atomic_bytes(stdout, completed.stdout)
     _atomic_bytes(stderr, completed.stderr)
     tokens = completed.stdout.decode("utf-8", errors="replace").split()
-    job_id = tokens[0] if completed.returncode == 0 and len(tokens) == 1 and PBS_JOB_ID.fullmatch(tokens[0]) else None
+    job_id = (
+        tokens[0]
+        if completed.returncode == 0
+        and len(tokens) == 1
+        and PBS_JOB_ID.fullmatch(tokens[0])
+        else None
+    )
     result = {
         "schema_version": "submission-result/v1",
         "request_sha256": _sha256(request_path),
@@ -96,7 +137,13 @@ def submit_pbs_run(
     }
     result_path = run_dir / "control/submission-result.json"
     _atomic_json(result_path, result)
-    with Recorder.open(manifest.path, registry_path, "runner.submission", run_dir, fragment_id="submission") as recorder:
+    with Recorder.open(
+        manifest.path,
+        registry_path,
+        "runner.submission",
+        run_dir,
+        fragment_id="submission",
+    ) as recorder:
         recorder.record(Fact("scheduler.request", request))
         if job_id is not None:
             recorder.record(Fact("scheduler.submit_job_id", job_id))
@@ -120,7 +167,10 @@ def capture_pbs_terminal(
         raise ValueError("PBS terminal identity is invalid")
     submission = _json(run_dir / "control/submission-result.json")
     entry = _json(run_dir / "control/job-entry.json")
-    if submission.get("parsed_job_id") != job_id or entry.get("scheduler_job_id") != job_id:
+    if (
+        submission.get("parsed_job_id") != job_id
+        or entry.get("scheduler_job_id") != job_id
+    ):
         raise ValueError("submission and job-entry scheduler IDs differ")
     qstat = _launcher_path(qstat_path or _which("qstat"))
     argv = [str(qstat), "-fx", job_id]
@@ -141,15 +191,28 @@ def capture_pbs_terminal(
     _atomic_json(run_dir / "control/scheduler-terminal.json", terminal)
     if completed.returncode != 0:
         raise ValueError("PBS accounting command failed")
-    accounting = parse_pbs_accounting(completed.stdout, expected_job_id=job_id, expected_nodes=protocol.nodes, expected_ranks=protocol.ranks)
+    accounting = parse_pbs_accounting(
+        completed.stdout,
+        expected_job_id=job_id,
+        expected_nodes=protocol.nodes,
+        expected_ranks=protocol.ranks,
+    )
     path = run_dir / "control/scheduler-accounting.json"
     _atomic_json(path, accounting)
-    with Recorder.open(manifest.path, registry_path, "runner.scheduler_postrun", run_dir, fragment_id="accounting") as recorder:
+    with Recorder.open(
+        manifest.path,
+        registry_path,
+        "runner.scheduler_postrun",
+        run_dir,
+        fragment_id="accounting",
+    ) as recorder:
         recorder.record(Fact("scheduler.accounting", accounting))
     return path
 
 
-def parse_pbs_accounting(raw: bytes, *, expected_job_id: str, expected_nodes: int, expected_ranks: int) -> dict[str, object]:
+def parse_pbs_accounting(
+    raw: bytes, *, expected_job_id: str, expected_nodes: int, expected_ranks: int
+) -> dict[str, object]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -157,7 +220,11 @@ def parse_pbs_accounting(raw: bytes, *, expected_job_id: str, expected_nodes: in
     job_ids = re.findall(r"^Job Id: (\S+)\s*$", text, flags=re.MULTILINE)
     if job_ids != [expected_job_id]:
         raise ValueError("PBS accounting job ID differs")
-    attributes = dict(re.findall(r"^[ \t]+([A-Za-z_][A-Za-z0-9_.-]*) = ([^\r\n]*)$", text, flags=re.MULTILINE))
+    attributes = dict(
+        re.findall(
+            r"^[ \t]+([A-Za-z_][A-Za-z0-9_.-]*) = ([^\r\n]*)$", text, flags=re.MULTILINE
+        )
+    )
     if _integer(attributes.get("Resource_List.ncpus")) != expected_ranks:
         raise ValueError("PBS accounting CPU allocation differs from protocol")
     walltime = attributes.get("resources_used.walltime", "")
@@ -169,7 +236,10 @@ def parse_pbs_accounting(raw: bytes, *, expected_job_id: str, expected_nodes: in
         "st": attributes.get("job_state", ""),
         "sdt": attributes.get("stime", ""),
         "elp": {"lexeme": walltime, "seconds": _duration(walltime)},
-        "ec": {"lexeme": attributes.get("Exit_status", ""), "value": _integer(attributes.get("Exit_status"))},
+        "ec": {
+            "lexeme": attributes.get("Exit_status", ""),
+            "value": _integer(attributes.get("Exit_status")),
+        },
         "sn": {"lexeme": "", "value": None},
         "pc": {"lexeme": "", "value": None},
         "nnumu": {"lexeme": str(expected_nodes), "value": expected_nodes},
@@ -182,14 +252,23 @@ def parse_pbs_accounting(raw: bytes, *, expected_job_id: str, expected_nodes: in
 
 def _duration(value: str) -> float | None:
     match = re.fullmatch(r"([0-9]+):([0-5][0-9]):([0-5][0-9](?:[.][0-9]+)?)", value)
-    return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3)) if match else None
+    return (
+        int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))
+        if match
+        else None
+    )
 
 
 def _memory_bytes(value: str) -> int | None:
     match = re.fullmatch(r"([0-9]+)(b|kb|mb|gb|tb)", value.lower())
     if match is None:
         return None
-    return int(match.group(1)) * {"b": 1, "kb": 1024, "mb": 1024**2, "gb": 1024**3, "tb": 1024**4}[match.group(2)]
+    return (
+        int(match.group(1))
+        * {"b": 1, "kb": 1024, "mb": 1024**2, "gb": 1024**3, "tb": 1024**4}[
+            match.group(2)
+        ]
+    )
 
 
 def _integer(value: object) -> int | None:
@@ -228,7 +307,11 @@ def _sha256(path: Path) -> str:
 
 def _member(path: Path, root: Path) -> dict[str, object]:
     raw = path.read_bytes()
-    return {"path": path.relative_to(root).as_posix(), "size_bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    return {
+        "path": path.relative_to(root).as_posix(),
+        "size_bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
 
 
 def _atomic_json(path: Path, document: object) -> None:
@@ -239,7 +322,9 @@ def _atomic_bytes(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         raise FileExistsError(path)
-    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:
+    with tempfile.NamedTemporaryFile(
+        dir=path.parent, prefix=f".{path.name}.", delete=False
+    ) as stream:
         stream.write(content)
         stream.flush()
         os.fsync(stream.fileno())

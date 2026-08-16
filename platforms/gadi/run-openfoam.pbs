@@ -7,17 +7,22 @@ set -euo pipefail
 : "${PBS_JOBFS:?PBS job-local filesystem is required}"
 : "${OPENFOAM_NODES:?protocol node count is required}"
 : "${OPENFOAM_MPI_PROCS:?protocol rank count is required}"
+: "${OPENFOAM_RUN_PURPOSE:?run purpose is required}"
+: "${OPENFOAM_TRANSPORT_POLICY:?protocol transport policy is required}"
 : "${PROVISION_DIR:?provision directory is required}"
 
 module purge
-module load gcc/13.2.0 openmpi/4.1.7
+module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then module load intel-vtune/2025.3.0; fi
 
 set +eu
 readarray -t build_environment < <("${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -c 'import json, sys; flags = json.load(open(sys.argv[1], encoding="utf-8"))["compile_flags"]; values = {key: [item.removeprefix(key + "=") for item in flags if item.startswith(key + "=")] for key in ("WM_COMPILE_OPTION", "WM_OPTIONS")}; all(len(value) == 1 for value in values.values()) or sys.exit(1); print(values["WM_COMPILE_OPTION"][0]); print(values["WM_OPTIONS"][0])' "${RUN_DIR}/control/build-sidecar.json")
 [[ "${#build_environment[@]}" -eq 2 && "${build_environment[0]}" =~ ^[A-Za-z0-9]+$ && "${build_environment[1]}" =~ ^[A-Za-z0-9]+$ ]]
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Gcc WM_MPLIB=SYSTEMOPENMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
 set -eu
 test "${WM_OPTIONS}" = "${build_environment[1]}"
 
+export I_MPI_FABRICS="${OPENFOAM_TRANSPORT_POLICY}"
+ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 mpirun_path=$(command -v mpirun)
-exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache" --profile-root "/scratch/hb15/${USER}/openfoam/gadi/profile" --global-rank-env OMPI_COMM_WORLD_RANK --local-rank-env OMPI_COMM_WORLD_LOCAL_RANK --local-size-env OMPI_COMM_WORLD_LOCAL_SIZE --solver-launch-arg "${mpirun_path}" --solver-launch-arg -np --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg --map-by --solver-launch-arg "ppr:$((OPENFOAM_MPI_PROCS / OPENFOAM_NODES)):node" --node-launch-arg "${mpirun_path}" --node-launch-arg -np --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg --map-by --node-launch-arg ppr:1:node
+exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache" --profile-root "/scratch/hb15/${USER}/openfoam/gadi/profile" --global-rank-env PMI_RANK --local-rank-env MPI_LOCALRANKID --local-size-env MPI_LOCALNRANKS --solver-launch-arg "${mpirun_path}" --solver-launch-arg -np --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpirun_path}" --node-launch-arg -np --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1

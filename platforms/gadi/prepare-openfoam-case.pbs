@@ -10,12 +10,12 @@ set -euo pipefail
 [[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
 
 module purge
-module load gcc/13.2.0 openmpi/4.1.7
+module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
 
 set +eu
 readarray -t build_environment < <("${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -c 'import json, sys; flags = json.load(open(sys.argv[1], encoding="utf-8"))["compile_flags"]; values = {key: [item.removeprefix(key + "=") for item in flags if item.startswith(key + "=")] for key in ("WM_COMPILE_OPTION", "WM_OPTIONS")}; all(len(value) == 1 for value in values.values()) or sys.exit(1); print(values["WM_COMPILE_OPTION"][0]); print(values["WM_OPTIONS"][0])' "${PROVISION_DIR}/control/build-sidecar.json")
 set +u
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Gcc WM_MPLIB=SYSTEMOPENMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
 set -eu
 test "${WM_OPTIONS}" = "${build_environment[1]}"
 

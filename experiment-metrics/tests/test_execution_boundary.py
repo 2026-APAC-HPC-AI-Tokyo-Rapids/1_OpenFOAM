@@ -37,6 +37,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(wrapper)], check=True)
     assert "#PJM -L elapse=01:00:00" in wrapper_text
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS" not in text
+    assert "smoke-send --run" not in text
     assert "stage solver" in text
     assert "stage minimal_hardware_capture" in text
     assert "if (( OPENFOAM_NODES == 1 )); then" in text
@@ -64,6 +65,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     ) in wrapper_text
     assert "OPENFOAM_PROFILE_DIR" not in text
     assert 'vtune_root="${profile_root}/${profile_run_id}"' in text
+    assert "/home/pj26000080" not in text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in wrapper_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in wrapper_text
     assert "capture-workload" in text
@@ -102,7 +104,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert text.index(export_path) < text.index("stage profile_hardware_capture")
 
 
-def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
+def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
     assert "submit-run" in workflow
@@ -149,7 +151,11 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert "steps.v2_context.outputs.pjm_job_id != ''" in workflow
     assert "needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert "LC_ALL=C sort -u" in workflow
-    assert "EXPERIMENT_METRICS_DIRECT_SEND=1" in workflow
+    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in workflow
+    assert (
+        'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
+        in workflow
+    )
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record v2 terminal sources" not in workflow
     assert "- name: Package fixed v2 artifact set" not in workflow
@@ -175,10 +181,11 @@ def test_control_plane_does_not_preflight_files_consumed_by_the_next_command() -
     assert '[[ -e "${TARGET_CASE}" ]]' not in prepare
 
 
-def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
+def test_gadi_uses_login_build_and_pbs_execution() -> None:
     workflow = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/gadi/run-openfoam.pbs").read_text(encoding="utf-8")
-    builder = (ROOT / "platforms/gadi/build-openfoam.pbs").read_text(encoding="utf-8")
+    builder_path = ROOT / "platforms/gadi/build-openfoam.sh"
+    builder = builder_path.read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
     assert "runs-on: [self-hosted, gadi]" in workflow
@@ -186,10 +193,15 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert "/home/pj26000080" not in workflow
     assert "submit-pbs-run" in workflow
     assert "record-pbs-terminal" in workflow
-    assert "ncpus=104,mem=400GB,jobfs=400GB" in workflow
-    assert workflow.count("- name: Initialize metrics and submit PBS run") == 1
+    assert (
+        "/tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}"
+        in workflow
+    )
+    assert "platforms/gadi/build-openfoam.sh" in workflow
+    assert "openfoam_build" not in workflow
+    assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
-    assert "steps.context.outputs.pbs_job_id != ''" in workflow
+    assert "steps.v2_context.outputs.pbs_job_id != ''" in workflow
     assert "if: always() && needs.provision.result == 'success'" in workflow
     assert "if: always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert (
@@ -208,10 +220,15 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert "${GITHUB_RUN_ID}.tar.zst" in workflow
     assert "${GITHUB_RUN_NUMBER}.tar.zst" not in workflow
     assert "openfoam-v2-protocol-gadi-scotch" not in workflow
-    assert "module load gcc/13.2.0 openmpi/4.1.7" in wrapper
-    assert "OMPI_COMM_WORLD_RANK" in wrapper
-    assert "--solver-launch-arg --map-by" in wrapper
-    assert '"${PBS_JOBFS}/openfoam-build"' in builder
+    assert "module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0" in wrapper
+    assert "module load intel-vtune/2025.3.0" in wrapper
+    assert "WM_COMPILER=Icx WM_MPLIB=INTELMPI" in wrapper
+    assert "PMI_RANK" in wrapper
+    assert "--solver-launch-arg -ppn" in wrapper
+    assert "build_parallelism=48" in builder
+    assert 'build_tree="${BUILD_DIR}/tree"' in builder
+    assert "PBS_JOBFS" not in builder
+    assert builder_path.stat().st_mode & 0o111
     assert 'tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}"' in builder
     assert (
         '--case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache"' in wrapper
@@ -234,9 +251,6 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
 
 def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() -> None:
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
-    profile = (ROOT / ".github/workflows/genkai-profile.yml").read_text(
-        encoding="utf-8"
-    )
     genkai = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
     gadi = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
 
@@ -247,27 +261,60 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     assert "require_build:" not in entry_inputs
     assert "reshare_ccache:" not in entry_inputs
     assert "run_purpose:" not in entry_inputs
-    assert "profile_rank:" not in entry_inputs
-    assert "profile_analysis:" not in entry_inputs
-
-    profile_inputs = profile.split("permissions:", 1)[0]
-    assert "profile_rank:" in profile_inputs
-    assert "profile_analysis:" in profile_inputs
-    assert "node_count:" in profile_inputs
-    assert "run_genkai:" not in profile_inputs
-    assert "run_gadi:" not in profile_inputs
-    assert "require_build:" not in profile_inputs
-    assert "run_purpose:" not in profile_inputs
-    assert "profile: true" in profile
+    assert "profile:" in entry_inputs
+    assert "profile_rank:" in entry_inputs
+    assert "profile_analysis:" in entry_inputs
+    profile_push_gate = "github.event_name == 'push' && contains(github.event.head_commit.message, '[profile]')"
+    assert entry.count(profile_push_gate) == 2
+    assert not (ROOT / ".github/workflows/genkai-profile.yml").exists()
 
     assert "require_build:" not in genkai
     assert "reshare_ccache:" not in genkai
     assert "run_purpose:" not in genkai
     assert "require_build:" not in gadi
     assert "run_purpose:" not in gadi
+    for workflow in (genkai, gadi):
+        assert "profile:" in workflow
+        assert "profile_rank:" in workflow
+        assert "profile_analysis:" in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
+
+
+def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
+    genkai = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
+    gadi = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
+    expected = [
+        "select-build",
+        "reuse-build",
+        "build-openfoam",
+        "provision",
+        "prepare-case",
+        "run",
+        "archive-artifacts",
+    ]
+    for workflow in (genkai, gadi):
+        job_section = workflow.split("jobs:\n", 1)[1]
+        jobs = [
+            line[2:-1]
+            for line in job_section.splitlines()
+            if line.startswith("  ")
+            and not line.startswith("    ")
+            and line.endswith(":")
+        ]
+        assert jobs == expected
+        assert workflow.index("- name: Wait for OpenFOAM job") < workflow.index(
+            "- name: Finalize metrics and package artifacts"
+        )
+        assert workflow.index(
+            "- name: Finalize metrics and package artifacts"
+        ) < workflow.index(
+            'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
+        )
+        assert workflow.index(
+            'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
+        ) < workflow.index("- name: Upload fixed v2 artifact set")
 
 
 def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
@@ -298,6 +345,7 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "CCACHE_RECACHE" not in script
     assert "${GITHUB_RUN_ID}.tar.zst" in script
     assert "${GITHUB_RUN_NUMBER}.tar.zst" not in script
+    assert "build_parallelism=120" in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:

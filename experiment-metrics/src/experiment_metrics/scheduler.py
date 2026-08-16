@@ -97,6 +97,7 @@ def submit_run(
     execution = execution_script.resolve(strict=True)
     pjsub = _launcher_path(pjsub_path or _which("pjsub"))
     environment = {
+        "EXPERIMENT_METRICS_DIRECT_SEND": "0",
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
         "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
@@ -110,11 +111,7 @@ def submit_run(
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
-    for name in (
-        "EXPERIMENT_METRICS_BIGQUERY_CONFIG",
-        "EXPERIMENT_METRICS_DIRECT_SEND",
-        "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE",
-    ):
+    for name in ("EXPERIMENT_METRICS_BIGQUERY_CONFIG",):
         value = os.environ.get(name)
         if value:
             environment[name] = value
@@ -204,7 +201,10 @@ def capture_scheduler_terminal(
         raise ValueError("scheduler terminal identity is invalid")
     submission = _json(run_dir / "control/submission-result.json")
     entry = _json(run_dir / "control/job-entry.json")
-    if submission.get("parsed_job_id") != job_id or entry.get("scheduler_job_id") != job_id:
+    if (
+        submission.get("parsed_job_id") != job_id
+        or entry.get("scheduler_job_id") != job_id
+    ):
         raise ValueError("submission and job-entry scheduler IDs differ")
     pjstat = _launcher_path(pjstat_path or _which("pjstat"))
     argv = [

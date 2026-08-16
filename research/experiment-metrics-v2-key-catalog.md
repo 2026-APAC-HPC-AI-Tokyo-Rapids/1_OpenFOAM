@@ -1,17 +1,18 @@
-# OpenFOAM experiment metrics v2 直接送信キーカタログ
+# OpenFOAM experiment metrics v2 キーカタログ
 
 ## 現行contract
 
 2026-08-12以降の実装の正本である。BigQueryは
 `openfoam_metrics(run STRING, key STRING, value STRING)` 一表だけを使用する。
-各producerはfragmentをatomic renameで確定した直後に同じ行を直接送信する。
+各producerはfragmentをatomic renameで確定する。計算ジョブ終了後にlogin runnerが
+確定済みfragmentをBigQueryへ一度だけ送信する。
 merge、finalize、projection、consumer view、conflict table、`metrics.jsonl`、自動再送は使わない。
 
 source trackは `source.track.head_commit`（このrepositoryのGit commit SHA）だけとする。
 pushは常にbench、手動dispatchだけがbench/profileを選択する。profileはVTune
 hotspotsへ一本化する。通常runでrank別environmentは収集しない。
 
-## 直接送信するキー
+## BigQueryへ送信するキー
 
 `*`は実際のnode、rank、stage、workload memberまたはIMB measurement識別子へ置換する。
 JSON値もBigQuery上ではcanonical JSON文字列として格納する。

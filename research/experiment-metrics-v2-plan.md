@@ -1,6 +1,6 @@
 # 実験メトリクス再設計計画（旧merge/projection設計資料）
 
-> この文書は当初計画の履歴資料である。実装済みの直接送信keyと非収集項目は
+> この文書は当初計画の履歴資料である。実装済みの送信keyと非収集項目は
 > `research/experiment-metrics-v2-key-catalog.md` を正本とする。
 
 ## 目的

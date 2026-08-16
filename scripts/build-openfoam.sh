@@ -12,6 +12,8 @@ set -euo pipefail
 # GitHub Actions のメタデータだけを受け取る。
 openfoam_source_ref=refs/heads/master
 thirdparty_source_ref=refs/heads/main
+# genkai0001/0002 expose two 60-core sockets. Use physical cores and do not
+# count the second SMT thread as another compiler worker.
 build_parallelism=120
 build_condition=baseline
 build_compile_option=Opt

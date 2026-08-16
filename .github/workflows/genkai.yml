@@ -49,7 +49,7 @@ jobs:
         id: prepare_identity
         run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
 
-      - name: Resolve Genkai experiment protocol
+      - name: Resolve experiment protocol
         id: protocol
         run: |
           case '${{ inputs.node_count }}' in
@@ -77,23 +77,19 @@ jobs:
           commit="${GITHUB_SHA}"
           while [[ -n "${commit}" ]]
           do
-            for workflow in openfoam.yml genkai-profile.yml genkai.yml
+            while IFS= read -r run_id
             do
-              while IFS= read -r run_id
-              do
-                [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
-                archive_key=${run_id}
-                archive="${BUILD_ARCHIVE_DIR}/${archive_key}.tar.zst"
-                sidecar="${BUILD_ARCHIVE_DIR}/${archive_key}.build-sidecar.json"
-                expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")" || continue
-                expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")" || continue
-                [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
-                [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
-                echo "Selected ${archive}"
-                printf 'action=reuse\nsource_archive_key=%s\n' "${archive_key}" >> "${GITHUB_OUTPUT}"
-                exit 0
-              done < <(gh run list --workflow "${workflow}" --commit "${commit}" --limit 20 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
-            done
+              [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
+              archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
+              sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
+              expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")" || continue
+              expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")" || continue
+              [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
+              [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
+              echo "Selected ${archive}"
+              printf 'action=reuse\nsource_archive_key=%s\n' "${run_id}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 20 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
             commit="$(git rev-parse "${commit}^" 2>/dev/null || true)"
           done
 
@@ -107,7 +103,7 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     steps:
-      - name: Hardlink the selected archive
+      - name: Hardlink selected archive
         run: |
           source_key=${{ needs.select-build.outputs.source_archive_key }}
           ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
@@ -277,7 +273,7 @@ jobs:
           install -m 0600 /dev/null "${staging_credential}"
           printf '%s' "${METRICS_CREDENTIAL_JSON}" >"${staging_credential}"
           trap 'rm -f -- "${staging_credential}"' EXIT
-          export EXPERIMENT_METRICS_DIRECT_SEND=1
+          export EXPERIMENT_METRICS_DIRECT_SEND=0
           export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${staging_credential}"
           export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
           uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
@@ -295,11 +291,9 @@ jobs:
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
           fi
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
-          control_plane_files=(.github/workflows/genkai.yml benchmark/parse_result.sh "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
+          control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
           if [[ "${purpose}" == profile ]]; then
-            control_plane_files+=(.github/workflows/genkai-profile.yml experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
-          else
-            control_plane_files+=(.github/workflows/openfoam.yml)
+            control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
           fi
           control_plane_files+=(platforms/genkai/prepare-openfoam-case.pjm platforms/genkai/run-openfoam.pjm scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
@@ -318,7 +312,7 @@ jobs:
           cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-artifact-index --manifest "${manifest}" --runtime-dir "${run_dir}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --build-sidecar "${run_dir}/control/build-sidecar.json"
           printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
-          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nEXPERIMENT_METRICS_DIRECT_SEND=1\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\nOPENFOAM_PROTOCOL_PATH=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" "${protocol_path}" >> "${GITHUB_ENV}"
+          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nEXPERIMENT_METRICS_DIRECT_SEND=0\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\nOPENFOAM_PROTOCOL_PATH=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" "${protocol_path}" >> "${GITHUB_ENV}"
           export RUN_ID="${run_id}"
           export RUN_MANIFEST="${manifest}"
           export RUN_DIR="${run_dir}"
@@ -411,6 +405,7 @@ jobs:
             done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
           fi
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
       - name: Upload fixed v2 artifact set
         id: upload_v2
