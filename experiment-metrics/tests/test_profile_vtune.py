@@ -128,6 +128,8 @@ def test_recording_writes_one_fact_and_derives_safe_actions_summary(
     rendered = markdown.read_text()
     assert "name`with\\|syntax" in rendered
     assert "`name`with" not in rendered
+    assert "Full VTune results remain in the cluster profile storage." in rendered
+    assert "Genkai" not in rendered
 
 
 def test_hpc_characterization_records_hardware_sampling(

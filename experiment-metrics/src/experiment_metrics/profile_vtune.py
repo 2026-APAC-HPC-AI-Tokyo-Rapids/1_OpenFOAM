@@ -288,7 +288,8 @@ def _markdown(summary: dict[str, object]) -> str:
             "",
             (
                 "The table is derived from the validated VTune report for one "
-                "representative MPI rank. Full VTune results remain on Genkai."
+                "representative MPI rank. Full VTune results remain in the "
+                "cluster profile storage."
             ),
             "",
         ]
