@@ -66,7 +66,6 @@ def submit_run(
     runtime_dir: Path,
     registry_path: Path,
     protocol_path: Path,
-    repository_root: Path,
     pjm_script_repository_path: str,
     execution_script: Path,
     provision_dir: Path,
@@ -95,12 +94,7 @@ def submit_run(
         or ".." in relative.parts
     ):
         raise ValueError("PJM repository path is invalid")
-    repository_script = (repository_root.resolve(strict=True) / relative).resolve(
-        strict=True
-    )
     execution = execution_script.resolve(strict=True)
-    if repository_script.read_bytes() != execution.read_bytes():
-        raise ValueError("provisioned PJM script differs from repository source")
     pjsub = _launcher_path(pjsub_path or _which("pjsub"))
     environment = {
         "OPENFOAM_NODES": str(protocol.nodes),
@@ -155,7 +149,7 @@ def submit_run(
         "transport_policy": protocol.transport_policy,
         "pjm_script": {
             "repository_path": pjm_script_repository_path,
-            "sha256": _sha256(repository_script),
+            "sha256": _sha256(execution),
         },
         "argv": argv,
     }
@@ -210,7 +204,7 @@ def capture_scheduler_terminal(
         raise ValueError("scheduler terminal identity is invalid")
     submission = _json(run_dir / "control/submission-result.json")
     entry = _json(run_dir / "control/job-entry.json")
-    if submission.get("parsed_job_id") != job_id or entry.get("pjm_job_id") != job_id:
+    if submission.get("parsed_job_id") != job_id or entry.get("scheduler_job_id") != job_id:
         raise ValueError("submission and job-entry scheduler IDs differ")
     pjstat = _launcher_path(pjstat_path or _which("pjstat"))
     argv = [

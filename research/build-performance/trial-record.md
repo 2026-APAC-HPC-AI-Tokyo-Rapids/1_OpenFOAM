@@ -57,6 +57,8 @@ version 付き source directory をそのまま使うと、`CCACHE_BASEDIR` か�
 
 ## 7. build archive の再利用は明示的に選ぶ
 
+この節は旧方式を採用した当時の記録である。現在は新規ビルドだけをpush時の`[require-build]`で指定し、それ以外は自動的に既存成果物を探す。手動実行はコミットメッセージを読まない。成果物名には実行番号ではなくGitHubの実行IDを使う。
+
 full build の成果物を run number 名の `tar.zst` として共有領域へ保存し、後続の `run` job が常に現在の run number だけを参照できる構成にした。ビルドを省略する判断は、手動実行の `skip_build` または push の先頭コミットメッセージに含める `[skip-build]` で明示する。
 
 workflow は第一親を1コミットずつ遡り、成功済みの実ビルドと対応する archive を探す。互換性を差分から推測しないため、判断基準は単純だが、指定側が source、patch、compiler設定の互換性に責任を持つ。

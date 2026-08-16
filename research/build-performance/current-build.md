@@ -1,6 +1,6 @@
 # 現在のビルド構成
 
-ここでいう「現在」は `main` の [Genkai workflow](../../.github/workflows/genkai.yml) を指す。環境に依存するため、別の runner や OpenFOAM version にこの設定をそのまま転用してはならない。
+ここでは玄界のビルドを扱う。Gadiはコンパイラ、MPI、記憶領域が異なるため、[Gadi用ワークフロー](../../.github/workflows/gadi.yml)と[運用方針](../../platforms/gadi/README.md)を参照する。
 
 ## ビルドの定義
 
@@ -8,7 +8,7 @@
 |---|---|
 | OpenFOAM | v2606 |
 | 追加依存 | ADIOS2 2.12.1、CGAL 6.1.1 |
-| compiler / MPI | Intel oneAPI 2025.1.3 の `mpiicx` / `mpiicpx`、Intel MPI |
+| compiler / MPI | `intel/2025.1.3`モジュールのIntel C++ 2025.1.1、Intel MPI 2021.15 |
 | OpenFOAM 設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、DP、64-bit label |
 | Allwmake | `-j 120 -s`、queue なし |
 | compiler cache | ccache。CMake の C/C++ launcher にも使用 |
@@ -33,11 +33,11 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 
 ## build archive の作成と再利用
 
-通常ビルドは `${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst` を作成する。手動実行では既定で無効な `skip_build` を有効にするか、push の先頭コミットメッセージに `[skip-build]` を含めると、通常ビルドを行わず過去の archive を再利用する。
+ビルド成果物は`${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst`として保存する。push時だけ、コミットメッセージ先頭の`[require-build]`で新規ビルドを指定する。手動実行ではコミットメッセージを読まない。
 
-再利用時は現在のコミットから第一親を順に遡り、`genkai.yml` が成功し、かつ `Archive OpenFOAM build` step が成功した run を調べる。対応する archive が残っていれば、現在の run number 名でハードリンクを作る。過去成果物を再利用しただけの run と、archive が削除済みの run は飛ばす。source、patch、compiler設定などの互換性は自動判定せず、`skip_build` または `[skip-build]` を指定する人間かエージェントが判断する。
+再利用時は現在のコミットから第一親を順に遡り、通常実行、玄界プロファイル、旧玄界ワークフローの成功履歴を調べる。圧縮ファイルと付随記録が残り、記録されたSHAと一致する成果物を現在の実行番号へハードリンクする。利用可能な成果物がなければ新しくビルドする。ソース、ツールチェーン、ビルド依存、生成物を変えるコミットは`[require-build]`を付けてpushする。
 
-現在の `run` job は実計算をまだ行わない。現在の run number に対応する archive を `tar -xO` で最後まで展開し、内容を `/dev/null` へ捨てる。これにより、通常ビルドと再利用のどちらでも後続jobが同じ名前の archive を読み出せることと、archiveを正常に展開できることだけを確認する。
+実行時は選択した成果物を展開し、ケース準備、計算ジョブ、公式判定、メトリクス作成、成果物回収までを同じActions実行内で完了する。
 
 ## 実行時の観測点
 

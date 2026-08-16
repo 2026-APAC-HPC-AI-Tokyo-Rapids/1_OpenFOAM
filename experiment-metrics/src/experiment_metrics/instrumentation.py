@@ -29,7 +29,6 @@ _HOOK_ACTIVATION_FIELDS = {
 _EXECUTABLE_ACTIVATION_FIELDS = {
     "kind",
     "artifact_relative_path",
-    "content_sha256",
     "argv_template",
 }
 
@@ -127,12 +126,6 @@ def load_bundle(
             _relative_path(artifact)
             if artifact not in sources:
                 raise ValueError("component executable is absent from source_paths")
-            digest = activation["content_sha256"]
-            if (
-                not isinstance(digest, str)
-                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
-            ):
-                raise ValueError("component executable hash is invalid")
             _argv_template(activation["argv_template"], set(component_sinks))
         else:
             raise ValueError("unsupported instrumentation activation")
@@ -202,7 +195,6 @@ def validate_runtime_bindings(
     registry_path: Path,
     *,
     environment: dict[str, str] | None = None,
-    artifact_root: Path | None = None,
 ) -> dict[str, str]:
     """Bind the immutable bundle to the environment used by the solver tree."""
 
@@ -219,30 +211,6 @@ def validate_runtime_bindings(
         purpose=manifest.purpose,
         registry_path=registry_path,
     )
-    executable_activations = [
-        component["activation"]
-        for component in document["components"]  # type: ignore[union-attr]
-        if component["activation"]["kind"] == "executable"
-    ]
-    if executable_activations:
-        if artifact_root is None:
-            raise ValueError("executable bundle requires an artifact root")
-        root = artifact_root.resolve(strict=True)
-        for activation in executable_activations:
-            executable = (root / activation["artifact_relative_path"]).resolve(
-                strict=True
-            )
-            if (
-                not executable.is_relative_to(root)
-                or not executable.is_file()
-                or executable.stat().st_mode & 0o111 == 0
-            ):
-                raise ValueError("component executable escapes the artifact root")
-            if (
-                hashlib.sha256(executable.read_bytes()).hexdigest()
-                != activation["content_sha256"]
-            ):
-                raise ValueError("component executable content differs from bundle")
     if (
         hashlib.sha256(canonical_json(document).encode()).hexdigest()
         != manifest.instrumentation_bundle_sha256

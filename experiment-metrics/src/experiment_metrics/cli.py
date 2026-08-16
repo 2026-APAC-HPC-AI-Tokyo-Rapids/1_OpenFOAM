@@ -31,7 +31,6 @@ def parser() -> argparse.ArgumentParser:
     runtime_bundle.add_argument("--manifest", type=Path, required=True)
     runtime_bundle.add_argument("--bundle", type=Path, required=True)
     runtime_bundle.add_argument("--registry", type=Path, required=True)
-    runtime_bundle.add_argument("--artifact-root", type=Path)
 
     build_state = commands.add_parser("capture-build-state")
     build_state.add_argument("--output", type=Path, required=True)
@@ -47,6 +46,11 @@ def parser() -> argparse.ArgumentParser:
     )
     build_state.add_argument("--executable", action="append", default=[])
     build_state.add_argument("--compile-flag", action="append", default=[])
+    build_state.add_argument("--compiler-c", type=Path, required=True)
+    build_state.add_argument("--compiler-cxx", type=Path, required=True)
+    build_state.add_argument("--mpi-launcher", type=Path, required=True)
+    build_state.add_argument("--precision", choices=["SP", "DP"], required=True)
+    build_state.add_argument("--label-bits", choices=[32, 64], type=int, required=True)
 
     build_finalize = commands.add_parser("finalize-build-sidecar")
     build_finalize.add_argument("--state", type=Path, required=True)
@@ -74,7 +78,6 @@ def parser() -> argparse.ArgumentParser:
     submit = commands.add_parser("submit-run")
     _runtime_common(submit)
     submit.add_argument("--protocol", type=Path, required=True)
-    submit.add_argument("--repository-root", type=Path, required=True)
     submit.add_argument("--pjm-script-repository-path", required=True)
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
@@ -85,9 +88,17 @@ def parser() -> argparse.ArgumentParser:
         default="hotspots",
     )
 
+    submit_pbs = commands.add_parser("submit-pbs-run")
+    _runtime_common(submit_pbs)
+    submit_pbs.add_argument("--protocol", type=Path, required=True)
+    submit_pbs.add_argument("--pbs-script-repository-path", required=True)
+    submit_pbs.add_argument("--execution-script", type=Path, required=True)
+    submit_pbs.add_argument("--provision-dir", type=Path, required=True)
+
     supervisor_start = commands.add_parser("supervisor-start")
     supervisor_start.add_argument("--manifest", type=Path, required=True)
     supervisor_start.add_argument("--state", type=Path, required=True)
+    supervisor_start.add_argument("--job-id", required=True)
 
     supervisor_mark = commands.add_parser("supervisor-mark-pipeline")
     supervisor_mark.add_argument("--state", type=Path, required=True)
@@ -111,6 +122,11 @@ def parser() -> argparse.ArgumentParser:
     terminal = commands.add_parser("record-scheduler-terminal")
     _runtime_common(terminal)
     terminal.add_argument("--job-id", required=True)
+
+    pbs_terminal = commands.add_parser("record-pbs-terminal")
+    _runtime_common(pbs_terminal)
+    pbs_terminal.add_argument("--job-id", required=True)
+    pbs_terminal.add_argument("--protocol", type=Path, required=True)
 
     execution_context = commands.add_parser("record-execution-context")
     _runtime_common(execution_context)
@@ -259,7 +275,6 @@ def main(argv: list[str] | None = None) -> int:
                     arguments.manifest,
                     arguments.bundle,
                     arguments.registry,
-                    artifact_root=arguments.artifact_root,
                 ),
                 separators=(",", ":"),
                 sort_keys=True,
@@ -280,6 +295,11 @@ def main(argv: list[str] | None = None) -> int:
                 thirdparty_algorithm=arguments.thirdparty_algorithm,
                 executable_paths=_role_paths(arguments.executable),
                 compile_flags=arguments.compile_flag,
+                compiler_c=arguments.compiler_c,
+                compiler_cxx=arguments.compiler_cxx,
+                mpi_launcher=arguments.mpi_launcher,
+                precision=arguments.precision,
+                label_bits=arguments.label_bits,
             )
         )
         return 0
@@ -335,7 +355,6 @@ def main(argv: list[str] | None = None) -> int:
             runtime_dir=arguments.runtime_dir,
             registry_path=arguments.registry,
             protocol_path=arguments.protocol,
-            repository_root=arguments.repository_root,
             pjm_script_repository_path=arguments.pjm_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
@@ -345,10 +364,25 @@ def main(argv: list[str] | None = None) -> int:
         if outcome.job_id is not None:
             print(outcome.job_id)
         return 0 if outcome.job_id is not None else 1
+    if arguments.command == "submit-pbs-run":
+        from .pbs_scheduler import submit_pbs_run
+
+        outcome = submit_pbs_run(
+            manifest_path=arguments.manifest,
+            runtime_dir=arguments.runtime_dir,
+            registry_path=arguments.registry,
+            protocol_path=arguments.protocol,
+            pbs_script_repository_path=arguments.pbs_script_repository_path,
+            execution_script=arguments.execution_script,
+            provision_dir=arguments.provision_dir,
+        )
+        if outcome.job_id is not None:
+            print(outcome.job_id)
+        return 0 if outcome.job_id is not None else 1
     if arguments.command == "supervisor-start":
         from .supervisor import start_supervisor
 
-        print(start_supervisor(arguments.manifest, arguments.state))
+        print(start_supervisor(arguments.manifest, arguments.state, job_id=arguments.job_id))
         return 0
     if arguments.command == "supervisor-mark-pipeline":
         from .supervisor import mark_pipeline
@@ -404,6 +438,19 @@ def main(argv: list[str] | None = None) -> int:
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
                 registry_path=arguments.registry,
+                job_id=arguments.job_id,
+            )
+        )
+        return 0
+    if arguments.command == "record-pbs-terminal":
+        from .pbs_scheduler import capture_pbs_terminal
+
+        print(
+            capture_pbs_terminal(
+                manifest_path=arguments.manifest,
+                runtime_dir=arguments.runtime_dir,
+                registry_path=arguments.registry,
+                protocol_path=arguments.protocol,
                 job_id=arguments.job_id,
             )
         )

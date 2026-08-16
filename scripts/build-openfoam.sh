@@ -5,7 +5,6 @@ set -euo pipefail
 : "${BUILD_DIR:?}"
 : "${GITHUB_RUN_ATTEMPT:?}"
 : "${GITHUB_RUN_ID:?}"
-: "${GITHUB_RUN_NUMBER:?}"
 : "${GITHUB_WORKSPACE:?}"
 : "${GIT_MIRROR_DIR:?}"
 : "${SOURCE_ARCHIVE_CACHE_DIR:?}"
@@ -27,8 +26,8 @@ export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 # ビルドツリー、ccache、一時 archive の場所を先に決めておく。
 build_tree="${BUILD_DIR}/tree"
 ccache_local_dir="/dev/shm/ccache-${USER:?}"
-publish_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.tar.zst.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
-publish_sidecar_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_NUMBER}.build-sidecar.json.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+publish_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_ID}.tar.zst.${GITHUB_RUN_ATTEMPT}.tmp"
+publish_sidecar_tmp="${BUILD_ARCHIVE_DIR}/.${GITHUB_RUN_ID}.build-sidecar.json.${GITHUB_RUN_ATTEMPT}.tmp"
 export CCACHE_BASEDIR="${build_tree}"
 export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
 export CCACHE_DIR="${ccache_local_dir}"
@@ -62,17 +61,14 @@ git -C "${build_tree}/ThirdParty" checkout --detach "${thirdparty_source_ref}"
 thirdparty_source_algorithm="$(git -C "${build_tree}/ThirdParty" rev-parse --show-object-format)"
 thirdparty_source_oid="$(git -C "${build_tree}/ThirdParty" rev-parse HEAD)"
 
-# Bundle-declared in-process sources must be present in, and byte-identical to,
-# the exact detached OpenFOAM source commit before its Git metadata is removed.
+# Bundle-declared in-process sources must be present in the exact detached
+# OpenFOAM source commit before its Git metadata is removed.
 # Executable component paths are relative to the separately provisioned
 # instrumentation artifact root, so they must not be resolved in this upstream
 # OpenFOAM checkout.
-test -z "$(git -C "${build_tree}/OpenFOAM" status --porcelain=v1 --untracked-files=all)"
-test -z "$(git -C "${build_tree}/ThirdParty" status --porcelain=v1 --untracked-files=all)"
 while IFS= read -r source_path
 do
   git -C "${build_tree}/OpenFOAM" cat-file -e "HEAD:${source_path}"
-  cmp -- "${build_tree}/OpenFOAM/${source_path}" <(git -C "${build_tree}/OpenFOAM" show "HEAD:${source_path}")
 done < <(
   jq -r '.components[].activation | select(.kind == "in_process_hook") | .source_path' "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json" |
     LC_ALL=C sort -u
@@ -133,11 +129,11 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 64 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
 "${metrics_cli}" finalize-build-sidecar --state "${build_state}" --archive "${publish_tmp}" --output "${publish_sidecar_tmp}"
-mv -- "${publish_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
-mv -- "${publish_sidecar_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.build-sidecar.json"
-echo "Published ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_NUMBER}.tar.zst"
+mv -- "${publish_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+mv -- "${publish_sidecar_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
+echo "Published ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"

@@ -50,7 +50,7 @@ id = "runner.submission"
 required_for = ["bench", "profile"]
 
 [[producers]]
-id = "pjm.supervisor"
+id = "scheduler.supervisor"
 required_for = ["bench", "profile"]
 
 [[producers]]
@@ -121,31 +121,31 @@ required_for = []
 
 [[keys]]
 pattern = "run.started_at"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "string"
 required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "run.finished_at"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "string"
 required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "run.elapsed_sec"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "decimal"
 required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "run.exit_code"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "integer"
 required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "perf.pipeline.wall_time_sec"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "decimal"
 required_for = ["bench", "profile"]
 
@@ -163,7 +163,7 @@ required_for = ["bench", "profile"]
 
 [[keys]]
 pattern = "scheduler.job_entry_job_id"
-owner = "pjm.supervisor"
+owner = "scheduler.supervisor"
 logical_type = "string"
 required_for = ["bench", "profile"]
 
@@ -421,7 +421,7 @@ activation = { kind = "always" }
 instances = { kind = "singleton" }
 
 [[producer]]
-id = "pjm.supervisor"
+id = "scheduler.supervisor"
 owner_scope = "run"
 applicable_run_variants = ["bench", "profile"]
 activation = { kind = "always" }
@@ -593,10 +593,10 @@ required_when_applicable = true
 
 [[source]]
 id = "facts.supervisor"
-producer_id = "pjm.supervisor"
+producer_id = "scheduler.supervisor"
 source_role = "supervisor_fact_fragment"
 storage = "fact_fragment"
-path_template = [{ literal = "domain/fragments/pjm.supervisor--supervisor.jsonl" }]
+path_template = [{ literal = "domain/fragments/scheduler.supervisor--supervisor.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -737,7 +737,7 @@ required_when_applicable = true
 
 [[source]]
 id = "artifact.job_entry"
-producer_id = "pjm.supervisor"
+producer_id = "scheduler.supervisor"
 source_role = "job_entry"
 storage = "run_bundle"
 path_template = [{ literal = "control/job-entry.json" }]
@@ -746,7 +746,7 @@ required_when_applicable = true
 
 [[source]]
 id = "artifact.job_entry_environment"
-producer_id = "pjm.supervisor"
+producer_id = "scheduler.supervisor"
 source_role = "job_entry_environment"
 storage = "run_bundle"
 path_template = [{ literal = "source/env/job-entry.snapshot" }]

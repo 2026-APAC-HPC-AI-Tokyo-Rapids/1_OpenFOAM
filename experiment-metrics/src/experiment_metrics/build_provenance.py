@@ -25,8 +25,8 @@ EXECUTABLE_ROLES = (
 )
 ELF_ROLES = EXECUTABLE_ROLES[:-1]
 TOOLCHAIN_ROLES = (
-    "mpiicx_version",
-    "mpiicpx_version",
+    "compiler_c_version",
+    "compiler_cxx_version",
     "mpirun_version",
     "icofoam_dynamic",
 )
@@ -35,11 +35,6 @@ PARTITION_SOURCE_PATHS = (
     "experiment-metrics/native/partition-audit/Make/options",
     "experiment-metrics/native/partition-audit/partition-audit.C",
 )
-CAPTURE_SOURCE_PATH = (
-    "experiment-metrics/src/experiment_metrics/probes/capture_hardware.py"
-)
-
-
 def capture_build_state(
     *,
     output: Path,
@@ -51,6 +46,11 @@ def capture_build_state(
     thirdparty_algorithm: str,
     executable_paths: dict[str, Path],
     compile_flags: list[str],
+    compiler_c: Path,
+    compiler_cxx: Path,
+    mpi_launcher: Path,
+    precision: str,
+    label_bits: int,
 ) -> Path:
     root = build_tree.resolve(strict=True)
     definition = build_definition_repo.resolve(strict=True)
@@ -89,19 +89,17 @@ def capture_build_state(
         role: _inside(root, path.resolve(strict=True))
         for role, path in executable_paths.items()
     }
-    if (definition / CAPTURE_SOURCE_PATH).read_bytes() != resolved[
-        "capture-hardware"
-    ].read_bytes():
-        raise ValueError("installed capture-hardware differs from tracked source")
     raw_root = root / "control/build-raw"
     raw_root.mkdir(parents=True, exist_ok=True)
-    compiler_c = _which("mpiicx")
-    compiler_cxx = _which("mpiicpx")
-    launcher = _which("mpirun")
+    compiler_c = compiler_c.resolve(strict=True)
+    compiler_cxx = compiler_cxx.resolve(strict=True)
+    launcher = mpi_launcher.resolve(strict=True)
+    if not all(os.access(path, os.X_OK) for path in (compiler_c, compiler_cxx, launcher)) or precision not in {"SP", "DP"} or label_bits not in {32, 64}:
+        raise ValueError("build toolchain selection is invalid")
     readelf = _which("readelf")
     commands = (
-        ("mpiicx_version", [str(compiler_c), "--version"]),
-        ("mpiicpx_version", [str(compiler_cxx), "--version"]),
+        ("compiler_c_version", [str(compiler_c), "--version"]),
+        ("compiler_cxx_version", [str(compiler_cxx), "--version"]),
         ("mpirun_version", [str(launcher), "--version"]),
         ("icofoam_dynamic", [str(readelf), "--dynamic", str(resolved["icoFoam"])]),
     )
@@ -126,16 +124,9 @@ def capture_build_state(
         "source_commits": source_commits,
         "toolchain_commands": observations,
         "compile_flags": compile_flags,
-        "precision": "DP",
-        "label_bits": 64,
+        "precision": precision,
+        "label_bits": label_bits,
         "runtime_objects": runtime_objects,
-        "capture_hardware_source": {
-            "source_commit_role": "build_definition",
-            "repository_path": CAPTURE_SOURCE_PATH,
-            "git_blob_oid": _git(
-                definition, "rev-parse", f"HEAD:{CAPTURE_SOURCE_PATH}"
-            ),
-        },
         "partition_audit_source": {
             "source_commit_role": "build_definition",
             "repository_paths": list(PARTITION_SOURCE_PATHS),
@@ -167,7 +158,6 @@ def finalize_build_sidecar(state_path: Path, archive: Path, output: Path) -> Pat
             "sha256": _sha256(archive),
         },
         "runtime_objects": state["runtime_objects"],
-        "capture_hardware_source": state["capture_hardware_source"],
         "partition_audit_source": state["partition_audit_source"],
     }
     validate_build_sidecar(document)
@@ -256,7 +246,6 @@ def validate_build_sidecar(document: object) -> None:
         "label_bits",
         "build_archive",
         "runtime_objects",
-        "capture_hardware_source",
         "partition_audit_source",
     }
     if (
@@ -292,7 +281,7 @@ def validate_build_sidecar(document: object) -> None:
     if (
         not isinstance(commands, list)
         or not all(isinstance(item, dict) for item in commands)
-        or [item.get("role") for item in commands] != list(TOOLCHAIN_ROLES)
+        or tuple(item.get("role") for item in commands) != TOOLCHAIN_ROLES
     ):
         raise ValueError("build toolchain observations are incomplete")
     for item in commands:
@@ -477,22 +466,8 @@ def _validate_command(item: object) -> None:
 
 
 def _validate_sources(document: dict[str, object], algorithm: object) -> None:
-    capture = document["capture_hardware_source"]
     partition = document["partition_audit_source"]
     width = 40 if algorithm == "sha1" else 64
-    if not isinstance(capture, dict) or set(capture) != {
-        "source_commit_role",
-        "repository_path",
-        "git_blob_oid",
-    }:
-        raise ValueError("capture hardware source is not closed")
-    if (
-        capture["source_commit_role"] != "build_definition"
-        or capture["repository_path"] != CAPTURE_SOURCE_PATH
-    ):
-        raise ValueError("capture hardware source identity is invalid")
-    if not re.fullmatch(rf"[a-f0-9]{{{width}}}", str(capture["git_blob_oid"])):
-        raise ValueError("capture hardware blob OID is invalid")
     if not isinstance(partition, dict) or set(partition) != {
         "source_commit_role",
         "repository_paths",

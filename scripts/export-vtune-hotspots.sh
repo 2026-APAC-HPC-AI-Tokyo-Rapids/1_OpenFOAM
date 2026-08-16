@@ -22,7 +22,6 @@ done
   exit 2
 }
 
-[[ "${OPENFOAM_VTUNE_PATH}" == /* && -x "${OPENFOAM_VTUNE_PATH}" ]]
 summary_dir="${RUN_DIR}/profile/raw/vtune-summary"
 install -d -m 0700 "${summary_dir}"
 

@@ -1,16 +1,44 @@
 #!/usr/bin/env bash
-#PJM -L elapse=01:00:00
 
-# Compute-side v2 executor.  It owns only local case data, source captures,
-# logs, and atomic metric fragments. Producers send through the shared
-# mode-0600 credential path; transport failure never changes solver status.
+# Scheduler-neutral compute-side executor. Cluster wrappers establish the
+# toolchain and MPI environment and pass launcher argv without shell parsing.
 set -euo pipefail
+
+solver_launch=()
+node_launch=()
+job_id=
+case_cache_root=
+global_rank_env=
+local_rank_env=
+local_size_env=
+profile_root=
+while [[ $# -gt 0 ]]
+do
+  case "$1" in
+    --solver-launch-arg) [[ $# -ge 2 ]]; solver_launch+=("$2"); shift 2 ;;
+    --node-launch-arg) [[ $# -ge 2 ]]; node_launch+=("$2"); shift 2 ;;
+    --job-id) [[ $# -ge 2 ]]; job_id=$2; shift 2 ;;
+    --case-cache-root) [[ $# -ge 2 ]]; case_cache_root=$2; shift 2 ;;
+    --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
+    --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
+    --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
+    --profile-root) [[ $# -ge 2 ]]; profile_root=$2; shift 2 ;;
+    *) printf 'unknown run-openfoam argument: %s\n' "$1" >&2; exit 64 ;;
+  esac
+done
+[[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+[[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
+[[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
+[[ "${case_cache_root}" == /* && "${profile_root}" == /* ]]
+for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
+do
+  [[ "${rank_env}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+done
 
 : "${RUN_ID:?runner-generated v2 run ID is required}"
 : "${RUN_MANIFEST:?runner-generated manifest path is required}"
 : "${RUN_DIR:?runner-generated runtime path is required}"
 : "${PROVISION_DIR:?provision directory is required}"
-: "${PJM_JOBID:?}"
 : "${OPENFOAM_NODES:?protocol node count is required}"
 : "${OPENFOAM_MPI_PROCS:?protocol rank count is required}"
 : "${OPENFOAM_RESOURCE_GROUP:?protocol resource group is required}"
@@ -31,7 +59,6 @@ case "${OPENFOAM_RUN_PURPOSE}" in
 esac
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
-ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 
 CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
 CASE_INPUT_DIR="${RUN_DIR}/work/cavity3D-64M-input"
@@ -46,8 +73,8 @@ METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
-profile_run_id="${RUN_ID}-${PJM_JOBID}"
-vtune_root="/home/pj26000080/share/openfoam-vtune/${profile_run_id}"
+profile_run_id="${RUN_ID}-${job_id}"
+vtune_root="${profile_root}/${profile_run_id}"
 OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
@@ -55,9 +82,8 @@ export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
 export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
 
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
-test -f "${RUN_MANIFEST}"
 install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${OPENFOAM_METRICS_PSTREAM_DIR}" "${RUN_DIR}/domain"
-"${METRICS_CLI}" supervisor-start --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}"
+"${METRICS_CLI}" supervisor-start --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --job-id "${job_id}"
 finish_supervisor() {
   local original_status=$?
   local finish_status=0
@@ -71,7 +97,7 @@ finish_supervisor() {
   exit "${original_status}"
 }
 trap finish_supervisor EXIT
-"${METRICS_CLI}" validate-bundle-runtime --manifest "${RUN_MANIFEST}" --bundle "${RUN_DIR}/control/instrumentation-bundle.json" --registry "${REGISTRY}" --artifact-root "${PROVISION_DIR}"
+"${METRICS_CLI}" validate-bundle-runtime --manifest "${RUN_MANIFEST}" --bundle "${RUN_DIR}/control/instrumentation-bundle.json" --registry "${REGISTRY}"
 
 # One exact argv is given directly to StageRunner; stdout and stderr are a
 # single durable record rather than a shell pipeline with ambiguous status.
@@ -90,39 +116,13 @@ stage_at() {
   "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
-# This launch-effective value is captured at host-exec and per rank.
-export I_MPI_FABRICS="${OPENFOAM_TRANSPORT_POLICY}"
-
-module purge
-module load intel/2025.1.3 impi
-
-set +eu
-readarray -t build_environment < <("${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -c 'import json, sys; flags = json.load(open(sys.argv[1], encoding="utf-8"))["compile_flags"]; values = {key: [item.removeprefix(key + "=") for item in flags if item.startswith(key + "=")] for key in ("WM_COMPILE_OPTION", "WM_OPTIONS")}; all(len(value) == 1 for value in values.values()) or sys.exit(1); print(values["WM_COMPILE_OPTION"][0]); print(values["WM_OPTIONS"][0])' "${RUN_DIR}/control/build-sidecar.json")
-[[ "${#build_environment[@]}" -eq 2 && "${build_environment[0]}" =~ ^[A-Za-z0-9]+$ && "${build_environment[1]}" =~ ^[A-Za-z0-9]+$ ]]
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
-set -eu
-test "${WM_OPTIONS}" = "${build_environment[1]}"
-
 # capture-hardware is a tracked, dependency-free Python probe whose installed
 # shebang is intentionally portable.  Genkai's system python3 is 3.6, while
 # the probe and the metrics runtime require the provisioned Python.  Put that
 # interpreter first for both the direct minimal capture and the MPI-launched
 # profile capture; the executable identity remains the tracked probe itself.
 probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
-[[ -x "${probe_python_dir}/python3" ]]
 export PATH="${probe_python_dir}:${PATH}"
-
-unset I_MPI_DEBUG I_MPI_PIN_DOMAIN I_MPI_PIN_ORDER I_MPI_PIN_PROCESSOR_LIST
-unset I_MPI_ADJUST_ALLREDUCE I_MPI_TUNING_MODE I_MPI_TUNING_AUTO_SYNC
-unset I_MPI_TUNING_AUTO_ITER_NUM I_MPI_TUNING_BIN I_MPI_TUNING_BIN_DUMP
-
-# The 112-rank/node experiment reserves one physical core in each of the
-# eight 15-core NUMA domains observed on Genkai compute nodes.  Intel MPI
-# interprets this processor list independently on every node.  Other rank
-# counts retain the measured default one-rank-per-core placement.
-if (( ranks_per_node == 112 )); then
-  export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
-fi
 
 MPIEXEC=$(command -v mpirun)
 BLOCK_MESH=$(command -v blockMesh)
@@ -132,17 +132,12 @@ CHECK_MESH=$(command -v checkMesh)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
-for executable in "${MPIEXEC}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${ICO_FOAM}" "${CHECK_MESH}" "${MESH_FACTS}" "${PARTITION_AUDIT}" "${CAPTURE_HARDWARE}"
-do
-  [[ "${executable}" == /* && -x "${executable}" ]]
-done
 
 provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "icoFoam=${ICO_FOAM}" --executable "blockMesh=${BLOCK_MESH}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
   (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
   OPENFOAM_VTUNE_PATH=$(command -v vtune)
-  [[ "${OPENFOAM_VTUNE_PATH}" == /* && -x "${OPENFOAM_VTUNE_PATH}" ]]
   export OPENFOAM_VTUNE_PATH
   provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
 fi
@@ -158,8 +153,8 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
-  *-scotch-1n-120r | *-scotch-2n-240r | *-scotch-4n-448r)
-    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${OPENFOAM_MPI_PROCS}")
+  *-scotch-*)
+    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
     ;;
   *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
@@ -181,9 +176,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
   # profiler, which launches icoFoam directly so VTune follows the solver
   # rather than the Python placement process.
-  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 else
-  stage solver "${SOLVER_LOG}" "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
 fi
 solver_status=$?
 set -e
@@ -216,9 +211,9 @@ if (( OPENFOAM_NODES == 1 )); then
   minimal_hardware_argv+=(--node-ordinal 0)
 else
   minimal_hardware_argv=(
-    "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1
+    "${node_launch[@]}"
     "${minimal_hardware_argv[@]}"
-    --node-ordinal-from-env PMI_RANK
+    --node-ordinal-from-env "${global_rank_env}"
   )
 fi
 set +e
@@ -233,7 +228,7 @@ fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e
-  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${MPIEXEC}" -np "${OPENFOAM_NODES}" -ppn 1 "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env PMI_RANK
+  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${node_launch[@]}" "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env "${global_rank_env}"
   profile_hardware_status=$?
   set -e
   if [[ "${profile_hardware_status}" -ne 0 ]]; then
@@ -253,7 +248,7 @@ install -d -m 0755 "${IMB_STDOUT%/*}"
 imb_bin=$(command -v IMB-MPI1 || true)
 if [[ -n "${imb_bin}" ]]; then
   imb_argv=(
-    "${MPIEXEC}" -np "${OPENFOAM_MPI_PROCS}" -ppn "${ranks_per_node}"
+    "${solver_launch[@]}"
     "${imb_bin}" -npmin "${OPENFOAM_MPI_PROCS}" -msglog 0:22
     -iter 1000 -time 1 -iter_policy dynamic PingPong Sendrecv Allreduce
   )

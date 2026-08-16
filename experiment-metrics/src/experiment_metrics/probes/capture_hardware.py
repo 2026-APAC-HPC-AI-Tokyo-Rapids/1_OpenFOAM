@@ -21,10 +21,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", type=Path, required=True)
     ordinal = parser.add_mutually_exclusive_group(required=True)
     ordinal.add_argument("--node-ordinal", type=int)
-    ordinal.add_argument("--node-ordinal-from-env", choices=["PMI_RANK"])
+    ordinal.add_argument("--node-ordinal-from-env")
     arguments = parser.parse_args(argv)
     node_ordinal = arguments.node_ordinal
     if arguments.node_ordinal_from_env is not None:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", arguments.node_ordinal_from_env):
+            raise ValueError("hardware probe node ordinal environment name is invalid")
         raw_ordinal = os.environ.get(arguments.node_ordinal_from_env)
         if raw_ordinal is None or not raw_ordinal.isdecimal():
             raise ValueError("hardware probe node ordinal environment is invalid")

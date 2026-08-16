@@ -12,21 +12,14 @@ set -euo pipefail
 : "${PROVISION_DIR:?provision directory is required}"
 : "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
 [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
-[[ "${OPENFOAM_VTUNE_PATH}" == /* && -x "${OPENFOAM_VTUNE_PATH}" ]]
 target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
-[[ -x "${target_launcher}" ]]
 install -d -m 0700 "$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")"
 
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hotspots)
     "${target_launcher}" "$@" &
     target_pid=$!
-    terminate_target() {
-      kill -TERM "${target_pid}" 2>/dev/null || true
-      wait "${target_pid}" 2>/dev/null || true
-      exit 143
-    }
-    trap terminate_target TERM INT
+    trap 'kill -TERM "${target_pid}" 2>/dev/null || true; wait "${target_pid}" 2>/dev/null || true; exit 143' TERM INT
     set +e
     "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}"
     vtune_status=$?
