@@ -142,6 +142,7 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
     assert 'steps.v2_context.outputs.run_id != \'\'' in workflow
+    assert "needs.run.outputs.run_id != ''" in workflow
     assert "LC_ALL=C sort -u" in workflow
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record v2 terminal sources" not in workflow
@@ -183,6 +184,8 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert workflow.count("- name: Initialize metrics and submit PBS run") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
     assert 'steps.context.outputs.run_id != \'\'' in workflow
+    assert "if: always() && needs.provision.result == 'success'" in workflow
+    assert "if: always() && needs.run.outputs.run_id != ''" in workflow
     assert "LC_ALL=C sort -u" in workflow
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record terminal metrics" not in workflow
