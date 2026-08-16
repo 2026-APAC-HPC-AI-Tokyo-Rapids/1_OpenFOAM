@@ -20,4 +20,4 @@ jobs:
         run: find scripts platforms -type f \( -name '*.sh' -o -name '*.pjm' -o -name '*.pbs' \) -print0 | xargs -0 -r -n1 bash -n
 
       - name: Run unit tests
-        run: uv run --project experiment-metrics pytest -q experiment-metrics/tests
+        run: uv run --project experiment-metrics pytest -q experiment-metrics/tests tests
