@@ -199,6 +199,7 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert '"${PBS_JOBFS}/openfoam-build"' in builder
     assert 'tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}"' in builder
     assert '--case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache"' in wrapper
+    assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:gadi]')" in entry
