@@ -196,7 +196,7 @@ jobs:
   prepare-case:
     name: Prepare Gadi case cache
     needs: [select-build, provision]
-    if: needs.provision.result == 'success'
+    if: always() && needs.provision.result == 'success'
     runs-on: [self-hosted, gadi]
     concurrency:
       group: gadi-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}
@@ -220,8 +220,10 @@ jobs:
   run:
     name: Run OpenFOAM on Gadi
     needs: [select-build, provision, prepare-case]
-    if: needs.provision.result == 'success' && needs.prepare-case.result == 'success'
+    if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
     runs-on: [self-hosted, gadi]
+    outputs:
+      run_id: ${{ steps.context.outputs.run_id }}
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
       OPENFOAM_RUN_ROOT: /scratch/hb15/tk7779/openfoam/gadi/runs
@@ -328,7 +330,7 @@ jobs:
   archive-artifacts:
     name: Archive Gadi artifacts on home server
     needs: run
-    if: always()
+    if: always() && needs.run.outputs.run_id != ''
     runs-on: ubuntu-latest
     permissions:
       actions: write
