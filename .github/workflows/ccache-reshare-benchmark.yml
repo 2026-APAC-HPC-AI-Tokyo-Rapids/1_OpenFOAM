@@ -49,6 +49,7 @@ jobs:
           path: ${{ env.BENCHMARK_RESULTS_ROOT }}
           if-no-files-found: error
           compression-level: 1
+          include-hidden-files: true
 
       - name: Cleanup benchmark evidence
         if: always()
@@ -106,6 +107,7 @@ jobs:
           path: ${{ env.BENCHMARK_RESULTS_ROOT }}
           if-no-files-found: error
           compression-level: 1
+          include-hidden-files: true
 
       - name: Cleanup benchmark evidence
         if: always()

@@ -12,6 +12,8 @@ publish_root=$2
 results_root=$3
 shift 3
 modes=(false false true true false false true)
+export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
+export CCACHE_DIR="/dev/shm/ccache-${USER:?}"
 
 rm -rf -- "${work_root:?}" "${publish_root:?}" "${results_root:?}"
 install -d "${work_root}" "${publish_root}" "${results_root}"
