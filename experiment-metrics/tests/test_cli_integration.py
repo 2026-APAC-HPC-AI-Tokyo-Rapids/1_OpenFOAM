@@ -99,8 +99,6 @@ expected_workload_identity = "{digest}"
                 str(manifest_path),
                 "--runtime-dir",
                 str(run_dir),
-                "--registry",
-                str(registry_path),
                 "--log",
                 str(log),
             ]
@@ -115,8 +113,6 @@ expected_workload_identity = "{digest}"
                 str(manifest_path),
                 "--runtime-dir",
                 str(run_dir),
-                "--registry",
-                str(registry_path),
                 "--stdout",
                 str(imb),
                 "--stderr",

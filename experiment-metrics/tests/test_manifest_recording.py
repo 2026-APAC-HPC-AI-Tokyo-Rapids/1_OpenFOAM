@@ -44,7 +44,6 @@ def test_recorder_closes_only_by_atomic_rename(
     runtime_dir = manifest_path.parents[1]
     recorder = Recorder.open(
         manifest_path,
-        registry_path,
         "arbitrary-producer",
         runtime_dir,
         fragment_id="one",
@@ -88,7 +87,7 @@ def test_recorder_allows_unregistered_keys_but_rejects_duplicate_keys(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
     manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
-    with Recorder.open(manifest_path, registry_path, "arbitrary-producer") as recorder:
+    with Recorder.open(manifest_path, "arbitrary-producer") as recorder:
         recorder.record(Fact("arbitrary.key", False))
         with pytest.raises(ValueError, match="duplicate"):
             recorder.record(Fact("arbitrary.key", True))

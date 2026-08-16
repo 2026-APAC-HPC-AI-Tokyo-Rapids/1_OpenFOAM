@@ -643,7 +643,7 @@ score eligibilityである。reopen triggerは対象clusterのnode modelまた�
 ```python
 Fact(key: str, logical_value: LogicalValue)
 init_run(settings_path, runtime_root, identities) -> RunManifestPath
-Recorder.open(manifest_path, registry_path, producer_id, runtime_dir)
+Recorder.open(manifest_path, producer_id, runtime_dir)
 collect_once(manifest_path, runtime_dir, producer_id, probe) -> Path
 submit_run(manifest_path, runtime_dir, execution_fields, pjsub_argv) -> SubmissionOutcome
 run_stage(stage_name, argv, *, cwd, stderr_mode, recorder) -> Termination

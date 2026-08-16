@@ -67,8 +67,6 @@ def test_capture_workload_cli(
                 str(case),
                 "--output-root",
                 str(manifest.parents[1] / "source/workload"),
-                "--registry",
-                str(registry_path),
             ]
         )
         == 0

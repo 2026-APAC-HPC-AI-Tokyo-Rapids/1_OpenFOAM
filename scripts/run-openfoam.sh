@@ -87,7 +87,7 @@ finish_supervisor() {
   local finish_status=0
   trap - EXIT
   set +e
-  "${METRICS_CLI}" supervisor-finish --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --registry "${REGISTRY}" --exit-code "${original_status}"
+  "${METRICS_CLI}" supervisor-finish --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --exit-code "${original_status}"
   finish_status=$?
   if [[ "${original_status}" -eq 0 && "${finish_status}" -ne 0 ]]; then
     original_status=${finish_status}
@@ -103,7 +103,7 @@ stage() {
   local stage_name=$1
   local stdout_path=$2
   shift 2
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage "${stage_name}" --cwd "${CASE_DIR}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${CASE_DIR}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
 stage_at() {
@@ -111,7 +111,7 @@ stage_at() {
   local stdout_path=$2
   local cwd=$3
   shift 3
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
 # capture-hardware is a tracked, dependency-free Python probe whose installed
@@ -140,14 +140,14 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
-"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
+"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
 
 cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 # Seal the exact seven workload-defining files after setup and before the
 # first OpenFOAM stage reads the case.
-"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --output-root "${SOURCE_DIR}/workload" --registry "${REGISTRY}"
+"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --output-root "${SOURCE_DIR}/workload"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
@@ -202,7 +202,7 @@ grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
 # Reuse the small, durable preparation logs.  Never reopen or hash the 64M-cell
 # serial/processor meshes just to collect metrics.
-"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --block-mesh-log "${LOG_DIR}/blockMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
+"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --block-mesh-log "${LOG_DIR}/blockMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
 
 minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then
@@ -221,7 +221,7 @@ set -e
 if [[ "${minimal_hardware_status}" -ne 0 ]]; then
   printf '%s\n' 'minimal hardware capture failed; solver result remains valid' >&2
 else
-  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
+  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
@@ -232,7 +232,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${profile_hardware_status}" -ne 0 ]]; then
     printf '%s\n' 'profile hardware capture failed; solver result remains valid' >&2
   else
-    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'profile hardware metrics could not be recorded' >&2
+    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'profile hardware metrics could not be recorded' >&2
   fi
 fi
 
@@ -252,11 +252,11 @@ if [[ -n "${imb_bin}" ]]; then
   )
   "${METRICS_CLI}" capture-argv --manifest "${RUN_MANIFEST}" --output "${IMB_ARGV}" -- "${imb_argv[@]}"
   set +e
-  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --producer stage.runner --stage network_imb_mpi1 --cwd "${CASE_DIR}" --stderr-mode separate --stdout-path "${IMB_STDOUT}" --stderr-path "${IMB_STDERR}" --timeout-sec 600 -- "${imb_argv[@]}"
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage network_imb_mpi1 --cwd "${CASE_DIR}" --stderr-mode separate --stdout-path "${IMB_STDOUT}" --stderr-path "${IMB_STDERR}" --timeout-sec 600 -- "${imb_argv[@]}"
   imb_status=$?
   set -e
   if [[ "${imb_status}" -eq 0 ]]; then
-    "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${REGISTRY}" --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt ||
+    "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt ||
       printf '%s\n' 'IMB output was not a complete canonical capture' >&2
   else
     printf '%s\n' "IMB-MPI1 stage failed (${imb_status}); collection will be incomplete" >&2

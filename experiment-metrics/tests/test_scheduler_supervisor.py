@@ -47,7 +47,6 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     submitted = submit_run(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=REGISTRY,
         protocol_path=PROTOCOL,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
@@ -69,7 +68,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert "OPENFOAM_RUN_PURPOSE=bench" in exported
     assert "OPENFOAM_VTUNE_RANK=0" in exported
     assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in exported
-    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in exported
+    assert "EXPERIMENT_METRICS_BIGQUERY_CONFIG" not in exported
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" not in exported
 
     (run_dir / "control/job-entry.json").write_text(
@@ -79,7 +78,6 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     accounting_path = capture_scheduler_terminal(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=REGISTRY,
         job_id="12345",
         pjstat_path=pjstat,
         execute=lambda argv: subprocess.CompletedProcess(argv, 0, raw, b""),
@@ -110,7 +108,6 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
     submitted = submit_run(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=REGISTRY,
         protocol_path=PROTOCOL,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
@@ -152,7 +149,6 @@ def test_submission_accepts_memory_access_profile(
     submitted = submit_run(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=REGISTRY,
         protocol_path=PROTOCOL,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
@@ -185,7 +181,6 @@ def test_submission_rejects_invalid_profile_rank(
         submit_run(
             manifest_path=manifest,
             runtime_dir=run_dir,
-            registry_path=REGISTRY,
             protocol_path=PROTOCOL,
             pjm_script_repository_path="scripts/run-openfoam.pjm",
             execution_script=execution,
@@ -276,7 +271,7 @@ def test_supervisor_captures_entry_lifecycle_and_pipeline(
     start_supervisor(manifest, state, job_id="9876")
     mark_pipeline(state, "start")
     mark_pipeline(state, "finish")
-    fragment = finish_supervisor(manifest, state, REGISTRY, exit_code=0)
+    fragment = finish_supervisor(manifest, state, exit_code=0)
 
     assert not state.exists()
     assert (run_dir / "source/env/job-entry.snapshot").is_file()

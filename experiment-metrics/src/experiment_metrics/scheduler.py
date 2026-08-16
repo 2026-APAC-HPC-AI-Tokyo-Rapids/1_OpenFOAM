@@ -64,7 +64,6 @@ def submit_run(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     protocol_path: Path,
     pjm_script_repository_path: str,
     execution_script: Path,
@@ -97,7 +96,6 @@ def submit_run(
     execution = execution_script.resolve(strict=True)
     pjsub = _launcher_path(pjsub_path or _which("pjsub"))
     environment = {
-        "EXPERIMENT_METRICS_DIRECT_SEND": "0",
         "OPENFOAM_NODES": str(protocol.nodes),
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
         "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
@@ -111,10 +109,6 @@ def submit_run(
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
-    for name in ("EXPERIMENT_METRICS_BIGQUERY_CONFIG",):
-        value = os.environ.get(name)
-        if value:
-            environment[name] = value
     if any("," in value for value in environment.values()):
         raise ValueError("PJM exported values cannot contain commas")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
@@ -175,7 +169,6 @@ def submit_run(
     _atomic_json(result_path, result)
     with Recorder.open(
         manifest.path,
-        registry_path,
         "runner.submission",
         run_dir,
         fragment_id="submission",
@@ -190,7 +183,6 @@ def capture_scheduler_terminal(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    registry_path: Path,
     job_id: str,
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
     pjstat_path: Path | None = None,
@@ -240,7 +232,6 @@ def capture_scheduler_terminal(
     _atomic_json(path, accounting)
     with Recorder.open(
         manifest.path,
-        registry_path,
         "runner.scheduler_postrun",
         run_dir,
         fragment_id="accounting",

@@ -215,12 +215,6 @@ def build_artifact_facts(
     )
 
 
-def build_artifact_index_fact(manifest_path: Path, build_sidecar_path: Path) -> Fact:
-    """Compatibility helper for callers that only need the sidecar identity."""
-
-    return build_artifact_facts(manifest_path, build_sidecar_path)[0]
-
-
 def _expanded_member(value: object, root: Path) -> dict[str, object]:
     _validate_member(value)
     assert isinstance(value, dict)

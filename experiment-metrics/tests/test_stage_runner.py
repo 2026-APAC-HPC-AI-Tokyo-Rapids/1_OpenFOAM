@@ -15,7 +15,7 @@ def test_stage_records_exact_argv_cwd_termination_and_wall_time(
     runtime_dir = manifest_path.parents[1]
     argv = [sys.executable, "-c", "raise SystemExit(3)"]
     with Recorder.open(
-        manifest_path, registry_path, "stage.runner", runtime_dir, fragment_id="solver"
+        manifest_path, "stage.runner", runtime_dir, fragment_id="solver"
     ) as recorder:
         termination = run_stage(
             "solver", argv, cwd=tmp_path, stderr_mode="separate", recorder=recorder
@@ -41,7 +41,7 @@ def test_stage_spawn_error_and_cli_signal_exit_precedence(
     manifest_path = init_run(None, tmp_path, identities, registry_path=registry_path)
     runtime_dir = manifest_path.parents[1]
     with Recorder.open(
-        manifest_path, registry_path, "stage.runner", runtime_dir, fragment_id="missing"
+        manifest_path, "stage.runner", runtime_dir, fragment_id="missing"
     ) as recorder:
         termination = run_stage(
             "missing",
@@ -59,8 +59,6 @@ def test_stage_spawn_error_and_cli_signal_exit_precedence(
             str(manifest_path),
             "--runtime-dir",
             str(runtime_dir),
-            "--registry",
-            str(registry_path),
             "--producer",
             "stage.runner",
             "--stage",
@@ -88,8 +86,6 @@ def test_cli_uses_distinct_stage_fragment_instances(
         str(manifest_path),
         "--runtime-dir",
         str(runtime_dir),
-        "--registry",
-        str(registry_path),
         "--producer",
         "stage.runner",
         "--cwd",
@@ -116,7 +112,7 @@ def test_stage_captures_combined_stdout_without_a_shell_pipeline(
     runtime_dir = manifest_path.parents[1]
     output = runtime_dir / "logs/combined.log"
     with Recorder.open(
-        manifest_path, registry_path, "stage.runner", runtime_dir, fragment_id="capture"
+        manifest_path, "stage.runner", runtime_dir, fragment_id="capture"
     ) as recorder:
         termination = run_stage(
             "capture",
@@ -143,7 +139,7 @@ def test_stage_captures_separate_streams_and_enforces_timeout(
     stdout = runtime_dir / "logs/stdout.txt"
     stderr = runtime_dir / "logs/stderr.txt"
     with Recorder.open(
-        manifest_path, registry_path, "stage.runner", runtime_dir, fragment_id="timeout"
+        manifest_path, "stage.runner", runtime_dir, fragment_id="timeout"
     ) as recorder:
         termination = run_stage(
             "timeout",

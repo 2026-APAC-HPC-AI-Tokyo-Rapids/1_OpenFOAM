@@ -98,7 +98,6 @@ expected_workload_identity = "{digest}"
     fragment = record_execution_context(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        registry_path=REGISTRY,
         protocol_path=protocol,
         host_snapshot=host,
         placement_root=placement_root,

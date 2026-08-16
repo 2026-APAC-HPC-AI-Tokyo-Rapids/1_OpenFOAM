@@ -151,7 +151,6 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "steps.v2_context.outputs.pjm_job_id != ''" in workflow
     assert "needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert "LC_ALL=C sort -u" in workflow
-    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in workflow
     assert (
         'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
         in workflow
@@ -209,7 +208,6 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         in workflow
     )
     assert "LC_ALL=C sort -u" in workflow
-    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in workflow
     assert (
         'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
         in workflow

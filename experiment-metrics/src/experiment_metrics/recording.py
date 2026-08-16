@@ -19,14 +19,12 @@ class Recorder:
     _temporary_path: Path
     _stream: object
     _keys: set[str] = field(default_factory=set)
-    _rows: list[dict[str, str]] = field(default_factory=list)
     _closed: bool = False
 
     @classmethod
     def open(
         cls,
         manifest_path: Path,
-        registry_path: Path,
         producer_id: str,
         runtime_dir: Path | None = None,
         *,
@@ -60,7 +58,6 @@ class Recorder:
         self._stream.write(
             json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
         )
-        self._rows.append(row)
         self._keys.add(fact.key)
 
     def close(self) -> Path:
@@ -71,10 +68,6 @@ class Recorder:
         self._stream.close()
         self._temporary_path.replace(self.fragment_path)
         self._closed = True
-        if os.environ.get("EXPERIMENT_METRICS_DIRECT_SEND") == "1":
-            from .publish import send_raw
-
-            send_raw(self.manifest.run_id, self._rows)
         return self.fragment_path
 
     def abort(self) -> None:
@@ -87,7 +80,7 @@ class Recorder:
     def __enter__(self) -> Recorder:
         return self
 
-    def __exit__(self, exc_type: object, exc: object, traceback: object) -> bool:
+    def __exit__(self, exc_type: object, _exc: object, _traceback: object) -> bool:
         if exc_type is None:
             self.close()
         else:
@@ -101,12 +94,10 @@ def collect_once(
     producer_id: str,
     probe: Callable[[], Iterable[Fact]],
     *,
-    registry_path: Path,
     fragment_id: str = "default",
 ) -> Path:
     with Recorder.open(
         manifest_path,
-        registry_path,
         producer_id,
         runtime_dir,
         fragment_id=fragment_id,
