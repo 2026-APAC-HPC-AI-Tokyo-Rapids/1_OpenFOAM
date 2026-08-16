@@ -252,7 +252,11 @@ jobs:
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose bench)
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
-          identities=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" source-track-identities --repository "${GITHUB_WORKSPACE}" --purpose bench --base-commit "${base_commit}" --instrumentation-bundle-sha256 "${bundle_sha256}" --control-plane-file .github/workflows/openfoam.yml --control-plane-file .github/workflows/gadi.yml --control-plane-file benchmark/parse_result.sh --control-plane-file "${protocol_relative}" --control-plane-file experiment-metrics/registry/openfoam-v2.toml --control-plane-file platforms/gadi/run-openfoam.pbs --control-plane-file platforms/gadi/prepare-openfoam-case.pbs --control-plane-file platforms/gadi/wait-pbs-job.sh --control-plane-file scripts/run-openfoam.sh --control-plane-file scripts/prepare-openfoam-case.sh)
+          control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/run-openfoam.pbs platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
+          control_plane_args=()
+          for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
+          identities=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" source-track-identities --repository "${GITHUB_WORKSPACE}" --purpose bench --base-commit "${base_commit}" --instrumentation-bundle-sha256 "${bundle_sha256}" "${control_plane_args[@]}")
           manifest=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose bench --identities-json "${identities}" --repository-id apac2026-openfoam --instrumentation-bundle "${bundle_path}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")
           run_dir=$(dirname "$(dirname "${manifest}")")
           run_id=$(basename "${run_dir}")
@@ -285,7 +289,7 @@ jobs:
 
       - name: Finalize metrics and package artifacts
         id: package
-        if: always()
+        if: always() && steps.context.outputs.run_id != ''
         run: |
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-pbs-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --protocol "${OPENFOAM_PROTOCOL_PATH}" --job-id "${PBS_JOB_ID}" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --log "${RUN_DIR}/logs/solver.log" || true
@@ -304,7 +308,7 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
 
       - name: Upload Gadi run artifact
-        if: always()
+        if: always() && steps.context.outputs.run_id != ''
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-gadi-v2-${{ steps.context.outputs.run_id }}
