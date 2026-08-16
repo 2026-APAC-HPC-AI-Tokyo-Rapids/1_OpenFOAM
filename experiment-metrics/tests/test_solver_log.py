@@ -45,9 +45,9 @@ def test_solver_log_parser_and_reducer_preserve_complete_records() -> None:
 
 def test_official_evaluator_matches_existing_shell_golden() -> None:
     root = Path(__file__).parents[2]
-    log = root / "tasks/baseline_logs/gadi/gadi-1n-175550866.log"
+    log = FIXTURES / "solver-valid.log"
     shell = subprocess.run(
-        ["bash", str(root / "tasks/parse_result.sh"), str(log)],
+        ["bash", str(root / "benchmark/parse_result.sh"), str(log)],
         check=True,
         text=True,
         capture_output=True,
