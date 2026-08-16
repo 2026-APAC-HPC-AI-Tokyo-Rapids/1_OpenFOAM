@@ -57,7 +57,6 @@ cd "${WM_PROJECT_DIR}"
 }
 
 install -m 0755 "${BUILD_DEFINITION_REPO}/experiment-metrics/src/experiment_metrics/probes/capture_hardware.py" "${FOAM_APPBIN}/capture-hardware"
-uv sync --project "${BUILD_DEFINITION_REPO}/experiment-metrics" --frozen --no-dev
 metrics_cli="${BUILD_DEFINITION_REPO}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_LOG_DIR}/build-state.json"
 "${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${BUILD_DEFINITION_REPO}" --openfoam-oid "${OPENFOAM_SOURCE_OID}" --openfoam-algorithm sha1 --thirdparty-oid "${THIRDPARTY_SOURCE_OID}" --thirdparty-algorithm sha1 --compiler-c "$(command -v gcc)" --compiler-cxx "$(command -v g++)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 64 --compile-flag BUILD_CONDITION=baseline --compile-flag "WM_OPTIONS=${WM_OPTIONS}" --compile-flag "WM_COMPILER=${WM_COMPILER}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
