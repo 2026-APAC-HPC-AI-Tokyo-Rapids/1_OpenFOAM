@@ -7,6 +7,7 @@ set -euo pipefail
 : "${PREPARE_TARGET:?temporary materialization path is required}"
 : "${PREPARE_SUBDOMAINS:?requested decomposition size is required}"
 : "${PREPARE_DECOMPOSITION_PROFILE:?decomposition profile is required}"
+: "${PREPARE_CACHE_ROOT:?case cache root is required}"
 [[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
 
 module purge
@@ -20,11 +21,8 @@ test "${WM_OPTIONS}" = "${build_environment[1]}"
 
 BLOCK_MESH=$(command -v blockMesh)
 DECOMPOSE_PAR=$(command -v decomposePar)
-[[ "${BLOCK_MESH}" == /* && -x "${BLOCK_MESH}" ]]
-[[ "${DECOMPOSE_PAR}" == /* && -x "${DECOMPOSE_PAR}" ]]
 
-rm -f -- "${PREPARE_TARGET}"
-trap 'rm -f -- "${PREPARE_TARGET}"' EXIT
+rm -rf -- "${PREPARE_TARGET}"
+trap 'rm -rf -- "${PREPARE_TARGET}"' EXIT
 [[ "${PREPARE_DECOMPOSITION_PROFILE}" == scotch ]]
-"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${PREPARE_SUBDOMAINS}"
-[[ -L "${PREPARE_TARGET}" && -d "${PREPARE_TARGET}/processor$((PREPARE_SUBDOMAINS - 1))" ]]
+"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}"

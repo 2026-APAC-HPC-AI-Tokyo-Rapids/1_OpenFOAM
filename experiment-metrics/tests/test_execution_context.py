@@ -29,6 +29,7 @@ nodes = 2
 ranks = 2
 resource_group = "test"
 transport_policy = "ofi"
+transport_environment = {{ I_MPI_FABRICS = "ofi" }}
 workload_id = "test"
 expected_workload_identity = "{digest}"
 [variant.profile]
@@ -37,6 +38,7 @@ nodes = 2
 ranks = 2
 resource_group = "test"
 transport_policy = "ofi"
+transport_environment = {{ I_MPI_FABRICS = "ofi" }}
 workload_id = "test"
 expected_workload_identity = "{digest}"
 """.strip()

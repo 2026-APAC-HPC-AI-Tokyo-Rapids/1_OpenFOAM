@@ -14,6 +14,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-ranks", type=int, required=True)
     parser.add_argument("--expected-nodes", type=int, required=True)
     parser.add_argument("--placement-root", type=Path, required=True)
+    parser.add_argument("--global-rank-env", required=True)
+    parser.add_argument("--local-rank-env", required=True)
+    parser.add_argument("--local-size-env", required=True)
     parser.add_argument("--profile-rank", type=int)
     parser.add_argument("--profile-wrapper", type=Path)
     parser.add_argument("solver_argv", nargs=argparse.REMAINDER)
@@ -44,9 +47,9 @@ def main(argv: list[str] | None = None) -> int:
         or arguments.expected_ranks % arguments.expected_nodes
     ):
         raise ValueError("rank wrapper paths are outside the bound run")
-    rank = _rank("PMI_RANK")
-    local_rank = _rank("MPI_LOCALRANKID")
-    local_size = _rank("MPI_LOCALNRANKS", positive=True)
+    rank = _rank(arguments.global_rank_env)
+    local_rank = _rank(arguments.local_rank_env)
+    local_size = _rank(arguments.local_size_env, positive=True)
     if rank >= arguments.expected_ranks or local_rank >= local_size:
         raise ValueError("rank wrapper environment is outside expected axes")
     ranks_per_node = arguments.expected_ranks // arguments.expected_nodes
@@ -67,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _rank(name: str, *, positive: bool = False) -> int:
+    if not name or not name.replace("_", "a").isalnum() or name[0].isdigit():
+        raise ValueError("rank wrapper environment name is invalid")
     value = os.environ.get(name)
     if value is None or not value.isdecimal():
         raise ValueError(f"rank wrapper requires {name}")

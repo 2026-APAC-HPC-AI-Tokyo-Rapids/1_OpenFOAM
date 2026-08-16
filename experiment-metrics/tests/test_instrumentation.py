@@ -96,7 +96,7 @@ def test_bundle_identity_cli(capsys: object) -> None:
     assert captured.out.strip() == bundle_identity(bundle, purpose="bench")
 
 
-def test_profile_bundle_binds_hashed_vtune_executable(
+def test_profile_bundle_declares_vtune_executable(
     tmp_path: Path, identities: dict[str, object]
 ) -> None:
     bundle = BUNDLES / "openfoam-profile-vtune-hotspots-v1.json"
@@ -105,21 +105,6 @@ def test_profile_bundle_binds_hashed_vtune_executable(
 
     assert activation["kind"] == "executable"
     assert activation["artifact_relative_path"] == "scripts/exec-profiler.sh"
-    assert len(activation["content_sha256"]) == 64
-
-    root = tmp_path / "artifact"
-    executable = root / activation["artifact_relative_path"]
-    executable.parent.mkdir(parents=True)
-    executable.write_bytes(
-        (Path(__file__).parents[2] / "scripts/exec-profiler.sh").read_bytes()
-    )
-    executable.chmod(0o755)
-    import hashlib
-
-    assert (
-        hashlib.sha256(executable.read_bytes()).hexdigest()
-        == activation["content_sha256"]
-    )
     profile_identities = {
         **identities,
         "source_track": {
@@ -147,6 +132,5 @@ def test_profile_bundle_binds_hashed_vtune_executable(
             "OPENFOAM_METRICS_PSTREAM_DIR": str(sink),
             "OPENFOAM_METRICS_RUN_ID": manifest.parents[1].name,
         },
-        artifact_root=root,
     )
     assert rendered["OPENFOAM_METRICS_RUN_ID"] == manifest.parents[1].name

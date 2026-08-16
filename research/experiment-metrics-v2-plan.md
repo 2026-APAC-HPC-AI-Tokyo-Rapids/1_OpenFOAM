@@ -317,9 +317,8 @@ meshの正常pathを実装可能にするため、probe sourceは
 同じOpenFOAMへlinkしてbuild artifactの`bin/mesh-facts`へ収録し、provisionは
 `<runtime>/provisions/<build-sidecar-sha256>/bin/mesh-facts`へ配置する。完全なpartition検査も
 `experiment-metrics/native/partition-audit/{partition-audit.C,Make/files,Make/options}`のnative utilityへ固定し、同じbuild/provisionの
-`bin/partition-audit`へ収録する。`capture-hardware`はtracked Python sourceの
-blob identityをbuild provenanceに置き、entrypointは同じper-build provisionの`bin/capture-hardware`へsource bytesを
-そのままinstallしてbyte hashもbuild semanticへ一度含める。
+`bin/partition-audit`へ収録する。`capture-hardware`はtracked Python sourceを
+同じper-build provisionの`bin/capture-hardware`へinstallし、実行ファイルのhashをbuild semanticへ一度含める。
 `icoFoam`、`blockMesh`、`decomposePar`、`checkMesh`、`mesh-facts`、`partition-audit`、`capture-hardware`、profileだけのsystem `perf`の
 resolved realpath/hashをbuild-provision validationへ一度記録し、stageは裸のcommand名でなく
 そのabsolute pathを起動する。MPI launcherもresolved realpath/hashとそのabsolute pathでの`--version`を同recordへ一度記録し、
@@ -549,7 +548,7 @@ scored solver直前にはBigQuery通信、profiler、MPI debug、`checkMesh`、�
 計測なし／ありで一時確認し、結果を破棄する。通常runのeligibilityや反復管理情報にはしない。
 
 `instrumentation_bundle_hash`は、score pathで有効なhook、probe、rank別source schema、sample interval、sink、
-buffer、wrapper executable hash、observation contract version、env capture scope、source path allowlistを
+buffer、wrapper path、observation contract version、env capture scope、source path allowlistを
 列挙したcanonical manifestのcontent hashである。`lightweight`等の
 labelだけでは同一視しない。collector実装中に一度だけ非擾乱を確認し、確認後は通常benchで同じbundleを使う。
 このhashはpurpose/arm/run ID/absolute runtime rootを含まないsemantic identityで、sinkとargvはrelative templateにする。

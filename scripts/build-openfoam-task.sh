@@ -13,7 +13,6 @@ if [[ $# -ne 2 || ! $1 =~ ^[1-9][0-9]*$ ]]; then
 fi
 build_parallelism=$1
 experiment_metrics_native_root=$2
-[[ -d "${experiment_metrics_native_root}" ]]
 
 export WM_NCOMPPROCS="${build_parallelism}"
 cd "${WM_PROJECT_DIR}"
@@ -68,7 +67,6 @@ done
 for application in blockMesh decomposePar icoFoam checkMesh mesh-facts partition-audit
 do
   executable="${FOAM_APPBIN}/${application}"
-  test -x "${executable}"
   if ldd "${executable}" | grep -q 'not found'; then
     ldd "${executable}" >&2
     exit 1

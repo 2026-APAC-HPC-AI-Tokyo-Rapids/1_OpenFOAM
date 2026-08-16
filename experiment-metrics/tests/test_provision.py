@@ -10,7 +10,6 @@ import pytest
 import experiment_metrics.provision as provision_module
 from experiment_metrics import init_run
 from experiment_metrics.build_provenance import (
-    CAPTURE_SOURCE_PATH,
     EXECUTABLE_ROLES,
     PARTITION_SOURCE_PATHS,
     TOOLCHAIN_ROLES,
@@ -95,11 +94,6 @@ def _sidecar(path: Path, executables: dict[str, Path]) -> Path:
             ],
             key=lambda item: item["path"].encode(),
         ),
-        "capture_hardware_source": {
-            "source_commit_role": "build_definition",
-            "repository_path": CAPTURE_SOURCE_PATH,
-            "git_blob_oid": "d" * 40,
-        },
         "partition_audit_source": {
             "source_commit_role": "build_definition",
             "repository_paths": list(PARTITION_SOURCE_PATHS),

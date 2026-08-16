@@ -29,14 +29,10 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
 ) -> None:
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
-    repository = tmp_path / "repository"
     provision = tmp_path / "provision"
-    (repository / "scripts").mkdir(parents=True)
     (provision / "scripts").mkdir(parents=True)
-    source = repository / "scripts/run-openfoam.pjm"
     execution = provision / "scripts/run-openfoam.pjm"
-    source.write_bytes(b"#!/bin/sh\n")
-    execution.write_bytes(source.read_bytes())
+    execution.write_bytes(b"#!/bin/sh\n")
     multiplexer = tmp_path / "bin/.cltkexec"
     multiplexer.parent.mkdir()
     multiplexer.write_bytes(b"fixture")
@@ -50,7 +46,6 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
         runtime_dir=run_dir,
         registry_path=REGISTRY,
         protocol_path=PROTOCOL,
-        repository_root=repository,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
@@ -73,7 +68,7 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in exported
 
     (run_dir / "control/job-entry.json").write_text(
-        json.dumps({"pjm_job_id": "12345"}) + "\n"
+        json.dumps({"scheduler_job_id": "12345"}) + "\n"
     )
     raw = b"12345\tEND\t2026-08-10T00:00:00\t1.5\t0\t1\t120\t1\t4096\t2\t3\n"
     accounting_path = capture_scheduler_terminal(
@@ -100,14 +95,10 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
         None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile"
     )
     run_dir = manifest.parents[1]
-    repository = tmp_path / "repository"
     provision = tmp_path / "provision"
-    (repository / "scripts").mkdir(parents=True)
     (provision / "scripts").mkdir(parents=True)
-    source = repository / "scripts/run-openfoam.pjm"
     execution = provision / "scripts/run-openfoam.pjm"
-    source.write_bytes(b"#!/bin/sh\n")
-    execution.write_bytes(source.read_bytes())
+    execution.write_bytes(b"#!/bin/sh\n")
     pjsub = tmp_path / "pjsub"
     pjsub.write_bytes(b"fixture")
 
@@ -116,7 +107,6 @@ def test_submission_derives_vtune_profile_purpose_from_manifest(
         runtime_dir=run_dir,
         registry_path=REGISTRY,
         protocol_path=PROTOCOL,
-        repository_root=repository,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
@@ -147,14 +137,10 @@ def test_submission_accepts_memory_access_profile(
         None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile"
     )
     run_dir = manifest.parents[1]
-    repository = tmp_path / "repository"
     provision = tmp_path / "provision"
-    (repository / "scripts").mkdir(parents=True)
     (provision / "scripts").mkdir(parents=True)
-    source = repository / "scripts/run-openfoam.pjm"
     execution = provision / "scripts/run-openfoam.pjm"
-    source.write_bytes(b"#!/bin/sh\n")
-    execution.write_bytes(source.read_bytes())
+    execution.write_bytes(b"#!/bin/sh\n")
     pjsub = tmp_path / "pjsub"
     pjsub.write_bytes(b"fixture")
 
@@ -163,7 +149,6 @@ def test_submission_accepts_memory_access_profile(
         runtime_dir=run_dir,
         registry_path=REGISTRY,
         protocol_path=PROTOCOL,
-        repository_root=repository,
         pjm_script_repository_path="scripts/run-openfoam.pjm",
         execution_script=execution,
         provision_dir=provision,
@@ -186,14 +171,10 @@ def test_submission_rejects_invalid_profile_rank(
 ) -> None:
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
-    repository = tmp_path / "repository"
     provision = tmp_path / "provision"
-    (repository / "scripts").mkdir(parents=True)
     (provision / "scripts").mkdir(parents=True)
-    source = repository / "scripts/run-openfoam.pjm"
     execution = provision / "scripts/run-openfoam.pjm"
-    source.write_bytes(b"#!/bin/sh\n")
-    execution.write_bytes(source.read_bytes())
+    execution.write_bytes(b"#!/bin/sh\n")
 
     with pytest.raises(ValueError, match="nonzero profile rank"):
         submit_run(
@@ -201,7 +182,6 @@ def test_submission_rejects_invalid_profile_rank(
             runtime_dir=run_dir,
             registry_path=REGISTRY,
             protocol_path=PROTOCOL,
-            repository_root=repository,
             pjm_script_repository_path="scripts/run-openfoam.pjm",
             execution_script=execution,
             provision_dir=provision,
@@ -284,14 +264,11 @@ def test_parse_scheduler_accounting_rejects_wrong_per_node_column_count() -> Non
 def test_supervisor_captures_entry_lifecycle_and_pipeline(
     tmp_path: Path,
     identities: dict[str, object],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
     state = run_dir / "domain/supervisor-state.json"
-    monkeypatch.setenv("PJM_JOBID", "9876")
-
-    start_supervisor(manifest, state)
+    start_supervisor(manifest, state, job_id="9876")
     mark_pipeline(state, "start")
     mark_pipeline(state, "finish")
     fragment = finish_supervisor(manifest, state, REGISTRY, exit_code=0)

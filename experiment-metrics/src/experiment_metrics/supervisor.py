@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -14,14 +15,13 @@ from .manifest import RunManifest
 from .recording import Recorder
 
 
-def start_supervisor(manifest_path: Path, state_path: Path) -> Path:
+def start_supervisor(manifest_path: Path, state_path: Path, *, job_id: str) -> Path:
     manifest = RunManifest.load(manifest_path)
     run_dir = manifest.path.parents[1]
     if state_path.resolve() != (run_dir / "domain/supervisor-state.json").resolve():
         raise ValueError("supervisor state is outside the bound run")
-    job_id = os.environ.get("PJM_JOBID") or os.environ.get("PJM_JOB_ID")
-    if not job_id or not job_id.isdecimal():
-        raise ValueError("supervisor requires a PJM job ID")
+    if re.fullmatch(r"[0-9]+(?:[.][A-Za-z0-9.-]+)?", job_id) is None:
+        raise ValueError("supervisor requires a scheduler job ID")
     started_at = _utc_now()
     snapshot = run_dir / "source/env/job-entry.snapshot"
     capture_snapshot(snapshot)
@@ -29,7 +29,7 @@ def start_supervisor(manifest_path: Path, state_path: Path) -> Path:
         "schema_version": "job-entry/v1",
         "subject_kind": "regular_run",
         "run_id": manifest.run_id,
-        "pjm_job_id": job_id,
+        "scheduler_job_id": job_id,
         "entry_utc": started_at,
         "environment_snapshot": _member(snapshot, run_dir),
     }
@@ -93,7 +93,7 @@ def finish_supervisor(
             Decimal(finished_ns - started_ns) / Decimal(1_000_000_000),
         ),
         Fact("run.exit_code", exit_code),
-        Fact("scheduler.job_entry_job_id", entry["pjm_job_id"]),
+        Fact("scheduler.job_entry_job_id", entry["scheduler_job_id"]),
     ]
     pipeline_start = state["pipeline_started_monotonic_ns"]
     pipeline_finish = state["pipeline_finished_monotonic_ns"]
@@ -107,7 +107,7 @@ def finish_supervisor(
     with Recorder.open(
         manifest.path,
         registry_path,
-        "pjm.supervisor",
+        "scheduler.supervisor",
         run_dir,
         fragment_id="supervisor",
     ) as recorder:

@@ -62,8 +62,9 @@ def record_execution_context(
     if placement_hosts != header_hosts or len(placement_hosts) != protocol.nodes:
         raise ValueError("solver and placement host mappings differ")
     environment = parse_snapshot(host_snapshot.read_bytes())
-    if environment.get(b"I_MPI_FABRICS") != protocol.transport_policy.encode():
-        raise ValueError("launch-effective MPI transport differs from protocol")
+    for name, expected in protocol.transport_environment.items():
+        if environment.get(name.encode()) != expected.encode():
+            raise ValueError("launch-effective MPI transport differs from protocol")
     facts = (
         *environment_facts(host_snapshot),
         placement,

@@ -1,0 +1,48 @@
+name: Profile OpenFOAM on Genkai
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile_rank:
+        description: MPI rank sampled by Intel VTune
+        required: true
+        default: "0"
+        type: string
+      profile_analysis:
+        description: Intel VTune analysis
+        required: true
+        default: hotspots
+        type: choice
+        options:
+          - hotspots
+          - hpc-performance
+          - memory-access
+      node_count:
+        description: Official experiment node count
+        required: true
+        default: "1"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "4"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    name: Validate control plane
+    uses: ./.github/workflows/validate.yml
+
+  genkai:
+    name: Genkai profile
+    needs: validate
+    uses: ./.github/workflows/genkai.yml
+    with:
+      profile: true
+      profile_rank: ${{ inputs.profile_rank }}
+      profile_analysis: ${{ inputs.profile_analysis }}
+      node_count: ${{ inputs.node_count }}
+    secrets: inherit

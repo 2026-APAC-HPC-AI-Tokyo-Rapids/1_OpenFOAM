@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from experiment_metrics import init_run
+from experiment_metrics.pbs_scheduler import (
+    capture_pbs_terminal,
+    parse_pbs_accounting,
+    submit_pbs_run,
+)
+
+REGISTRY = Path(__file__).parents[1] / "registry/openfoam-v2.toml"
+PROTOCOL = Path(__file__).parents[1] / "registry/openfoam-v2-protocol-gadi-scotch-1n-104r.toml"
+
+
+def test_pbs_submission_and_terminal_are_bound(tmp_path: Path, identities: dict[str, object]) -> None:
+    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/gadi").mkdir(parents=True)
+    execution = provision / "platforms/gadi/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+
+    outcome = submit_pbs_run(manifest_path=manifest, runtime_dir=run_dir, registry_path=REGISTRY, protocol_path=PROTOCOL, pbs_script_repository_path="platforms/gadi/run-openfoam.pbs", execution_script=execution, provision_dir=provision, qsub_path=launcher, execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"176123456.gadi-pbs\n", b""))
+    assert outcome.job_id == "176123456.gadi-pbs"
+    request = json.loads(outcome.request_path.read_text())
+    assert request["nodes"] == 1
+    assert request["ranks"] == 104
+    assert "ncpus=104,mem=400GB,jobfs=1GB,storage=scratch/hb15" in request["argv"]
+    (run_dir / "control/job-entry.json").write_text(json.dumps({"scheduler_job_id": outcome.job_id}) + "\n")
+    raw = f"""Job Id: {outcome.job_id}
+    job_state = F
+    Exit_status = 0
+    stime = Sat Aug 15 01:02:03 2026
+    Resource_List.ncpus = 104
+    resources_used.walltime = 00:03:04
+    resources_used.cput = 05:18:09
+    resources_used.mem = 81234567kb
+""".encode()
+    accounting_path = capture_pbs_terminal(manifest_path=manifest, runtime_dir=run_dir, registry_path=REGISTRY, protocol_path=PROTOCOL, job_id=outcome.job_id, qstat_path=launcher, execute=lambda argv: subprocess.CompletedProcess(argv, 0, raw, b""))
+    accounting = json.loads(accounting_path.read_text())
+    terminal = json.loads((run_dir / "control/scheduler-terminal.json").read_text())
+    assert terminal["argv"] == [str(launcher), "-fx", outcome.job_id]
+    assert accounting["jid"] == outcome.job_id
+    assert accounting["nnumu"]["value"] == 1
+    assert accounting["elp"]["seconds"] == 184.0
+    assert accounting["mmszu"]["bytes"] == 81234567 * 1024
+
+
+def test_parse_pbs_accounting_rejects_wrong_cpu_count() -> None:
+    raw = b"Job Id: 1.gadi-pbs\n    Resource_List.ncpus = 48\n"
+    try:
+        parse_pbs_accounting(raw, expected_job_id="1.gadi-pbs", expected_nodes=1, expected_ranks=104)
+    except ValueError as error:
+        assert "CPU allocation" in str(error)
+    else:
+        raise AssertionError("wrong PBS CPU count was accepted")

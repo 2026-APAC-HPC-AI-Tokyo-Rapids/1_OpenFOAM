@@ -14,6 +14,7 @@ class RunProtocol:
     ranks: int
     resource_group: str
     transport_policy: str
+    transport_environment: dict[str, str]
     workload_id: str
     expected_workload_identity: str
 
@@ -48,6 +49,7 @@ class RunProtocol:
             "ranks",
             "resource_group",
             "transport_policy",
+            "transport_environment",
             "workload_id",
             "expected_workload_identity",
         }
@@ -58,6 +60,7 @@ class RunProtocol:
         ranks = variant["ranks"]
         resource_group = variant["resource_group"]
         transport = variant["transport_policy"]
+        transport_environment = variant["transport_environment"]
         workload_id = variant["workload_id"]
         workload_identity = variant["expected_workload_identity"]
         if (
@@ -78,6 +81,15 @@ class RunProtocol:
             or not isinstance(transport, str)
             or not transport
             or (nodes > 1 and transport == "shm")
+            or not isinstance(transport_environment, dict)
+            or not all(
+                isinstance(name, str)
+                and name
+                and name.replace("_", "").isalnum()
+                and isinstance(value, str)
+                and value
+                for name, value in transport_environment.items()
+            )
             or not isinstance(workload_id, str)
             or not workload_id
             or not isinstance(workload_identity, str)
@@ -90,6 +102,7 @@ class RunProtocol:
             ranks,
             resource_group,
             transport,
+            dict(transport_environment),
             workload_id,
             workload_identity,
         )

@@ -87,9 +87,9 @@ component ID UTF-8 byte順uniqueとする。`activation`は
 ```text
 {kind:"in_process_hook", source_commit_role:const "openfoam_source",
  source_path:repository-relative POSIX path, symbol:nonempty string, event_schema_id:nonempty string}
-{kind:"executable", artifact_relative_path:relative POSIX path, content_sha256:sha256,
+{kind:"executable", artifact_relative_path:relative POSIX path,
  argv_template:nonempty argv-argument-template array}
-{kind:"sampler", artifact_relative_path:relative POSIX path, content_sha256:sha256,
+{kind:"sampler", artifact_relative_path:relative POSIX path,
  argv_template:nonempty argv-argument-template array, sample_interval_sec:positive finite decimal}
 {kind:"control", control_id:nonempty contract-registry ID, timeout_sec:positive finite decimal}
 {kind:"postrun_parser", parser_id:nonempty string, source_schema_id:nonempty string}
@@ -102,11 +102,10 @@ template segmentはclosed union `{literal:nonempty string}`、
 `{token:const "provisioned_executable",role:const "perf"}`、
 `{token:const "sink_path",sink_id:nonempty string}`、`{token:const "rank_sink_template",sink_id:nonempty string}`とする。argv argument templateはnonempty
 segment arrayで、adjacent literalは一つに結合する。sink pathはbinding `source_id`のregistry `path_template`だけから得る。
-`artifact_root`はsource-track headのclean checkoutから作るread-only instrumentation payload root、
-`artifact_relative_path`はそのroot基準である。runnerはactivate直前にrealpathがroot外へ出ないことと実fileの
-size/content SHA-256をbundle宣言へ一致させ、`component_executable`をその検査済みabsolute realpathだけへ展開する。
+`artifact_relative_path`はsource trackへ記録した実行checkoutを基準とする。実際に起動した
+absolute pathとargvはStageRunner Factが所有する。
 `stage_executable(role)`はbuild-provision validationの同role検査済みabsolute realpathだけへ展開する。
-executable/samplerで別root、PATH検索、hash不一致fallbackを許さない。実run ID、absolute runtime root、実時刻はbundle byteに含めない。runnerは
+executable/samplerでPATH検索やfallbackを許さない。実run ID、absolute runtime root、実時刻はbundle byteに含めない。runnerは
 `score -> bench`、`profile -> profile`の固定写像でbundleを一つ選び、
 その全componentを一度activateする。component別applicabilityはこの写像の完全な複写になるため保存しない。
 benchは通常contractのscore bundleを使う。開発時確認のevidenceは保存・継続照合しない。purposeはsubject manifest、実argv/cwdはStageRunner Fact、
@@ -419,8 +418,6 @@ precision: enum "SP"|"DP"
 label_bits: enum 32|64
 build_archive: member
 runtime_objects: runtime-object[]
-capture_hardware_source: {source_commit_role:const "build_definition",repository_path:repository-relative POSIX path,
-  git_blob_oid:algorithm-constrained full OID}
 partition_audit_source: {source_commit_role:const "build_definition",
   repository_paths:exactly 3 sorted unique repository-relative POSIX paths,
   git_blob_oids:exactly 3 algorithm-constrained full OIDs}
@@ -431,10 +428,9 @@ source commit/toolchain arraysは記載role順に各role exactly onceである�
   path:relative POSIX path,size_bytes:uint,sha256:sha256}`または
   `{kind:"shared_library",path:relative POSIX path,soname:nonempty string,size_bytes:uint,sha256:sha256}`である。path byte順unique、七つの
   executable roleをexactly once必須にする。
-capture/partition source blobのalgorithm/OID treeは`source_commits[commit_role="build_definition"]`から継承し、
+partition source blobのalgorithm/OID treeは`source_commits[commit_role="build_definition"]`から継承し、
 `partition_audit_source.repository_paths[i]`と`git_blob_oids[i]`は同じpath byte順offsetで対応する。captureの生成entrypoint hashは
-同じsource bytesからinstallした`capture-hardware` runtime objectのhashと照合する。entrypointはtracked source bytesを
-そのままinstallするものとし、shebangを含む全byteがsource blob contentとexact一致しなければsidecarを公開しない。
+`capture-hardware` runtime objectが所有する。
   workflow run/attemptはoperational build rowだけが所有し、content-hashed sidecarへ入れない。
   shared library集合は六つのELF executable（`capture-hardware`を除く）の`DT_NEEDED`を`RPATH/RUNPATH`とbuild時loader resolutionで再帰的に
   解決したうち、build archiveが所有する実fileの全体である。symlinkはarchive内で解決し、

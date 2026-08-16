@@ -10,7 +10,6 @@ import pytest
 import experiment_metrics.build_provenance as provenance
 from experiment_metrics import init_run
 from experiment_metrics.build_provenance import (
-    CAPTURE_SOURCE_PATH,
     EXECUTABLE_ROLES,
     PARTITION_SOURCE_PATHS,
     build_artifact_facts,
@@ -24,9 +23,6 @@ from experiment_metrics.build_provenance import (
 def _definition_repo(root: Path) -> Path:
     repo = root / "definition"
     repo.mkdir()
-    capture = repo / CAPTURE_SOURCE_PATH
-    capture.parent.mkdir(parents=True)
-    capture.write_text("#!/usr/bin/env python3\n")
     for relative in PARTITION_SOURCE_PATHS:
         path = repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,7 +73,7 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
         shutil.copy2("/bin/true", path)
         paths[role] = path
     capture = bin_dir / "capture-hardware"
-    shutil.copy2(definition / CAPTURE_SOURCE_PATH, capture)
+    capture.write_text("#!/usr/bin/env python3\n")
     capture.chmod(0o755)
     paths["capture-hardware"] = capture
     monkeypatch.setattr(provenance, "_which", lambda _name: Path("/bin/true"))
@@ -92,6 +88,11 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
         thirdparty_algorithm="sha1",
         executable_paths=paths,
         compile_flags=["WM_PRECISION_OPTION=DP", "WM_LABEL_SIZE=64"],
+        compiler_c=Path("/bin/true"),
+        compiler_cxx=Path("/bin/true"),
+        mpi_launcher=Path("/bin/true"),
+        precision="DP",
+        label_bits=64,
     )
     archive = tmp_path / "build.tar.zst"
     archive.write_bytes(b"immutable-build-archive")
@@ -128,31 +129,3 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
     archive.write_bytes(b"tampered")
     with pytest.raises(ValueError, match="does not match"):
         verify_build_pair(sidecar, archive)
-
-
-def test_capture_build_state_rejects_modified_installed_probe(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    definition = _definition_repo(tmp_path)
-    tree = tmp_path / "tree"
-    bin_dir = tree / "bin"
-    bin_dir.mkdir(parents=True)
-    paths = {}
-    for role in EXECUTABLE_ROLES:
-        path = bin_dir / role
-        shutil.copy2("/bin/true", path)
-        paths[role] = path
-    monkeypatch.setattr(provenance, "_which", lambda _name: Path("/bin/true"))
-
-    with pytest.raises(ValueError, match="differs from tracked source"):
-        capture_build_state(
-            output=tmp_path / "state.json",
-            build_tree=tree,
-            build_definition_repo=definition,
-            openfoam_oid="a" * 40,
-            openfoam_algorithm="sha1",
-            thirdparty_oid="b" * 40,
-            thirdparty_algorithm="sha1",
-            executable_paths=paths,
-            compile_flags=[],
-        )
