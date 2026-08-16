@@ -374,6 +374,7 @@ run_bundle_source_roles = [
   "job_entry_environment",
   "minimal_hardware",
   "official_result",
+  "pbs_log",
   "pjm_log",
   "postrun_source",
   "pstream_source",
