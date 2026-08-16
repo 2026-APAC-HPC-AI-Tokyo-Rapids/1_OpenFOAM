@@ -28,7 +28,7 @@ on:
           - "4"
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 jobs:
