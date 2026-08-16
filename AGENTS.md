@@ -8,6 +8,7 @@
  - GitHub Actionsのrunnerは複数起動されており、同時に複数のジョブを投げることができます。同時に投げて実験時間の短縮を図れる場合はそうしてください。
  - 同時実行制御の名前にはクラスタ名を含め、異なるクラスタの処理を相互に待たせないでください。実行ジョブには、必要性が確認されていない直列化を加えないでください。
  - compiler optionなど複数の実験条件を比較するときは、workflowのmatrixやdispatch inputで条件を切り替えず、条件ごとに追跡可能なcommitを作成してpushし、そのcommitからbuildと実行が起動されるようにしてください。
+ - 通常計測とプロファイルは同じ`OpenFOAM` workflowを入口とし、手動実行は`profile`入力、pushは`[profile]`で切り替えてください。クラスタ別workflowのジョブ構成は揃え、PJM/PBSや記憶領域の差はクラスタ別スクリプトへ置いてください。
 
 
 # リポジトリに関する指示
@@ -42,6 +43,7 @@
  - 後からレポートや論文を作成できるよう、実験条件、来歴、ログ、結果を適切な正本へ残してください。Gitとコミット本文は追跡対象の設定と変更理由、Actions・PJMログは実行経過、退避したartifactとサーバー上のrun directoryはraw出力、BigQueryは比較・集計対象のメトリクスを担当します。同じ事実を複数の保存先へ不必要に複製しないでください。
  - 条件や実行環境が異なるrunを直接比較せず、単一runの結果だけで性能上の結論を出さないでください。
  - profiler、instrumentation、メトリクス収集が通常のbench結果を変えないようにしてください。必要に応じてbenchとprofileを分離してください。
+ - 計算ノードではメトリクス断片を共有run directoryへ記録するだけにし、スケジューラ終了後にlogin runnerからBigQueryとGitHub artifactへ送信してください。計算ジョブへBigQueryの資格情報を渡さないでください。
  - ボトルネックは処理全体の所要時間から推測せず、build、provision、case preparation、solver、成果物回収などの段階ごとに特定してください。
  - 計算ノードを必要としない検証は、可能な限りローカルまたはlogin nodeで行ってください。実タスクの実行、MPI環境、割当資源上の挙動を確認する場合は各クラスタの計算ジョブを使用してください。
  - filesystem、runner、login node、compute nodeの性質を隠蔽せず、I/O特性、容量、filesystem境界、ownership、node-localか共有かを確認して実装してください。

@@ -68,7 +68,6 @@ RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 
-if [[ "${EXPERIMENT_METRICS_DIRECT_SEND:-0}" == 1 ]]; then "${METRICS_CLI}" smoke-send --run "${RUN_ID}" --source compute; fi
 DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
@@ -165,7 +164,7 @@ install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "$(readlink -f -- "${CASE_DIR}")/../manifest.json" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  install -d -m 2770 "/home/pj26000080/share/openfoam-vtune" "${vtune_root}"
+  install -d -m 2770 "${vtune_root}"
   install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"

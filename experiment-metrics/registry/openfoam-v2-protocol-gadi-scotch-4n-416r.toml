@@ -5,8 +5,8 @@ schema_version = "openfoam-v2-run-protocol/v1"
 nodes = 4
 ranks = 416
 resource_group = "normalsr"
-transport_policy = "openmpi-default"
-transport_environment = {}
+transport_policy = "shm:ofi"
+transport_environment = { I_MPI_FABRICS = "shm:ofi" }
 workload_id = "cavity3d-64m-v1"
 expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295ac14103cc967feb"
 expected_stages = ["case_prepare", "solver", "minimal_hardware_capture", "network_imb_mpi1"]
@@ -15,8 +15,8 @@ expected_stages = ["case_prepare", "solver", "minimal_hardware_capture", "networ
 nodes = 4
 ranks = 416
 resource_group = "normalsr"
-transport_policy = "openmpi-default"
-transport_environment = {}
+transport_policy = "shm:ofi"
+transport_environment = { I_MPI_FABRICS = "shm:ofi" }
 workload_id = "cavity3d-64m-v1"
 expected_workload_identity = "2e486049c74f16c141e9708eea4ba71e2d78f79df6c0bf295ac14103cc967feb"
 expected_stages = ["case_prepare", "solver", "minimal_hardware_capture", "profile_hardware_capture", "network_imb_mpi1"]

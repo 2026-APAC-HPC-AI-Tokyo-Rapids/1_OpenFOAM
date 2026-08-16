@@ -1,4 +1,4 @@
-# OpenFOAM on Genkai
+# OpenFOAM on Genkai and Gadi
 
 Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法や実行性能の改善による影響を比較するためのリポジトリです。
 
@@ -12,15 +12,15 @@ Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法
 
 ## GitHub Actionsからの起動
 
-通常の実行は `OpenFOAM` を手動実行し、`run_genkai`、`run_gadi`、`node_count` を指定します。玄界とGadiは同時に選択できます。どちらも選択しなければクラスタのジョブはすべてスキップされます。
+`OpenFOAM` を手動実行し、`run_genkai`、`run_gadi`、`node_count`を指定します。玄界とGadiは同時に選択できます。どちらも選択しなければクラスタのジョブはすべてスキップされます。通常計測は`profile=false`、VTune計測は`profile=true`とし、後者では`profile_rank`と`profile_analysis`も指定します。
 
-pushではコミットメッセージに `[cluster:genkai]`、`[cluster:gadi]` を含めて実行先を指定し、`[nodes:1]`、`[nodes:2]`、`[nodes:4]` でノード数を指定します。ノード数を省略した場合は1です。両方のクラスタを同時に指定できます。
+pushではコミットメッセージに`[cluster:genkai]`、`[cluster:gadi]`を含めて実行先を指定し、`[nodes:1]`、`[nodes:2]`、`[nodes:4]`でノード数を指定します。ノード数を省略した場合は1です。両方のクラスタを同時に指定できます。`[profile]`を含めるとVTune計測になり、rank 0の`hotspots`を使います。
 
 push時は、最新コミットメッセージの先頭が `[require-build]` なら各クラスタで新しくビルドし、それ以外は同じクラスタにある直近の利用可能な成果物を再利用します。手動実行では `[require-build]` を無視して既存成果物を再利用し、利用可能な成果物がない場合だけ新しくビルドします。
 
 ## VTuneによるプロファイル
 
-プロファイルは `Profile OpenFOAM on Genkai` から起動します。`profile_rank` で選んだMPI rank（既定値0）へ60秒間Intel VTuneを接続して計測します。
+プロファイルも通常実行と同じ`OpenFOAM`から起動します。`profile_rank`で選んだMPI rank（既定値0）へ60秒間Intel VTuneを接続して計測します。
 `profile_analysis=hotspots`は関数別CPU時間、`hpc-performance`はCPUパイプライン、メモリ階層、DRAM帯域、FPU・ベクトル化の特性を取得します。
 計測後、上位ホットスポットはGitHub Actionsの実行概要に表として表示されます。Perfetto用のトレースは生成しません。
-VTuneの完全な結果は玄界の `/home/pj26000080/share/openfoam-vtune/` 以下に保持され、実行概要に保存先が記録されます。
+VTuneの完全な結果は、玄界では`/home/pj26000080/share/openfoam-vtune/`、Gadiでは`/scratch/hb15/tk7779/openfoam/gadi/profile/`以下に保持され、実行概要に保存先が記録されます。

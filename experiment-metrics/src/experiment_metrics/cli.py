@@ -94,6 +94,12 @@ def parser() -> argparse.ArgumentParser:
     submit_pbs.add_argument("--pbs-script-repository-path", required=True)
     submit_pbs.add_argument("--execution-script", type=Path, required=True)
     submit_pbs.add_argument("--provision-dir", type=Path, required=True)
+    submit_pbs.add_argument("--profile-rank", type=int, default=0)
+    submit_pbs.add_argument(
+        "--profile-analysis",
+        choices=["hotspots", "hpc-performance", "memory-access"],
+        default="hotspots",
+    )
 
     supervisor_start = commands.add_parser("supervisor-start")
     supervisor_start.add_argument("--manifest", type=Path, required=True)
@@ -379,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
             pbs_script_repository_path=arguments.pbs_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
+            profile_rank=arguments.profile_rank,
+            profile_analysis=arguments.profile_analysis,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)

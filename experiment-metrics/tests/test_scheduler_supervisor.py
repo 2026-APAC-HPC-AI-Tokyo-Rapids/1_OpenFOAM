@@ -25,7 +25,7 @@ PROTOCOL = (
 
 
 def test_submission_and_terminal_accounting_are_bound_by_job_id(
-    tmp_path: Path, identities: dict[str, object]
+    tmp_path: Path, identities: dict[str, object], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
@@ -40,6 +40,9 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     pjstat = multiplexer.with_name("pjstat")
     pjsub.symlink_to(multiplexer.name)
     pjstat.symlink_to(multiplexer.name)
+    monkeypatch.setenv(
+        "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE", "/secret/runner-only.json"
+    )
 
     submitted = submit_run(
         manifest_path=manifest,
@@ -66,6 +69,8 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     assert "OPENFOAM_RUN_PURPOSE=bench" in exported
     assert "OPENFOAM_VTUNE_RANK=0" in exported
     assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in exported
+    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in exported
+    assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" not in exported
 
     (run_dir / "control/job-entry.json").write_text(
         json.dumps({"scheduler_job_id": "12345"}) + "\n"
