@@ -165,7 +165,7 @@ jobs:
 
   provision:
     name: Provision OpenFOAM runtime
-    needs: [select-build, build-openfoam, reuse-build]
+    needs: [select-build, reuse-build, build-openfoam]
     if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
     runs-on: [self-hosted, gadi]
     outputs:
