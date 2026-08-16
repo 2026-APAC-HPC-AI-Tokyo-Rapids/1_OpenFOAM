@@ -68,8 +68,7 @@ RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 
-# Fail before mesh/solver work if compute nodes cannot append raw metrics.
-"${METRICS_CLI}" smoke-send --run "${RUN_ID}" --source compute
+if [[ "${EXPERIMENT_METRICS_DIRECT_SEND:-0}" == 1 ]]; then "${METRICS_CLI}" smoke-send --run "${RUN_ID}" --source compute; fi
 DECOMPOSE_PAR_DICT=system/decomposeParDict.6
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"

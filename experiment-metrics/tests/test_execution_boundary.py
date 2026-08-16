@@ -17,7 +17,13 @@ def test_commands_do_not_use_line_continuations() -> None:
     paths.extend((ROOT / "research").rglob("*.md"))
 
     for path in paths:
-        continued = [number for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if line.endswith("\\")]
+        continued = [
+            number
+            for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1
+            )
+            if line.endswith("\\")
+        ]
         assert not continued, f"{path}: command continuation at lines {continued}"
 
 
@@ -54,8 +60,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "scheduler-selected VTune rank is required" in text
     assert "if (( ranks_per_node == 112 )); then" in wrapper_text
     assert (
-        'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,'
-        '60-73,75-88,90-103,105-118"'
+        'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"'
     ) in wrapper_text
     assert "OPENFOAM_PROFILE_DIR" not in text
     assert 'vtune_root="${profile_root}/${profile_run_id}"' in text
@@ -137,13 +142,14 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert prepare_concurrency in workflow
     assert "queue: max" not in workflow
     assert "queue: single" not in workflow
-    assert '${GITHUB_RUN_ID}.tar.zst' in workflow
-    assert '${GITHUB_RUN_NUMBER}.tar.zst' not in workflow
+    assert "${GITHUB_RUN_ID}.tar.zst" in workflow
+    assert "${GITHUB_RUN_NUMBER}.tar.zst" not in workflow
     assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
-    assert 'steps.v2_context.outputs.pjm_job_id != \'\'' in workflow
+    assert "steps.v2_context.outputs.pjm_job_id != ''" in workflow
     assert "needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert "LC_ALL=C sort -u" in workflow
+    assert "EXPERIMENT_METRICS_DIRECT_SEND=1" in workflow
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record v2 terminal sources" not in workflow
     assert "- name: Package fixed v2 artifact set" not in workflow
@@ -183,23 +189,33 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert "ncpus=104,mem=400GB,jobfs=400GB" in workflow
     assert workflow.count("- name: Initialize metrics and submit PBS run") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
-    assert 'steps.context.outputs.pbs_job_id != \'\'' in workflow
+    assert "steps.context.outputs.pbs_job_id != ''" in workflow
     assert "if: always() && needs.provision.result == 'success'" in workflow
     assert "if: always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
-    assert 'export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"' in workflow
+    assert (
+        'export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"'
+        in workflow
+    )
     assert "LC_ALL=C sort -u" in workflow
+    assert "EXPERIMENT_METRICS_DIRECT_SEND=0" in workflow
+    assert (
+        'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
+        in workflow
+    )
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record terminal metrics" not in workflow
     assert "- name: Package fixed run artifact" not in workflow
-    assert '${GITHUB_RUN_ID}.tar.zst' in workflow
-    assert '${GITHUB_RUN_NUMBER}.tar.zst' not in workflow
+    assert "${GITHUB_RUN_ID}.tar.zst" in workflow
+    assert "${GITHUB_RUN_NUMBER}.tar.zst" not in workflow
     assert "openfoam-v2-protocol-gadi-scotch" not in workflow
-    assert 'module load gcc/13.2.0 openmpi/4.1.7' in wrapper
+    assert "module load gcc/13.2.0 openmpi/4.1.7" in wrapper
     assert "OMPI_COMM_WORLD_RANK" in wrapper
-    assert '--solver-launch-arg --map-by' in wrapper
+    assert "--solver-launch-arg --map-by" in wrapper
     assert '"${PBS_JOBFS}/openfoam-build"' in builder
     assert 'tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}"' in builder
-    assert '--case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache"' in wrapper
+    assert (
+        '--case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache"' in wrapper
+    )
     assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
@@ -208,7 +224,10 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert "inputs.run_gadi" in entry
     assert entry.count("contains(github.event.head_commit.message, '[nodes:4]')") == 2
     assert entry.count("contains(github.event.head_commit.message, '[nodes:2]')") == 2
-    assert entry.count("github.event_name == 'workflow_dispatch' && inputs.node_count") == 2
+    assert (
+        entry.count("github.event_name == 'workflow_dispatch' && inputs.node_count")
+        == 2
+    )
     assert "select-target" not in entry
     assert "select-actions-target.sh" not in entry
 
@@ -277,8 +296,8 @@ def test_builder_verifies_only_upstream_in_process_sources() -> None:
     assert "WM_COMPILE_CONTROL=+ccache" in script
     assert "CMAKE_CXX_COMPILER_LAUNCHER=ccache" in script
     assert "CCACHE_RECACHE" not in script
-    assert '${GITHUB_RUN_ID}.tar.zst' in script
-    assert '${GITHUB_RUN_NUMBER}.tar.zst' not in script
+    assert "${GITHUB_RUN_ID}.tar.zst" in script
+    assert "${GITHUB_RUN_NUMBER}.tar.zst" not in script
 
 
 def test_ruff_does_not_enforce_code_width() -> None:

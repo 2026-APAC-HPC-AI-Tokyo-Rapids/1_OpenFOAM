@@ -251,7 +251,7 @@ jobs:
           install -m 0600 /dev/null "${credential_staging}"
           printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_staging}"
           trap 'rm -f -- "${credential_staging}"' EXIT
-          export EXPERIMENT_METRICS_DIRECT_SEND=1
+          export EXPERIMENT_METRICS_DIRECT_SEND=0
           export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_staging}"
           export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
           uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
@@ -278,7 +278,7 @@ jobs:
           cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-artifact-index --manifest "${manifest}" --runtime-dir "${run_dir}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --build-sidecar "${run_dir}/control/build-sidecar.json"
           printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
-          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nOPENFOAM_PROTOCOL_PATH=%s\nEXPERIMENT_METRICS_DIRECT_SEND=1\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${protocol_path}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >> "${GITHUB_ENV}"
+          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nOPENFOAM_PROTOCOL_PATH=%s\nEXPERIMENT_METRICS_DIRECT_SEND=0\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${protocol_path}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >> "${GITHUB_ENV}"
           export RUN_ID="${run_id}"
           export RUN_MANIFEST="${manifest}"
           export RUN_DIR="${run_dir}"
@@ -317,6 +317,7 @@ jobs:
           args+=(--member 'source/workload-manifest.json:workload_manifest')
           while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:workload_member"); done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
       - name: Upload Gadi run artifact
         id: upload
