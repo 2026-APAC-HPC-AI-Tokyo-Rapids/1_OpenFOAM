@@ -227,6 +227,10 @@ def parser() -> argparse.ArgumentParser:
     smoke = commands.add_parser("smoke-send")
     smoke.add_argument("--run", required=True)
     smoke.add_argument("--source", choices=["runner", "compute"], required=True)
+
+    fragments = commands.add_parser("send-fragments")
+    fragments.add_argument("--manifest", type=Path, required=True)
+    fragments.add_argument("--runtime-dir", type=Path, required=True)
     return root
 
 
@@ -382,7 +386,11 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "supervisor-start":
         from .supervisor import start_supervisor
 
-        print(start_supervisor(arguments.manifest, arguments.state, job_id=arguments.job_id))
+        print(
+            start_supervisor(
+                arguments.manifest, arguments.state, job_id=arguments.job_id
+            )
+        )
         return 0
     if arguments.command == "supervisor-mark-pipeline":
         from .supervisor import mark_pipeline
@@ -763,6 +771,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             else 1
         )
+    if arguments.command == "send-fragments":
+        from .publish import send_fragments
+
+        return 0 if send_fragments(arguments.manifest, arguments.runtime_dir) else 1
     raise AssertionError(f"unhandled command: {arguments.command}")
 
 

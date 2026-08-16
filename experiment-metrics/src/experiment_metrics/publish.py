@@ -11,6 +11,8 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .manifest import RunManifest
+
 BIGQUERY_SCOPE = "https://www.googleapis.com/auth/bigquery.insertdata"
 CONFIG_ENV = "EXPERIMENT_METRICS_BIGQUERY_CONFIG"
 CREDENTIALS_FILE_ENV = "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE"
@@ -125,6 +127,38 @@ def send_raw(
             f"experiment metrics BigQuery append failed: {error}", RuntimeWarning
         )
         return False
+
+
+def send_fragments(
+    manifest_path: Path,
+    runtime_dir: Path,
+    *,
+    config: BigQueryConfig | None = None,
+    credentials_file: Path | None = None,
+    request: Callable[[urllib.request.Request], bytes] | None = None,
+) -> bool:
+    """Send every closed fragment once from a network-capable runner."""
+
+    manifest = RunManifest.load(manifest_path)
+    root = runtime_dir.resolve(strict=True)
+    if manifest.path.parents[1] != root:
+        raise ValueError("fragment runtime does not own the run manifest")
+    fragments = sorted(
+        (root / "domain/fragments").glob("*.jsonl"), key=lambda path: path.name.encode()
+    )
+    if not fragments:
+        raise ValueError("run has no closed metric fragments")
+    rows: list[RawRow] = []
+    for fragment in fragments:
+        for line in fragment.read_text(encoding="utf-8").splitlines():
+            rows.append(RawRow.from_mapping(json.loads(line)))
+    return send_raw(
+        manifest.run_id,
+        rows,
+        config=config,
+        credentials_file=credentials_file,
+        request=request,
+    )
 
 
 def _access_token(credentials_file: Path) -> str:

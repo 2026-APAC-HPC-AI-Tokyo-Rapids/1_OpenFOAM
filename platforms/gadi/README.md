@@ -9,7 +9,7 @@ Gadiでは、小ファイルを大量に置く処理と、長く保存する大�
 
 `$PBS_JOBFS`はノードごとに独立しているため、多ノード実行で共有するケースや実行記録には使いません。ビルドは1ノード内で完結するため、展開物と中間生成物を`$PBS_JOBFS`へ置けます。実行前に`/scratch`へ展開する実行環境は一時物とし、Actionsの終了処理で削除します。
 
-計算ノードから外部ネットワークへは接続できません。ビルド記録に使うPython環境はActionsのlogin runnerで作り、共有されているrunner workspaceからPBSジョブが利用します。
+計算ノードから外部ネットワークへは接続できません。ビルド記録に使うPython環境はActionsのlogin runnerで作り、共有されているrunner workspaceからPBSジョブが利用します。実行中のメトリクスは`/scratch`上のrun directoryへ記録し、PBS終了後にlogin runnerから一度だけ送信します。
 
 GitHub Actionsの実行機は、版ごとに用意した`shared/<version>/externals`を共有します。共有物の初回作成と版の切り替えは運用者が手作業で行い、ワークフローや起動スクリプトから作成・更新しません。各実行機の`bin`、認証情報、診断記録、作業領域は共有しません。
 
