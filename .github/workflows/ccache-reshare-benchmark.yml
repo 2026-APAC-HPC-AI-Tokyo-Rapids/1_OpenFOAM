@@ -33,7 +33,7 @@ jobs:
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
       BENCHMARK_WORK_ROOT: /dev/shm/openfoam-ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
       BENCHMARK_PUBLISH_ROOT: /home/pj26000080/share/openfoam-build/.ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
-      BENCHMARK_RESULTS_ROOT: ${{ github.workspace }}/ccache-benchmark-results
+      BENCHMARK_RESULTS_ROOT: /home/pj26000080/share/openfoam-build/.ccache-benchmark-results-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout benchmark inputs
         uses: actions/checkout@v7
@@ -64,7 +64,7 @@ jobs:
       SOURCE_ARCHIVE_DIR: /scratch/hb15/tk7779/openfoam/gadi/source-archives
       BENCHMARK_WORK_ROOT: /tmp/openfoam-ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
       BENCHMARK_PUBLISH_ROOT: /scratch/hb15/tk7779/openfoam/gadi/.ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
-      BENCHMARK_RESULTS_ROOT: ${{ github.workspace }}/ccache-benchmark-results
+      BENCHMARK_RESULTS_ROOT: /scratch/hb15/tk7779/openfoam/gadi/.ccache-benchmark-results-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout benchmark inputs
         uses: actions/checkout@v7
