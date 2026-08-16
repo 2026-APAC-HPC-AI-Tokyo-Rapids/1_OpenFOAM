@@ -255,7 +255,7 @@ jobs:
       needs.prepare-case.result == 'success'
     runs-on: [self-hosted, genkai]
     outputs:
-      run_id: ${{ steps.v2_context.outputs.run_id }}
+      artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
     env:
       OPENFOAM_RUN_ROOT: /fast/pj26000080/openfoam-runs
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
@@ -328,6 +328,7 @@ jobs:
           job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}" --profile-rank '${{ inputs.profile_rank }}' --profile-analysis '${{ inputs.profile_analysis }}')"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
+          echo "pjm_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Wait for OpenFOAM job
         run: |
@@ -368,7 +369,7 @@ jobs:
 
       - name: Finalize metrics and package artifacts
         id: package_v2
-        if: always() && steps.v2_context.outputs.run_id != ''
+        if: always() && steps.v2_context.outputs.pjm_job_id != ''
         run: |
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-scheduler-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --job-id "${PJM_JOB_ID}" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml" --log "${RUN_DIR}/logs/solver.log" || true
@@ -413,7 +414,7 @@ jobs:
 
       - name: Upload fixed v2 artifact set
         id: upload_v2
-        if: always() && steps.v2_context.outputs.run_id != ''
+        if: always() && steps.v2_context.outputs.pjm_job_id != ''
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-v2-${{ steps.v2_context.outputs.run_id }}
@@ -446,7 +447,7 @@ jobs:
   archive-artifacts:
     name: Archive artifacts on home server
     needs: run
-    if: always() && needs.run.outputs.run_id != ''
+    if: always() && needs.run.outputs.artifact_uploaded == 'true'
     runs-on: ubuntu-latest
 
     permissions:

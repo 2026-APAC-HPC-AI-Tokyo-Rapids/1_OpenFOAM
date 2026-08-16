@@ -141,8 +141,8 @@ def test_workflow_uses_mode_0600_credential_path_for_direct_sends() -> None:
     assert '${GITHUB_RUN_NUMBER}.tar.zst' not in workflow
     assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
-    assert 'steps.v2_context.outputs.run_id != \'\'' in workflow
-    assert "needs.run.outputs.run_id != ''" in workflow
+    assert 'steps.v2_context.outputs.pjm_job_id != \'\'' in workflow
+    assert "needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert "LC_ALL=C sort -u" in workflow
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record v2 terminal sources" not in workflow
@@ -183,9 +183,10 @@ def test_gadi_boundary_uses_pbs_and_target_local_storage() -> None:
     assert "ncpus=104,mem=400GB,jobfs=400GB" in workflow
     assert workflow.count("- name: Initialize metrics and submit PBS run") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
-    assert 'steps.context.outputs.run_id != \'\'' in workflow
+    assert 'steps.context.outputs.pbs_job_id != \'\'' in workflow
     assert "if: always() && needs.provision.result == 'success'" in workflow
-    assert "if: always() && needs.run.outputs.run_id != ''" in workflow
+    assert "if: always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
+    assert 'export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"' in workflow
     assert "LC_ALL=C sort -u" in workflow
     assert "- name: Verify runner BigQuery connectivity" not in workflow
     assert "- name: Record terminal metrics" not in workflow
