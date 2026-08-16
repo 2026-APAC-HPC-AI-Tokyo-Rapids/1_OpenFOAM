@@ -186,7 +186,7 @@ jobs:
           test "$(sha256sum "${archive}" | awk '{print $1}')" = "$(jq -er '.build_archive.sha256' "${sidecar}")"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh "${provision_dir}/scripts/"
-          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs "${provision_dir}/platforms/gadi/"
+          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/task/"
           cp -a benchmark/cavity3D-64M "${provision_dir}/task/"
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
@@ -209,13 +209,20 @@ jobs:
           prepare_cache_root="${GADI_ROOT}/case-cache"
           prepare_target="${prepare_root}/case"
           install -d -m 0750 "${prepare_root}" "${prepare_cache_root}"
+          cleanup() {
+            status=$?
+            trap - EXIT
+            if [[ "${status}" -ne 0 ]]; then qdel "${job_id:-}" 2>/dev/null || true; cat "${prepare_root}/pbs.log" 2>/dev/null || true; fi
+            rm -rf -- "${prepare_root}"
+            exit "${status}"
+          }
+          trap cleanup EXIT
           exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}"
           job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=110GB,jobfs=1GB,storage=scratch/hb15 -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/gadi/prepare-openfoam-case.pbs")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          platforms/gadi/wait-pbs-job.sh "${job_id}"
+          "${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"
           cache_dir=$(sed -n 's/^cache_dir=//p' "${prepare_root}/pbs.log" | tail -n 1)
           [[ "${cache_dir}" == "${prepare_cache_root}/"* ]]
-          rm -rf -- "${prepare_root}"
 
   run:
     name: Run OpenFOAM on Gadi
