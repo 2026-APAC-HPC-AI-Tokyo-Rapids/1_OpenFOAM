@@ -1,0 +1,112 @@
+name: Benchmark ccache reshare
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_genkai:
+        description: Benchmark on Genkai
+        required: true
+        default: true
+        type: boolean
+      run_gadi:
+        description: Benchmark on Gadi
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --login -eo pipefail {0}
+
+jobs:
+  genkai:
+    name: Genkai warm-cache comparison
+    if: inputs.run_genkai
+    runs-on: [self-hosted, genkai]
+    concurrency:
+      group: genkai-openfoam-build
+    env:
+      GIT_MIRROR_DIR: /fast/pj26000080/git-mirror
+      SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
+      BENCHMARK_WORK_ROOT: /dev/shm/openfoam-ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+      BENCHMARK_PUBLISH_ROOT: /home/pj26000080/share/openfoam-build/.ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+      BENCHMARK_RESULTS_ROOT: ${{ github.workspace }}/ccache-benchmark-results
+    steps:
+      - name: Checkout benchmark inputs
+        uses: actions/checkout@v7
+
+      - name: Run warm-cache comparison
+        run: scripts/benchmark-ccache-reshare.sh "${BENCHMARK_WORK_ROOT}" "${BENCHMARK_PUBLISH_ROOT}" "${BENCHMARK_RESULTS_ROOT}" scripts/build-openfoam.sh
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: genkai-ccache-reshare-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BENCHMARK_RESULTS_ROOT }}
+          if-no-files-found: error
+          compression-level: 1
+
+      - name: Cleanup benchmark evidence
+        if: always()
+        run: rm -rf -- "${BENCHMARK_WORK_ROOT:?}" "${BENCHMARK_PUBLISH_ROOT:?}" "${BENCHMARK_RESULTS_ROOT:?}"
+
+  gadi:
+    name: Gadi warm-cache comparison
+    if: inputs.run_gadi
+    runs-on: [self-hosted, gadi]
+    concurrency:
+      group: gadi-openfoam-build
+    env:
+      SOURCE_ARCHIVE_DIR: /scratch/hb15/tk7779/openfoam/gadi/source-archives
+      BENCHMARK_WORK_ROOT: /tmp/openfoam-ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+      BENCHMARK_PUBLISH_ROOT: /scratch/hb15/tk7779/openfoam/gadi/.ccache-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+      BENCHMARK_RESULTS_ROOT: ${{ github.workspace }}/ccache-benchmark-results
+    steps:
+      - name: Checkout benchmark inputs
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Stage source archives
+        id: stage
+        run: |
+          install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
+          openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/commits/master --jq .sha)
+          thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/commits/main --jq .sha)
+          openfoam_archive="${SOURCE_ARCHIVE_DIR}/${openfoam_oid}.openfoam.tar.gz"
+          thirdparty_archive="${SOURCE_ARCHIVE_DIR}/${thirdparty_oid}.thirdparty.tar.gz"
+          gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/tarball/${openfoam_oid}" > "${openfoam_archive}.tmp"
+          gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/tarball/${thirdparty_oid}" > "${thirdparty_archive}.tmp"
+          mv -f -- "${openfoam_archive}.tmp" "${openfoam_archive}"
+          mv -f -- "${thirdparty_archive}.tmp" "${thirdparty_archive}"
+          printf 'openfoam_archive=%s\nopenfoam_archive_sha256=%s\nopenfoam_oid=%s\nthirdparty_archive=%s\nthirdparty_archive_sha256=%s\nthirdparty_oid=%s\n' "${openfoam_archive}" "$(sha256sum "${openfoam_archive}" | awk '{print $1}')" "${openfoam_oid}" "${thirdparty_archive}" "$(sha256sum "${thirdparty_archive}" | awk '{print $1}')" "${thirdparty_oid}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare metrics tools
+        run: uv sync --project experiment-metrics --frozen --no-dev
+
+      - name: Run warm-cache comparison
+        env:
+          OPENFOAM_SOURCE_ARCHIVE: ${{ steps.stage.outputs.openfoam_archive }}
+          OPENFOAM_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.openfoam_archive_sha256 }}
+          OPENFOAM_SOURCE_OID: ${{ steps.stage.outputs.openfoam_oid }}
+          THIRDPARTY_SOURCE_ARCHIVE: ${{ steps.stage.outputs.thirdparty_archive }}
+          THIRDPARTY_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.thirdparty_archive_sha256 }}
+          THIRDPARTY_SOURCE_OID: ${{ steps.stage.outputs.thirdparty_oid }}
+        run: scripts/benchmark-ccache-reshare.sh "${BENCHMARK_WORK_ROOT}" "${BENCHMARK_PUBLISH_ROOT}" "${BENCHMARK_RESULTS_ROOT}" platforms/gadi/build-openfoam.sh
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gadi-ccache-reshare-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BENCHMARK_RESULTS_ROOT }}
+          if-no-files-found: error
+          compression-level: 1
+
+      - name: Cleanup benchmark evidence
+        if: always()
+        run: rm -rf -- "${BENCHMARK_WORK_ROOT:?}" "${BENCHMARK_PUBLISH_ROOT:?}" "${BENCHMARK_RESULTS_ROOT:?}"
