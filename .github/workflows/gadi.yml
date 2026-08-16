@@ -132,6 +132,8 @@ jobs:
         run: |
           build_log_dir="${GADI_ROOT}/build-logs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           install -d -m 0750 "${BUILD_ARCHIVE_DIR}" "${build_log_dir}"
+          # Compute nodes cannot reach PyPI. Resolve the build-recording CLI on the login runner before qsub; the PBS job reads this venv through the shared runner workspace.
+          uv sync --project experiment-metrics --frozen --no-dev
           exported="BUILD_ARCHIVE_DIR=${BUILD_ARCHIVE_DIR},BUILD_DEFINITION_REPO=${GITHUB_WORKSPACE},BUILD_LOG_DIR=${build_log_dir},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_RUN_ID=${GITHUB_RUN_ID},OPENFOAM_SOURCE_ARCHIVE=${{ needs.stage-source.outputs.openfoam_archive }},OPENFOAM_SOURCE_ARCHIVE_SHA256=${{ needs.stage-source.outputs.openfoam_archive_sha256 }},OPENFOAM_SOURCE_OID=${{ needs.stage-source.outputs.openfoam_oid }},THIRDPARTY_SOURCE_ARCHIVE=${{ needs.stage-source.outputs.thirdparty_archive }},THIRDPARTY_SOURCE_ARCHIVE_SHA256=${{ needs.stage-source.outputs.thirdparty_archive_sha256 }},THIRDPARTY_SOURCE_OID=${{ needs.stage-source.outputs.thirdparty_oid }}"
           job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=400GB,jobfs=400GB,storage=scratch/hb15 -v "${exported}" -o "${build_log_dir}/pbs.log" -j oe -N openfoam_build platforms/gadi/build-openfoam.pbs)
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
