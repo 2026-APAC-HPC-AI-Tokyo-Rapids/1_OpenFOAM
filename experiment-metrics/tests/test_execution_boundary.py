@@ -290,7 +290,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "profile_analysis:" not in workflow
         assert "--profile-rank" not in workflow
         assert "--profile-analysis" not in workflow
-        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 20' in workflow
+        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000' in workflow
         assert 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")' in workflow
         assert 'commit="${GITHUB_SHA}"' in workflow
         assert 'git rev-parse "${commit}^"' in workflow
