@@ -32,6 +32,8 @@
 
 ## 本番確認
 
+以下のrunはIssue #18移行前のcavity3D系経路を確認した履歴であり、v2512 `occDrivAerStaticMesh`の完了証跡には用いない。
+
 1ノードの新規ビルド確認はActions run `31940403739`で行った。両クラスタとも選択、login nodeでのビルド、配備、ケース準備、計算、公式判定、成果物保管まで成功した。公式判定は玄界が`FVOPS_trim=1.8101M`、Gadiが`FVOPS_trim=1.7903M`で、どちらも`STATUS: VALID`だった。
 
 `[require-build]`のないpushによる再利用確認はrun `31942772973`で行った。両クラスタともBuildが`Skipped`、Reuseが成功し、その後の全処理も成功した。公式判定は玄界が`FVOPS_trim=1.8073M`、Gadiが`FVOPS_trim=1.7922M`で、どちらも`STATUS: VALID`だった。

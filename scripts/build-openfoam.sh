@@ -7,11 +7,13 @@ set -euo pipefail
 : "${GITHUB_RUN_ID:?}"
 : "${GITHUB_WORKSPACE:?}"
 : "${GIT_MIRROR_DIR:?}"
+: "${OPENFOAM_SOURCE_OID:?pinned OpenFOAM source commit is required}"
 : "${SOURCE_ARCHIVE_CACHE_DIR:?}"
+: "${THIRDPARTY_SOURCE_OID:?pinned ThirdParty source commit is required}"
 # ビルド仕様はここへ集約し、workflow からは実行ごとのパスと
 # GitHub Actions のメタデータだけを受け取る。
-openfoam_source_ref=refs/heads/master
-thirdparty_source_ref=refs/heads/main
+openfoam_source_ref=refs/tags/OpenFOAM-v2512
+thirdparty_source_ref=refs/tags/v2512
 # genkai0001/0002 expose two 60-core sockets. Use physical cores and do not
 # count the second SMT thread as another compiler worker.
 build_parallelism=120
@@ -51,38 +53,30 @@ rm -rf -- "${BUILD_DIR:?}"
 install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${build_tree}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
 install -d -m 0700 "${ccache_local_dir}"
 
-# OpenFOAM v2606 と対応する ThirdParty を、ソースリポジトリ側で更新される
+# OpenFOAM v2512 と対応する ThirdParty を、ソースリポジトリ側で管理される
 # 読み取り専用の共有 mirror からローカル clone する。
 git clone --no-checkout "${GIT_MIRROR_DIR}/3_OpenFOAM_Src.git" "${build_tree}/OpenFOAM"
 git -C "${build_tree}/OpenFOAM" checkout --detach "${openfoam_source_ref}"
 openfoam_source_algorithm="$(git -C "${build_tree}/OpenFOAM" rev-parse --show-object-format)"
 openfoam_source_oid="$(git -C "${build_tree}/OpenFOAM" rev-parse HEAD)"
+test "${openfoam_source_oid}" = "${OPENFOAM_SOURCE_OID}"
 
 git clone --no-checkout "${GIT_MIRROR_DIR}/4_OpenFOAM_ThirdParty_Src.git" "${build_tree}/ThirdParty"
 git -C "${build_tree}/ThirdParty" checkout --detach "${thirdparty_source_ref}"
 thirdparty_source_algorithm="$(git -C "${build_tree}/ThirdParty" rev-parse --show-object-format)"
 thirdparty_source_oid="$(git -C "${build_tree}/ThirdParty" rev-parse HEAD)"
-
-# Bundle-declared in-process sources must be present in the exact detached
-# OpenFOAM source commit before its Git metadata is removed.
-# Executable component paths are relative to the separately provisioned
-# instrumentation artifact root, so they must not be resolved in this upstream
-# OpenFOAM checkout.
-while IFS= read -r source_path
-do
-  git -C "${build_tree}/OpenFOAM" cat-file -e "HEAD:${source_path}"
-done < <(
-  jq -r '.components[].activation | select(.kind == "in_process_hook") | .source_path' "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json" "${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-vtune-hotspots-v1.json" |
-    LC_ALL=C sort -u
-)
+test "${thirdparty_source_oid}" = "${THIRDPARTY_SOURCE_OID}"
 
 # ビルドには worktree だけを使うため、成果物へ Git オブジェクトを含めない。
 rm -rf -- "${build_tree}/OpenFOAM/.git" "${build_tree}/ThirdParty/.git"
 ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 
-# ThirdParty リポジトリが管理するスクリプトで、v2606 ビルドに必要な依存を
-# 共有 archive cache から検証・展開する。
-"${build_tree}/ThirdParty/download-v2606-sources.sh"
+# v2512 が要求する Scotch 6.1.0 を、玄界の共有 source cache から展開する。
+scotch_archive="${SOURCE_ARCHIVE_CACHE_DIR}/scotch-v6.1.0.tar.gz"
+test "$(sha256sum "${scotch_archive}" | awk '{print $1}')" = 4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1
+install -d "${build_tree}/ThirdParty/sources/scotch"
+tar -xzf "${scotch_archive}" -C "${build_tree}/ThirdParty/sources/scotch"
+mv "${build_tree}/ThirdParty/sources/scotch/scotch-v6.1.0" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0"
 
 module purge
 module load intel/2025.1.3 impi
@@ -99,7 +93,7 @@ ccache --show-config
 # OpenFOAM の bashrc は未設定変数や中間コマンドの失敗を許容するため、
 # 初期化中だけ厳格なエラーチェックを緩める。
 set +eu
-source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" WM_COMPILE_CONTROL=+ccache
+source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" WM_COMPILE_CONTROL=+ccache
 set -eu
 export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
 test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"
@@ -107,8 +101,7 @@ test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"
 # タスク専用ビルドスクリプトが参照するプロジェクトへ移動する。
 cd "${WM_PROJECT_DIR}"
 
-# cavity3D の前処理と実行に必要なblockMesh、decomposePar、checkMesh、
-# icoFoamとその依存だけをビルドする。
+# occDrivAerStaticMesh の前処理と simpleFoam に必要な対象だけをビルドする。
 ccache --zero-stats
 "${GITHUB_WORKSPACE}/scripts/build-openfoam-task.sh" "${build_parallelism}" "${GITHUB_WORKSPACE}/experiment-metrics/native" > "${BUILD_DIR}/logs/allwmake.log" 2>&1 || {
   build_status=$?
@@ -131,7 +124,7 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 64 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag SCOTCH_SOURCE_SHA256=4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1 --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .

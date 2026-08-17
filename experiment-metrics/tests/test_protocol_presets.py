@@ -26,3 +26,8 @@ def test_selected_scotch_presets_are_self_consistent() -> None:
             )
             assert protocol.ranks_per_node == expected_ranks_per_node
             assert protocol.transport_policy == transport
+            assert protocol.workload_id == "occDrivAerStaticMesh-65M"
+            assert protocol.solver == "simpleFoam"
+            assert protocol.distribution == "OpenFOAM.com"
+            assert protocol.release == "v2512"
+            assert protocol.iteration_target == {1: 40, 2: 80, 4: 150}[nodes]

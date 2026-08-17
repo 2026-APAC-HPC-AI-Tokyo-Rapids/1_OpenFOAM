@@ -43,30 +43,13 @@ def test_init_installs_canonical_bundle_and_checks_identity(
     )
     installed = manifest.with_name("instrumentation-bundle.json")
     assert bundle_identity(installed, purpose="bench") == expected
-    run_dir = manifest.parents[1]
-    sink = run_dir / "domain/pstream"
-    sink.mkdir()
     rendered = validate_runtime_bindings(
         manifest,
         installed,
         registry_path,
-        environment={
-            "OPENFOAM_METRICS_PSTREAM_DIR": str(sink),
-            "OPENFOAM_METRICS_RUN_ID": run_dir.name,
-        },
+        environment={},
     )
-    assert rendered["OPENFOAM_METRICS_PSTREAM_DIR"] == str(sink)
-    with pytest.raises(ValueError, match="binding mismatch"):
-        validate_runtime_bindings(
-            manifest,
-            installed,
-            registry_path,
-            environment={
-                "OPENFOAM_METRICS_PSTREAM_DIR": str(sink),
-                "OPENFOAM_METRICS_RUN_ID": "r-" + "f" * 32,
-            },
-        )
-
+    assert rendered == {}
     wrong = {**identities, "instrumentation_bundle_sha256": "0" * 64}
     with pytest.raises(ValueError, match="identity does not match"):
         init_run(
@@ -101,7 +84,7 @@ def test_profile_bundle_declares_vtune_executable(
 ) -> None:
     bundle = BUNDLES / "openfoam-profile-vtune-hotspots-v1.json"
     document = load_bundle(bundle, purpose="profile")
-    activation = document["components"][1]["activation"]
+    activation = document["components"][0]["activation"]
 
     assert activation["kind"] == "executable"
     assert activation["artifact_relative_path"] == "scripts/exec-profiler.sh"
@@ -122,15 +105,10 @@ def test_profile_bundle_declares_vtune_executable(
         registry_path=registry,
         instrumentation_bundle_path=bundle,
     )
-    sink = manifest.parents[1] / "domain/pstream"
-    sink.mkdir()
     rendered = validate_runtime_bindings(
         manifest,
         manifest.with_name("instrumentation-bundle.json"),
         registry,
-        environment={
-            "OPENFOAM_METRICS_PSTREAM_DIR": str(sink),
-            "OPENFOAM_METRICS_RUN_ID": manifest.parents[1].name,
-        },
+        environment={},
     )
-    assert rendered["OPENFOAM_METRICS_RUN_ID"] == manifest.parents[1].name
+    assert rendered == {}

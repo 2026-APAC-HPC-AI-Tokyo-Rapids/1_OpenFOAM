@@ -44,6 +44,14 @@ done
 : "${OPENFOAM_RESOURCE_GROUP:?protocol resource group is required}"
 : "${OPENFOAM_TRANSPORT_POLICY:?protocol transport policy is required}"
 : "${OPENFOAM_PROTOCOL_PATH:?effective protocol path is required}"
+: "${OPENFOAM_ITERATIONS:?protocol iteration target is required}"
+: "${OPENFOAM_EXPECTED_CELLS:?workload cell count is required}"
+: "${OPENFOAM_DISTRIBUTION:?OpenFOAM distribution is required}"
+: "${OPENFOAM_RELEASE:?OpenFOAM release is required}"
+: "${OPENFOAM_SOLVER:?solver identity is required}"
+: "${OPENFOAM_WORKLOAD_ID:?workload identity is required}"
+: "${WORKLOAD_MESH_ARCHIVE:?verified mesh archive is required}"
+[[ "${OPENFOAM_SOLVER}" == simpleFoam && "${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com && "${OPENFOAM_RELEASE}" == v2512 && "${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M ]]
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
@@ -60,15 +68,15 @@ esac
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 
-CASE_DIR="${RUN_DIR}/work/cavity3D-64M"
-CASE_INPUT_DIR="${RUN_DIR}/work/cavity3D-64M-input"
+CASE_DIR="${RUN_DIR}/work/occDrivAerStaticMesh"
+CASE_INPUT_DIR="${RUN_DIR}/work/occDrivAerStaticMesh-input"
 LOG_DIR="${RUN_DIR}/logs"
 SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 
-DECOMPOSE_PAR_DICT=system/decomposeParDict.6
+DECOMPOSE_PAR_DICT=system/decomposeParDict
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 profile_run_id="${RUN_ID}-${job_id}"
@@ -76,11 +84,8 @@ vtune_root="${profile_root}/${profile_run_id}"
 OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
-export OPENFOAM_METRICS_PSTREAM_DIR="${RUN_DIR}/domain/pstream"
-export OPENFOAM_METRICS_RUN_ID="${RUN_ID}"
-
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
-install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${OPENFOAM_METRICS_PSTREAM_DIR}" "${RUN_DIR}/domain"
+install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${RUN_DIR}/domain"
 "${METRICS_CLI}" supervisor-start --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --job-id "${job_id}"
 finish_supervisor() {
   local original_status=$?
@@ -123,15 +128,18 @@ probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
 export PATH="${probe_python_dir}:${PATH}"
 
 MPIEXEC=$(command -v mpirun)
-BLOCK_MESH=$(command -v blockMesh)
 DECOMPOSE_PAR=$(command -v decomposePar)
-ICO_FOAM=$(command -v icoFoam)
+SIMPLE_FOAM=$(command -v simpleFoam)
 CHECK_MESH=$(command -v checkMesh)
+RENUMBER_MESH=$(command -v renumberMesh)
+POTENTIAL_FOAM=$(command -v potentialFoam)
+APPLY_BOUNDARY_LAYER=$(command -v applyBoundaryLayer)
+RESTORE_ZERO_DIR=$(command -v restore0Dir)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
 
-provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "icoFoam=${ICO_FOAM}" --executable "blockMesh=${BLOCK_MESH}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
+provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
   (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
@@ -142,26 +150,33 @@ fi
 "${METRICS_CLI}" "${provision_args[@]}"
 "${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
 
-cp -a "${PROVISION_DIR}/task/cavity3D-64M" "${CASE_INPUT_DIR}"
+cp -a "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
-# Seal the exact seven workload-defining files after setup and before the
-# first OpenFOAM stage reads the case.
-"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --output-root "${SOURCE_DIR}/workload"
+# Seal the exact pinned official setup before the first OpenFOAM stage reads it.
+"${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --definition "${PROVISION_DIR}/benchmark/workload.json" --output-root "${SOURCE_DIR}/workload"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
   *-scotch-*)
-    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${BLOCK_MESH}" "${DECOMPOSE_PAR}" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
+    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
     ;;
   *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
 stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" "${PREPARE_COMMAND[@]}" --require-cache
 cd "${CASE_DIR}"
 install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
-install -m 0644 logs/blockMesh.log "${LOG_DIR}/blockMesh.log"
+install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
-install -m 0644 "$(readlink -f -- "${CASE_DIR}")/../manifest.json" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
+cache_dir=$(sed -n 's/^cache_dir=//p' "${LOG_DIR}/case-prepare.log" | tail -n 1)
+[[ "${cache_dir}" == "${case_cache_root}/"* ]]
+install -m 0644 "${cache_dir}/manifest.json" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
+
+sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${OPENFOAM_ITERATIONS};/" system/controlDict
+"${RESTORE_ZERO_DIR}" -processor
+stage renumber_mesh "${LOG_DIR}/renumberMesh.log" "${solver_launch[@]}" "${RENUMBER_MESH}" -constant -overwrite -parallel -fileHandler uncollated
+stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POTENTIAL_FOAM}" -initialiseUBCs -parallel -fileHandler uncollated
+stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   install -d -m 2770 "${vtune_root}"
@@ -169,14 +184,17 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
+if [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]; then
+  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
+fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
-  # profiler, which launches icoFoam directly so VTune follows the solver
+  # profiler, which launches simpleFoam directly so VTune follows the solver
   # rather than the Python placement process.
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated
 else
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" -- "${ICO_FOAM}" -parallel -fileHandler uncollated -decomposeParDict "${DECOMPOSE_PAR_DICT}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated
 fi
 solver_status=$?
 set -e
@@ -196,13 +214,13 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   fi
 fi
 
-"${PROVISION_DIR}/task/parse_result.sh" "${SOLVER_LOG}" > "${RESULTS_DIR}/result.txt"
+"${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" > "${RESULTS_DIR}/result.txt"
 grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
 grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
-# Reuse the small, durable preparation logs.  Never reopen or hash the 64M-cell
+# Reuse the small, durable preparation logs. Never reopen or hash the 65M-cell
 # serial/processor meshes just to collect metrics.
-"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --block-mesh-log "${LOG_DIR}/blockMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
+"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --check-mesh-log "${LOG_DIR}/checkMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
 
 minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then

@@ -161,7 +161,7 @@ def test_provision_validation_rejects_changed_build_executable(
         shutil.copy2("/bin/true", target)
         executables[role] = target
     sidecar = _sidecar(run_dir / "control/build-sidecar.json", executables)
-    executables["icoFoam"].write_bytes(b"changed")
+    executables["simpleFoam"].write_bytes(b"changed")
     role_paths = {role: executables[role] for role in EXECUTABLE_ROLES}
     role_paths["mpirun"] = Path("/bin/true")
     libmpi = tmp_path / "libmpi.so.12"

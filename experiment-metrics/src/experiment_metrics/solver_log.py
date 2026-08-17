@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-
-EXPECTED_CELLS = 64_000_000
-EXPECTED_STEPS = 5
-EXPECTED_SOLVES = 10
-EXPECTED_ITERATIONS = 321
+from decimal import Decimal, InvalidOperation
 
 _TIME = re.compile(r"^Time\s*=\s*(?P<value>\S+)\s*$")
 _EXECUTION = re.compile(
@@ -30,6 +25,9 @@ _HOST_BLOCK = re.compile(
 _HOST = re.compile(r"^\s*\((?P<host>\S+)\s+(?P<ranks>\d+)\)\s*$")
 _BADNUM = re.compile(r"\b(?:nan|inf)\b", re.IGNORECASE)
 _CELLS = re.compile(r"nCells:\s*(\d+)")
+_MEASURED = re.compile(r"^\s*Number of measured time steps = (\d+)\s*$")
+_AVERAGE = re.compile(r"^\s*Average wall-clock time per time step = (\S+)\s*$")
+_STDDEV = re.compile(r"^\s*Standard deviation of wall-clock time per time step = (\S+)\s*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,9 +43,9 @@ class ParsedSolverLog:
 @dataclass(frozen=True, slots=True)
 class OfficialEvaluation:
     valid: bool
-    fvops_trim_m: Decimal | None
-    seconds_per_step: Decimal | None
-    trim_seconds: Decimal | None
+    average_wall_clock_sec: Decimal | None
+    standard_deviation_sec: Decimal | None
+    measured_iterations: int | None
 
 
 def parse_solver_log(text: str) -> ParsedSolverLog:
@@ -115,45 +113,45 @@ def parse_solver_log(text: str) -> ParsedSolverLog:
             "end_count": sum(line.startswith("End") for line in lines),
             "badnum_line_count": badnum_lines,
             "log_ncells": _first_cells(text),
+            "measured_iterations": _last_int(lines, _MEASURED),
+            "average_wall_clock_sec": _last_decimal(lines, _AVERAGE),
+            "standard_deviation_sec": _last_decimal(lines, _STDDEV),
         },
         observed_nprocs=observed_nprocs,
         observed_hosts=observed_hosts,
     )
 
 
-def evaluate_official(parsed: ParsedSolverLog) -> OfficialEvaluation:
+def evaluate_official(
+    parsed: ParsedSolverLog,
+    *,
+    iterations: int,
+    expected_cells: int,
+    ranks: int,
+    release: str,
+    solver: str,
+) -> OfficialEvaluation:
     markers = parsed.log_markers
+    simulation_times = [item["simulation_time"] for item in parsed.step_timings]
+    header = parsed.runtime_header
     valid = (
         markers["end_count"] == 1
         and markers["badnum_line_count"] == 0
-        and len(parsed.step_timings) == EXPECTED_STEPS
-        and len(parsed.pressure_solves) == EXPECTED_SOLVES
-        and sum(
-            item["iterations_lexeme"] == str(EXPECTED_ITERATIONS)
-            for item in parsed.pressure_solves
-        )
-        == EXPECTED_SOLVES
-        and (markers["log_ncells"] is None or markers["log_ncells"] == EXPECTED_CELLS)
+        and len(parsed.step_timings) == iterations
+        and simulation_times == [Decimal(value) for value in range(1, iterations + 1)]
+        and markers["measured_iterations"] == iterations - 1
+        and isinstance(markers["average_wall_clock_sec"], Decimal)
+        and isinstance(markers["standard_deviation_sec"], Decimal)
+        and (markers["log_ncells"] is None or markers["log_ncells"] == expected_cells)
+        and header is not None
+        and header["nprocs"] == ranks
+        and solver in str(header["exec"])
+        and release.removeprefix("v") in str(header["build"])
         and _ranks_are_consistent(parsed)
     )
     if not valid:
         return OfficialEvaluation(False, None, None, None)
-    first = parsed.step_timings[0]["execution_sec"]
-    last = parsed.step_timings[-1]["execution_sec"]
-    if not isinstance(first, Decimal) or not isinstance(last, Decimal):
-        return OfficialEvaluation(True, None, None, None)
-    trim = last - first
-    if trim <= 0:
-        return OfficialEvaluation(True, None, None, None)
-    step_count = Decimal(EXPECTED_STEPS - 1)
-    return OfficialEvaluation(
-        True,
-        (Decimal(EXPECTED_CELLS) * step_count / trim / Decimal(1_000_000)).quantize(
-            Decimal("0.0001"), rounding=ROUND_HALF_UP
-        ),
-        (trim / step_count).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
-        trim,
-    )
+    return OfficialEvaluation(True, markers["average_wall_clock_sec"], markers["standard_deviation_sec"], markers["measured_iterations"])
 
 
 def _runtime_header(
@@ -233,6 +231,16 @@ def _decimal_or_none(value: str | None) -> Decimal | None:
 
 def _integer_or_none(value: str) -> int | None:
     return int(value) if value.isdecimal() else None
+
+
+def _last_int(lines: list[str], expression: re.Pattern[str]) -> int | None:
+    values = [int(match.group(1)) for line in lines if (match := expression.match(line))]
+    return values[-1] if values else None
+
+
+def _last_decimal(lines: list[str], expression: re.Pattern[str]) -> Decimal | None:
+    values = [_decimal_or_none(match.group(1)) for line in lines if (match := expression.match(line))]
+    return values[-1] if values else None
 
 
 def _ranks_are_consistent(parsed: ParsedSolverLog) -> bool:

@@ -4,9 +4,9 @@
 set -euo pipefail
 
 : "${PROVISION_DIR:?provision directory is required}"
-: "${PREPARE_TARGET:?temporary materialization path is required}"
 : "${PREPARE_SUBDOMAINS:?requested decomposition size is required}"
 : "${PREPARE_CACHE_ROOT:?case cache root is required}"
+: "${WORKLOAD_MESH_ARCHIVE:?mesh archive is required}"
 [[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
 
 module purge
@@ -15,13 +15,11 @@ module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
 set +eu
 readarray -t build_environment < <("${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -c 'import json, sys; flags = json.load(open(sys.argv[1], encoding="utf-8"))["compile_flags"]; values = {key: [item.removeprefix(key + "=") for item in flags if item.startswith(key + "=")] for key in ("WM_COMPILE_OPTION", "WM_OPTIONS")}; all(len(value) == 1 for value in values.values()) or sys.exit(1); print(values["WM_COMPILE_OPTION"][0]); print(values["WM_OPTIONS"][0])' "${PROVISION_DIR}/control/build-sidecar.json")
 set +u
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
 set -eu
 test "${WM_OPTIONS}" = "${build_environment[1]}"
 
-block_mesh=$(command -v blockMesh)
 decompose_par=$(command -v decomposePar)
+check_mesh=$(command -v checkMesh)
 
-rm -rf -- "${PREPARE_TARGET}"
-trap 'rm -rf -- "${PREPARE_TARGET}"' EXIT
-"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/task/cavity3D-64M" "${PREPARE_TARGET}" "${block_mesh}" "${decompose_par}" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}"
+"${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}"

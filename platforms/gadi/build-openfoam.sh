@@ -51,6 +51,7 @@ tar -xzf "${THIRDPARTY_SOURCE_ARCHIVE}" -C "${thirdparty_tree}" --strip-componen
 ln -s ../ThirdParty "${openfoam_tree}/ThirdParty"
 install -d "${thirdparty_tree}/sources/scotch"
 cp -a /apps/OpenFOAM/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${thirdparty_tree}/sources/scotch/"
+scotch_source_identity=$(find "${thirdparty_tree}/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
 
 module purge
 module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
@@ -61,7 +62,7 @@ export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 ccache --show-config
 
 set +eu
-source "${openfoam_tree}/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt WM_COMPILE_CONTROL=+ccache
+source "${openfoam_tree}/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt WM_COMPILE_CONTROL=+ccache
 set -eu
 export FOAM_EXTRA_CXXFLAGS=
 cd "${WM_PROJECT_DIR}"
@@ -77,7 +78,7 @@ ccache --trim-dir "${ccache_remote_dir}" --trim-max-size 10GB || true
 install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/probes/capture_hardware.py" "${FOAM_APPBIN}/capture-hardware"
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${build_log_dir}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${OPENFOAM_SOURCE_OID}" --openfoam-algorithm sha1 --thirdparty-oid "${THIRDPARTY_SOURCE_OID}" --thirdparty-algorithm sha1 --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 64 --compile-flag BUILD_CONDITION=baseline --compile-flag "WM_OPTIONS=${WM_OPTIONS}" --compile-flag "WM_COMPILER=${WM_COMPILER}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --executable "icoFoam=${FOAM_APPBIN}/icoFoam" --executable "blockMesh=${FOAM_APPBIN}/blockMesh" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${OPENFOAM_SOURCE_OID}" --openfoam-algorithm sha1 --thirdparty-oid "${THIRDPARTY_SOURCE_OID}" --thirdparty-algorithm sha1 --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag BUILD_CONDITION=baseline --compile-flag "WM_OPTIONS=${WM_OPTIONS}" --compile-flag "WM_COMPILER=${WM_COMPILER}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
 "${metrics_cli}" finalize-build-sidecar --state "${build_state}" --archive "${publish_tmp}" --output "${sidecar_tmp}"

@@ -66,12 +66,12 @@ def load_bundle(
     bindings = document["environment_bindings"]
     if not all(isinstance(value, list) for value in (components, sinks, bindings)):
         raise ValueError("instrumentation bundle arrays are required")
-    if track == "reference":
+    if track in {"reference", "score"}:
         if sources or components or scopes or sinks or bindings:
-            raise ValueError("reference instrumentation bundle must be empty")
+            raise ValueError(f"{track} instrumentation bundle must be empty")
         return document
     if not sources or not components:
-        raise ValueError("score/profile instrumentation bundles must be nonempty")
+        raise ValueError("profile instrumentation bundle must be nonempty")
 
     sink_ids: list[str] = []
     sink_sources: list[str] = []
@@ -345,7 +345,7 @@ def _argv_template(value: object, sink_ids: set[str]) -> None:
             if (
                 set(segment) == {"token", "role"}
                 and segment["token"] in {"provisioned_executable", "stage_executable"}
-                and segment["role"] in {"vtune", "icoFoam"}
+                and segment["role"] in {"vtune", "simpleFoam"}
             ):
                 continue
             if (

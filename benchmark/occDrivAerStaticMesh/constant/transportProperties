@@ -1,7 +1,7 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  v2006                                 |
+|  \\    /   O peration     | Version:  v2412                                 |
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
@@ -10,46 +10,12 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    location    "system";
-    object      fvSolution;
+    object      transportProperties;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-solvers
-{
-    p
-    {
-        solver          PCG;
-        preconditioner  DIC;
-        tolerance       0;
-        relTol          0;
-        maxIter         321;
-    }
+#include       "${FOAM_CASE}/system/include/caseDefinition"
 
-    pFinal
-    {
-        $p;
-        relTol          0;
-    }
-
-    U
-    {
-        solver          PBiCGStab;
-        preconditioner  DILU;
-        tolerance       0;
-        relTol          0;
-        maxIter         0;
-    }
-}
-
-PISO
-{
-    nCorrectors     2;
-    nNonOrthogonalCorrectors 0;
-    momentumPredictor no;
-    pRefCell        0;
-    pRefValue       0;
-}
-
-
+transportModel Newtonian;
+nu             $nu;
 // ************************************************************************* //

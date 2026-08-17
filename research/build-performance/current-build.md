@@ -6,14 +6,14 @@
 
 | 項目 | 設定 |
 |---|---|
-| OpenFOAM | v2606 |
-| 追加依存 | ADIOS2 2.12.1、CGAL 6.1.1 |
+| OpenFOAM | OpenFOAM.com v2512、`OpenFOAM-v2512` tag |
+| 追加依存 | Scotch 6.1.0 |
 | compiler / MPI | `intel/2025.1.3`モジュールのIntel C++ 2025.1.1、Intel MPI 2021.15 |
-| OpenFOAM 設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、DP、64-bit label |
-| Allwmake | `-j 120 -s`、queue なし |
+| OpenFOAM 設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、DP、32-bit label |
+| build対象 | `simpleFoam`、公式前処理・検証utility、計測probe |
 | compiler cache | ccache。CMake の C/C++ launcher にも使用 |
 
-ADIOS2 と CGAL の source は workflow が明示した version を使う。CGAL の version 選択、Icx の C preprocessor、Allwmake の timestamp 出力は、Org 管理の `3_OpenFOAM_Src` に直接反映している。ビルドは同 repository の `master` を checkout するため、これらの変更はソース履歴の一部として管理される。
+Org管理のsource repositoryは読み取り専用で扱い、OpenFOAMは`OpenFOAM-v2512`、ThirdPartyは`v2512`をdetached checkoutする。公式sourceへ計測hookを追加せず、benchは無改変のsolverを使う。profileは実行時に選択したrankへVTuneを付加する。
 
 ## ディレクトリとキャッシュ
 

@@ -8,6 +8,7 @@ from experiment_metrics.cli import main
 from experiment_metrics.fact import canonical_json
 
 FIXTURES = Path(__file__).parent / "fixtures"
+WORKLOAD = Path(__file__).parents[2] / "benchmark/workload.json"
 
 
 def _complete_imb() -> str:
@@ -63,12 +64,12 @@ def test_cli_records_saved_solver_and_imb_sources(
     argv_json.write_text(
         canonical_json({"schema_version": "argv/v1", "argv": imb_argv}) + "\n"
     )
-    digest = "a" * 64
     protocol = tmp_path / "protocol.toml"
     protocol.write_text(
         f"""
 [protocol]
-schema_version = "openfoam-v2-run-protocol/v1"
+schema_version = "openfoam-v2-run-protocol/v2"
+workload_definition = "{WORKLOAD}"
 [variant.bench]
 expected_stages = ["solver"]
 nodes = 1
@@ -76,8 +77,6 @@ ranks = 2
 resource_group = "test"
 transport_policy = "shm"
 transport_environment = {{ I_MPI_FABRICS = "shm" }}
-workload_id = "test"
-expected_workload_identity = "{digest}"
 [variant.profile]
 expected_stages = ["solver"]
 nodes = 1
@@ -85,8 +84,6 @@ ranks = 2
 resource_group = "test"
 transport_policy = "shm"
 transport_environment = {{ I_MPI_FABRICS = "shm" }}
-workload_id = "test"
-expected_workload_identity = "{digest}"
 """.strip()
         + "\n"
     )
@@ -101,6 +98,8 @@ expected_workload_identity = "{digest}"
                 str(run_dir),
                 "--log",
                 str(log),
+                "--protocol",
+                str(protocol),
             ]
         )
         == 0

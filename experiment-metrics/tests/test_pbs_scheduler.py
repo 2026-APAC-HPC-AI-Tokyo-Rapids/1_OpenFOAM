@@ -51,8 +51,17 @@ def test_pbs_submission_and_terminal_are_bound(
     request = json.loads(outcome.request_path.read_text())
     assert request["nodes"] == 1
     assert request["ranks"] == 104
+    assert request["iterations"] == 40
+    assert request["workload_id"] == "occDrivAerStaticMesh-65M"
+    assert request["distribution"] == "OpenFOAM.com"
+    assert request["release"] == "v2512"
+    assert request["solver"] == "simpleFoam"
     assert "ncpus=104,mem=400GB,jobfs=1GB,storage=scratch/hb15" in request["argv"]
     exported = request["argv"][request["argv"].index("-v") + 1]
+    assert "OPENFOAM_WORKLOAD_ID=occDrivAerStaticMesh-65M" in exported
+    assert "OPENFOAM_DISTRIBUTION=OpenFOAM.com" in exported
+    assert "OPENFOAM_RELEASE=v2512" in exported
+    assert "OPENFOAM_SOLVER=simpleFoam" in exported
     assert "EXPERIMENT_METRICS_BIGQUERY_CONFIG" not in exported
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" not in exported
     (run_dir / "control/job-entry.json").write_text(

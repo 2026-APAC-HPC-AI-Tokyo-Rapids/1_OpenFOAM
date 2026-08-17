@@ -18,11 +18,12 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then module load intel-vtune/2025
 set +eu
 readarray -t build_environment < <("${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -c 'import json, sys; flags = json.load(open(sys.argv[1], encoding="utf-8"))["compile_flags"]; values = {key: [item.removeprefix(key + "=") for item in flags if item.startswith(key + "=")] for key in ("WM_COMPILE_OPTION", "WM_OPTIONS")}; all(len(value) == 1 for value in values.values()) or sys.exit(1); print(values["WM_COMPILE_OPTION"][0]); print(values["WM_OPTIONS"][0])' "${RUN_DIR}/control/build-sidecar.json")
 [[ "${#build_environment[@]}" -eq 2 && "${build_environment[0]}" =~ ^[A-Za-z0-9]+$ && "${build_environment[1]}" =~ ^[A-Za-z0-9]+$ ]]
-source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=64 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
+source "${PROVISION_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_environment[0]}"
 set -eu
 test "${WM_OPTIONS}" = "${build_environment[1]}"
 
 export I_MPI_FABRICS="${OPENFOAM_TRANSPORT_POLICY}"
+export WORKLOAD_MESH_ARCHIVE="/scratch/hb15/${USER}/openfoam/gadi/workload/polyMesh_65M.tar.gz"
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 mpirun_path=$(command -v mpirun)
 exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache" --profile-root "/scratch/hb15/${USER}/openfoam/gadi/profile" --global-rank-env PMI_RANK --local-rank-env MPI_LOCALRANKID --local-size-env MPI_LOCALNRANKS --solver-launch-arg "${mpirun_path}" --solver-launch-arg -np --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpirun_path}" --node-launch-arg -np --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1

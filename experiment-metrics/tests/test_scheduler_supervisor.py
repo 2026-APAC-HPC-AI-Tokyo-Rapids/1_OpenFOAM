@@ -60,12 +60,21 @@ def test_submission_and_terminal_accounting_are_bound_by_job_id(
     request = json.loads(submitted.request_path.read_text())
     assert request["nodes"] == 1
     assert request["ranks"] == 120
+    assert request["iterations"] == 40
+    assert request["workload_id"] == "occDrivAerStaticMesh-65M"
+    assert request["distribution"] == "OpenFOAM.com"
+    assert request["release"] == "v2512"
+    assert request["solver"] == "simpleFoam"
     assert request["profile_rank"] == 0
     assert request["profile_analysis"] == "hotspots"
     assert request["argv"][0] == str(pjsub)
     exported = request["argv"][request["argv"].index("-x") + 1]
     assert "OPENFOAM_MPI_PROCS=120" in exported
     assert "OPENFOAM_RUN_PURPOSE=bench" in exported
+    assert "OPENFOAM_WORKLOAD_ID=occDrivAerStaticMesh-65M" in exported
+    assert "OPENFOAM_DISTRIBUTION=OpenFOAM.com" in exported
+    assert "OPENFOAM_RELEASE=v2512" in exported
+    assert "OPENFOAM_SOLVER=simpleFoam" in exported
     assert "OPENFOAM_VTUNE_RANK=0" in exported
     assert "OPENFOAM_VTUNE_ANALYSIS=hotspots" in exported
     assert "EXPERIMENT_METRICS_BIGQUERY_CONFIG" not in exported

@@ -1,5 +1,7 @@
 # OpenFOAM motorBike runtime profiling
 
+> Historical record: this campaign predates the Issue #18 migration. The active workload is the pinned v2512 `occDrivAerStaticMesh` task in `benchmark/workload.json`; the motorBike results below are not comparable to it.
+
 ## Purpose
 
 This document records runtime profiling and launch-option tuning for the

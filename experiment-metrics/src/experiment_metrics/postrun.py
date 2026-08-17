@@ -234,20 +234,20 @@ def mesh_topology_fact(path: Path) -> Fact:
 
 
 def mesh_facts_from_logs(
-    block_mesh_log: Path, decompose_log: Path, dictionary: Path
+    check_mesh_log: Path, decompose_log: Path, dictionary: Path
 ) -> tuple[Fact, Fact, Fact]:
-    """Parse already durable preparation logs without reopening the 64M mesh."""
+    """Parse already durable preparation logs without reopening the 65M mesh."""
 
-    block_text = block_mesh_log.read_text(encoding="utf-8", errors="replace")
+    check_text = check_mesh_log.read_text(encoding="utf-8", errors="replace")
     topology = {
         "schema_version": "mesh-topology/v2",
-        "cells": _unique_log_uint(block_text, "nCells"),
-        "faces": _unique_log_uint(block_text, "nFaces"),
-        "points": _unique_log_uint(block_text, "nPoints"),
-        "internal_faces": _unique_log_uint(block_text, "nInternalFaces"),
+        "cells": _unique_log_uint(check_text, "cells"),
+        "faces": _unique_log_uint(check_text, "faces"),
+        "points": _unique_log_uint(check_text, "points"),
+        "internal_faces": _unique_log_uint(check_text, "internal faces"),
     }
     if topology["internal_faces"] > topology["faces"]:
-        raise ValueError("blockMesh internal face count exceeds total faces")
+        raise ValueError("checkMesh internal face count exceeds total faces")
     requested = _requested_partition(dictionary)
     observed = _partition_log(
         decompose_log.read_text(encoding="utf-8", errors="replace"),
@@ -267,7 +267,7 @@ def _unique_log_uint(text: str, name: str) -> int:
         for match in re.findall(rf"(?m)^\s*{re.escape(name)}:\s*([0-9]+)\s*$", text)
     }
     if len(values) != 1:
-        raise ValueError(f"blockMesh log has no unique {name}")
+        raise ValueError(f"checkMesh log has no unique {name}")
     return next(iter(values))
 
 
@@ -304,7 +304,7 @@ def _partition_log(
         ):
             directed_interfaces[(rank, int(peer))] = int(count)
     if sum(item["cell_count"] for item in subdomains) != expected_cells:
-        raise ValueError("decomposePar cell total differs from blockMesh")
+        raise ValueError("decomposePar cell total differs from checkMesh")
     interfaces: list[dict[str, int]] = []
     for (rank, peer), count in sorted(directed_interfaces.items()):
         if rank >= peer:

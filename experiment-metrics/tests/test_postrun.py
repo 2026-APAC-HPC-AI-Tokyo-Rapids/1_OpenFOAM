@@ -30,15 +30,15 @@ def _locator(path: str) -> dict[str, object]:
 
 
 def _write_mesh_logs(tmp_path: Path, ranks: int) -> tuple[Path, Path, Path]:
-    block_log = tmp_path / "blockMesh.log"
-    block_log.write_text(
+    check_log = tmp_path / "checkMesh.log"
+    check_log.write_text(
         "\n".join(
             (
                 "Mesh Information",
-                f"  nPoints: {ranks * 2}",
-                f"  nCells: {ranks}",
-                f"  nFaces: {ranks * 3}",
-                f"  nInternalFaces: {ranks * 2}",
+                f"    points: {ranks * 2}",
+                f"    cells: {ranks}",
+                f"    faces: {ranks * 3}",
+                f"    internal faces: {ranks * 2}",
             )
         )
     )
@@ -66,14 +66,14 @@ def _write_mesh_logs(tmp_path: Path, ranks: int) -> tuple[Path, Path, Path]:
     )
     dictionary = tmp_path / "decomposeParDict"
     dictionary.write_text(f"numberOfSubdomains {ranks};\nmethod scotch;\n")
-    return block_log, decompose_log, dictionary
+    return check_log, decompose_log, dictionary
 
 
 def test_mesh_facts_are_parsed_from_existing_small_logs(tmp_path: Path) -> None:
-    block_log, decompose_log, dictionary = _write_mesh_logs(tmp_path, 2)
+    check_log, decompose_log, dictionary = _write_mesh_logs(tmp_path, 2)
 
     topology, requested, observed = mesh_facts_from_logs(
-        block_log, decompose_log, dictionary
+        check_log, decompose_log, dictionary
     )
 
     assert topology.logical_value == {

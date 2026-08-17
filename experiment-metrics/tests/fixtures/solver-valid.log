@@ -1,6 +1,6 @@
-Build  : test-build
-Arch   : "LSB;label=64;scalar=64"
-Exec   : icoFoam -parallel
+Build  : _test OPENFOAM=2512
+Arch   : "LSB;label=32;scalar=64"
+Exec   : simpleFoam -parallel
 I/O    : uncollated
 nProcs : 2
 Hosts  :
@@ -8,24 +8,23 @@ Hosts  :
     (node-b 1)
     (node-a 1)
 )
-Time = 0.1
-Solving for p, Initial residual = 1, Final residual = 1.0e-1, No Iterations 321
-Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+Time = 1
+Solving for p, Initial residual = 1, Final residual = 1.0e-1, No Iterations 12
 ExecutionTime = 10.0 s  ClockTime = 11 s
-Time = 0.2
-Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
-Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+Time = 2
+Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 12
 ExecutionTime = 20.0 s  ClockTime = 21 s
-Time = 0.3
-Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
-Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+Time = 3
+Solving for p, Initial residual = 0.4, Final residual = 0.04, No Iterations 12
 ExecutionTime = 30.0 s  ClockTime = 31 s
-Time = 0.4
-Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
-Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+Time = 4
+Solving for p, Initial residual = 0.3, Final residual = 0.03, No Iterations 12
 ExecutionTime = 40.0 s  ClockTime = 41 s
-Time = 0.5
-Solving for p, Initial residual = 1, Final residual = 0.1, No Iterations 321
-Solving for p, Initial residual = 0.5, Final residual = 0.05, No Iterations 321
+Time = 5
+Solving for p, Initial residual = 0.2, Final residual = 0.02, No Iterations 12
 ExecutionTime = 50.0 s  ClockTime = 51 s
+Statistics:
+    Number of measured time steps = 4
+    Average wall-clock time per time step = 10.25
+    Standard deviation of wall-clock time per time step = 0.5
 End

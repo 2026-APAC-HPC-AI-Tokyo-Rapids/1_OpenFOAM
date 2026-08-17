@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Build only the OpenFOAM components used by the selected cavity3D pipeline:
-# blockMesh, decomposePar with Scotch, checkMesh, and icoFoam.
+# Build only the OpenFOAM components used by occDrivAerStaticMesh:
+# decomposition, official preprocessing, validation, and simpleFoam.
 set -euo pipefail
 
 : "${WM_PROJECT_DIR:?}"
@@ -17,36 +17,16 @@ experiment_metrics_native_root=$2
 export WM_NCOMPPROCS="${build_parallelism}"
 cd "${WM_PROJECT_DIR}"
 
-# Bootstrap wmake and the sole external library used by this task.
+# Bootstrap wmake and the sole required external library.
 "${WM_DIR}/src/Allmake"
 "${WM_THIRD_PARTY_DIR}/makeSCOTCH" -no-mpi
 
-# OpenFOAM and Pstream form the base of every parallel executable.
-wmakeLnInclude -u src/OpenFOAM
-wmakeLnInclude -u "src/OSspecific/${WM_OSTYPE:-POSIX}"
-src/OpenFOAM/Alltouch -check 2>/dev/null || true
-src/OSspecific/"${WM_OSTYPE:-POSIX}"/Allwmake
-src/Pstream/Allwmake
-wmake -j "${build_parallelism}" src/OpenFOAM
+# applyBoundaryLayer links both incompressible and thermophysical libraries.
+# Build the complete upstream v2512 library layer so this official utility and
+# simpleFoam use a consistent ABI; applications remain limited to the task.
+src/Allwmake
 
-# Shared mesh and finite-volume libraries required by the task commands.
-for library in src/fileFormats src/surfMesh src/meshTools src/finiteArea src/finiteVolume src/mesh/blockMesh src/mesh/extrudeModel src/dynamicMesh src/genericPatchFields src/parallel/decompose/decompositionMethods src/lagrangian/basic
-do
-  wmake -j "${build_parallelism}" "${library}"
-done
-
-# decomposePar links generic placeholders and loads the available backend at
-# runtime. Its upstream Allwmake performs the required backend discovery and
-# exports the detected Scotch include and library paths to wmake. Since only
-# serial Scotch was installed above, the other real backends remain skipped.
-src/parallel/decompose/AllwmakeLnInclude
-for backend in kahipDecomp metisDecomp scotchDecomp
-do
-  wmake -j "${build_parallelism}" "src/dummyThirdParty/${backend}"
-done
-src/parallel/decompose/Allwmake
-
-for application in applications/utilities/mesh/generation/blockMesh applications/utilities/parallelProcessing/decomposePar applications/utilities/mesh/manipulation/checkMesh applications/solvers/incompressible/icoFoam
+for application in applications/utilities/parallelProcessing/decomposePar applications/utilities/mesh/manipulation/checkMesh applications/utilities/mesh/manipulation/renumberMesh applications/solvers/basic/potentialFoam applications/utilities/preProcessing/applyBoundaryLayer applications/solvers/incompressible/simpleFoam
 do
   wmake -j "${build_parallelism}" "${application}"
 done
@@ -64,7 +44,7 @@ done
 
 # Fail the build here instead of discovering a missing binary during runtime
 # provisioning. Also ensure all shared-library dependencies resolve.
-for application in blockMesh decomposePar icoFoam checkMesh mesh-facts partition-audit
+for application in simpleFoam decomposePar checkMesh renumberMesh potentialFoam applyBoundaryLayer mesh-facts partition-audit
 do
   executable="${FOAM_APPBIN}/${application}"
   if ldd "${executable}" | grep -q 'not found'; then

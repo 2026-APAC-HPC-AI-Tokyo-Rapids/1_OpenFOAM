@@ -42,10 +42,6 @@ id = "compute.profile_hardware_parser"
 required_for = ["profile"]
 
 [[producers]]
-id = "runner.pstream_parser"
-required_for = ["bench", "profile"]
-
-[[producers]]
 id = "runner.submission"
 required_for = ["bench", "profile"]
 
@@ -288,30 +284,6 @@ logical_type = "json"
 required_for = []
 
 [[keys]]
-pattern = "solver.pstream.startup_applied"
-owner = "runner.pstream_parser"
-logical_type = "json"
-required_for = ["bench", "profile"]
-
-[[keys]]
-pattern = "solver.pstream.runtime_current"
-owner = "runner.pstream_parser"
-logical_type = "json"
-required_for = ["bench", "profile"]
-
-[[keys]]
-pattern = "solver.pstream.change_events"
-owner = "runner.pstream_parser"
-logical_type = "json"
-required_for = ["bench", "profile"]
-
-[[keys]]
-pattern = "solver.pstream.rank_exceptions"
-owner = "runner.pstream_parser"
-logical_type = "json"
-required_for = []
-
-[[keys]]
 pattern = "hardware.minimal.node.*"
 owner = "compute.minimal_hardware_parser"
 logical_type = "json"
@@ -359,7 +331,7 @@ run_bundle = "run-artifacts.tar.zst"
 profile_raw = "profile-raw.tar.zst"
 artifact_manifest = "artifact-manifest.json"
 run_bundle_source_roles = [
-  "block_mesh_log",
+  "apply_boundary_layer_log",
   "build_provision_validation",
   "build_raw",
   "build_sidecar",
@@ -377,8 +349,9 @@ run_bundle_source_roles = [
   "pbs_log",
   "pjm_log",
   "postrun_source",
-  "pstream_source",
+  "potential_foam_log",
   "rank_placement",
+  "renumber_mesh_log",
   "run_manifest",
   "scheduler_accounting",
   "scheduler_accounting_stderr",
@@ -503,20 +476,6 @@ id = "compute.profile_hardware_parser"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
 activation = { kind = "always" }
-instances = { kind = "singleton" }
-
-[[producer]]
-id = "runner.pstream_parser"
-owner_scope = "run"
-applicable_run_variants = ["bench", "profile"]
-activation = { kind = "bundle_component", component_id = "openfoam.pstream-hook/v1" }
-instances = { kind = "singleton" }
-
-[[producer]]
-id = "openfoam.pstream-hook/v1"
-owner_scope = "run"
-applicable_run_variants = ["bench", "profile"]
-activation = { kind = "bundle_component", component_id = "openfoam.pstream-hook/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
@@ -679,15 +638,6 @@ producer_id = "compute.profile_hardware_parser"
 source_role = "profile_hardware_fact_fragment"
 storage = "fact_fragment"
 path_template = [{ literal = "domain/fragments/compute.profile_hardware_parser--profile-hardware.jsonl" }]
-schema_id = "fact-jsonl/v1"
-required_when_applicable = true
-
-[[source]]
-id = "facts.pstream"
-producer_id = "runner.pstream_parser"
-source_role = "pstream_fact_fragment"
-storage = "fact_fragment"
-path_template = [{ literal = "domain/fragments/runner.pstream_parser--pstream.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
 
@@ -878,15 +828,6 @@ source_role = "vtune_hotspots_report"
 storage = "profile_raw"
 path_template = [{ literal = "profile/raw/vtune-summary/hotspots.csv" }]
 schema_id = "vtune-hotspots-csv/v2"
-required_when_applicable = true
-
-[[source]]
-id = "openfoam.pstream-rank-events/v1"
-producer_id = "openfoam.pstream-hook/v1"
-source_role = "pstream_source"
-storage = "run_bundle"
-path_template = [{ literal = "domain/pstream" }]
-schema_id = "openfoam-pstream-event-set/v1"
 required_when_applicable = true
 
 [[source]]
@@ -1361,54 +1302,6 @@ validator_id = "imb_result/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
-id = "pstream.startup"
-key_pattern = "solver.pstream.startup_applied"
-source_id = "facts.pstream"
-schema_id = "pstream-startup/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "pstream_jsonl/v1"
-validator_id = "pstream_rank/v1"
-reducer_id = "pstream_rank/v1"
-
-[[fact]]
-id = "pstream.runtime"
-key_pattern = "solver.pstream.runtime_current"
-source_id = "facts.pstream"
-schema_id = "pstream-runtime/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "pstream_jsonl/v1"
-validator_id = "pstream_rank/v1"
-reducer_id = "pstream_rank/v1"
-
-[[fact]]
-id = "pstream.changes"
-key_pattern = "solver.pstream.change_events"
-source_id = "facts.pstream"
-schema_id = "pstream-changes/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "pstream_jsonl/v1"
-validator_id = "pstream_rank/v1"
-reducer_id = "pstream_rank/v1"
-
-[[fact]]
-id = "pstream.rank_exceptions"
-key_pattern = "solver.pstream.rank_exceptions"
-source_id = "facts.pstream"
-schema_id = "pstream-rank-exceptions/v1"
-logical_type = "json"
-unit = "none"
-cardinality = "run"
-capture_id = "pstream_jsonl/v1"
-validator_id = "pstream_rank/v1"
-reducer_id = "pstream_consensus/v1"
-
-[[fact]]
 id = "hardware.minimal.compatibility"
 key_pattern = "hardware.minimal.node.*"
 source_id = "facts.minimal_hardware"
@@ -1452,7 +1345,7 @@ schema_id = "mesh-topology/v2"
 logical_type = "json"
 unit = "none"
 cardinality = "run"
-capture_id = "block_mesh_log/v1"
+capture_id = "check_mesh_log/v1"
 validator_id = "mesh_topology/v2"
 reducer_id = "identity/v1"
 
