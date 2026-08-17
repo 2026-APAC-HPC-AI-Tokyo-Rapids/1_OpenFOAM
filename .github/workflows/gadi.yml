@@ -14,10 +14,6 @@ permissions:
   actions: read
   contents: read
 
-concurrency:
-  group: gadi-openfoam-runtime
-  cancel-in-progress: false
-
 env:
   GADI_ROOT: /scratch/hb15/tk7779/openfoam/gadi
   BUILD_ARCHIVE_DIR: /scratch/hb15/tk7779/openfoam/gadi/builds
@@ -188,8 +184,7 @@ jobs:
           install -d "${provision_dir}/benchmark" "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/platforms/gadi"
           archive="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
           sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
-          test "$(stat -c '%s' "${archive}")" = "$(jq -er '.build_archive.size_bytes' "${sidecar}")"
-          test "$(sha256sum "${archive}" | awk '{print $1}')" = "$(jq -er '.build_archive.sha256' "${sidecar}")"
+          platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}" "${GADI_ROOT}/runtime-cache"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh "${provision_dir}/scripts/"
           install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh "${provision_dir}/platforms/gadi/"
@@ -198,8 +193,7 @@ jobs:
           install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
-          # Keep OpenFOAM headers and wmake: the official coded wall-clock function object compiles on first use.
-          tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='./OpenFOAM/applications' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
+          # The shared runtime retains OpenFOAM headers and wmake because the official coded wall-clock function object compiles on first use.
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision.outputs.provision_dir != ''

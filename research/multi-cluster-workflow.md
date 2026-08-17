@@ -24,7 +24,7 @@
 
 ## 同時実行
 
-実行機のラベルと同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiだけは、展開runtime 3件がinode hard limitへ同時に到達した実測に基づき、Provisionから計算、回収、cleanupまでrun全体を`gadi-openfoam-runtime`で直列化する。展開物は計算終了まで必要なので、Provision jobだけの直列化では上限を防げない。玄界にはこの制御を加えない。
+実行機のラベルと同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiでは、展開runtime 3件がinode hard limitへ同時に到達した実測に基づき、Build archive SHA-256ごとの読み取り専用runtimeを共有する。初回populationだけをGadi内のfilesystem lockで直列化し、Provision、計算、回収そのものには同時実行制御を置かない。
 
 ## 内容の識別
 
