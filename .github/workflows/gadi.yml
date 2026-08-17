@@ -14,6 +14,10 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: gadi-openfoam-runtime
+  cancel-in-progress: false
+
 env:
   GADI_ROOT: /scratch/hb15/tk7779/openfoam/gadi
   BUILD_ARCHIVE_DIR: /scratch/hb15/tk7779/openfoam/gadi/builds
