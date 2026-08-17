@@ -286,6 +286,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "if (( OPENFOAM_NODES > 1 ))" in wrapper
     assert '"${distributed_root_args[@]}"' in wrapper
     assert "stage-rank-context.sh" in wrapper
+    assert "platforms/gadi/stage-rank-context.sh platforms/gadi/collect-rank-placement.sh" in workflow
     assert "--rank-manifest" in wrapper
     assert "--rank-placement-root" in wrapper
     assert "--placement-collector" in wrapper
