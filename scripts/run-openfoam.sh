@@ -126,7 +126,9 @@ stage_at() {
 # profile capture; the executable identity remains the tracked probe itself.
 probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
 export PATH="${probe_python_dir}:${PATH}"
+set +u
 source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"
+set -u
 
 MPIEXEC=$(command -v mpirun)
 DECOMPOSE_PAR=$(command -v decomposePar)

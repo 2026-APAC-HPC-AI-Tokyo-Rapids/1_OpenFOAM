@@ -79,6 +79,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert 'source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"' in text
     assert "RESTORE_ZERO_DIR=$(command -v restore0Dir)" not in text
     assert "restore0Dir -processor" in text
+    source_index = text.index('source "${WM_PROJECT_DIR:?')
+    assert text.rindex("set +u", 0, source_index) < source_index
+    assert text.index("set -u", source_index) > source_index
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
