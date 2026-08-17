@@ -11,7 +11,7 @@ Gadiの`/tmp`と`/dev/shm`はlogin node上の約126 GiBのtmpfsです。`/dev/sh
 
 32 KiBのファイル4096個を作成した実測では、`/dev/shm`と`/tmp`が約0.08秒、`/scratch`が約5秒でした。一次ccacheを`/dev/shm`、別のlogin nodeからも使う共有ccacheを`/scratch/hb15/tk7779/openfoam/gadi/ccache`へ置きます。`~/.config/ccache/ccache.conf`で一次ccacheを`max_size = 10GB`とし、共有ccacheはビルド後に`ccache --trim-dir`で10 GBまで整理します。`max_size`は共有ccacheに適用されず、容量による整理ではinode数も保証されないため、最初の実ビルド後に共有ccacheの実ファイル数も確認します。
 
-ビルドはlogin runnerで48並列にします。これは2 socket、24物理コア/socketという確認結果に基づきます。環境変数`OMP_NUM_THREADS=1`の影響で`nproc`は1を返すため、並列数の決定には使いません。
+ビルドはlogin runnerで16並列にします。2 socket、24物理コア/socketに合わせた48並列では、公式v2512のlibrary layerをIntel `icpx`でビルドした際に複数のcompiler processが同時にkillされました（Actions run `31990408500`、2026年8月17日）。CPU数ではなく実測したmemory制約を採用し、GCC導入時にも完走実績のある16並列を使います。環境変数`OMP_NUM_THREADS=1`の影響で`nproc`は1を返すため、並列数の決定には使いません。
 
 計算ノードから外部ネットワークへは接続できません。実行中のメトリクスは`/scratch`上のrun directoryへ記録し、PBS終了後にlogin runnerから一度だけ送信します。計算ノードへBigQueryの資格情報を環境変数で渡しません。
 
