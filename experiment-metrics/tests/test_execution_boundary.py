@@ -283,6 +283,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     )
     assert "--openfoam-arg -hostRoots" in wrapper
     assert 'host_roots="((\\\".*\\\" \\\"${PBS_JOBFS}/openfoam-case\\\"))"' in wrapper
+    assert 'io_ranks+="$(( node * ranks_per_node )) "' in wrapper
+    assert "--openfoam-arg -ioRanks" in wrapper
     assert "if (( OPENFOAM_NODES > 1 ))" in wrapper
     assert '"${distributed_root_args[@]}"' in wrapper
     assert "stage-rank-context.sh" in wrapper
