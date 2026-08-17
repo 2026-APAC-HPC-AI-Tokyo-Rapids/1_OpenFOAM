@@ -192,7 +192,9 @@ else
   stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR}" "${JQ}" -e --argjson number_of_subdomains "${OPENFOAM_MPI_PROCS}" 'select(.schema_version == "openfoam-case-cache/v4" and .number_of_subdomains == $number_of_subdomains)' "${prepared_case_manifest}"
 fi
 cd "${CASE_DIR}"
-install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
+sed -E -e 's/^(numberOfSubdomains[[:space:]]+)\$nCores;/\1'"${OPENFOAM_MPI_PROCS}"';/' -e 's/^(method[[:space:]]+)\$decompositionMethod;/\1scotch;/' "${DECOMPOSE_PAR_DICT}" > "${SOURCE_DIR}/mesh/decomposeParDict"
+grep -Eq "^numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS};$" "${SOURCE_DIR}/mesh/decomposeParDict"
+grep -Eq '^method[[:space:]]+scotch;' "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
