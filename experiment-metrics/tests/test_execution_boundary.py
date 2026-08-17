@@ -230,7 +230,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "WM_COMPILER=Icx WM_MPLIB=INTELMPI" in wrapper
     assert "PMI_RANK" in wrapper
     assert "--solver-launch-arg -ppn" in wrapper
-    assert "build_parallelism=48" in builder
+    assert "build_parallelism=16" in builder
     assert 'build_tree="${BUILD_DIR}/tree"' in builder
     assert "PBS_JOBFS" not in builder
     assert builder_path.stat().st_mode & 0o111

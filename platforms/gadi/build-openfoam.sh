@@ -18,9 +18,10 @@ set -euo pipefail
 test "$(sha256sum "${OPENFOAM_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${OPENFOAM_SOURCE_ARCHIVE_SHA256}"
 test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRDPARTY_SOURCE_ARCHIVE_SHA256}"
 
-# Gadi login nodes expose two 24-core sockets. OMP_NUM_THREADS=1 makes nproc
-# report one here, so use the inspected physical-core count explicitly.
-build_parallelism=48
+# Gadi login nodes expose two 24-core sockets, but 48 concurrent icpx processes
+# exhausted login-node memory while compiling the v2512 library layer in run
+# 31990408500. Keep enough memory per compiler process instead of matching cores.
+build_parallelism=16
 build_tree="${BUILD_DIR}/tree"
 openfoam_tree="${build_tree}/OpenFOAM"
 thirdparty_tree="${build_tree}/ThirdParty"
