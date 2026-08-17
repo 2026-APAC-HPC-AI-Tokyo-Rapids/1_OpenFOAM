@@ -9,6 +9,7 @@
 | OpenFOAM | OpenFOAM.com v2512、`OpenFOAM-v2512` tag |
 | 追加依存 | Scotch 6.1.0 |
 | compiler / MPI | `intel/2025.1.3`モジュールのIntel C++ 2025.1.1、Intel MPI 2021.15 |
+| Make preprocessor | compute nodeでも実行できるgcc-toolset-11の`/opt/rh/gcc-toolset-11/root/usr/bin/cpp` |
 | OpenFOAM 設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、DP、32-bit label |
 | build対象 | `simpleFoam`、公式前処理・検証utility、計測probe |
 | compiler cache | ccache。CMake の C/C++ launcher にも使用 |
@@ -35,7 +36,7 @@ archive 展開後の version 付きディレクトリは、build root 内の `Op
 
 ビルド成果物は`${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst`として保存する。push時だけ、コミットメッセージ先頭の`[require-build]`で新規ビルドを指定する。手動実行ではコミットメッセージを読まない。
 
-再利用時は現在のコミットからfirst-parentを順に遡り、各コミットの`OpenFOAM` workflow実行履歴を新しい順に調べる。source/toolchain/build定義の一致は条件にしない。圧縮ファイルと付随記録が同じクラスタに残り、記録されたsizeとSHAが一致する最初の成果物を現在の実行番号へハードリンクする。利用可能な成果物がなければ新しくビルドする。新規buildが必要な変更では、利用者が`[require-build]`を付けてpushする。
+再利用時は現在のコミットからfirst-parentを1 commitずつ親方向へ遡る。Actions全体をworkflow実行日時順に探索せず、各commit内だけ`OpenFOAM` workflow実行履歴を新しい順に調べる。source/toolchain/build定義の一致は条件にしない。圧縮ファイルと付随記録が同じクラスタに残り、記録されたsizeとSHAが一致する最初の成果物を現在の実行番号へハードリンクする。利用可能な成果物がなければ新しくビルドする。新規buildが必要な変更では、利用者が`[require-build]`を付けてpushする。
 
 実行時は選択した成果物を展開し、ケース準備、計算ジョブ、公式判定、メトリクス作成、成果物回収までを同じActions実行内で完了する。
 

@@ -21,6 +21,7 @@ build_condition=baseline
 build_compile_option=Opt
 build_tuning_flags=
 optimization_report_flags='-qopt-report=3 -qopt-report-phase=loop,vec,cg'
+genkai_cpp=/opt/rh/gcc-toolset-11/root/usr/bin/cpp
 export CC=mpiicx
 export CXX=mpiicpx
 build_extra_cxxflags="${build_tuning_flags:+${build_tuning_flags} }${optimization_report_flags}"
@@ -71,6 +72,14 @@ test "${thirdparty_source_oid}" = "${THIRDPARTY_SOURCE_OID}"
 rm -rf -- "${build_tree}/OpenFOAM/.git" "${build_tree}/ThirdParty/.git"
 ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 
+# Genkaiのcompute nodeではOS標準の/lib/cppが対応するcc1を解決できない。
+# login nodeだけでなくcoded functionを実行時コンパイルするcompute nodeでも
+# 利用できるOS提供のgcc-toolset-11 preprocessorをIcx規則へ固定する。
+genkai_cpp_rule="${build_tree}/OpenFOAM/wmake/rules/linux64Icx/general"
+test -x "${genkai_cpp}"
+sed -i "s|^CPP        = /lib/cpp |CPP        = ${genkai_cpp} |" "${genkai_cpp_rule}"
+grep -Fqx "CPP        = ${genkai_cpp} -traditional-cpp \$(GFLAGS)" "${genkai_cpp_rule}"
+
 # v2512 が要求する Scotch 6.1.0 を、玄界の共有 source cache から展開する。
 scotch_archive="${SOURCE_ARCHIVE_CACHE_DIR}/scotch-v6.1.0.tar.gz"
 test "$(sha256sum "${scotch_archive}" | awk '{print $1}')" = 4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1
@@ -82,7 +91,7 @@ module purge
 module load intel/2025.1.3 impi
 
 # 使用するコンパイラとccacheが利用可能であることを確認する。
-for build_tool in "${CC}" "${CXX}" ccache
+for build_tool in "${CC}" "${CXX}" "${genkai_cpp}" ccache
 do
   "${build_tool}" --version
 done
@@ -124,7 +133,7 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag SCOTCH_SOURCE_SHA256=4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1 --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag "CPP=${genkai_cpp}" --compile-flag SCOTCH_SOURCE_SHA256=4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1 --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
