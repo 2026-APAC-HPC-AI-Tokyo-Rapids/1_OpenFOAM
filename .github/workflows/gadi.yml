@@ -37,10 +37,8 @@ jobs:
       ranks: ${{ steps.protocol.outputs.ranks }}
       prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
     steps:
-      - name: Checkout repository history
+      - name: Checkout repository
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Identify case preparation
         id: prepare_identity
@@ -70,27 +68,19 @@ jobs:
               exit 0
             fi
           fi
-          commit="${GITHUB_SHA}"
-          while [[ -n "${commit}" ]]
+          while IFS= read -r run_id
           do
-            while IFS= read -r run_id
-            do
-              [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
-              archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
-              sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
-              expected_size=$(jq -er '.build_archive.size_bytes' "${sidecar}") || continue
-              expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
-              jq -e --arg openfoam "${OPENFOAM_SOURCE_OID}" --arg thirdparty "${THIRDPARTY_SOURCE_OID}" '(.source_commits[] | select(.commit_role == "openfoam_source") | .oid) == $openfoam and (.source_commits[] | select(.commit_role == "thirdparty_source") | .oid) == $thirdparty and .label_bits == 32 and ([.runtime_objects[] | select(.kind == "executable") | .role] | sort) == ["applyBoundaryLayer","capture-hardware","checkMesh","decomposePar","mesh-facts","partition-audit","potentialFoam","renumberMesh","simpleFoam"]' "${sidecar}" >/dev/null || continue
-              build_definition=$(jq -er '.source_commits[] | select(.commit_role == "build_definition") | .oid' "${sidecar}") || continue
-              git cat-file -e "${build_definition}^{commit}" 2>/dev/null || continue
-              git diff --quiet "${build_definition}" "${GITHUB_SHA}" -- scripts/build-openfoam-task.sh platforms/gadi/build-openfoam.sh experiment-metrics/native experiment-metrics/src/experiment_metrics/build_provenance.py experiment-metrics/src/experiment_metrics/probes/capture_hardware.py || continue
-              [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
-              [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
-              printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
-              exit 0
-            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 20 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
-            commit=$(git rev-parse "${commit}^" 2>/dev/null || true)
-          done
+            [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
+            archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
+            sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
+            expected_size=$(jq -er 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst") | .build_archive.size_bytes' "${sidecar}") || continue
+            expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
+            [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
+            [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
+            echo "Selected latest available ${archive}"
+            printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          done < <(gh run list --workflow openfoam.yml --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
           echo 'No reusable Gadi archive was found; a new build is required'
           printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
 
