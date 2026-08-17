@@ -11,6 +11,9 @@ job_id=
 case_cache_root=
 case_dir=
 prepared_case_manifest=
+rank_manifest=
+rank_placement_root=
+placement_collector=
 global_rank_env=
 local_rank_env=
 local_size_env=
@@ -25,6 +28,9 @@ do
     --case-cache-root) [[ $# -ge 2 ]]; case_cache_root=$2; shift 2 ;;
     --case-dir) [[ $# -ge 2 ]]; case_dir=$2; shift 2 ;;
     --prepared-case-manifest) [[ $# -ge 2 ]]; prepared_case_manifest=$2; shift 2 ;;
+    --rank-manifest) [[ $# -ge 2 ]]; rank_manifest=$2; shift 2 ;;
+    --rank-placement-root) [[ $# -ge 2 ]]; rank_placement_root=$2; shift 2 ;;
+    --placement-collector) [[ $# -ge 2 ]]; placement_collector=$2; shift 2 ;;
     --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
     --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
     --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
@@ -91,6 +97,10 @@ SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
+rank_manifest=${rank_manifest:-${RUN_MANIFEST}}
+rank_placement_root=${rank_placement_root:-${SOURCE_DIR}/placement}
+[[ "${rank_manifest}" == /* && "${rank_placement_root}" == /* ]]
+if [[ "${rank_manifest}" == "${RUN_MANIFEST}" ]]; then [[ "${rank_placement_root}" == "${SOURCE_DIR}/placement" && -z "${placement_collector}" ]]; else [[ "${placement_collector}" == /* ]]; fi
 
 DECOMPOSE_PAR_DICT=system/decomposeParDict
 SOLVER_LOG="${LOG_DIR}/solver.log"
@@ -212,14 +222,14 @@ fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]; then
-  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
+  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
   # profiler, which launches simpleFoam directly so VTune follows the solver
   # rather than the Python placement process.
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 fi
@@ -230,6 +240,7 @@ set -e
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
+if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e

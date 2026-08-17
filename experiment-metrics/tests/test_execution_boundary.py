@@ -285,6 +285,11 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert 'host_roots="((\\\".*\\\" \\\"${PBS_JOBFS}/openfoam-case\\\"))"' in wrapper
     assert "if (( OPENFOAM_NODES > 1 ))" in wrapper
     assert '"${distributed_root_args[@]}"' in wrapper
+    assert "stage-rank-context.sh" in wrapper
+    assert "--rank-manifest" in wrapper
+    assert "--rank-placement-root" in wrapper
+    assert "--placement-collector" in wrapper
+    assert '"${node_launch[@]}" "${placement_collector}"' in runner
     assert "numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS}" in runner
     assert "method[[:space:]]+scotch" in runner
     assert "jobfs=100GB" in workflow
