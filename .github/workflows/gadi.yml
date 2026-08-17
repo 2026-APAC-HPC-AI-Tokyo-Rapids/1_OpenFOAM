@@ -1,4 +1,4 @@
-name: OpenFOAM on Gadi
+name: GadiでOpenFOAMを実行
 
 on:
   workflow_call:
@@ -27,7 +27,7 @@ defaults:
 
 jobs:
   select-build:
-    name: Select OpenFOAM build
+    name: OpenFOAMビルドを選択
     runs-on: [self-hosted, gadi]
     outputs:
       action: ${{ steps.select.outputs.action }}
@@ -37,27 +37,27 @@ jobs:
       ranks: ${{ steps.protocol.outputs.ranks }}
       prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
     steps:
-      - name: Checkout repository history
+      - name: リポジトリ履歴を取得
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Identify case preparation
+      - name: ケース準備処理を識別
         id: prepare_identity
         run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
 
-      - name: Resolve experiment protocol
+      - name: 実験条件を決定
         id: protocol
         run: |
           case '${{ inputs.node_count }}' in
             1) experiment_preset=gadi-scotch-1n-104r; ranks=104 ;;
             2) experiment_preset=gadi-scotch-2n-208r; ranks=208 ;;
             4) experiment_preset=gadi-scotch-4n-416r; ranks=416 ;;
-            *) echo 'Gadi node count must be 1, 2, or 4' >&2; exit 64 ;;
+            *) echo 'Gadiのノード数には1、2、4のいずれかを指定してください' >&2; exit 64 ;;
           esac
           printf 'experiment_preset=%s\nranks=%s\n' "${experiment_preset}" "${ranks}" >> "${GITHUB_OUTPUT}"
 
-      - name: Select an existing archive or a new build
+      - name: 既存成果物の再利用または新規ビルドを選択
         id: select
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,7 +65,7 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
             commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"
             if [[ "${commit_message}" == '[require-build]'* ]]; then
-              echo 'The commit requests a new Gadi OpenFOAM build'
+              echo 'コミットでGadi向けOpenFOAMの新規ビルドが指定されました'
               printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
@@ -82,29 +82,29 @@ jobs:
               expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
               [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
               [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
-              echo "Selected latest available ancestor build ${archive}"
+              echo "利用可能な最も近い親コミットのビルドを選択しました: ${archive}"
               printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
               exit 0
             done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
             commit=$(git rev-parse "${commit}^" 2>/dev/null || true)
           done
-          echo 'No reusable Gadi archive was found; a new build is required'
+          echo '再利用可能なGadi向け成果物がないため、新しくビルドします'
           printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
 
   reuse-build:
-    name: Reuse OpenFOAM build
+    name: OpenFOAMビルドを再利用
     needs: select-build
     if: needs.select-build.outputs.action == 'reuse'
     runs-on: [self-hosted, gadi]
     steps:
-      - name: Hardlink selected archive
+      - name: 選択した成果物をハードリンク
         run: |
           source_key='${{ needs.select-build.outputs.source_archive_key }}'
           ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
           ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.build-sidecar.json" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
 
   build-openfoam:
-    name: Build OpenFOAM
+    name: OpenFOAMをビルド
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, gadi]
@@ -113,15 +113,15 @@ jobs:
     env:
       BUILD_DIR: /tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Checkout build inputs
+      - name: ビルド入力を取得
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Stage source archives
+      - name: ソース圧縮ファイルを配置
         id: stage
         run: |
-          # GITHUB_TOKEN cannot read the two sibling private repositories. The Gadi runner's existing read-only gh login stages source before the login-node build.
+          # GITHUB_TOKENでは同じ組織の非公開ソースリポジトリ2件を読めないため、Gadi実行機に設定済みの読み取り専用gh認証でログインノード上のビルド前にソースを配置する。
           install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
           openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
@@ -138,7 +138,7 @@ jobs:
           tar -tzf "${thirdparty_archive}" >/dev/null
           printf 'openfoam_archive=%s\nopenfoam_archive_sha256=%s\nopenfoam_oid=%s\nthirdparty_archive=%s\nthirdparty_archive_sha256=%s\nthirdparty_oid=%s\n' "${openfoam_archive}" "$(sha256sum "${openfoam_archive}" | awk '{print $1}')" "${openfoam_oid}" "${thirdparty_archive}" "$(sha256sum "${thirdparty_archive}" | awk '{print $1}')" "${thirdparty_oid}" >> "${GITHUB_OUTPUT}"
 
-      - name: Build and publish OpenFOAM
+      - name: OpenFOAMをビルドして保存
         env:
           OPENFOAM_SOURCE_ARCHIVE: ${{ steps.stage.outputs.openfoam_archive }}
           OPENFOAM_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.openfoam_archive_sha256 }}
@@ -150,7 +150,7 @@ jobs:
           uv sync --project experiment-metrics --frozen --no-dev
           platforms/gadi/build-openfoam.sh
 
-      - name: Upload OpenFOAM build log
+      - name: OpenFOAMビルドログを保存
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -159,22 +159,22 @@ jobs:
           if-no-files-found: warn
           compression-level: 1
 
-      - name: Cleanup OpenFOAM build directory
+      - name: OpenFOAMビルド領域を削除
         if: always()
         run: rm -rf -- "${BUILD_DIR:?}"
 
   provision:
-    name: Provision OpenFOAM runtime
+    name: OpenFOAM実行環境を配備
     needs: [select-build, reuse-build, build-openfoam]
     if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
     runs-on: [self-hosted, gadi]
     outputs:
       provision_dir: ${{ steps.provision.outputs.provision_dir }}
     steps:
-      - name: Checkout runtime files
+      - name: 実行用ファイルを取得
         uses: actions/checkout@v7
 
-      - name: Provision OpenFOAM runtime
+      - name: OpenFOAM実行環境を配備
         id: provision
         run: |
           provision_root="${GADI_ROOT}/provision"
@@ -194,14 +194,14 @@ jobs:
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
 
-      - name: Cleanup failed OpenFOAM provisioning
+      - name: 配備失敗時のOpenFOAM実行環境を削除
         if: failure() && steps.provision.outputs.provision_dir != ''
         env:
           PROVISION_DIR: ${{ steps.provision.outputs.provision_dir }}
         run: rm -rf -- "${PROVISION_DIR:?}"
 
   prepare-case:
-    name: Prepare OpenFOAM case cache
+    name: OpenFOAMケースのキャッシュを準備
     needs: [select-build, provision]
     if: always() && needs.provision.result == 'success'
     runs-on: [self-hosted, gadi]
@@ -210,7 +210,7 @@ jobs:
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
     steps:
-      - name: Stage mesh, validate it, and decompose when uncached
+      - name: 未作成のメッシュを配置・検証・領域分割
         run: |
           prepare_root="${GADI_ROOT}/prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           prepare_cache_root="${GADI_ROOT}/case-archives"
@@ -243,7 +243,7 @@ jobs:
           [[ "${cache_dir}" == "${prepare_cache_root}/"* ]]
 
   run:
-    name: Run OpenFOAM
+    name: OpenFOAMを実行
     needs: [select-build, provision, prepare-case]
     if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
     runs-on: [self-hosted, gadi]
@@ -253,12 +253,12 @@ jobs:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
       OPENFOAM_RUN_ROOT: /scratch/hb15/tk7779/openfoam/gadi/runs
     steps:
-      - name: Checkout control-plane identity
+      - name: 制御処理の識別情報を取得
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Initialize metrics and submit OpenFOAM
+      - name: 計測記録を初期化してOpenFOAMを投入
         id: v2_context
         env:
           METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
@@ -314,7 +314,7 @@ jobs:
           echo "PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pbs_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
 
-      - name: Wait for OpenFOAM job
+      - name: OpenFOAMジョブの終了を待機
         run: |
           tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/pbs.log" &
           stream_pid=$!
@@ -322,7 +322,7 @@ jobs:
           platforms/gadi/wait-pbs-job.sh "${PBS_JOB_ID}"
           test -e "${RUN_DIR}/run-success"
 
-      - name: Publish VTune hotspots to Actions summary
+      - name: VTuneホットスポットをActionsの概要へ掲載
         if: success() && inputs.profile
         run: |
           summary="${RUN_DIR}/profile/raw/vtune-summary/summary.md"
@@ -332,7 +332,7 @@ jobs:
             printf "\nVTune result on Gadi:\n\n- \`%s\`\n" "${vtune_result_dir}" >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Finalize metrics and package artifacts
+      - name: 計測記録を確定して成果物を梱包
         id: package_v2
         if: always() && steps.v2_context.outputs.pbs_job_id != ''
         run: |
@@ -354,7 +354,7 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
-      - name: Upload fixed v2 artifact set
+      - name: 固定構成のv2成果物を保存
         id: upload_v2
         if: always() && steps.v2_context.outputs.pbs_job_id != ''
         uses: actions/upload-artifact@v7
@@ -367,7 +367,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Upload occDrivAerStaticMesh result
+      - name: occDrivAerStaticMeshの結果を保存
         if: success()
         uses: actions/upload-artifact@v7
         with:
@@ -376,7 +376,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Cleanup provisioned runtime
+      - name: 配備した実行環境を削除
         if: always()
         run: |
           rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}"
@@ -384,7 +384,7 @@ jobs:
           rm -rf -- "${PROVISION_DIR:?}"
 
   archive-artifacts:
-    name: Archive artifacts on home server
+    name: 成果物を自宅サーバーへ保管
     needs: run
     if: always() && needs.run.outputs.artifact_uploaded == 'true'
     runs-on: ubuntu-latest
@@ -392,19 +392,19 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: Download workflow artifacts
+      - name: ワークフロー成果物を取得
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: "openfoam-gadi-*"
-      - name: Connect to home server through Tailscale
+      - name: Tailscale経由で自宅サーバーへ接続
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:apac-hpc-ai-actions
           ping: tomokazu-ubuntu-server
-      - name: Configure SSH
+      - name: SSHを設定
         env:
           ARTIFACT_SERVER_SSH_PRIVATE_KEY: ${{ secrets.ARTIFACT_SERVER_SSH_PRIVATE_KEY }}
         run: |
@@ -412,12 +412,12 @@ jobs:
           printf '%s\n' "${ARTIFACT_SERVER_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
-      - name: Copy artifacts to home server
+      - name: 成果物を自宅サーバーへ転送
         run: |
           ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/gadi"
           scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/gadi/"
 
-      - name: Delete copied GitHub artifacts
+      - name: 転送済みのGitHub成果物を削除
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

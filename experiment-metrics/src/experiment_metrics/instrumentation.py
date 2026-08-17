@@ -68,10 +68,10 @@ def load_bundle(
         raise ValueError("instrumentation bundle arrays are required")
     if track in {"reference", "score"}:
         if sources or components or scopes or sinks or bindings:
-            raise ValueError(f"{track} instrumentation bundle must be empty")
+            raise ValueError(f"{track}用の計測構成は空でなければなりません")
         return document
     if not sources or not components:
-        raise ValueError("profile instrumentation bundle must be nonempty")
+        raise ValueError("プロファイル用の計測構成が空です")
 
     sink_ids: list[str] = []
     sink_sources: list[str] = []

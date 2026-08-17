@@ -14,8 +14,8 @@ set -euo pipefail
 # GitHub Actions のメタデータだけを受け取る。
 openfoam_source_ref=refs/tags/OpenFOAM-v2512
 thirdparty_source_ref=refs/tags/v2512
-# genkai0001/0002 expose two 60-core sockets. Use physical cores and do not
-# count the second SMT thread as another compiler worker.
+# genkai0001/0002は60コアのソケットを2基備える。物理コアだけを使い、
+# SMTの第2スレッドを別のコンパイル処理数には数えない。
 build_parallelism=120
 build_condition=baseline
 build_compile_option=Opt
@@ -72,15 +72,15 @@ test "${thirdparty_source_oid}" = "${THIRDPARTY_SOURCE_OID}"
 rm -rf -- "${build_tree}/OpenFOAM/.git" "${build_tree}/ThirdParty/.git"
 ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 
-# Genkaiのcompute nodeではOS標準の/lib/cppが対応するcc1を解決できない。
-# login nodeだけでなくcoded functionを実行時コンパイルするcompute nodeでも
-# 利用できるOS提供のgcc-toolset-11 preprocessorをIcx規則へ固定する。
+# 玄界の計算ノードではOS標準の/lib/cppが対応するcc1を解決できない。
+# ログインノードだけでなく、coded functionを実行時コンパイルする計算ノードでも
+# 利用できるOS提供のgcc-toolset-11プリプロセッサをIcx規則へ固定する。
 genkai_cpp_rule="${build_tree}/OpenFOAM/wmake/rules/linux64Icx/general"
 test -x "${genkai_cpp}"
 sed -i "s|^CPP        = /lib/cpp |CPP        = ${genkai_cpp} |" "${genkai_cpp_rule}"
 grep -Fqx "CPP        = ${genkai_cpp} -traditional-cpp \$(GFLAGS)" "${genkai_cpp_rule}"
 
-# v2512 が要求する Scotch 6.1.0 を、玄界の共有 source cache から展開する。
+# v2512が要求するScotch 6.1.0を、玄界の共有ソースキャッシュから展開する。
 scotch_archive="${SOURCE_ARCHIVE_CACHE_DIR}/scotch-v6.1.0.tar.gz"
 test "$(sha256sum "${scotch_archive}" | awk '{print $1}')" = 4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1
 install -d "${build_tree}/ThirdParty/sources/scotch"
@@ -123,13 +123,12 @@ find "${build_tree}/OpenFOAM" -type f -name '*.optrpt' -printf '%P\n' | LC_ALL=C
 test -s "${report_list}"
 tar -I zstd -cf "${BUILD_DIR}/logs/optimization-reports.tar.zst" -C "${build_tree}/OpenFOAM" -T "${report_list}"
 
-# The dependency-free probe entrypoint is installed byte-for-byte from the
-# tracked source and becomes the seventh build-owned executable.
+# 依存関係のない計測ツールの入口は、追跡中のソースからバイト単位で同一のまま
+# 導入し、ビルド成果物が所有する7番目の実行ファイルとする。
 install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/probes/capture_hardware.py" "${FOAM_APPBIN}/capture-hardware"
 
-# Capture all pre-archive semantic inputs while the toolchain environment and
-# resolved build paths are still live. The final archive hash is added only
-# after tar has completed, avoiding archive self-reference.
+# ツールチェーン環境と解決済みビルドパスが有効なうちに、圧縮前の意味的な入力を
+# すべて記録する。圧縮ファイル自身への循環参照を避けるため、最終SHAはtar完了後に加える。
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
@@ -140,4 +139,4 @@ tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
 "${metrics_cli}" finalize-build-sidecar --state "${build_state}" --archive "${publish_tmp}" --output "${publish_sidecar_tmp}"
 mv -- "${publish_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
 mv -- "${publish_sidecar_tmp}" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
-echo "Published ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+echo "ビルド成果物を保存しました: ${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"

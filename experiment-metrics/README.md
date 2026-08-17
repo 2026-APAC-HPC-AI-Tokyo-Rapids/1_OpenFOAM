@@ -1,20 +1,18 @@
 # experiment-metrics v2
 
-Each OpenFOAM producer writes a diagnostic JSONL fragment with atomic rename.
-After the scheduler reaches a terminal state, the login-node runner appends the
-fragment rows to BigQuery. Values are encoded without an owner/type registry.
-BigQuery writes use 500-row chunks, no `insertId`, no retry, and allow
-duplicates. Transport failures are warnings and never change solver or workflow
-results.
+OpenFOAMの各記録処理は、診断用のJSONL断片を一時ファイルへ書き、名前の変更によって
+一括で確定する。スケジューラが終了状態になった後、ログインノード上の実行機が断片の
+各行をBigQueryへ追加する。値の符号化に所有者や型の登録表は使わない。BigQueryへの
+書き込みは500行ずつ行い、`insertId`と再試行は使わず、重複を許容する。転送失敗は
+警告として扱い、ソルバーやワークフローの結果を変更しない。
 
-The workflow creates a mode-0600 credential file inside the run directory for
-the login-node sender. Credential transport variables are omitted from
-environment snapshots and the file is excluded from artifacts and removed at
-cleanup. Producer fragments remain diagnostic artifacts; there is no merge,
-`metrics.jsonl`, physical projection, consumer view, conflict table, or replay.
+ワークフローはログインノードから送信するため、権限を0600にした資格情報ファイルを
+実行ディレクトリ内へ作成する。資格情報を運ぶ環境変数は環境記録から除外する。この
+ファイルは成果物へ含めず、終了処理で削除する。各記録処理が作る断片は診断用成果物の
+まま保持し、統合処理、`metrics.jsonl`、物理形式への投影、利用者向けビュー、競合表、
+再送処理は設けない。
 
-The run protocol remains separate because node/rank/stage settings are required
-to execute the job. It references the pinned workload definition instead of
-duplicating case identity, mesh provenance, solver, release, or iteration
-targets. Case cache identity covers the prepare script, official case bytes,
-verified mesh SHA-256, decomposition method, and rank count.
+ノード数、ランク数、処理段階の設定はジョブ実行に必要なため、実験条件として独立して
+管理する。ケース識別情報、メッシュの来歴、ソルバー、版、反復回数を重複して持たず、
+固定した課題定義を参照する。ケースキャッシュの識別情報には、準備スクリプト、公式
+ケースの内容、検証済みメッシュのSHA-256、領域分割方式、ランク数を含める。

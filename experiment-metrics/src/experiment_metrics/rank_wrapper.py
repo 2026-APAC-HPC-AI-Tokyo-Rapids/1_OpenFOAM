@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
         else arguments.solver_argv
     )
     if arguments.capture_only and (solver or arguments.profile_rank is not None or arguments.profile_wrapper is not None):
-        raise ValueError("capture-only rank wrapper cannot launch a solver or profiler")
+        raise ValueError("配置記録専用モードではsolverやプロファイラを起動できません")
     if not arguments.capture_only and (not solver or not Path(solver[0]).is_absolute()):
         raise ValueError("rank wrapper requires an absolute solver executable")
     if (arguments.profile_rank is None) != (arguments.profile_wrapper is None):

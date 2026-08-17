@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-  echo "usage: $0 LOCAL_ROOT SHARED_ROOT EXPECTED_LOCAL_RANKS" >&2
+  echo "使用方法: $0 LOCAL_ROOT SHARED_ROOT EXPECTED_LOCAL_RANKS" >&2
   exit 64
 fi
 local_root=$1

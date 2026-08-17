@@ -18,15 +18,15 @@ do
   [[ -d "${candidate}" ]] && result_dirs+=("${candidate}")
 done
 [[ "${#result_dirs[@]}" -eq 1 ]] || {
-  printf 'Expected one VTune result directory for %s, found %d\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#result_dirs[@]}" >&2
+  printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#result_dirs[@]}" >&2
   exit 2
 }
 
 summary_dir="${RUN_DIR}/profile/raw/vtune-summary"
 install -d -m 0700 "${summary_dir}"
 
-# VTune 2025 may return an empty -report-output file even when the report
-# succeeds, so capture the CSV report from stdout.
+# VTune 2025はレポート生成に成功しても-report-outputへ空ファイルを返す場合が
+# あるため、CSVレポートは標準出力から取得する。
 "${OPENFOAM_VTUNE_PATH}" -quiet -report hotspots -result-dir "${result_dirs[0]}" -group-by function,module -column time -format csv -csv-delimiter comma > "${summary_dir}/hotspots.csv"
 
 if [[ "${OPENFOAM_VTUNE_ANALYSIS}" == hpc-performance ]]; then

@@ -32,7 +32,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth=true -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
     target_status=$?
     # -return-app-exitcode makes the CLI status authoritative for the target.
-    # Report generation below independently validates the collection result.
+    # 後続のレポート生成で収集結果を独立に検証する。
     vtune_status=0
     set -e
     ;;
@@ -40,17 +40,17 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     set +e
     "${OPENFOAM_VTUNE_PATH}" -collect memory-access -knob analyze-mem-objects=false -knob dram-bandwidth-limits=true -knob analyze-openmp=false -data-limit=0 -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
     target_status=$?
-    # The Memory Access collector launches the selected rank so it can collect
-    # process events together with node-wide uncore bandwidth counters.
+    # Memory Access収集処理から選択ランクを起動し、プロセスの事象とノード全体の
+    # アンコア帯域カウンタを同時に収集できるようにする。
     vtune_status=0
     set -e
     ;;
-  *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
+  *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
 status_tmp="${OPENFOAM_VTUNE_STATUS_PATH}.tmp-$$"
 printf '{"schema_version":"vtune-collection-status/v1","target_exit_code":%d,"vtune_exit_code":%d}\n' "${target_status}" "${vtune_status}" > "${status_tmp}"
 mv -- "${status_tmp}" "${OPENFOAM_VTUNE_STATUS_PATH}"
 
-# The solver target remains authoritative. Collection failures are retained in
-# the status source and handled independently by the post-run exporter.
+# ソルバーの終了状態を正本とする。収集失敗は状態記録に残し、実行後の出力処理で
+# ソルバーとは独立に扱う。
 exit "${target_status}"

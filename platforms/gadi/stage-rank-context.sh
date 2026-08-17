@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  echo "usage: $0 RUN_MANIFEST TARGET_ROOT" >&2
+  echo "使用方法: $0 RUN_MANIFEST TARGET_ROOT" >&2
   exit 64
 fi
 run_manifest=$1

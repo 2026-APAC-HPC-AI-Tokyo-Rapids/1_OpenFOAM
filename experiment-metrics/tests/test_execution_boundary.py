@@ -118,9 +118,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "decomposePar" in prepare_text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in prepare_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in prepare_text
-    # The installed hardware probe has an env python3 shebang.  Genkai's
-    # system Python is too old, so every direct or MPI-launched probe must
-    # inherit the provisioned interpreter without changing the probe argv.
+    # 導入したハードウェア計測ツールのshebangはenv python3である。玄界のOS標準
+    # Pythonは古いため、直接起動とMPI起動のどちらでも、計測ツールの引数を変えずに
+    # 配備したPythonを継承する必要がある。
     python_path = 'probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"'
     export_path = 'export PATH="${probe_python_dir}:${PATH}"'
     assert python_path in text
@@ -140,7 +140,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "record-scheduler-terminal --manifest" in workflow
     assert "record-execution-context --manifest" in workflow
     assert "record-profile-vtune" not in workflow
-    assert "Publish VTune hotspots to Actions summary" in workflow
+    assert "VTuneホットスポットをActionsの概要へ掲載" in workflow
     assert "purpose='${{ inputs.run_purpose }}'" not in workflow
     assert "run_purpose:" not in workflow
     assert "if [[ '${{ inputs.profile }}' == true ]]" in workflow
@@ -163,7 +163,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "install -m 0600" in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" in workflow
     assert 'smoke-send --run "${RUN_ID}" --source runner' in workflow
-    assert "Prepare OpenFOAM case cache" in workflow
+    assert "OpenFOAMケースのキャッシュを準備" in workflow
     prepare_concurrency = "genkai-openfoam-case-${{ needs.select-build.outputs.experiment_preset }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
     assert prepare_concurrency in workflow
     assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
@@ -171,8 +171,8 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "queue: single" not in workflow
     assert "${GITHUB_RUN_ID}.tar.zst" in workflow
     assert "${GITHUB_RUN_NUMBER}.tar.zst" not in workflow
-    assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
-    assert workflow.count("- name: Finalize metrics and package artifacts") == 1
+    assert workflow.count("- name: 計測記録を初期化してOpenFOAMを投入") == 1
+    assert workflow.count("- name: 計測記録を確定して成果物を梱包") == 1
     assert "steps.v2_context.outputs.pjm_job_id != ''" in workflow
     assert "needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert "LC_ALL=C sort -u" in workflow
@@ -245,8 +245,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         in workflow
     )
     assert "openfoam_build" not in workflow
-    assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
-    assert workflow.count("- name: Finalize metrics and package artifacts") == 1
+    assert workflow.count("- name: 計測記録を初期化してOpenFOAMを投入") == 1
+    assert workflow.count("- name: 計測記録を確定して成果物を梱包") == 1
     assert "steps.v2_context.outputs.pbs_job_id != ''" in workflow
     assert "if: always() && needs.provision.result == 'success'" in workflow
     assert "if: always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
@@ -400,17 +400,17 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
             and line.endswith(":")
         ]
         assert jobs == expected
-        assert workflow.index("- name: Wait for OpenFOAM job") < workflow.index(
-            "- name: Finalize metrics and package artifacts"
+        assert workflow.index("- name: OpenFOAMジョブの終了を待機") < workflow.index(
+            "- name: 計測記録を確定して成果物を梱包"
         )
         assert workflow.index(
-            "- name: Finalize metrics and package artifacts"
+            "- name: 計測記録を確定して成果物を梱包"
         ) < workflow.index(
             'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
         )
         assert workflow.index(
             'send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"'
-        ) < workflow.index("- name: Upload fixed v2 artifact set")
+        ) < workflow.index("- name: 固定構成のv2成果物を保存")
 
 
 def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:

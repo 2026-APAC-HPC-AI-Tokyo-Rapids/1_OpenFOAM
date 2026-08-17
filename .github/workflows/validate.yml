@@ -1,4 +1,4 @@
-name: Validate OpenFOAM control plane
+name: OpenFOAM制御処理の検証
 
 on:
   workflow_call:
@@ -10,14 +10,14 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout validation inputs
+      - name: 検証対象を取得
         uses: actions/checkout@v7
 
-      - name: Install uv
+      - name: uvを導入
         uses: astral-sh/setup-uv@v7
 
-      - name: Validate shell syntax
+      - name: シェル構文を検証
         run: find scripts platforms -type f \( -name '*.sh' -o -name '*.pjm' -o -name '*.pbs' \) -print0 | xargs -0 -r -n1 bash -n
 
-      - name: Run unit tests
+      - name: 単体テストを実行
         run: uv run --project experiment-metrics pytest -q experiment-metrics/tests tests

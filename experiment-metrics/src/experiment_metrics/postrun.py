@@ -236,7 +236,7 @@ def mesh_topology_fact(path: Path) -> Fact:
 def mesh_facts_from_logs(
     check_mesh_log: Path, decompose_log: Path, dictionary: Path
 ) -> tuple[Fact, Fact, Fact]:
-    """Parse already durable preparation logs without reopening the 65M mesh."""
+    """65Mセルのメッシュを開き直さず、保存済みの準備ログを解析する。"""
 
     check_text = check_mesh_log.read_text(encoding="utf-8", errors="replace")
     topology = {
@@ -247,7 +247,7 @@ def mesh_facts_from_logs(
         "internal_faces": _unique_log_uint(check_text, "internal faces"),
     }
     if topology["internal_faces"] > topology["faces"]:
-        raise ValueError("checkMesh internal face count exceeds total faces")
+        raise ValueError("checkMeshの内部面数が総面数を超えています")
     requested = _requested_partition(dictionary)
     observed = _partition_log(
         decompose_log.read_text(encoding="utf-8", errors="replace"),
@@ -267,7 +267,7 @@ def _unique_log_uint(text: str, name: str) -> int:
         for match in re.findall(rf"(?m)^\s*{re.escape(name)}:\s*([0-9]+)\s*$", text)
     }
     if len(values) != 1:
-        raise ValueError(f"checkMesh log has no unique {name}")
+        raise ValueError(f"checkMeshログから一意な{name}を取得できません")
     return next(iter(values))
 
 
@@ -304,7 +304,7 @@ def _partition_log(
         ):
             directed_interfaces[(rank, int(peer))] = int(count)
     if sum(item["cell_count"] for item in subdomains) != expected_cells:
-        raise ValueError("decomposePar cell total differs from checkMesh")
+        raise ValueError("decomposeParとcheckMeshでセル総数が一致しません")
     interfaces: list[dict[str, int]] = []
     for (rank, peer), count in sorted(directed_interfaces.items()):
         if rank >= peer:
@@ -400,7 +400,7 @@ def _partition(
         _addressing_object(item["addressing"])
         cells += item["cell_count"]
     if cells != topology["cells"]:
-        raise ValueError("partition cell total does not match mesh topology")
+        raise ValueError("領域分割後のセル総数がメッシュ構成と一致しません")
     if not isinstance(interfaces, list):
         raise ValueError("partition interfaces are invalid")
     previous: tuple[int, int] | None = None

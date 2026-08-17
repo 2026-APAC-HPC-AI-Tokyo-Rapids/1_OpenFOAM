@@ -270,7 +270,7 @@ def test_postrun_rejects_partition_cell_count_mismatch(tmp_path: Path) -> None:
             }
         )
     )
-    with pytest.raises(ValueError, match="cell total"):
+    with pytest.raises(ValueError, match="セル総数"):
         partition_facts(
             dictionary, observed, topology=mesh_topology_fact(topology).logical_value
         )

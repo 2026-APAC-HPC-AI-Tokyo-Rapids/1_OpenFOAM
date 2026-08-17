@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 9 || $# -gt 10 ]]; then
-  echo "usage: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only]" >&2
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only]" >&2
   exit 64
 fi
 
@@ -18,7 +18,7 @@ cache_root=$9
 mode=${10:-}
 case "${mode}" in
   ''|--require-cache|--identity-only) ;;
-  *) echo "unsupported case preparation mode: ${mode}" >&2; exit 64 ;;
+  *) echo "未対応のケース準備モードです: ${mode}" >&2; exit 64 ;;
 esac
 [[ "${subdomains}" =~ ^[1-9][0-9]*$ ]]
 
@@ -47,7 +47,7 @@ cache_valid() {
 cache_hit=true
 if ! cache_valid; then
   if [[ "${mode}" == --require-cache ]]; then
-    echo "required cache entry is absent or invalid: ${cache_dir}" >&2
+    echo "必要なキャッシュが存在しないか無効です: ${cache_dir}" >&2
     exit 75
   fi
   cache_hit=false

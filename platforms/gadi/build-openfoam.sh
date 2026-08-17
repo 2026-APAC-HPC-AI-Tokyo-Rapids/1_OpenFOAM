@@ -18,8 +18,8 @@ set -euo pipefail
 test "$(sha256sum "${OPENFOAM_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${OPENFOAM_SOURCE_ARCHIVE_SHA256}"
 test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRDPARTY_SOURCE_ARCHIVE_SHA256}"
 
-# Gadi login nodes expose two 24-core sockets, but 48 concurrent icpx processes
-# exhausted login-node memory while compiling the v2512 library layer in run
+# Gadiのログインノードは24コアのソケットを2基備えるが、v2512のライブラリ群を
+# 48個のicpxで同時にコンパイルするとログインノードのメモリを使い切ったため、
 # 31990408500. Keep enough memory per compiler process instead of matching cores.
 build_parallelism=16
 build_tree="${BUILD_DIR}/tree"

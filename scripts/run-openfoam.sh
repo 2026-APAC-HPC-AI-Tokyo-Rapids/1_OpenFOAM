@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Scheduler-neutral compute-side executor. Cluster wrappers establish the
-# toolchain and MPI environment and pass launcher argv without shell parsing.
+# スケジューラに依存しない計算ノード側の実行処理。クラスタ別の呼び出し側で
+# ツールチェーンとMPI環境を設定し、起動引数をシェルで再解釈せずに渡す。
 set -euo pipefail
 
 solver_launch=()
@@ -37,7 +37,7 @@ do
     --profile-root) [[ $# -ge 2 ]]; profile_root=$2; shift 2 ;;
     --runtime-root) [[ $# -ge 2 ]]; runtime_root=$2; shift 2 ;;
     --openfoam-arg) [[ $# -ge 2 ]]; openfoam_args+=("$2"); shift 2 ;;
-    *) printf 'unknown run-openfoam argument: %s\n' "$1" >&2; exit 64 ;;
+    *) printf 'run-openfoamの未知の引数です: %s\n' "$1" >&2; exit 64 ;;
   esac
 done
 [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
@@ -62,7 +62,7 @@ done
 : "${OPENFOAM_EXPECTED_CELLS:?workload cell count is required}"
 : "${OPENFOAM_DISTRIBUTION:?OpenFOAM distribution is required}"
 : "${OPENFOAM_RELEASE:?OpenFOAM release is required}"
-: "${OPENFOAM_SOLVER:?solver identity is required}"
+: "${OPENFOAM_SOLVER:?ソルバーの識別情報が必要です}"
 : "${OPENFOAM_WORKLOAD_ID:?workload identity is required}"
 : "${WORKLOAD_MESH_ARCHIVE:?verified mesh archive is required}"
 [[ "${OPENFOAM_SOLVER}" == simpleFoam && "${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com && "${OPENFOAM_RELEASE}" == v2512 && "${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M ]]
@@ -72,12 +72,12 @@ OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hotspots|hpc-performance|memory-access) ;;
-  *) printf 'Unsupported VTune analysis: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
+  *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
-  *) printf 'Unsupported OPENFOAM_RUN_PURPOSE: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
+  *) printf '未対応のOPENFOAM_RUN_PURPOSEです: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
 esac
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
@@ -128,8 +128,8 @@ finish_supervisor() {
 trap finish_supervisor EXIT
 "${METRICS_CLI}" validate-bundle-runtime --manifest "${RUN_MANIFEST}" --bundle "${RUN_DIR}/control/instrumentation-bundle.json" --registry "${REGISTRY}"
 
-# One exact argv is given directly to StageRunner; stdout and stderr are a
-# single durable record rather than a shell pipeline with ambiguous status.
+# 一意に定めた引数列をStageRunnerへ直接渡す。終了状態が曖昧になるシェルの
+# パイプラインは使わず、標準出力と標準エラーを一つの永続的な記録にまとめる。
 stage() {
   local stage_name=$1
   local stdout_path=$2
@@ -145,11 +145,11 @@ stage_at() {
   "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
-# capture-hardware is a tracked, dependency-free Python probe whose installed
-# shebang is intentionally portable.  Genkai's system python3 is 3.6, while
-# the probe and the metrics runtime require the provisioned Python.  Put that
-# interpreter first for both the direct minimal capture and the MPI-launched
-# profile capture; the executable identity remains the tracked probe itself.
+# capture-hardwareは追跡対象で依存関係のないPython計測ツールであり、導入時の
+# shebangは意図的に移植可能にしている。玄界のOS標準Pythonは3.6だが、計測ツールと
+# 計測記録処理には配備したPythonが必要である。最小構成の直接計測とMPI経由の
+# プロファイル計測の両方で、このPythonをPATHの先頭に置く。実行ファイルの識別情報は
+# 追跡対象の計測ツール自身を維持する。
 probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
 export PATH="${probe_python_dir}:${PATH}"
 set +u
@@ -177,17 +177,17 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
-"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
+"${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'ビルド配備の計測値を記録できませんでした' >&2
 
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
-# Seal the exact pinned official setup before the first OpenFOAM stage reads it.
+# 最初のOpenFOAM処理が読み込む前に、固定した公式設定をそのまま記録する。
 "${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --definition "${PROVISION_DIR}/benchmark/workload.json" --output-root "${SOURCE_DIR}/workload"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
   *-scotch-*) ;;
-  *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
+  *) echo "未対応の領域分割条件です: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
 if [[ -z "${prepared_case_manifest}" ]]; then
   PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
@@ -226,9 +226,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]; then
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  # Every rank records its placement first. The selected rank then execs the
-  # profiler, which launches simpleFoam directly so VTune follows the solver
-  # rather than the Python placement process.
+  # まず全ランクが配置を記録する。その後、選択したランクがプロファイラへ置き換わる。
+  # プロファイラからsimpleFoamを直接起動し、VTuneがPythonの配置記録処理ではなく
+  # ソルバーを追跡するようにする。
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
@@ -248,7 +248,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   vtune_export_status=$?
   set -e
   if [[ "${vtune_export_status}" -ne 0 ]]; then
-    printf 'VTune hotspot export failed (%d); solver result remains authoritative\n' "${vtune_export_status}" >&2
+    printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2
   fi
 fi
 
@@ -256,9 +256,9 @@ fi
 grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
 grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 
-# Reuse the small, durable preparation logs. Never reopen or hash the 65M-cell
-# serial/processor meshes just to collect metrics.
-"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --check-mesh-log "${LOG_DIR}/checkMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'mesh metrics could not be recorded; solver result remains valid' >&2
+# 小さく永続的な準備ログを再利用する。計測値を集めるだけのために、65Mセルの
+# 非分割メッシュやprocessorメッシュを開き直したりハッシュ計算したりしない。
+"${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --check-mesh-log "${LOG_DIR}/checkMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'メッシュの計測値を記録できませんでした。ソルバーの結果は有効です' >&2
 
 minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then
@@ -275,9 +275,9 @@ stage minimal_hardware_capture "${LOG_DIR}/minimal-hardware-capture.log" "${mini
 minimal_hardware_status=$?
 set -e
 if [[ "${minimal_hardware_status}" -ne 0 ]]; then
-  printf '%s\n' 'minimal hardware capture failed; solver result remains valid' >&2
+  printf '%s\n' '最小構成のハードウェア情報取得に失敗しました。ソルバーの結果は有効です' >&2
 else
-  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'minimal hardware metrics could not be recorded' >&2
+  "${METRICS_CLI}" record-minimal-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --hardware-root "${SOURCE_DIR}/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' '最小構成のハードウェア計測値を記録できませんでした' >&2
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
@@ -286,15 +286,15 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   profile_hardware_status=$?
   set -e
   if [[ "${profile_hardware_status}" -ne 0 ]]; then
-    printf '%s\n' 'profile hardware capture failed; solver result remains valid' >&2
+    printf '%s\n' 'プロファイル用ハードウェア情報の取得に失敗しました。ソルバーの結果は有効です' >&2
   else
-    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'profile hardware metrics could not be recorded' >&2
+    "${METRICS_CLI}" record-profile-hardware --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --profile-hardware-root "${RUN_DIR}/profile/raw/hardware" --protocol "${OPENFOAM_PROTOCOL_PATH}" || printf '%s\n' 'プロファイル用ハードウェア計測値を記録できませんでした' >&2
   fi
 fi
 
-# Network measurement is an independent post-solver stage.  Missing IMB,
-# failed execution, or malformed output deliberately does not alter the solver
-# success marker; network diagnostics remain a separate non-gating stage.
+# ネットワーク計測はソルバー後の独立した処理である。IMBがない場合、実行失敗、
+# 不正な出力があっても、意図的にソルバーの成功印は変更しない。ネットワーク診断は
+# 成否判定に影響しない別処理として維持する。
 IMB_STDOUT="${SOURCE_DIR}/network/imb-mpi1/stdout.txt"
 IMB_STDERR="${SOURCE_DIR}/network/imb-mpi1/stderr.txt"
 IMB_ARGV="${SOURCE_DIR}/network/imb-mpi1/argv.json"
@@ -313,12 +313,12 @@ if [[ -n "${imb_bin}" ]]; then
   set -e
   if [[ "${imb_status}" -eq 0 ]]; then
     "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt ||
-      printf '%s\n' 'IMB output was not a complete canonical capture' >&2
+      printf '%s\n' 'IMB出力を正規化された完全な記録として取得できませんでした' >&2
   else
     printf '%s\n' "IMB-MPI1 stage failed (${imb_status}); collection will be incomplete" >&2
   fi
 else
-  printf '%s\n' 'IMB-MPI1 is unavailable; collection will be incomplete' >&2
+  printf '%s\n' 'IMB-MPI1を利用できないため、収集結果は不完全になります' >&2
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
@@ -332,8 +332,8 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${#vtune_result_dirs[@]}" -eq 1 ]]; then
     printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" >> "${LOG_DIR}/profile-location.txt"
   else
-    printf 'Expected one VTune result directory for %s, found %d\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
+    printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
   fi
 fi
-# Only solver validity controls the scheduler/job success marker.
+# スケジューラジョブの成功印はソルバーの有効性だけで決める。
 touch "${RUN_DIR}/run-success"

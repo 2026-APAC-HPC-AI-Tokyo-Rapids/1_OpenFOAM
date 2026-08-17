@@ -40,7 +40,7 @@ class RunProtocol:
             or not isinstance(variants, dict)
             or set(variants) != {"bench", "profile"}
         ):
-            raise ValueError("protocol must contain exactly its v2 fields")
+            raise ValueError("実験条件にv2で定義された項目以外が含まれています")
         variant = variants.get(purpose)
         if not isinstance(variant, dict):
             raise ValueError(f"protocol has no {purpose} variant")
@@ -61,7 +61,7 @@ class RunProtocol:
         transport = variant["transport_policy"]
         transport_environment = variant["transport_environment"]
         if not isinstance(root["workload_definition"], str):
-            raise ValueError("protocol workload definition path is invalid")
+            raise ValueError("実験条件の課題定義パスが無効です")
         workload_path = (path.parent / root["workload_definition"]).resolve(strict=True)
         workload = load_workload_definition(workload_path)
         workload_id = workload.workload_id

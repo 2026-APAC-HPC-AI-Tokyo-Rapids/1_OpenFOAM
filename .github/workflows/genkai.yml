@@ -1,4 +1,4 @@
-name: OpenFOAM on Genkai
+name: 玄界でOpenFOAMを実行
 
 on:
   workflow_call:
@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   select-build:
-    name: Select OpenFOAM build
+    name: OpenFOAMビルドを選択
     runs-on: [self-hosted, genkai]
 
     outputs:
@@ -37,27 +37,27 @@ jobs:
       build_cache_key: ${{ steps.select.outputs.build_cache_key }}
 
     steps:
-      - name: Checkout repository history
+      - name: リポジトリ履歴を取得
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Identify case preparation
+      - name: ケース準備処理を識別
         id: prepare_identity
         run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
 
-      - name: Resolve experiment protocol
+      - name: 実験条件を決定
         id: protocol
         run: |
           case '${{ inputs.node_count }}' in
             1) experiment_preset=scotch-1n-120r ;;
             2) experiment_preset=scotch-2n-240r ;;
             4) experiment_preset=scotch-4n-448r ;;
-            *) echo 'Genkai node count must be 1, 2, or 4' >&2; exit 64 ;;
+            *) echo '玄界のノード数には1、2、4のいずれかを指定してください' >&2; exit 64 ;;
           esac
           echo "experiment_preset=${experiment_preset}" >> "${GITHUB_OUTPUT}"
 
-      - name: Select an existing archive or a new build
+      - name: 既存成果物の再利用または新規ビルドを選択
         id: select
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,7 +65,7 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
             commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"
             if [[ "${commit_message}" == '[require-build]'* ]]; then
-              echo "The commit requests a new OpenFOAM build"
+              echo "コミットでOpenFOAMの新規ビルドが指定されました"
               printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
@@ -83,31 +83,31 @@ jobs:
               expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")" || continue
               [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
               [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
-              echo "Selected latest available ancestor build ${archive}"
+              echo "利用可能な最も近い親コミットのビルドを選択しました: ${archive}"
               printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
               exit 0
             done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
             commit="$(git rev-parse "${commit}^" 2>/dev/null || true)"
           done
 
-          echo "No reusable OpenFOAM build archive was found; falling back to a new build"
+          echo "再利用可能なOpenFOAMビルド成果物がないため、新しくビルドします"
           printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
 
   reuse-build:
-    name: Reuse OpenFOAM build
+    name: OpenFOAMビルドを再利用
     needs: select-build
     if: needs.select-build.outputs.action == 'reuse'
     runs-on: [self-hosted, genkai]
 
     steps:
-      - name: Hardlink selected archive
+      - name: 選択した成果物をハードリンク
         run: |
           source_key=${{ needs.select-build.outputs.source_archive_key }}
           ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
           ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.build-sidecar.json" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
 
   build-openfoam:
-    name: Build OpenFOAM
+    name: OpenFOAMをビルド
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, genkai]
@@ -120,13 +120,13 @@ jobs:
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache
 
     steps:
-      - name: Checkout build inputs
+      - name: ビルド入力を取得
         uses: actions/checkout@v7
 
-      - name: Build and publish OpenFOAM
+      - name: OpenFOAMをビルドして保存
         run: '"${GITHUB_WORKSPACE}/scripts/build-openfoam.sh"'
 
-      - name: Upload OpenFOAM build log
+      - name: OpenFOAMビルドログを保存
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -135,12 +135,12 @@ jobs:
           if-no-files-found: warn
           compression-level: 1
 
-      - name: Cleanup OpenFOAM build directory
+      - name: OpenFOAMビルド領域を削除
         if: always()
         run: rm -rf -- "${BUILD_DIR:?}"
 
   provision:
-    name: Provision OpenFOAM runtime
+    name: OpenFOAM実行環境を配備
     needs: [select-build, reuse-build, build-openfoam]
     if: >-
       always() &&
@@ -155,12 +155,12 @@ jobs:
       OPENFOAM_RUNTIME_ROOT: /fast/pj26000080/openfoam-provisioning
 
     steps:
-      - name: Checkout runtime files
+      - name: 実行用ファイルを取得
         uses: actions/checkout@v7
         with:
           submodules: false
 
-      - name: Provision OpenFOAM runtime
+      - name: OpenFOAM実行環境を配備
         id: provision_runtime
         run: |
           install -d -m 2775 "${OPENFOAM_RUNTIME_ROOT}"
@@ -181,17 +181,17 @@ jobs:
           install -m 0644 "${GITHUB_WORKSPACE}/benchmark/workload.json" "${provision_dir}/benchmark/workload.json"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
-          # Keep OpenFOAM headers and wmake: the official coded wall-clock function object compiles on first use.
+          # 公式のcoded wall-clock function objectは初回実行時にコンパイルされるため、OpenFOAMのヘッダーとwmakeを残す。
           tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='./OpenFOAM/applications' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
 
-      - name: Cleanup failed OpenFOAM provisioning
+      - name: 配備失敗時のOpenFOAM実行環境を削除
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
         env:
           PROVISION_DIR: ${{ steps.provision_runtime.outputs.provision_dir }}
         run: rm -rf -- "${PROVISION_DIR:?}"
 
   prepare-case:
-    name: Prepare OpenFOAM case cache
+    name: OpenFOAMケースのキャッシュを準備
     needs: [select-build, provision]
     if: always() && needs.provision.result == 'success'
     runs-on: [self-hosted, genkai]
@@ -203,7 +203,7 @@ jobs:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
-      - name: Stage mesh, validate it, and decompose when uncached
+      - name: 未作成のメッシュを配置・検証・領域分割
         run: |
           experiment_preset='${{ needs.select-build.outputs.experiment_preset }}'
           [[ "${experiment_preset}" =~ ^[a-z0-9-]+$ ]]
@@ -212,7 +212,7 @@ jobs:
           [[ "${prepare_subdomains}" =~ ^[1-9][0-9]*$ ]]
           case "${experiment_preset}" in
             scotch-*) prepare_decomposition_profile=scotch ;;
-            *) echo "unsupported decomposition preset: ${experiment_preset}" >&2; exit 64 ;;
+            *) echo "未対応の領域分割条件です: ${experiment_preset}" >&2; exit 64 ;;
           esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${prepare_root}"
@@ -253,7 +253,7 @@ jobs:
           [[ "${cache_dir}" == "${HOME}/../share/openfoam-case-cache/"* ]]
 
   run:
-    name: Run OpenFOAM
+    name: OpenFOAMを実行
     needs: [select-build, provision, prepare-case]
     if: >-
       always() &&
@@ -267,12 +267,12 @@ jobs:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
-      - name: Checkout control-plane identity
+      - name: 制御処理の識別情報を取得
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Initialize metrics and submit OpenFOAM
+      - name: 計測記録を初期化してOpenFOAMを投入
         id: v2_context
         env:
           METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
@@ -333,10 +333,9 @@ jobs:
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pjm_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
 
-      - name: Wait for OpenFOAM job
+      - name: OpenFOAMジョブの終了を待機
         run: |
-          # The PJM record is durable inside RUN_DIR; follow it only for
-          # scheduler diagnostics while solver stdout/stderr remains combined.
+          # PJM記録はRUN_DIRへ永続化される。ソルバーの標準出力と標準エラーは一つにまとめたまま、スケジューラ診断だけを追跡する。
           tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" &
           stream_pid=$!
           stop_stream() {
@@ -351,13 +350,13 @@ jobs:
           sleep 1
           pjwait "${PJM_JOB_ID}"
           if [[ ! -e "${RUN_DIR}/run-success" ]]; then
-            echo 'OpenFOAM job did not create run-success' >&2
+            echo 'OpenFOAMジョブがrun-successを生成しませんでした' >&2
             tail -n 240 "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" >&2 || true
             tail -n 240 "${RUN_DIR}/logs/solver.log" >&2 || true
             exit 1
           fi
 
-      - name: Publish VTune hotspots to Actions summary
+      - name: VTuneホットスポットをActionsの概要へ掲載
         if: success() && inputs.profile
         run: |
           summary="${RUN_DIR}/profile/raw/vtune-summary/summary.md"
@@ -370,7 +369,7 @@ jobs:
             } >> "${GITHUB_STEP_SUMMARY}"
           fi
 
-      - name: Finalize metrics and package artifacts
+      - name: 計測記録を確定して成果物を梱包
         id: package_v2
         if: always() && steps.v2_context.outputs.pjm_job_id != ''
         run: |
@@ -412,7 +411,7 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
-      - name: Upload fixed v2 artifact set
+      - name: 固定構成のv2成果物を保存
         id: upload_v2
         if: always() && steps.v2_context.outputs.pjm_job_id != ''
         uses: actions/upload-artifact@v7
@@ -425,7 +424,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Upload occDrivAerStaticMesh result
+      - name: occDrivAerStaticMeshの結果を保存
         if: success()
         uses: actions/upload-artifact@v7
         with:
@@ -434,7 +433,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Cleanup provisioned runtime
+      - name: 配備した実行環境を削除
         if: always()
         run: |
           rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}"
@@ -445,7 +444,7 @@ jobs:
           rm -rf -- "${PROVISION_DIR:?}"
 
   archive-artifacts:
-    name: Archive artifacts on home server
+    name: 成果物を自宅サーバーへ保管
     needs: run
     if: always() && needs.run.outputs.artifact_uploaded == 'true'
     runs-on: ubuntu-latest
@@ -455,13 +454,13 @@ jobs:
       contents: read
 
     steps:
-      - name: Download workflow artifacts
+      - name: ワークフロー成果物を取得
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: "openfoam-genkai-*"
 
-      - name: Connect to home server through Tailscale
+      - name: Tailscale経由で自宅サーバーへ接続
         uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -469,7 +468,7 @@ jobs:
           tags: tag:apac-hpc-ai-actions
           ping: tomokazu-ubuntu-server
 
-      - name: Configure SSH
+      - name: SSHを設定
         env:
           ARTIFACT_SERVER_SSH_PRIVATE_KEY: ${{ secrets.ARTIFACT_SERVER_SSH_PRIVATE_KEY }}
         run: |
@@ -478,12 +477,12 @@ jobs:
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
 
-      - name: Copy artifacts to home server
+      - name: 成果物を自宅サーバーへ転送
         run: |
           ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/genkai"
           scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/genkai/"
 
-      - name: Delete copied GitHub artifacts
+      - name: 転送済みのGitHub成果物を削除
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -41,7 +41,7 @@ def test_capture_workload_rejects_changed_member(
     case = tmp_path / "case"
     shutil.copytree(OFFICIAL_CASE, case)
     (case / "system/controlDict").write_text("changed\n")
-    with pytest.raises(ValueError, match="pinned workload identity"):
+    with pytest.raises(ValueError, match="固定済みの課題識別情報"):
         capture_workload(manifest, case, manifest.parents[1] / "source/workload", DEFINITION)
 
 

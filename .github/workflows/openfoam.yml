@@ -8,17 +8,17 @@ on:
   workflow_dispatch:
     inputs:
       run_genkai:
-        description: Run the Genkai workflow
+        description: 玄界用ワークフローを実行する
         required: true
         default: true
         type: boolean
       run_gadi:
-        description: Run the Gadi workflow
+        description: Gadi用ワークフローを実行する
         required: true
         default: false
         type: boolean
       node_count:
-        description: Official experiment node count; the target workflow resolves its rank count
+        description: 公式実験のノード数（MPIランク数は各クラスタ用ワークフローで決定）
         required: true
         default: "1"
         type: choice
@@ -27,7 +27,7 @@ on:
           - "2"
           - "4"
       profile:
-        description: Collect an Intel VTune profile instead of a benchmark
+        description: 通常計測の代わりにIntel VTuneでプロファイルを取得する
         required: true
         default: false
         type: boolean
@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate control plane
+    name: 制御処理を検証
     if: ${{ (github.event_name == 'push' && (contains(github.event.head_commit.message, '[cluster:genkai]') || contains(github.event.head_commit.message, '[cluster:gadi]'))) || (github.event_name == 'workflow_dispatch' && (inputs.run_genkai || inputs.run_gadi)) }}
     uses: ./.github/workflows/validate.yml
 

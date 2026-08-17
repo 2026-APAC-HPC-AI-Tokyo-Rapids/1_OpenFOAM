@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-  echo "usage: $0 BUILD_ARCHIVE BUILD_SIDECAR PROVISION_DIR" >&2
+  echo "使用方法: $0 BUILD_ARCHIVE BUILD_SIDECAR PROVISION_DIR" >&2
   exit 64
 fi
 

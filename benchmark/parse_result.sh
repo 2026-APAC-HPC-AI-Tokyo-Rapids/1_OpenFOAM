@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 9 ]]; then
-  echo "usage: $0 SOLVER_LOG CHECK_MESH_LOG RANKS NODES ITERATIONS EXPECTED_CELLS RELEASE WORKLOAD_ID DISTRIBUTION" >&2
+  echo "使用方法: $0 SOLVER_LOG CHECK_MESH_LOG RANKS NODES ITERATIONS EXPECTED_CELLS RELEASE WORKLOAD_ID DISTRIBUTION" >&2
   exit 64
 fi
 solver_log=$1
@@ -30,7 +30,7 @@ test "$(grep -Ec '^Time = [0-9]+$' "${solver_log}")" = "${iterations}"
 grep -qx "Time = ${iterations}" "${solver_log}"
 test "$(grep -cx End "${solver_log}")" = 1
 if grep -Eqi 'FOAM FATAL|segmentation fault' "${solver_log}" || grep -E '^(Time = |ExecutionTime|.*Solving for |[[:space:]]*(Average|Standard deviation) of wall-clock time per time step)' "${solver_log}" | grep -Eqi '(^|[^[:alpha:]])nan([^[:alpha:]]|$)|(^|[^[:alpha:]])inf(inity)?([^[:alpha:]]|$)'; then
-  echo "solver log contains a fatal or non-finite result" >&2
+  echo "ソルバーログに致命的エラーまたは有限でない結果が含まれています" >&2
   exit 1
 fi
 

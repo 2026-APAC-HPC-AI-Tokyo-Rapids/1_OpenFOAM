@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -ne 5 ]]; then
-  echo "usage: $0 ARCHIVE_DIR CACHE_IDENTITY ITERATIONS TARGET_CASE RUNTIME_ROOT" >&2
+  echo "使用方法: $0 ARCHIVE_DIR CACHE_IDENTITY ITERATIONS TARGET_CASE RUNTIME_ROOT" >&2
   exit 64
 fi
 

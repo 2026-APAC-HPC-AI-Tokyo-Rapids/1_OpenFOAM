@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 1 || ! $1 =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]; then
-  echo "usage: $0 PBS_JOB_ID" >&2
+  echo "使用方法: $0 PBS_JOB_ID" >&2
   exit 64
 fi
 
@@ -19,6 +19,6 @@ do
     [[ "${exit_status}" -eq 0 ]]
     exit
   fi
-  case "${state}" in Q|H|R|B|E) ;; *) echo "unsupported PBS job state: ${state}" >&2; exit 65 ;; esac
+  case "${state}" in Q|H|R|B|E) ;; *) echo "未対応のPBSジョブ状態です: ${state}" >&2; exit 65 ;; esac
   sleep 5
 done

@@ -12,10 +12,10 @@ set -euo pipefail
 module purge
 module load intel/2025.1.3 impi
 
-# The login environment may prepend a user-built GCC containing cpp but no
-# executable cc1.  Coded function objects must use Genkai's complete system
-# GCC support tools while OpenFOAM itself continues to use the loaded Intel
-# compiler and MPI toolchain.
+# ログイン環境では、cppだけを含みcc1を実行できない利用者導入のGCCがPATHの
+# 先頭に置かれる場合がある。coded function objectには玄界のOSが提供する
+# 一式そろったGCC補助ツールを使い、OpenFOAM本体には読み込んだIntel
+# コンパイラとMPIを引き続き使う。
 user_local_bin="${HOME}/.local/bin:"
 export PATH="${PATH//${user_local_bin}/}"
 

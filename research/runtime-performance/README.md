@@ -1,207 +1,152 @@
-# OpenFOAM motorBike runtime profiling
+# OpenFOAM motorBikeの実行性能調査
 
-> Historical record: this campaign predates the Issue #18 migration. The active workload is the pinned v2512 `occDrivAerStaticMesh` task in `benchmark/workload.json`; the motorBike results below are not comparable to it.
+> 過去の記録: この調査はIssue #18の移行前に行った。現在の課題は`benchmark/workload.json`で固定したv2512の`occDrivAerStaticMesh`であり、以下のmotorBikeの結果とは比較できない。
 
-## Purpose
+## 目的
 
-This document records runtime profiling and launch-option tuning for the
-OpenFOAM v2606 `simpleFoam` motorBike test on Genkai. The optimization scope is
-limited to MPI layout, MPI/OpenFOAM runtime switches, and profiler launch
-options. No OpenFOAM source optimization is included.
+この文書は、玄界上でOpenFOAM v2606の`simpleFoam`を使ったmotorBike試験について、実行時プロファイルと起動設定の調整結果を記録する。改善対象はMPI配置、MPIとOpenFOAMの実行時設定、プロファイラの起動設定に限定し、OpenFOAMのソース自体は変更しない。
 
-Historical APS and VTune results are kept outside GitHub artifacts:
+過去のAPSとVTuneの完全な結果はGitHubの成果物とは別に保存している。
 
 ```text
 ~/openfoam-profile/<github-run-id>-<pjm-job-id>/
 ```
 
-New VTune-only profile runs use the purpose-specific location:
+新しいVTune専用プロファイルは、用途別の次の場所へ保存する。
 
 ```text
 /home/pj26000080/share/openfoam-vtune/<run-id>-<pjm-job-id>/rank-<profile-rank>/
 ```
 
-The shared profile root and every per-run directory have mode `2770`. At the time of
-this report the profile tree occupies approximately 3.0 GiB.
+共有プロファイル領域と実行ごとのディレクトリの権限は`2770`である。この記録を作成した時点で、プロファイル全体は約3.0 GiBを使用していた。
 
-## Test configuration
+## 試験条件
 
-- OpenFOAM v2606, `simpleFoam`, Intel oneAPI 2025.1.3 and Intel MPI 2021.15.
-- The current default is one Genkai CPU node with 120 MPI ranks. The earlier
-  scaling and profiling campaign below used up to two nodes.
-- Each node: 2 sockets, 60 physical cores/socket, 120 physical cores and 240
-  logical CPUs.
-- Inter-node adapter reported by APS: ConnectX-7.
-- Decomposition: Scotch.
-- Simulation `endTime=3000`, one result write at `Time=3000`.
-- Final mesh: 356,630 cells, 1,116,860 faces and 408,877 points.
-- The mesh is very small for 240 MPI ranks:
-  - 240 ranks: approximately 1,486 cells/rank.
-  - 120 ranks: approximately 2,972 cells/rank.
-  - 60 ranks: approximately 5,944 cells/rank.
+- OpenFOAM v2606、`simpleFoam`、Intel oneAPI 2025.1.3、Intel MPI 2021.15。
+- 現在の既定値は玄界のCPUノード1台、MPI 120ランクである。以下の初期の拡張性調査とプロファイルでは最大2ノードを使用した。
+- 各ノードは60物理コアのソケット2基、計120物理コア、240論理CPUを備える。
+- APSが報告したノード間接続装置はConnectX-7。
+- 領域分割はScotch。
+- 計算の`endTime=3000`で、`Time=3000`に結果を1回書き出す。
+- 最終メッシュは356,630セル、1,116,860面、408,877点。
+- 240 MPIランクに対してメッシュが非常に小さい。
+  - 240ランク: 1ランクあたり約1,486セル。
+  - 120ランク: 1ランクあたり約2,972セル。
+  - 60ランク: 1ランクあたり約5,944セル。
 
-The mesh is regenerated for every Actions run. Solver comparisons use the same
-case and simulation time, but wall times should still be interpreted with the
-normal run-to-run noise of a shared HPC system.
+メッシュはActionsの実行ごとに再生成した。ソルバー比較では同じケースと計算時間を使ったが、共有HPCシステムに通常生じる実行間の揺らぎを考慮して経過時間を解釈する必要がある。
 
-## One-node 120-rank MPI tuning
+## 1ノード120ランクでのMPI調整
 
-The current production constraint is one node and 120 MPI ranks, one rank per
-physical core. Intel MPI 2021.15 did not automatically reduce this job to its
-shared-memory-only transport: the baseline debug log reported the `mlx`
-libfabric provider even though all ranks were on one node. Explicitly setting
-the following in `scripts/run-openfoam.pjm` avoids that unnecessary provider:
+現在の運用条件は1ノード120 MPIランク、物理コアあたり1ランクである。Intel MPI 2021.15は、このジョブを自動的に共有メモリ通信だけへ切り替えなかった。基準条件の診断ログでは、全ランクが1ノード上にあっても`mlx` libfabric提供機能が選ばれていた。`scripts/run-openfoam.pjm`で次を明示すると、不要な提供機能を避けられる。
 
 ```bash
 export I_MPI_FABRICS=shm
 ```
 
-The settings were changed and pushed as separate commits, so every row is a
-separate Actions and PJM job. `Launcher wall` includes MPI initialization and
-finalization as well as the solver.
+各設定は別々のコミットとして変更・プッシュしたため、表の各行は独立したActions実行とPJMジョブである。「起動全体」にはソルバーだけでなくMPIの初期化と終了も含む。
 
-| Run | MPI setting | Solver clock | Launcher wall | Result |
-|---:|---|---:|---:|---|
-| #141 | Intel MPI defaults | 111 s | 120.81 s | Baseline; debug output selected `mlx` |
-| #142 | `I_MPI_FABRICS=shm` | **101 s** | **104.45 s** | Fastest SHM-only trial |
-| #143 | `I_MPI_PIN_DOMAIN=core`, `I_MPI_PIN_ORDER=scatter` | 105 s | 114.60 s | Same effective CPU list as the default |
-| #144 | `I_MPI_PIN_DOMAIN=core`, `I_MPI_PIN_ORDER=compact` | 106 s | 115.96 s | Same effective CPU list as the default |
-| #145 | `I_MPI_ADJUST_ALLREDUCE=1` (recursive doubling) | Did not finish | Did not finish | Reached only Time=943 before the 25-minute PJM limit |
-| #146 | `I_MPI_ADJUST_ALLREDUCE=9` (Knomial) | 112 s | 120.21 s | Slower than automatic selection |
-| #147 | `I_MPI_ADJUST_ALLREDUCE=11` (SHM Knomial preset) | 106 s | 116.53 s | Does not force the transport to SHM |
-| #148 | Intel MPI collective autotuning | 107 s | 115.93 s | Autotuning overhead and result are worse than SHM |
-| #149 | `I_MPI_FABRICS=shm`, repeat | 107 s | 109.30 s | Confirms the benefit with normal run-to-run variation |
-| #150 | SHM plus Knomial Allreduce | 103 s | 105.43 s | Within noise of SHM alone; extra forcing is not justified |
-| #151 | SHM-only solver configuration, debug disabled | **101 s** | **103.46 s** | Successful solver verification |
-| #152 | SHM applied before every MPI phase | **101 s** | **104.06 s** | Final successful end-to-end verification |
+| 実行 | MPI設定 | ソルバー時間 | 起動全体 | 結果 |
+| --- | --- | ---: | ---: | --- |
+| #141 | Intel MPI既定値 | 111 s | 120.81 s | 基準条件。診断出力で`mlx`を選択 |
+| #142 | `I_MPI_FABRICS=shm` | **101 s** | **104.45 s** | 共有メモリ通信だけを使った試行で最速 |
+| #143 | `I_MPI_PIN_DOMAIN=core`、`I_MPI_PIN_ORDER=scatter` | 105 s | 114.60 s | 実効CPU一覧は既定値と同じ |
+| #144 | `I_MPI_PIN_DOMAIN=core`、`I_MPI_PIN_ORDER=compact` | 106 s | 115.96 s | 実効CPU一覧は既定値と同じ |
+| #145 | `I_MPI_ADJUST_ALLREDUCE=1`（再帰的倍加） | 未完了 | 未完了 | PJMの25分上限までにTime=943までしか到達しなかった |
+| #146 | `I_MPI_ADJUST_ALLREDUCE=9`（Knomial） | 112 s | 120.21 s | 自動選択より遅い |
+| #147 | `I_MPI_ADJUST_ALLREDUCE=11`（共有メモリ向けKnomial） | 106 s | 116.53 s | 通信方式を共有メモリだけには限定しない |
+| #148 | Intel MPI集合通信の自動調整 | 107 s | 115.93 s | 調整負荷と結果が共有メモリだけの条件より悪い |
+| #149 | `I_MPI_FABRICS=shm`の再試行 | 107 s | 109.30 s | 通常の実行間変動を含めても効果を確認 |
+| #150 | 共有メモリ通信とKnomial Allreduce | 103 s | 105.43 s | 共有メモリ通信だけの条件との差は雑音範囲で、追加指定の根拠はない |
+| #151 | 共有メモリ通信専用のソルバー設定、診断無効 | **101 s** | **103.46 s** | ソルバーの検証に成功 |
+| #152 | すべてのMPI処理へ共有メモリ通信を適用 | **101 s** | **104.06 s** | 最終的な一連処理の検証に成功 |
 
-The baseline pinned ranks 0-119 to logical CPUs 0-119. Explicit `core` pinning
-produced the same list, so the small timing differences between pinning orders
-are noise rather than a different placement. The useful optimization is
-transport selection, not pinning.
+基準条件ではランク0--119を論理CPU 0--119へ固定していた。明示的な`core`固定でも同じ一覧になったため、配置順序による小さな時間差は配置の違いではなく雑音である。有効だった改善は固定方法ではなく通信方式の選択である。
 
-Moving the SHM setting before all MPI preprocessing commands in #152 reduced
-the Actions log-stream interval from 201 seconds in baseline #141 to 165
-seconds. Earlier SHM runs that applied the setting only to `simpleFoam` took
-185-189 seconds over the same interval. The final placement therefore benefits
-`snappyHexMesh`, `topoSet`, and `potentialFoam` as well as the main solver.
+#152では、共有メモリ設定をすべてのMPI前処理より前へ移したことで、Actionsのログ追跡区間が基準条件#141の201秒から165秒へ短縮した。設定を`simpleFoam`だけへ適用した以前の試行は、同じ区間に185--189秒かかった。この配置により、主ソルバーだけでなく`snappyHexMesh`、`topoSet`、`potentialFoam`も改善した。
 
-For this job, forcing one Allreduce algorithm globally is counterproductive.
-OpenFOAM calls Allreduce with different message sizes and contexts, so Intel
-MPI's size-dependent automatic selection should remain enabled. Recursive
-doubling was especially unsuitable and did not finish within the PJM time
-limit. The final configuration therefore sets only `I_MPI_FABRICS=shm`; it
-leaves pinning, collective algorithm selection, and collective autotuning at
-their defaults.
+このジョブではAllreduce方式を一律に固定すると逆効果になる。OpenFOAMは異なるメッセージ容量と状況でAllreduceを呼ぶため、Intel MPIの容量別自動選択を維持するべきである。特に再帰的倍加は不適切で、PJMの上限時間内に完了しなかった。最終設定は`I_MPI_FABRICS=shm`だけを指定し、プロセス固定、集合通信方式、自動調整は既定値のままとした。
 
-## Solver timing results
+## ソルバー時間の結果
 
-`Solver clock` is the final OpenFOAM `ClockTime`. `Launcher wall` is
-`/usr/bin/time` around `mpirun`, so it also includes MPI initialization and
-finalization. Instrumented APS/VTune runs are excluded from direct timing
-comparisons.
+「ソルバー時間」はOpenFOAMが最後に出力する`ClockTime`である。「起動全体」は`mpirun`を`/usr/bin/time`で囲んだ値であり、MPIの初期化と終了も含む。APSやVTuneを使った計測実行は直接比較から除外した。
 
-| Run | Nodes | MPI ranks | Setting | Solver clock | Launcher wall | Result |
-|---:|---:|---:|---|---:|---:|---|
-| #117 | 1 | 120 | Default | 107 s | - | Baseline from the earlier test |
-| #122 | 2 | 240 | Default | 105 s | 127.04 s | Two nodes give almost no benefit when the rank count is doubled |
-| #123 | 2 | 240 | `allcores:map=scatter` | 104 s | 125.71 s | About 1 s faster; within normal noise |
-| #124 | 2 | 240 | `allcores:map=bunch` | 107 s | 128.53 s | Slower than default |
-| #125 | 2 | 120 | Default, 60 ranks/node | **56 s** | **63.31 s** | Best completed rank-count result |
-| #126 | 2 | 60 | Default, 30 ranks/node | 76 s | 79.55 s | Too little compute parallelism |
-| #129 | 2 | 240 | `topoControl=16` | 107 s | 127.30 s | OpenFOAM hierarchical reduction is slower |
-| #130 | 2 | 240 | `nPollProcInterfaces=-1` | 114 s | 136.04 s | Readiness polling is about 9% slower |
-| #131 | 2 | 240 | Intel MPI collective autotuner | 103 s | 128.89 s | About 2 s faster, but the gain is small |
-| #134 | 2 | 120 | Intel MPI collective autotuner | 58 s | 64.33 s | Slower than the 120-rank default |
-| #135 | 2 | 90 | Default | 68 s | 73.72 s | Too little compute parallelism |
-| #136 | 2 | 150 | Default | 55 s | 65.31 s | Solver is close to 120 ranks, but launch overhead is higher |
-| #137 | 2 | 180 | Default | 57 s | 71.72 s | Communication overhead is rising |
-| #138 | 2 | 135 | Default | 54 s | 64.88 s | Fast solver, but slower launch-to-finish than 120 ranks |
-| #139 | 2 | 165 | Default | 53 s | 68.10 s | Fast solver, but significantly higher MPI overhead |
-| #140 | 2 | 120 | Final default verification | 56 s | 63.31 s | Reproduced #125 exactly |
+| 実行 | ノード数 | MPIランク数 | 設定 | ソルバー時間 | 起動全体 | 結果 |
+| --- | ---: | ---: | --- | ---: | ---: | --- |
+| #117 | 1 | 120 | 既定値 | 107 s | - | 以前の試験による基準値 |
+| #122 | 2 | 240 | 既定値 | 105 s | 127.04 s | ランク数も倍にすると2ノードの効果はほぼない |
+| #123 | 2 | 240 | `allcores:map=scatter` | 104 s | 125.71 s | 約1秒短縮したが通常の雑音範囲 |
+| #124 | 2 | 240 | `allcores:map=bunch` | 107 s | 128.53 s | 既定値より遅い |
+| #125 | 2 | 120 | 既定値、各ノード60ランク | **56 s** | **63.31 s** | 完了したランク数比較で最良 |
+| #126 | 2 | 60 | 既定値、各ノード30ランク | 76 s | 79.55 s | 計算並列度が不足 |
+| #129 | 2 | 240 | `topoControl=16` | 107 s | 127.30 s | OpenFOAMの階層型縮約が遅い |
+| #130 | 2 | 240 | `nPollProcInterfaces=-1` | 114 s | 136.04 s | 完了済みインターフェースの即時処理は約9%遅い |
+| #131 | 2 | 240 | Intel MPI集合通信の自動調整 | 103 s | 128.89 s | 約2秒短縮したが効果は小さい |
+| #134 | 2 | 120 | Intel MPI集合通信の自動調整 | 58 s | 64.33 s | 120ランクの既定値より遅い |
+| #135 | 2 | 90 | 既定値 | 68 s | 73.72 s | 計算並列度が不足 |
+| #136 | 2 | 150 | 既定値 | 55 s | 65.31 s | ソルバーは120ランクに近いが起動負荷が高い |
+| #137 | 2 | 180 | 既定値 | 57 s | 71.72 s | 通信負荷が増えている |
+| #138 | 2 | 135 | 既定値 | 54 s | 64.88 s | ソルバーは速いが開始から終了までは120ランクより遅い |
+| #139 | 2 | 165 | 既定値 | 53 s | 68.10 s | ソルバーは速いがMPI負荷が大きい |
+| #140 | 2 | 120 | 最終的な既定値の検証 | 56 s | 63.31 s | #125を正確に再現 |
 
-The major result is not a pinning tweak: reducing the two-node job from 240 to
-120 total ranks cuts solver time from 105 to 56 seconds, about 47%. Reducing
-further to 60 ranks raises it to 76 seconds. Higher counts down to 165 can
-slightly reduce the solver-only time, but MPI initialization/finalization grows
-faster. The 120-rank run has the lowest measured launcher wall time and the
-joint-lowest measured end-to-end PJM time. It is therefore the best operational
-default.
+主要な結果は固定方法の微調整ではない。2ノードジョブを240ランクから合計120ランクへ減らすと、ソルバー時間が105秒から56秒へ約47%短縮した。さらに60ランクへ減らすと76秒へ増えた。165ランク程度まではソルバーだけの時間を少し短縮できるが、MPIの初期化と終了がそれ以上に増える。120ランクは測定した起動全体が最短で、PJMの一連処理時間も同率最短だったため、運用上の最良な既定値である。
 
-The Actions log-stream step, which closely covers the complete PJM execution,
-measured 272 seconds at 240 ranks, 133 seconds at 120 ranks, 133 seconds at 60
-ranks, 138 seconds at 90 ranks, 154 seconds at both 135 and 150 ranks, 171
-seconds at 165 ranks, and 177 seconds at 180 ranks. The 60-rank run only ties
-120 ranks end-to-end because its slower solver is offset by cheaper startup and
-preprocessing; 120 ranks provides much higher solver throughput without
-increasing total job time.
+PJM全体に近い範囲を測るActionsのログ追跡処理は、240ランクで272秒、120ランクで133秒、60ランクで133秒、90ランクで138秒、135と150ランクで154秒、165ランクで171秒、180ランクで177秒だった。60ランクが開始から終了まで120ランクと同時間なのは、ソルバーが遅い一方で起動と前処理が軽いためである。120ランクはジョブ全体の時間を増やさず、ソルバーの処理量を大きくできる。
 
-## APS: why 240 ranks are slow
+## APSによる240ランク低速化の分析
 
-The full-rank APS runs are #119 (240 ranks) and #133 (120 ranks). Raw data:
+全ランクをAPSで計測した実行は#119（240ランク）と#133（120ランク）である。生データは次にある。
 
 ```text
-~/openfoam-profile/30005026547-6264943/  # 240 ranks
-~/openfoam-profile/30007072403-6265018/  # 120 ranks
+~/openfoam-profile/30005026547-6264943/  # 240ランク
+~/openfoam-profile/30007072403-6265018/  # 120ランク
 ```
 
-| APS metric | 240 ranks | 120 ranks |
-|---|---:|---:|
-| Instrumented elapsed time | 179.02 s | 86.62 s |
-| Average MPI time | 151.27 s (84.50%) | 51.80 s (59.86%) |
-| MPI imbalance | 44.30 s (24.75%) | 15.57 s (18.00%) |
-| `MPI_Allreduce` average | 56.04 s | 18.42 s |
-| `MPI_Waitall` average | 59.06 s | 12.38 s |
-| Inter-node transfer, both directions | 289,023.6 MB | 105,093.1 MB |
-| Average DRAM bandwidth | 20.66 GB/s | 29.98 GB/s |
-| DRAM bandwidth bound | 14.20% | 46.80% |
-| DP vectorization | 23.55% | 20.20% |
+| APSの指標 | 240ランク | 120ランク |
+| --- | ---: | ---: |
+| 計測対象の経過時間 | 179.02 s | 86.62 s |
+| 平均MPI時間 | 151.27 s（84.50%） | 51.80 s（59.86%） |
+| MPI不均衡 | 44.30 s（24.75%） | 15.57 s（18.00%） |
+| `MPI_Allreduce`平均 | 56.04 s | 18.42 s |
+| `MPI_Waitall`平均 | 59.06 s | 12.38 s |
+| 双方向のノード間転送量 | 289,023.6 MB | 105,093.1 MB |
+| 平均DRAM帯域 | 20.66 GB/s | 29.98 GB/s |
+| DRAM帯域律速 | 14.20% | 46.80% |
+| 倍精度ベクトル化率 | 23.55% | 20.20% |
 
-At 240 ranks APS classifies the application as MPI-bound. The aggregate
-function statistics include approximately:
+APSは240ランクのアプリケーションをMPI律速と判定した。全ランク合計の関数統計はおよそ次のとおりである。
 
-- 210.6 million `MPI_Allreduce` calls.
-- 189.3 million `MPI_Waitall` calls.
-- 2.22 billion `MPI_Isend` calls.
-- 289 GB transferred between the two nodes.
+- `MPI_Allreduce`が2億1,060万回。
+- `MPI_Waitall`が1億8,930万回。
+- `MPI_Isend`が22億2,000万回。
+- 2ノード間で289 GBを転送。
 
-At 120 ranks the point-to-point call counts are approximately halved and
-inter-node traffic falls by about 64%. Aggregate MPI time falls much more
-sharply. Once MPI pressure is reduced, DRAM bandwidth becomes a meaningful
-secondary constraint.
+120ランクでは1対1通信の呼び出し回数がほぼ半減し、ノード間通信量は約64%減少した。MPI時間の合計はそれ以上に大きく減った。MPI負荷を減らした後は、DRAM帯域が意味のある二次的な制約になる。
 
-The corresponding 120-rank aggregate statistics include approximately:
+120ランクの全ランク合計値はおよそ次のとおりである。
 
-- 96.0 million `MPI_Allreduce` calls.
-- 99.6 million `MPI_Waitall` calls.
-- 1.13 billion `MPI_Isend` calls.
-- 105 GB transferred between the two nodes.
+- `MPI_Allreduce`が9,600万回。
+- `MPI_Waitall`が9,960万回。
+- `MPI_Isend`が11億3,000万回。
+- 2ノード間で105 GBを転送。
 
-Rank 0 is atypical. In the 240-rank APS run its MPI fraction is about 51%,
-whereas most ranks spend roughly 83-87% in MPI. This makes rank 0 a useful VTune
-target for finding actual OpenFOAM compute hotspots, while the other ranks
-mostly demonstrate communication and load-imbalance cost.
+ランク0は典型的ではない。240ランクのAPS実行では、ランク0のMPI比率が約51%なのに対し、大半のランクは約83--87%をMPIに費やした。このためランク0はOpenFOAM本体の計算上のホットスポットを探すVTune対象として有用だが、ほかのランクは主に通信と負荷不均衡の費用を示す。
 
-APS emitted a warning because one statistics stream per node was missing:
-ranks 4 and 195 in the 240-rank run, and the analogous two records in the
-120-rank run. APS still recognized the correct communicator sizes and produced
-consistent high-level results, but exact aggregate call counts should be
-treated as slightly underestimated.
+APSは、ノードごとの統計情報が一つ欠けているとして警告を出した。240ランク実行ではランク4と195、120ランク実行でも同様に2件の記録が欠けた。APSは正しい通信集団の大きさを認識し、上位の結果も一貫していたが、合計呼び出し回数はわずかに過小評価されているものとして扱う。
 
-## VTune hotspots
+## VTuneホットスポット
 
-The most useful optimized-layout profile is #132: two nodes, 120 ranks, VTune
-Hotspots on rank 0.
+改善後の配置で最も有用なプロファイルは#132で、2ノード120ランクのランク0をVTune Hotspotsで計測した。
 
 ```text
 ~/openfoam-profile/30007051832-6265016/hotspots.<host>/
 ```
 
-VTune measured 62.06 seconds elapsed and 59.26 seconds CPU time on the selected
-rank. The leading hotspots are:
+VTuneが測定した選択ランクの経過時間は62.06秒、CPU時間は59.26秒だった。主なホットスポットは次のとおりである。
 
-| Function | Module | CPU time | Share |
-|---|---|---:|---:|
+| 関数 | モジュール | CPU時間 | 割合 |
+| --- | --- | ---: | ---: |
 | `PMPI_Allreduce` | Intel MPI | 11.36 s | 19.2% |
 | `PMPI_Waitall` | Intel MPI | 5.57 s | 9.4% |
 | `Foam::GaussSeidelSmoother::smooth` | `libOpenFOAM` | 3.54 s | 6.0% |
@@ -213,52 +158,22 @@ rank. The leading hotspots are:
 | `linearUpwindV<...>::correction` | `libfiniteVolume` | 0.78 s | 1.3% |
 | `Foam::fv::gaussGrad<double>::gradf` | `libfiniteVolume` | 0.75 s | 1.3% |
 
-The 240-rank rank-0 profile showed still stronger MPI dominance:
-`PMPI_Allreduce` 21.9%, `PMPI_Waitall` 11.3%, and `internal_Isend` 8.3%.
-Reducing the rank count lowers all three, while the matrix smoother and
-gradient work become more visible.
+240ランクのランク0ではMPIの比率がさらに大きく、`PMPI_Allreduce`が21.9%、`PMPI_Waitall`が11.3%、`internal_Isend`が8.3%だった。ランク数を減らすと3つとも低下し、行列平滑化と勾配計算が相対的に目立つようになった。
 
-The HPC Characterization run agrees with APS that vectorization is low
-(roughly 20-23% of DP operations), but floating point work is a small fraction
-of total uOps and the full 240-rank run is not memory-bandwidth saturated.
-Source-level vectorization is therefore not the first optimization target.
-At 120 ranks, however, APS reports higher DRAM bandwidth pressure, so memory
-locality is the next likely limit after MPI is reduced.
+HPC Characterizationの結果もAPSと同様に、倍精度演算のベクトル化率が約20--23%と低いことを示した。ただし浮動小数点演算は全uOpsの一部にすぎず、240ランクの実行はメモリ帯域上限に達していない。そのため、ソースレベルのベクトル化を最初の改善対象にはしない。一方、120ランクではAPSがDRAM帯域負荷の増加を示しており、MPIを減らした次にメモリ局所性が制約となる可能性が高い。
 
-## Runtime tuning guidance
+## 実行時設定の指針
 
-1. When restricted to one node, use 120 MPI ranks and set
-   `I_MPI_FABRICS=shm`. Intel MPI 2021.15 otherwise selected its `mlx`
-   libfabric provider in the measured job. In the earlier unconstrained
-   comparison, two nodes with 120 total ranks were still faster, but that is
-   outside the current one-node constraint.
-2. Keep Intel MPI's default process placement unless repeated measurements show
-   a stable scatter advantage. `scatter` improved only about 1 second and
-   `bunch` was slower.
-3. Keep OpenFOAM's default `topoControl=0`. Intel MPI already performs
-   topology-aware collectives, and forcing OpenFOAM's three-stage hierarchical
-   reduction was slower.
-4. Keep `nPollProcInterfaces=0`. Dispatching completed interfaces with `-1`
-   slowed this workload by about 9%.
-5. Intel MPI autotuning is worth testing only after the rank count is correct.
-   It improved the poor 240-rank layout by about 2 seconds, but slowed the
-   120-rank layout from 56 to 58 seconds. Tuning files are topology-specific
-   and should only be reused with the same node count, ranks per node, fabric
-   and MPI version.
-6. For a new case, begin with a rank-count sweep based on cells/rank, then use
-   APS to quantify MPI time and imbalance. Run VTune on the most compute-heavy
-   rank after identifying it from APS.
-7. Store full VTune result directories in `/home/pj26000080/share/openfoam-vtune`; publish validated
-   text/CSV summaries through the profile artifact and metrics paths.
-8. If source changes become allowed later, investigate the Gauss-Seidel
-   smoother, limited gradient calculation, `lduMatrix` residual/multiply, and
-   the very high frequency of global reductions. The current work does not
-   modify these algorithms.
+1. 1ノードに限定する場合はMPI 120ランクで`I_MPI_FABRICS=shm`を指定する。指定しない場合、計測したIntel MPI 2021.15は`mlx` libfabric提供機能を選択した。以前の制約なし比較では合計120ランクの2ノードがさらに速かったが、現在の1ノード条件の範囲外である。
+2. 反復測定で安定したscatterの優位性が出ない限り、Intel MPIの既定のプロセス配置を使う。`scatter`の改善は約1秒だけで、`bunch`は遅かった。
+3. OpenFOAMの`topoControl=0`を維持する。Intel MPIがトポロジーを考慮した集合通信を行っており、OpenFOAMの3段階階層型縮約を強制すると遅くなった。
+4. `nPollProcInterfaces=0`を維持する。`-1`で完了済みインターフェースを即時処理すると、この課題は約9%遅くなった。
+5. Intel MPIの自動調整は、適切なランク数を決めた後だけ試す。性能の悪い240ランク配置は約2秒改善したが、120ランク配置は56秒から58秒へ悪化した。調整ファイルは構成依存であり、ノード数、ノードあたりランク数、通信方式、MPI版が同じ場合だけ再利用する。
+6. 新しいケースでは、1ランクあたりセル数を基準にランク数を振り、APSでMPI時間と不均衡を定量化する。その後、APSで計算時間が最も大きいランクを特定してVTuneを実行する。
+7. VTuneの完全な結果は`/home/pj26000080/share/openfoam-vtune`へ保存し、検証済みのテキストやCSV要約をプロファイル成果物と計測値経路へ公開する。
+8. 将来ソース変更が許可された場合は、Gauss-Seidel平滑化、制限付き勾配計算、`lduMatrix`の残差と積、非常に高頻度の大域縮約を調査する。現在の作業ではこれらの算法を変更しない。
 
-Intel documents APS through `I_MPI_STATS`/`aps`, selective MPI-rank profiling
-through `mpirun -gtool`, process pinning with
-`I_MPI_PIN_PROCESSOR_LIST`, and collective autotuning with
-`I_MPI_TUNING_MODE=auto`:
+Intelは、`I_MPI_STATS`または`aps`によるAPS、`mpirun -gtool`による特定MPIランクのプロファイル、`I_MPI_PIN_PROCESSOR_LIST`によるプロセス固定、`I_MPI_TUNING_MODE=auto`による集合通信の自動調整を次の資料で説明している。
 
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-15/communication-fabrics-control.html>
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-16/other-environment-variables.html>
@@ -266,18 +181,8 @@ through `mpirun -gtool`, process pinning with
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-12/environment-variables-for-process-pinning.html>
 - <https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-11/autotuning.html>
 
-## Profiling implementation
+## プロファイル実装
 
-Push-triggered runs are always benchmarks and launch the solver without an
-external profiler. Manual workflow dispatches select either `bench` or
-`profile`; profile runs attach VTune hotspots collection to the MPI rank chosen
-by the `profile_rank` workflow input (default 0) for a bounded window without
-changing the source or build archive. Rank 0 remains useful for compute-hotspot
-discovery, but representative communication conclusions require additional
-interior and cross-node-boundary ranks because APS already showed rank 0 is
-atypical.
+プッシュ起動は常に通常計測とし、外部プロファイラを付けずにソルバーを起動する。手動実行では`bench`または`profile`を選ぶ。プロファイル実行はソースやビルド成果物を変更せず、`profile_rank`入力で選択したMPIランク（既定値は0）へ一定時間だけVTuneのホットスポット収集を接続する。ランク0は計算上のホットスポット発見に引き続き有用だが、APSがランク0を非典型と示しているため、代表的な通信の結論には内部ランクやノード境界ランクの追加計測が必要である。
 
-Full VTune results remain under `/home/pj26000080/share/openfoam-vtune`. The validated report,
-collection status, JSON fact, and bounded Actions summary are retained in the
-profile artifact set and experiment-metrics stream. VTune executable identity
-and version are owned once by the build-provision observation.
+VTuneの完全な結果は`/home/pj26000080/share/openfoam-vtune`以下に保持する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。

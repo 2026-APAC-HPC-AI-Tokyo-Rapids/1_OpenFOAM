@@ -19,8 +19,8 @@ if [[ $# -eq 3 && $1 == verify ]]; then
 fi
 
 if [[ $# -ne 4 || $1 != create ]]; then
-  echo "usage: $0 verify ARCHIVE_DIR CACHE_IDENTITY" >&2
-  echo "       $0 create EXPANDED_CACHE_DIR ARCHIVE_DIR CACHE_IDENTITY" >&2
+  echo "使用方法: $0 verify ARCHIVE_DIR CACHE_IDENTITY" >&2
+  echo "          $0 create EXPANDED_CACHE_DIR ARCHIVE_DIR CACHE_IDENTITY" >&2
   exit 64
 fi
 

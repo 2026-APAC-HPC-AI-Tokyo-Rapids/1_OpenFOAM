@@ -1,2 +1,2 @@
-# Preserve the byte-exact upstream case; its published files contain intentional whitespace.
+# 公開元のケースをバイト単位で維持する。配布ファイルには意図的な空白が含まれる。
 benchmark/occDrivAerStaticMesh/** whitespace=-trailing-space,-blank-at-eof

@@ -6,15 +6,15 @@
 
 | 項目 | 設定 |
 |---|---|
-| OpenFOAM | OpenFOAM.com v2512、`OpenFOAM-v2512` tag |
+| OpenFOAM | OpenFOAM.com v2512、`OpenFOAM-v2512`タグ |
 | 追加依存 | Scotch 6.1.0 |
-| compiler / MPI | `intel/2025.1.3`モジュールのIntel C++ 2025.1.1、Intel MPI 2021.15 |
-| Make preprocessor | compute nodeでも実行できるgcc-toolset-11の`/opt/rh/gcc-toolset-11/root/usr/bin/cpp` |
-| OpenFOAM 設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、DP、32-bit label |
-| build対象 | `simpleFoam`、公式前処理・検証utility、計測probe |
-| compiler cache | ccache。CMake の C/C++ launcher にも使用 |
+| コンパイラ / MPI | `intel/2025.1.3`モジュールのIntel C++ 2025.1.1、Intel MPI 2021.15 |
+| Makeプリプロセッサ | 計算ノードでも実行できるgcc-toolset-11の`/opt/rh/gcc-toolset-11/root/usr/bin/cpp` |
+| OpenFOAM設定 | `WM_COMPILER=Icx`、`WM_MPLIB=INTELMPI`、倍精度、32ビットラベル |
+| ビルド対象 | `simpleFoam`、公式の前処理・検証用補助処理、計測ツール |
+| コンパイラキャッシュ | ccache。CMakeのC/C++起動処理にも使用 |
 
-Org管理のsource repositoryは読み取り専用で扱い、OpenFOAMは`OpenFOAM-v2512`、ThirdPartyは`v2512`をdetached checkoutする。公式sourceへ計測hookを追加せず、benchは無改変のsolverを使う。profileは実行時に選択したrankへVTuneを付加する。
+組織管理のソースリポジトリは読み取り専用で扱い、OpenFOAMは`OpenFOAM-v2512`、ThirdPartyは`v2512`をブランチに属さない状態で取得する。公式ソースへ計測処理を追加せず、通常計測は無改変のソルバーを使う。プロファイルでは実行時に選択したランクへVTuneを付加する。
 
 ## ディレクトリとキャッシュ
 
@@ -22,31 +22,31 @@ Org管理のsource repositoryは読み取り専用で扱い、OpenFOAMは`OpenFO
 
 | 種別 | 置き場 | 意図 |
 |---|---|---|
-| source archive | 共有の source cache | download を再利用する |
-| 展開済み source・object・log | 実行ごとの `/dev/shm/openfoam-<run-id>-...` | build tree の大量 I/O を runner のメモリ上へ閉じる |
-| ccache の本体 | runner 既定の cache storage | warm cache を実行間で再利用する |
-| ccache の一時ファイル | run用一時ディレクトリの `ccache` | 一時ファイルを build archive から分離する |
-| build archive | 共有の builds directory | run number ごとの `tar.zst` を後続jobから利用する |
+| ソース圧縮ファイル | 共有ソースキャッシュ | 取得結果を再利用する |
+| 展開済みソース・オブジェクト・ログ | 実行ごとの`/dev/shm/openfoam-<run-id>-...` | ビルドツリーの大量I/Oを実行機のメモリ上へ閉じる |
+| ccache本体 | 実行機既定のキャッシュ領域 | 暖まったキャッシュを実行間で再利用する |
+| ccacheの一時ファイル | 実行用一時ディレクトリの`ccache` | 一時ファイルをビルド成果物から分離する |
+| ビルド圧縮ファイル | 共有ビルドディレクトリ | 実行番号ごとの`tar.zst`を後続ジョブから利用する |
 
-archive 展開後の version 付きディレクトリは、build root 内の `OpenFOAM` と `ThirdParty` に正規化する。`OpenFOAM/ThirdParty` は後者への symlink とし、OpenFOAM の標準的な探索規則を維持する。さらに `CCACHE_BASEDIR` を build root に設定し、実行ごとの一時パスと OpenFOAM version を cache key に持ち込まない。cleanup は当該 run-id の `mktemp` ディレクトリだけに限定する。
+圧縮ファイル展開後の版付きディレクトリは、ビルドルート内の`OpenFOAM`と`ThirdParty`へ正規化する。`OpenFOAM/ThirdParty`は後者へのシンボリックリンクとし、OpenFOAMの標準的な探索規則を維持する。さらに`CCACHE_BASEDIR`をビルドルートに設定し、実行ごとの一時パスとOpenFOAMの版をキャッシュキーに持ち込まない。終了時の削除は、当該実行IDの`mktemp`ディレクトリだけに限定する。
 
-`/dev/shm` は build tree を高速化する手段であって、すべての I/O を隔離するものではない。compiler、標準 header、module、ccache storage は共有ストレージ側に残る。そのため、build root を tmpfs 化しても時間変動は残る。
+`/dev/shm`はビルドツリーを高速化する手段であって、すべてのI/Oを隔離するものではない。コンパイラ、標準ヘッダー、モジュール、ccacheの保存領域は共有ストレージ側に残る。そのため、ビルドルートをtmpfsへ置いても時間変動は残る。
 
-## build archive の作成と再利用
+## ビルド成果物の作成と再利用
 
-ビルド成果物は`${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst`として保存する。push時だけ、コミットメッセージ先頭の`[require-build]`で新規ビルドを指定する。手動実行ではコミットメッセージを読まない。
+ビルド成果物は`${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst`として保存する。プッシュ時だけ、コミットメッセージ先頭の`[require-build]`で新規ビルドを指定する。手動実行ではコミットメッセージを読まない。
 
-再利用時は現在のコミットからfirst-parentを1 commitずつ親方向へ遡る。Actions全体をworkflow実行日時順に探索せず、各commit内だけ`OpenFOAM` workflow実行履歴を新しい順に調べる。source/toolchain/build定義の一致は条件にしない。圧縮ファイルと付随記録が同じクラスタに残り、記録されたsizeとSHAが一致する最初の成果物を現在の実行番号へハードリンクする。利用可能な成果物がなければ新しくビルドする。新規buildが必要な変更では、利用者が`[require-build]`を付けてpushする。
+再利用時は現在のコミットから第一親を1コミットずつ親方向へ遡る。Actions全体をワークフロー実行日時順に探索せず、各コミット内だけ`OpenFOAM`ワークフローの実行履歴を新しい順に調べる。ソース、ツールチェーン、ビルド定義の一致は条件にしない。圧縮ファイルと付随記録が同じクラスタに残り、記録された容量とSHAが一致する最初の成果物を現在の実行番号へハードリンクする。利用可能な成果物がなければ新しくビルドする。新規ビルドが必要な変更では、利用者が`[require-build]`を付けてプッシュする。
 
-実行時は選択した成果物を展開し、ケース準備、計算ジョブ、公式判定、メトリクス作成、成果物回収までを同じActions実行内で完了する。
+実行時は選択した成果物を展開し、ケース準備、計算ジョブ、公式判定、計測値作成、成果物回収までを同じActions実行内で完了する。
 
 ## 実行時の観測点
 
-通常の成功 run では、次を確認する。
+通常の成功実行では、次を確認する。
 
-- GitHub Actions の job / step 所要時間。runner の待機と `Build OpenFOAM` の遅延を分ける。
-- artifact の `allwmake.log`。`3_OpenFOAM_Src` の Allwmake ログ処理が各行に時刻を付けるため、遅延した工程を絞れる。
-- `ccache --show-stats`。Allwmake の直前に統計を zero clear するため、その build だけの hit 率、cacheable call 数、miss 数、local / remote storage の状態を確認できる。
-- 失敗時の `allwmake.log` と Actions の失敗ログ。workflow は console へ error の要約を出し、完全な log は artifact として残す。
+- GitHub Actionsのジョブと処理単位の所要時間。実行機の待機と`OpenFOAMをビルド`の遅延を分ける。
+- 成果物の`allwmake.log`。`3_OpenFOAM_Src`のAllwmakeログ処理が各行に時刻を付けるため、遅延した工程を絞れる。
+- `ccache --show-stats`。Allwmake直前に統計を初期化するため、そのビルドだけのヒット率、キャッシュ可能な呼び出し数、ミス数、ローカルとリモートの保存状態を確認できる。
+- 失敗時の`allwmake.log`とActionsの失敗ログ。ワークフローは画面へエラーの要約を出し、完全なログは成果物として残す。
 
 ビルド本体は `scripts/build-openfoam-task.sh` を直接呼び、常設のプロファイラは挟まない。詳細計測が必要な場合は、比較条件を固定した専用の実験コミットで追加する。

@@ -31,7 +31,7 @@ class WorkloadDefinition:
         try:
             return self.iteration_by_nodes[nodes]
         except KeyError as error:
-            raise ValueError(f"unsupported OpenFOAM node count: {nodes}") from error
+            raise ValueError(f"未対応のOpenFOAMノード数です: {nodes}") from error
 
 
 def load_workload_definition(path: Path) -> WorkloadDefinition:
@@ -55,7 +55,7 @@ def load_workload_definition(path: Path) -> WorkloadDefinition:
         or document["distribution"] != "OpenFOAM.com"
         or document["release"] != "v2512"
     ):
-        raise ValueError("workload definition is not the selected official task")
+        raise ValueError("課題定義が選択された公式課題と一致しません")
     case = document["case"]
     mesh = document["mesh"]
     iterations = document["iteration_by_nodes"]
@@ -85,7 +85,7 @@ def load_workload_definition(path: Path) -> WorkloadDefinition:
         or set(iterations) != {"1", "2", "4"}
         or iterations != {"1": 40, "2": 80, "4": 150}
     ):
-        raise ValueError("workload definition has invalid provenance or protocol")
+        raise ValueError("課題定義の来歴または実行条件が無効です")
     return WorkloadDefinition(
         document["workload_id"],
         document["solver"],
@@ -138,7 +138,7 @@ def capture_workload(
 
     identity = hashlib.sha256(canonical_json(members).encode()).hexdigest()
     if identity != definition.case_identity:
-        raise ValueError("case files differ from the pinned workload identity")
+        raise ValueError("ケースファイルが固定済みの課題識別情報と一致しません")
     output_manifest = run_dir / "source/workload-manifest.json"
     document = {
         "schema_version": "workload-manifest/v2",
