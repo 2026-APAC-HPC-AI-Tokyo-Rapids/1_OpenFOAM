@@ -41,15 +41,18 @@ def test_official_evaluator_accepts_pinned_simplefoam_run() -> None:
 
 def test_official_shell_parser_accepts_simplefoam_statistics(tmp_path: Path) -> None:
     check_mesh = tmp_path / "checkMesh.log"
-    check_mesh.write_text("    cells: 65334765\n    Mesh OK.    \n")
+    check_mesh.write_text("    cells: 65334765\nFailed 2 mesh checks.\n\nEnd\n")
     solver = tmp_path / "solver.log"
-    solver.write_text("Build  : test OPENFOAM=2512\nExec   : simpleFoam -parallel\nnProcs : 2\n" + "".join(f"Time = {iteration}\n" for iteration in range(1, 41)) + "    Number of measured time steps = 39\n    Average wall-clock time per time step = 10.25\n    Standard deviation of wall-clock time per time step = 0.25\nEnd\n")
+    solver.write_text("Build  : test OPENFOAM=2512\nExec   : simpleFoam -parallel\nnProcs : 2\ntrapFpe: Floating point exception trapping enabled (FOAM_SIGFPE).\n" + "".join(f"Time = {iteration}\n" for iteration in range(1, 41)) + "    Number of measured time steps = 39\n    Average wall-clock time per time step = 10.25\n    Standard deviation of wall-clock time per time step = 0.25\nEnd\n")
     command = [Path(__file__).parents[2] / "benchmark/parse_result.sh", solver, check_mesh, "2", "1", "40", "65334765", "v2512", "occDrivAerStaticMesh-65M", "OpenFOAM.com"]
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     assert "STATUS: VALID" in completed.stdout
     assert "average_wall_clock_seconds_per_iteration=10.25" in completed.stdout
     assert "nodes=1 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com" in completed.stdout
     assert subprocess.run([*command[:4], "2", *command[5:]], capture_output=True).returncode != 0
+
+    solver.write_text(solver.read_text().replace("Average wall-clock time per time step = 10.25", "Average wall-clock time per time step = NaN"))
+    assert subprocess.run(command, capture_output=True).returncode != 0
 
 
 def test_official_evaluator_rejects_badnum_but_retains_lexemes() -> None:
