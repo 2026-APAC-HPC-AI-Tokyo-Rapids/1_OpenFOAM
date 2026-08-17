@@ -5,14 +5,14 @@ Gadiでは、小ファイルを大量に置く処理と、長く保存する大�
 - login runnerの`/tmp`には、ソースの展開先、ビルド作業領域、ccacheの一時ファイルを置きます。
 - login runnerの`/dev/shm/ccache-${USER}`には、10 GBを上限とする一次ccacheを置きます。
 - `/scratch/hb15/tk7779/openfoam/gadi`には、圧縮したソース、検証済み公式mesh、ビルド成果物、共有ccache、領域分割済みケースの圧縮アーカイブ、実行記録と回収対象だけを置きます。
-- PBS計算ノードでは、OpenFOAM runtimeと担当rankのケースを各ノードの`$PBS_JOBFS`へ展開します。展開runtime、serial mesh、processor directoryは`/scratch`へ置きません。
+- PBS計算ノードでは、OpenFOAM runtimeと完全な領域分割済みケースを各ノードの`$PBS_JOBFS`へ展開します。展開runtime、serial mesh、processor directoryは`/scratch`へ置きません。
 - 玄界の成果物やキャッシュをGadiで再利用しません。
 
 Gadiの`/tmp`と`/dev/shm`はlogin node上の約126 GiBのtmpfsです。`/dev/shm`は`noexec`なので実行ファイルを生成するビルドや計算には使いませんが、ccacheの保存物には使えます。ビルド終了時に`/tmp`の展開物、中間生成物、ccacheの一時ファイルを削除し、`/dev/shm`の一次ccacheはlogin nodeが保持する間だけ再利用します。
 
 OpenFOAM runtime 1件の展開には約35,000--37,000 inodeを使います。2026年8月17日に3 runを同時にProvisionしたところ、`hb15`のinode hard limit 212,100へ同時に到達し、3件とも`tar: Disk quota exceeded`で失敗しました（Actions `32002206618`、`32002206644`、`32002207026`）。失敗した3展開物を削除するとinode使用量は210,900から121,823へ戻りました。runtimeをBuild archive SHA-256ごとの共有展開cacheにする暫定策でも、領域分割済みcaseをrunごとに共有領域へコピーすると同じinode制約に当たりました。このため、共有展開cacheとrun固有case copyは廃止します。
 
-ケース準備PBSだけが`$PBS_JOBFS`へruntime、公式mesh、全processor directoryを展開します。準備後は共通設定の`common.tar.zst`と、各実行ノードが担当する連続rank範囲の`node-NNN.tar.zst`へ分け、sizeとSHA-256を持つmanifestとともに`case-archives`へ保存します。通常実行PBSは`$PBS_NODEFILE`から割当hostを明示し、各ノードにruntime archive、共通case archive、自分のnode archiveだけを展開します。複数ノード時だけOpenFOAM utilityとsolverへ`-hostRoots`を渡し、rankごとのprocessor directoryを同じノードの`$PBS_JOBFS`から読み書きさせます。各ノードの先頭rankを`-ioRanks`へ指定し、coded libraryなどroot間で配布するファイルは1ノード1rankだけが書き込みます。1ノードでは全rankが同じjob-local filesystemを見るためdistributed rootを有効にしません。archive検証と展開はsolver計測区間の前に完了させ、通常計測値へ含めません。
+ケース準備PBSだけが`$PBS_JOBFS`へruntime、公式mesh、全processor directoryを展開し、完全な領域分割済みケースを単一の`case.tar.zst`としてsizeとSHA-256を持つmanifestとともに`case-archives`へ保存します。通常実行PBSは`$PBS_NODEFILE`から割当hostを明示し、各ノードに同じruntime archiveと完全case archiveを展開します。各rankは同じノードの`$PBS_JOBFS`にある自分のprocessor directoryを読み書きします。複数ノード時だけOpenFOAM utilityとsolverへ`-hostRoots`を渡し、各ノードの先頭rankを`-ioRanks`へ指定して、coded libraryなどroot間で配布するファイルは1ノード1rankだけが書き込みます。1ノードでは全rankが同じjob-local filesystemを見るためdistributed rootを有効にしません。archive検証と展開はsolver計測区間の前に完了させ、通常計測値へ含めません。
 
 `jobfs`要求は各ノード100 GBです。PBSの`jobfs`はjob全体への要求値であり複数ノードへ分配されるため、実行投入では`nodes * 100 GB`を指定します。rankごとのmanifest参照とplacement生成も各ノードの`$PBS_JOBFS`で行い、solver終了後に各ノード1プロセスだけが小さなplacement JSONを共有run directoryへ回収します。`/scratch`上のrun directoryへ残すのは、solver log、公式判定、metrics断片、hardware/placement記録、profile出力などの回収対象だけです。
 

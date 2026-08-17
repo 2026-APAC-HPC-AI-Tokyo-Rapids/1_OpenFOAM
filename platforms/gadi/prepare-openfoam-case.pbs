@@ -5,12 +5,9 @@ set -euo pipefail
 
 : "${PROVISION_DIR:?provision directory is required}"
 : "${PREPARE_SUBDOMAINS:?requested decomposition size is required}"
-: "${PREPARE_NODES:?requested node count is required}"
 : "${PREPARE_CACHE_ROOT:?case cache root is required}"
 : "${WORKLOAD_MESH_ARCHIVE:?mesh archive is required}"
 [[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
-[[ "${PREPARE_NODES}" =~ ^[1-9][0-9]*$ ]]
-(( PREPARE_SUBDOMAINS % PREPARE_NODES == 0 ))
 
 module purge
 module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
@@ -27,12 +24,11 @@ test "${WM_OPTIONS}" = "${build_environment[1]}"
 
 DECOMPOSE_PAR=$(command -v decomposePar)
 CHECK_MESH=$(command -v checkMesh)
-ranks_per_node=$(( PREPARE_SUBDOMAINS / PREPARE_NODES ))
 identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}" --identity-only)
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 archive_dir="${PREPARE_CACHE_ROOT}/${cache_identity}"
 
-if "${PROVISION_DIR}/platforms/gadi/archive-openfoam-case.sh" verify "${archive_dir}" "${cache_identity}" "${PREPARE_NODES}" "${ranks_per_node}" 2>/dev/null; then
+if "${PROVISION_DIR}/platforms/gadi/archive-openfoam-case.sh" verify "${archive_dir}" "${cache_identity}" 2>/dev/null; then
   printf 'cache_hit=true\ncache_dir=%s\n' "${archive_dir}"
   exit 0
 fi
@@ -40,4 +36,4 @@ fi
 expanded_root="${PBS_JOBFS}/openfoam-case-expanded"
 prepare_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${expanded_root}")
 expanded_cache_dir=$(sed -n 's/^cache_dir=//p' <<< "${prepare_output}")
-"${PROVISION_DIR}/platforms/gadi/archive-openfoam-case.sh" create "${expanded_cache_dir}" "${archive_dir}" "${cache_identity}" "${PREPARE_NODES}" "${ranks_per_node}"
+"${PROVISION_DIR}/platforms/gadi/archive-openfoam-case.sh" create "${expanded_cache_dir}" "${archive_dir}" "${cache_identity}"

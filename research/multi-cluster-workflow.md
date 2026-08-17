@@ -18,7 +18,7 @@
 
 玄界は短命なビルド領域と一次ccacheをlogin nodeの`/dev/shm`、ソースの鏡像と共有ccacheを`/fast`、圧縮成果物を共有領域へ置く。玄界の`/fast`は共有展開runtimeとcaseを実行中に読む運用を維持する。Gadiは`/dev/shm`が`noexec`なので短命なビルド領域をlogin nodeの`/tmp`へ置き、一次ccacheだけを`/dev/shm`へ置く。圧縮したソース、build、公式mesh、領域分割済みcase archive、共有ccache、実行記録と回収対象を`/scratch`へ置く。Gadiの展開runtimeとcaseはPBS allocation内の各ノードの`$PBS_JOBFS`へ置き、共有`/scratch`には保持しない。
 
-ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。Gadiのcase archiveは共通部分とノードごとの連続processor範囲へ分け、実行時に各ノードが担当分だけを展開する。OpenFOAMには`-hostRoots`を渡し、processor directoryをnode-local filesystemから読む。異なるコンパイラ、MPI、ABIの成果物を共有しない。
+ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。Gadiでは完全な領域分割済みcaseを単一archiveにし、実行時に各ノードが同じcase全体をnode-local filesystemへ展開する。OpenFOAMには`-hostRoots`を渡し、各rankがローカルのprocessor directoryを読む。異なるコンパイラ、MPI、ABIの成果物を共有しない。
 
 両クラスタとも、計算ノード上ではメトリクス断片をrun directoryへ閉じる。スケジューラの終了を確認してterminal情報を記録した後、login runnerが全断片を一度だけBigQueryへ送る。BigQueryの資格情報は計算ジョブの環境へ渡さない。GitHub artifactも同じlogin runnerからアップロードする。
 

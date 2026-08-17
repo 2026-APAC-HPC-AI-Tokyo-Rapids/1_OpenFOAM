@@ -235,7 +235,7 @@ jobs:
             exit "${status}"
           }
           trap cleanup EXIT
-          exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_NODES=${{ inputs.node_count }},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
+          exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
           job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=110GB,jobfs=100GB,storage=scratch/hb15 -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/gadi/prepare-openfoam-case.pbs")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
           "${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"
