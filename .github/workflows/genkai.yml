@@ -86,7 +86,7 @@ jobs:
               echo "Selected latest available ancestor build ${archive}"
               printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
               exit 0
-            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 20 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
+            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
             commit="$(git rev-parse "${commit}^" 2>/dev/null || true)"
           done
 
