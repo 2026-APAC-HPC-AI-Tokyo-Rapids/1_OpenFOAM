@@ -208,6 +208,7 @@ def test_control_plane_does_not_preflight_files_consumed_by_the_next_command() -
 def test_gadi_uses_login_build_and_pbs_execution() -> None:
     workflow = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/gadi/run-openfoam.pbs").read_text(encoding="utf-8")
+    runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
     builder_path = ROOT / "platforms/gadi/build-openfoam.sh"
     builder = builder_path.read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
@@ -282,6 +283,10 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     )
     assert "--openfoam-arg -hostRoots" in wrapper
     assert 'host_roots="((\\\".*\\\" \\\"${PBS_JOBFS}/openfoam-case\\\"))"' in wrapper
+    assert "if (( OPENFOAM_NODES > 1 ))" in wrapper
+    assert '"${distributed_root_args[@]}"' in wrapper
+    assert "numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS}" in runner
+    assert "method[[:space:]]+scotch" in runner
     assert "jobfs=100GB" in workflow
     assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
