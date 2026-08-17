@@ -35,6 +35,9 @@ def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) 
             }
         )
     )
+    for path in case.rglob("*"):
+        path.chmod(0o555 if path.is_dir() else 0o444)
+    case.chmod(0o555)
     archive_dir = tmp_path / "archives" / cache_identity
     archive_dir.parent.mkdir()
 

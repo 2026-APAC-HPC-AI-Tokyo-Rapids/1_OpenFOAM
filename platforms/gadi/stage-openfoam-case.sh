@@ -33,6 +33,7 @@ done
 rm -rf -- "${target_case}"
 install -d "${target_case}"
 tar -I zstd -xf "${archive_dir}/common.tar.zst" -C "${target_case}"
+chmod u+w "${target_case}"
 tar -I zstd -xf "${archive_dir}/${node_archive_name}" -C "${target_case}"
 chmod -R u+w "${target_case}"
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${iterations};/" "${target_case}/system/controlDict"
