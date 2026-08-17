@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 9 || $# -gt 10 || ( $# -eq 10 && ${10:-} != --require-cache ) ]]; then
-  echo "usage: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache]" >&2
+if [[ $# -lt 9 || $# -gt 10 ]]; then
+  echo "usage: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only]" >&2
   exit 64
 fi
 
@@ -15,7 +15,11 @@ workload_definition=$6
 build_sidecar=$7
 subdomains=$8
 cache_root=$9
-require_cache=${10:-}
+mode=${10:-}
+case "${mode}" in
+  ''|--require-cache|--identity-only) ;;
+  *) echo "unsupported case preparation mode: ${mode}" >&2; exit 64 ;;
+esac
 [[ "${subdomains}" =~ ^[1-9][0-9]*$ ]]
 
 expected_size=$(jq -er '.mesh.size_bytes' "${workload_definition}")
@@ -30,6 +34,10 @@ source_identity=$(cd "${source_case}" && find . -type f -print0 | LC_ALL=C sort 
 prepare_toolchain_identity=$(jq -ecS 'select(.schema_version == "build-sidecar/v1" and ([.runtime_objects[] | select(.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")) | .role] | sort) == ["checkMesh", "decomposePar"]) | {source_commits,compile_flags,precision,label_bits,runtime_objects:[.runtime_objects[] | select(.kind == "shared_library" or (.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")))]}' "${build_sidecar}" | sha256sum | awk '{print $1}')
 cache_identity=$(printf '%s\n' "prepare=${script_sha256}" "toolchain=${prepare_toolchain_identity}" "case=${source_identity}" "mesh=${expected_sha256}" "subdomains=${subdomains}" 'method=scotch' 'fileHandler=uncollated' | sha256sum | awk '{print $1}')
 cache_dir="${cache_root}/${cache_identity}"
+if [[ "${mode}" == --identity-only ]]; then
+  printf 'prepare_script_sha256=%s\ncache_identity=%s\ncache_dir=%s\n' "${script_sha256}" "${cache_identity}" "${cache_dir}"
+  exit 0
+fi
 mkdir -p "${cache_root}"
 
 cache_valid() {
@@ -38,7 +46,7 @@ cache_valid() {
 
 cache_hit=true
 if ! cache_valid; then
-  if [[ "${require_cache}" == --require-cache ]]; then
+  if [[ "${mode}" == --require-cache ]]; then
     echo "required cache entry is absent or invalid: ${cache_dir}" >&2
     exit 75
   fi

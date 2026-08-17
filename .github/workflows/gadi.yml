@@ -184,16 +184,15 @@ jobs:
           install -d "${provision_dir}/benchmark" "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/platforms/gadi"
           archive="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
           sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
-          platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}" "${GADI_ROOT}/runtime-cache"
+          platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh "${provision_dir}/scripts/"
-          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh "${provision_dir}/platforms/gadi/"
+          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
           install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
-          # The shared runtime retains OpenFOAM headers and wmake because the official coded wall-clock function object compiles on first use.
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision.outputs.provision_dir != ''
@@ -214,7 +213,7 @@ jobs:
       - name: Stage mesh, validate it, and decompose when uncached
         run: |
           prepare_root="${GADI_ROOT}/prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          prepare_cache_root="${GADI_ROOT}/case-cache"
+          prepare_cache_root="${GADI_ROOT}/case-archives"
           workload_dir="${GADI_ROOT}/workload"
           workload_archive="${workload_dir}/polyMesh_65M.tar.gz"
           workload_temporary="${workload_archive}.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
@@ -236,8 +235,8 @@ jobs:
             exit "${status}"
           }
           trap cleanup EXIT
-          exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
-          job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=110GB,jobfs=1GB,storage=scratch/hb15 -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/gadi/prepare-openfoam-case.pbs")
+          exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_NODES=${{ inputs.node_count }},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
+          job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=110GB,jobfs=100GB,storage=scratch/hb15 -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/gadi/prepare-openfoam-case.pbs")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
           "${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"
           cache_dir=$(sed -n 's/^cache_dir=//p' "${prepare_root}/pbs.log" | tail -n 1)
@@ -285,7 +284,7 @@ jobs:
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
-          control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/run-openfoam.pbs platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/archive-openfoam-case.sh platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/provision-openfoam-runtime.sh platforms/gadi/run-openfoam.pbs platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()

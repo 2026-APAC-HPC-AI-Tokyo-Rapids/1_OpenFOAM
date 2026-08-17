@@ -16,15 +16,15 @@
 
 ## 記憶領域と再利用
 
-玄界は短命なビルド領域と一次ccacheをlogin nodeの`/dev/shm`、ソースの鏡像と共有ccacheを`/fast`、圧縮成果物を共有領域へ置く。Gadiは`/dev/shm`が`noexec`なので短命なビルド領域をlogin nodeの`/tmp`へ置き、一次ccacheだけを`/dev/shm`へ置く。圧縮したソースと成果物、共有ccache、ケースキャッシュ、実行領域、回収記録は`/scratch`へ置く。展開したビルド領域とccacheの一時ファイルはActionsの終了処理で削除する。Gadiの実行環境はBuild archive SHA-256ごとの共有runtime cacheとして保持し、run固有のsymlinkだけを削除する。
+玄界は短命なビルド領域と一次ccacheをlogin nodeの`/dev/shm`、ソースの鏡像と共有ccacheを`/fast`、圧縮成果物を共有領域へ置く。玄界の`/fast`は共有展開runtimeとcaseを実行中に読む運用を維持する。Gadiは`/dev/shm`が`noexec`なので短命なビルド領域をlogin nodeの`/tmp`へ置き、一次ccacheだけを`/dev/shm`へ置く。圧縮したソース、build、公式mesh、領域分割済みcase archive、共有ccache、実行記録と回収対象を`/scratch`へ置く。Gadiの展開runtimeとcaseはPBS allocation内の各ノードの`$PBS_JOBFS`へ置き、共有`/scratch`には保持しない。
 
-ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。異なるコンパイラ、MPI、ABIの成果物を共有しない。
+ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。Gadiのcase archiveは共通部分とノードごとの連続processor範囲へ分け、実行時に各ノードが担当分だけを展開する。OpenFOAMには`-hostRoots`を渡し、processor directoryをnode-local filesystemから読む。異なるコンパイラ、MPI、ABIの成果物を共有しない。
 
 両クラスタとも、計算ノード上ではメトリクス断片をrun directoryへ閉じる。スケジューラの終了を確認してterminal情報を記録した後、login runnerが全断片を一度だけBigQueryへ送る。BigQueryの資格情報は計算ジョブの環境へ渡さない。GitHub artifactも同じlogin runnerからアップロードする。
 
 ## 同時実行
 
-実行機のラベルと同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiでは、展開runtime 3件がinode hard limitへ同時に到達した実測に基づき、Build archive SHA-256ごとの読み取り専用runtimeを共有する。初回populationだけをGadi内のfilesystem lockで直列化し、Provision、計算、回収そのものには同時実行制御を置かない。
+実行機のラベルと同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiでは、展開runtime 3件とrun固有case copyがinode hard limitへ到達した実測に基づき、共有展開物そのものを廃止する。同じcase archiveを生成する準備だけをGadi内で直列化し、Provision、計算、回収そのものには同時実行制御を置かない。
 
 ## 内容の識別
 

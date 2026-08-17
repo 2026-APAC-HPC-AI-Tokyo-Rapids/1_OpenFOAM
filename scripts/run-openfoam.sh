@@ -6,12 +6,16 @@ set -euo pipefail
 
 solver_launch=()
 node_launch=()
+openfoam_args=()
 job_id=
 case_cache_root=
+case_dir=
+prepared_case_manifest=
 global_rank_env=
 local_rank_env=
 local_size_env=
 profile_root=
+runtime_root=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
@@ -19,17 +23,21 @@ do
     --node-launch-arg) [[ $# -ge 2 ]]; node_launch+=("$2"); shift 2 ;;
     --job-id) [[ $# -ge 2 ]]; job_id=$2; shift 2 ;;
     --case-cache-root) [[ $# -ge 2 ]]; case_cache_root=$2; shift 2 ;;
+    --case-dir) [[ $# -ge 2 ]]; case_dir=$2; shift 2 ;;
+    --prepared-case-manifest) [[ $# -ge 2 ]]; prepared_case_manifest=$2; shift 2 ;;
     --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
     --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
     --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
     --profile-root) [[ $# -ge 2 ]]; profile_root=$2; shift 2 ;;
+    --runtime-root) [[ $# -ge 2 ]]; runtime_root=$2; shift 2 ;;
+    --openfoam-arg) [[ $# -ge 2 ]]; openfoam_args+=("$2"); shift 2 ;;
     *) printf 'unknown run-openfoam argument: %s\n' "$1" >&2; exit 64 ;;
   esac
 done
 [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
 [[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
 [[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
-[[ "${case_cache_root}" == /* && "${profile_root}" == /* ]]
+[[ "${profile_root}" == /* ]]
 for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
 do
   [[ "${rank_env}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
@@ -68,8 +76,16 @@ esac
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 
-CASE_DIR="${RUN_DIR}/work/occDrivAerStaticMesh"
-CASE_INPUT_DIR="${RUN_DIR}/work/occDrivAerStaticMesh-input"
+runtime_root=${runtime_root:-${PROVISION_DIR}}
+case_dir=${case_dir:-${RUN_DIR}/work/occDrivAerStaticMesh}
+[[ "${runtime_root}" == /* && "${case_dir}" == /* ]]
+if [[ -z "${prepared_case_manifest}" ]]; then
+  [[ "${case_cache_root}" == /* ]]
+else
+  [[ "${prepared_case_manifest}" == /* ]]
+fi
+CASE_DIR=${case_dir}
+CASE_INPUT_DIR="${PROVISION_DIR}/benchmark/occDrivAerStaticMesh"
 LOG_DIR="${RUN_DIR}/logs"
 SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
@@ -140,8 +156,9 @@ APPLY_BOUNDARY_LAYER=$(command -v applyBoundaryLayer)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
+JQ=$(command -v jq)
 
-provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${PROVISION_DIR}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
+provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${runtime_root}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
   (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
@@ -152,7 +169,6 @@ fi
 "${METRICS_CLI}" "${provision_args[@]}"
 "${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'build provision metrics could not be recorded' >&2
 
-cp -a "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" "${CASE_INPUT_DIR}"
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 # Seal the exact pinned official setup before the first OpenFOAM stage reads it.
@@ -160,25 +176,32 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
 case "${PROTOCOL_NAME}" in
-  *-scotch-*)
-    PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
-    ;;
+  *-scotch-*) ;;
   *) echo "unsupported protocol decomposition: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
-stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" "${PREPARE_COMMAND[@]}" --require-cache
+if [[ -z "${prepared_case_manifest}" ]]; then
+  PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
+  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" "${PREPARE_COMMAND[@]}" --require-cache
+  cache_dir=$(sed -n 's/^cache_dir=//p' "${LOG_DIR}/case-prepare.log" | tail -n 1)
+  [[ "${cache_dir}" == "${case_cache_root}/"* ]]
+  case_manifest="${cache_dir}/manifest.json"
+  restore_case=true
+else
+  case_manifest=${prepared_case_manifest}
+  restore_case=false
+  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR}" "${JQ}" -e --argjson number_of_subdomains "${OPENFOAM_MPI_PROCS}" 'select(.schema_version == "openfoam-case-cache/v4" and .number_of_subdomains == $number_of_subdomains)' "${prepared_case_manifest}"
+fi
 cd "${CASE_DIR}"
 install -m 0644 "${DECOMPOSE_PAR_DICT}" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
-cache_dir=$(sed -n 's/^cache_dir=//p' "${LOG_DIR}/case-prepare.log" | tail -n 1)
-[[ "${cache_dir}" == "${case_cache_root}/"* ]]
-install -m 0644 "${cache_dir}/manifest.json" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
+install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${OPENFOAM_ITERATIONS};/" system/controlDict
-restore0Dir -processor
-stage renumber_mesh "${LOG_DIR}/renumberMesh.log" "${solver_launch[@]}" "${RENUMBER_MESH}" -constant -overwrite -parallel -fileHandler uncollated
-stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POTENTIAL_FOAM}" -initialiseUBCs -parallel -fileHandler uncollated
-stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated
+if [[ "${restore_case}" == true ]]; then restore0Dir -processor; fi
+stage renumber_mesh "${LOG_DIR}/renumberMesh.log" "${solver_launch[@]}" "${RENUMBER_MESH}" -constant -overwrite -parallel -fileHandler uncollated "${openfoam_args[@]}"
+stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POTENTIAL_FOAM}" -initialiseUBCs -parallel -fileHandler uncollated "${openfoam_args[@]}"
+stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated "${openfoam_args[@]}"
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   install -d -m 2770 "${vtune_root}"
@@ -194,9 +217,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # Every rank records its placement first. The selected rank then execs the
   # profiler, which launches simpleFoam directly so VTune follows the solver
   # rather than the Python placement process.
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${RUN_MANIFEST}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${SOURCE_DIR}/placement" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 else
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 fi
 solver_status=$?
 set -e

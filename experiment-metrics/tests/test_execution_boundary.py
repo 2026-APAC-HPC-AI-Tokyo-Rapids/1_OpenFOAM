@@ -37,8 +37,14 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(wrapper)], check=True)
     assert "#PJM -L elapse=01:00:00" in wrapper_text
     assert 'export PATH="${PATH//${user_local_bin}/}"' in wrapper_text
-    assert '--solver-launch-arg -genv --solver-launch-arg PATH --solver-launch-arg "${PATH}"' in wrapper_text
-    assert '--node-launch-arg -genv --node-launch-arg PATH --node-launch-arg "${PATH}"' in wrapper_text
+    assert (
+        '--solver-launch-arg -genv --solver-launch-arg PATH --solver-launch-arg "${PATH}"'
+        in wrapper_text
+    )
+    assert (
+        '--node-launch-arg -genv --node-launch-arg PATH --node-launch-arg "${PATH}"'
+        in wrapper_text
+    )
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS" not in text
     assert "smoke-send --run" not in text
     assert "stage solver" in text
@@ -50,7 +56,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "stage_at case_prepare" in text
     assert "stage rank_placement" in text
     assert 'stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}"' in text
-    assert text.index("stage rank_placement") < text.index('stage solver "${SOLVER_LOG}"')
+    assert text.index("stage rank_placement") < text.index(
+        'stage solver "${SOLVER_LOG}"'
+    )
     assert "prepare-openfoam-case.sh" in text
     assert "--require-cache" in text
     assert '"${RUN_DIR}/control/build-sidecar.json"' in text
@@ -79,7 +87,10 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '"${OPENFOAM_SOLVER}" == simpleFoam' in text
     assert '"${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com' in text
     assert '"${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M' in text
-    assert 'source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"' in text
+    assert (
+        'source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"'
+        in text
+    )
     assert "RESTORE_ZERO_DIR=$(command -v restore0Dir)" not in text
     assert "restore0Dir -processor" in text
     source_index = text.index('source "${WM_PROJECT_DIR:?')
@@ -202,11 +213,21 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
     assert "runs-on: [self-hosted, gadi]" in workflow
-    runtime_provisioner = (ROOT / "platforms/gadi/provision-openfoam-runtime.sh").read_text(encoding="utf-8")
-    assert 'platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}" "${GADI_ROOT}/runtime-cache"' in workflow
-    assert 'exec {runtime_cache_lock_fd}>"${runtime_cache_root}/.gadi-populate.lock"' in runtime_provisioner
-    assert 'flock "${runtime_cache_lock_fd}"' in runtime_provisioner
-    assert 'ln -s -- "${runtime_cache}/OpenFOAM" "${provision_dir}/OpenFOAM"' in runtime_provisioner
+    runtime_provisioner = (
+        ROOT / "platforms/gadi/provision-openfoam-runtime.sh"
+    ).read_text(encoding="utf-8")
+    assert (
+        'platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"'
+        in workflow
+    )
+    assert (
+        'ln -- "${archive}" "${provision_dir}/runtime.tar.zst"' in runtime_provisioner
+    )
+    assert (
+        'tar -I zstd -xf "${archive}" -C "${provision_dir}" ./control/build-raw'
+        in runtime_provisioner
+    )
+    assert "runtime-cache" not in runtime_provisioner
     assert "group: gadi-openfoam-runtime" not in workflow
     assert "/scratch/hb15/tk7779/openfoam/gadi" in workflow
     assert "/home/pj26000080" not in workflow
@@ -218,7 +239,10 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     )
     assert "platforms/gadi/build-openfoam.sh" in workflow
     assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
-    assert "gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}" in workflow
+    assert (
+        "gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
+        in workflow
+    )
     assert "openfoam_build" not in workflow
     assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
@@ -250,9 +274,14 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "PBS_JOBFS" not in builder
     assert builder_path.stat().st_mode & 0o111
     assert 'tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}"' in builder
+    assert 'runtime_root="${PBS_JOBFS}/openfoam-runtime"' in wrapper
+    assert 'case_dir="${PBS_JOBFS}/openfoam-case/occDrivAerStaticMesh"' in wrapper
     assert (
-        '--case-cache-root "/scratch/hb15/${USER}/openfoam/gadi/case-cache"' in wrapper
+        'case_archive_root="/scratch/hb15/${USER}/openfoam/gadi/case-archives"'
+        in wrapper
     )
+    assert "--openfoam-arg -hostRoots" in wrapper
+    assert "jobfs=100GB" in workflow
     assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
@@ -299,8 +328,14 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "profile_analysis:" not in workflow
         assert "--profile-rank" not in workflow
         assert "--profile-analysis" not in workflow
-        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000' in workflow
-        assert 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")' in workflow
+        assert (
+            'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000'
+            in workflow
+        )
+        assert (
+            'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")'
+            in workflow
+        )
         assert 'commit="${GITHUB_SHA}"' in workflow
         assert 'git rev-parse "${commit}^"' in workflow
         assert "git diff --quiet" not in workflow
@@ -329,7 +364,7 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert f"openfoam-{cluster}-occdrivaer-65m-result-" in workflow
         assert f'pattern: "openfoam-{cluster}-*"' in workflow
         assert f'startswith("openfoam-{cluster}-")' in workflow
-        assert f'openfoam-artifacts/${{GITHUB_RUN_ID}}/{cluster}' in workflow
+        assert f"openfoam-artifacts/${{GITHUB_RUN_ID}}/{cluster}" in workflow
         assert ".artifacts[].id" not in workflow
         assert "cavity3d" not in workflow.lower()
         job_section = workflow.split("jobs:\n", 1)[1]
@@ -366,8 +401,8 @@ def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
 def test_builder_uses_the_pinned_unmodified_v2512_sources() -> None:
     script = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
 
-    assert 'openfoam_source_ref=refs/tags/OpenFOAM-v2512' in script
-    assert 'thirdparty_source_ref=refs/tags/v2512' in script
+    assert "openfoam_source_ref=refs/tags/OpenFOAM-v2512" in script
+    assert "thirdparty_source_ref=refs/tags/v2512" in script
     assert 'select(.kind == "in_process_hook")' not in script
     assert "jq -r '.source_paths[]'" not in script
     assert "OPENFOAM_BUILD_PARALLELISM" not in script

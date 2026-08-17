@@ -56,7 +56,7 @@ def test_pbs_submission_and_terminal_are_bound(
     assert request["distribution"] == "OpenFOAM.com"
     assert request["release"] == "v2512"
     assert request["solver"] == "simpleFoam"
-    assert "ncpus=104,mem=400GB,jobfs=1GB,storage=scratch/hb15" in request["argv"]
+    assert "ncpus=104,mem=400GB,jobfs=100GB,storage=scratch/hb15" in request["argv"]
     exported = request["argv"][request["argv"].index("-v") + 1]
     assert "OPENFOAM_WORKLOAD_ID=occDrivAerStaticMesh-65M" in exported
     assert "OPENFOAM_DISTRIBUTION=OpenFOAM.com" in exported
