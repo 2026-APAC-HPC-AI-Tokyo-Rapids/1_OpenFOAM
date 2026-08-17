@@ -281,6 +281,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         in wrapper
     )
     assert "--openfoam-arg -hostRoots" in wrapper
+    assert 'host_roots="((\\\".*\\\" ${PBS_JOBFS}/openfoam-case))"' in wrapper
     assert "jobfs=100GB" in workflow
     assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
