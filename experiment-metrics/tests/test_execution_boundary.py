@@ -36,6 +36,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     subprocess.run(["bash", "-n", str(script)], check=True)
     subprocess.run(["bash", "-n", str(wrapper)], check=True)
     assert "#PJM -L elapse=01:00:00" in wrapper_text
+    assert 'export PATH="${PATH//${user_local_bin}/}"' in wrapper_text
+    assert '--solver-launch-arg -genv --solver-launch-arg PATH --solver-launch-arg "${PATH}"' in wrapper_text
+    assert '--node-launch-arg -genv --node-launch-arg PATH --node-launch-arg "${PATH}"' in wrapper_text
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS" not in text
     assert "smoke-send --run" not in text
     assert "stage solver" in text
