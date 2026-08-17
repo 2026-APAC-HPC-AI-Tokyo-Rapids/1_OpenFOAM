@@ -284,11 +284,12 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "profile_analysis:" not in workflow
         assert "--profile-rank" not in workflow
         assert "--profile-analysis" not in workflow
-        assert "gh run list --workflow openfoam.yml --limit 1000" in workflow
+        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 20' in workflow
         assert 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")' in workflow
+        assert 'commit="${GITHUB_SHA}"' in workflow
+        assert 'git rev-parse "${commit}^"' in workflow
         assert "git diff --quiet" not in workflow
         assert "git cat-file" not in workflow
-        assert "--commit \"${commit}\"" not in workflow
         assert "commit_role" not in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
