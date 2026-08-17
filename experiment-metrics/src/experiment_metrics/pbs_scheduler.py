@@ -85,7 +85,7 @@ def submit_pbs_run(
         "-q",
         protocol.resource_group,
         "-l",
-        f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs=1GB,storage=scratch/hb15",
+        f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs={protocol.nodes * 100}GB,storage=scratch/hb15",
         "-v",
         exported,
         "-o",
