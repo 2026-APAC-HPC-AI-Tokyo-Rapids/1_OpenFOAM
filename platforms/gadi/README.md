@@ -14,7 +14,7 @@ OpenFOAM runtime 1件の展開には約35,000--37,000 inodeを使います。202
 
 ケース準備PBSだけが`$PBS_JOBFS`へruntime、公式mesh、全processor directoryを展開します。準備後は共通設定の`common.tar.zst`と、各実行ノードが担当する連続rank範囲の`node-NNN.tar.zst`へ分け、sizeとSHA-256を持つmanifestとともに`case-archives`へ保存します。通常実行PBSは`$PBS_NODEFILE`から割当hostを明示し、各ノードにruntime archive、共通case archive、自分のnode archiveだけを展開します。複数ノード時だけOpenFOAM utilityとsolverへ`-hostRoots`を渡し、rankごとのprocessor directoryを同じノードの`$PBS_JOBFS`から読み書きさせます。1ノードでは全rankが同じjob-local filesystemを見るためdistributed rootを有効にしません。archive検証と展開はsolver計測区間の前に完了させ、通常計測値へ含めません。
 
-`jobfs`要求は各ノード100 GBです。PBSの`jobfs`はjob全体への要求値であり複数ノードへ分配されるため、実行投入では`nodes * 100 GB`を指定します。`/scratch`上のrun directoryへ残すのは、solver log、公式判定、metrics断片、hardware/placement記録、profile出力などの回収対象だけです。
+`jobfs`要求は各ノード100 GBです。PBSの`jobfs`はjob全体への要求値であり複数ノードへ分配されるため、実行投入では`nodes * 100 GB`を指定します。rankごとのmanifest参照とplacement生成も各ノードの`$PBS_JOBFS`で行い、solver終了後に各ノード1プロセスだけが小さなplacement JSONを共有run directoryへ回収します。`/scratch`上のrun directoryへ残すのは、solver log、公式判定、metrics断片、hardware/placement記録、profile出力などの回収対象だけです。
 
 32 KiBのファイル4096個を作成した実測では、`/dev/shm`と`/tmp`が約0.08秒、`/scratch`が約5秒でした。一次ccacheを`/dev/shm`、別のlogin nodeからも使う共有ccacheを`/scratch/hb15/tk7779/openfoam/gadi/ccache`へ置きます。`~/.config/ccache/ccache.conf`で一次ccacheを`max_size = 10GB`とし、共有ccacheはビルド後に`ccache --trim-dir`で10 GBまで整理します。`max_size`は共有ccacheに適用されず、容量による整理ではinode数も保証されないため、最初の実ビルド後に共有ccacheの実ファイル数も確認します。
 

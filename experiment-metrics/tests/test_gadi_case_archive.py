@@ -7,6 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "platforms/gadi/archive-openfoam-case.sh"
 STAGE = ROOT / "platforms/gadi/stage-openfoam-case.sh"
+STAGE_RANK_CONTEXT = ROOT / "platforms/gadi/stage-rank-context.sh"
+COLLECT_RANK_PLACEMENT = ROOT / "platforms/gadi/collect-rank-placement.sh"
 
 
 def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) -> None:
@@ -92,3 +94,20 @@ def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) 
     assert not (target / "processor0").exists()
     assert not (target / "constant/polyMesh").exists()
     assert (target / "system/controlDict").read_text() == "endTime 80;\n"
+
+
+def test_gadi_rank_context_stays_local_until_node_leader_collects_it(tmp_path: Path) -> None:
+    run_manifest = tmp_path / "shared/run-manifest.json"
+    run_manifest.parent.mkdir()
+    run_manifest.write_text('{"schema_version":"run-manifest/v1"}\n')
+    local_root = tmp_path / "jobfs/openfoam-run"
+    subprocess.run([STAGE_RANK_CONTEXT, run_manifest, local_root], check=True)
+
+    assert (local_root / "control/run-manifest.json").read_bytes() == run_manifest.read_bytes()
+    placement = local_root / "source/placement"
+    (placement / "rank-2.json").write_text("two\n")
+    (placement / "rank-3.json").write_text("three\n")
+    shared_placement = tmp_path / "shared/placement"
+    subprocess.run([COLLECT_RANK_PLACEMENT, placement, shared_placement, "2"], check=True)
+
+    assert sorted(path.name for path in shared_placement.iterdir()) == ["rank-2.json", "rank-3.json"]
