@@ -187,7 +187,7 @@ jobs:
           platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh "${provision_dir}/scripts/"
-          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh "${provision_dir}/platforms/gadi/"
+          install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-rank-context.sh platforms/gadi/collect-rank-placement.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
           install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
