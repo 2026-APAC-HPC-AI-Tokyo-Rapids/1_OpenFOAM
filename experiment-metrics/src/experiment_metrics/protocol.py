@@ -4,7 +4,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from .manifest import SHA256
+from .workload import load_workload_definition
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,10 +17,11 @@ class RunProtocol:
     transport_environment: dict[str, str]
     workload_id: str
     expected_workload_identity: str
-
-    @property
-    def expected_pstream_ranks(self) -> int:
-        return self.ranks
+    iteration_target: int
+    expected_cells: int
+    solver: str
+    distribution: str
+    release: str
 
     @property
     def ranks_per_node(self) -> int:
@@ -34,12 +35,12 @@ class RunProtocol:
         variants = document.get("variant")
         if (
             not isinstance(root, dict)
-            or set(root) != {"schema_version"}
-            or root["schema_version"] != "openfoam-v2-run-protocol/v1"
+            or set(root) != {"schema_version", "workload_definition"}
+            or root["schema_version"] != "openfoam-v2-run-protocol/v2"
             or not isinstance(variants, dict)
             or set(variants) != {"bench", "profile"}
         ):
-            raise ValueError("protocol must contain exactly its v1 fields")
+            raise ValueError("protocol must contain exactly its v2 fields")
         variant = variants.get(purpose)
         if not isinstance(variant, dict):
             raise ValueError(f"protocol has no {purpose} variant")
@@ -50,8 +51,6 @@ class RunProtocol:
             "resource_group",
             "transport_policy",
             "transport_environment",
-            "workload_id",
-            "expected_workload_identity",
         }
         if set(variant) != required:
             raise ValueError("protocol variant must contain exactly its v1 fields")
@@ -61,8 +60,17 @@ class RunProtocol:
         resource_group = variant["resource_group"]
         transport = variant["transport_policy"]
         transport_environment = variant["transport_environment"]
-        workload_id = variant["workload_id"]
-        workload_identity = variant["expected_workload_identity"]
+        if not isinstance(root["workload_definition"], str):
+            raise ValueError("protocol workload definition path is invalid")
+        workload_path = (path.parent / root["workload_definition"]).resolve(strict=True)
+        workload = load_workload_definition(workload_path)
+        workload_id = workload.workload_id
+        workload_identity = workload.case_identity
+        expected_cells = workload.expected_cells
+        solver = workload.solver
+        distribution = workload.distribution
+        release = workload.release
+        iteration_target = workload.iteration_for(nodes)
         if (
             not isinstance(stages, list)
             or not stages
@@ -90,10 +98,6 @@ class RunProtocol:
                 and value
                 for name, value in transport_environment.items()
             )
-            or not isinstance(workload_id, str)
-            or not workload_id
-            or not isinstance(workload_identity, str)
-            or SHA256.fullmatch(workload_identity) is None
         ):
             raise ValueError("protocol expected instances are invalid")
         return cls(
@@ -105,6 +109,11 @@ class RunProtocol:
             dict(transport_environment),
             workload_id,
             workload_identity,
+            iteration_target,
+            expected_cells,
+            solver,
+            distribution,
+            release,
         )
 
 

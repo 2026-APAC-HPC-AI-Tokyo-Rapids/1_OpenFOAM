@@ -4,7 +4,7 @@ Gadiでは、小ファイルを大量に置く処理と、長く保存する大�
 
 - login runnerの`/tmp`には、ソースの展開先、ビルド作業領域、ccacheの一時ファイルを置きます。
 - login runnerの`/dev/shm/ccache-${USER}`には、10 GBを上限とする一次ccacheを置きます。
-- `/scratch/hb15/tk7779/openfoam/gadi`には、圧縮したソース、ビルド成果物、共有ccache、付随記録、ケースキャッシュ、実行領域を置きます。
+- `/scratch/hb15/tk7779/openfoam/gadi`には、圧縮したソース、検証済み公式mesh、ビルド成果物、共有ccache、付随記録、ケースキャッシュ、実行領域を置きます。
 - 玄界の成果物やキャッシュをGadiで再利用しません。
 
 Gadiの`/tmp`と`/dev/shm`はlogin node上の約126 GiBのtmpfsです。`/dev/shm`は`noexec`なので実行ファイルを生成するビルドには使いませんが、ccacheの保存物には使えます。ビルド終了時に`/tmp`の展開物、中間生成物、ccacheの一時ファイルを削除し、`/dev/shm`の一次ccacheはlogin nodeが保持する間だけ再利用します。実行前に`/scratch`へ展開する実行環境も一時物とし、Actionsの終了処理で削除します。

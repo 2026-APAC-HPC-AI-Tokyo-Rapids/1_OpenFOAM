@@ -45,8 +45,12 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '"${node_launch[@]}"' in text
     assert '--node-ordinal-from-env "${global_rank_env}"' in text
     assert "stage_at case_prepare" in text
+    assert "stage rank_placement" in text
+    assert 'stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}"' in text
+    assert text.index("stage rank_placement") < text.index('stage solver "${SOLVER_LOG}"')
     assert "prepare-openfoam-case.sh" in text
     assert "--require-cache" in text
+    assert '"${RUN_DIR}/control/build-sidecar.json"' in text
     assert "stage mesh_facts" not in text
     assert "stage partition_audit" not in text
     assert 'stage mesh_facts "${LOG_DIR}/mesh-facts.log"' not in text
@@ -54,8 +58,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "stage check_mesh" not in text
     assert "native tool is not provisioned" not in text
     assert "-fileHandler uncollated" in text
-    assert "OPENFOAM_METRICS_PSTREAM_DIR" in text
-    assert "OPENFOAM_METRICS_RUN_ID" in text
+    assert "OPENFOAM_METRICS_PSTREAM_DIR" not in text
+    assert "OPENFOAM_METRICS_RUN_ID" not in text
     assert "OPENFOAM_RANKS" not in text
     assert "OPENFOAM_MPI_PPN" not in text
     assert "scheduler-selected VTune rank is required" in text
@@ -69,6 +73,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in wrapper_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in wrapper_text
     assert "capture-workload" in text
+    assert '"${OPENFOAM_SOLVER}" == simpleFoam' in text
+    assert '"${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com' in text
+    assert '"${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M' in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
@@ -81,13 +88,13 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "record-build-provision" in text
     assert "record-minimal-hardware" in text
     assert "record-mesh" in text
-    assert '--block-mesh-log "${LOG_DIR}/blockMesh.log"' in text
+    assert '--check-mesh-log "${LOG_DIR}/checkMesh.log"' in text
     assert '--decompose-log "${LOG_DIR}/decomposePar.log"' in text
 
     prepare = ROOT / "platforms/genkai/prepare-openfoam-case.pjm"
     subprocess.run(["bash", "-n", str(prepare)], check=True)
     prepare_text = prepare.read_text(encoding="utf-8")
-    assert "blockMesh" in prepare_text
+    assert "checkMesh" in prepare_text
     assert "decomposePar" in prepare_text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in prepare_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in prepare_text
@@ -118,30 +125,28 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "run_purpose:" not in workflow
     assert "if [[ '${{ inputs.profile }}' == true ]]" in workflow
     assert "build_preset:" not in workflow
-    assert "profile_rank:" in workflow
-    assert "profile_analysis:" in workflow
+    assert "profile_rank:" not in workflow
+    assert "profile_analysis:" not in workflow
     assert "OPENFOAM_PROFILE_RANK" not in workflow
     assert "OPENFOAM_PROFILE_ANALYSIS" not in workflow
     assert "OPENFOAM_EXPERIMENT_PRESET" not in workflow
-    assert """--profile-rank '${{ inputs.profile_rank }}'""" in workflow
-    assert """--profile-analysis '${{ inputs.profile_analysis }}'""" in workflow
-    assert "type: string" in workflow
+    assert "--profile-rank" not in workflow
+    assert "--profile-analysis" not in workflow
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow
     assert "profile_mode" not in workflow
     assert "perf-stat" not in workflow
     assert "Perfetto" not in workflow
     assert "Merge terminal fragments" not in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
-    assert "record-pstream --manifest" in workflow
+    assert "record-pstream --manifest" not in workflow
     assert "Publish v2 raw facts to BigQuery" not in workflow
     assert "install -m 0600" in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" in workflow
     assert 'smoke-send --run "${RUN_ID}" --source runner' in workflow
     assert "Prepare OpenFOAM case cache" in workflow
-    prepare_concurrency = (
-        "genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}"
-    )
+    prepare_concurrency = "genkai-openfoam-case-${{ needs.select-build.outputs.experiment_preset }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
     assert prepare_concurrency in workflow
+    assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
     assert "queue: max" not in workflow
     assert "queue: single" not in workflow
     assert "${GITHUB_RUN_ID}.tar.zst" in workflow
@@ -197,6 +202,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         in workflow
     )
     assert "platforms/gadi/build-openfoam.sh" in workflow
+    assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
+    assert "gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}" in workflow
     assert "openfoam_build" not in workflow
     assert workflow.count("- name: Initialize metrics and submit OpenFOAM") == 1
     assert workflow.count("- name: Finalize metrics and package artifacts") == 1
@@ -260,8 +267,8 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     assert "reshare_ccache:" not in entry_inputs
     assert "run_purpose:" not in entry_inputs
     assert "profile:" in entry_inputs
-    assert "profile_rank:" in entry_inputs
-    assert "profile_analysis:" in entry_inputs
+    assert "profile_rank:" not in entry_inputs
+    assert "profile_analysis:" not in entry_inputs
     profile_push_gate = "github.event_name == 'push' && contains(github.event.head_commit.message, '[profile]')"
     assert entry.count(profile_push_gate) == 2
     assert not (ROOT / ".github/workflows/genkai-profile.yml").exists()
@@ -273,8 +280,14 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     assert "run_purpose:" not in gadi
     for workflow in (genkai, gadi):
         assert "profile:" in workflow
-        assert "profile_rank:" in workflow
-        assert "profile_analysis:" in workflow
+        assert "profile_rank:" not in workflow
+        assert "profile_analysis:" not in workflow
+        assert "--profile-rank" not in workflow
+        assert "--profile-analysis" not in workflow
+        assert 'select(.commit_role == "openfoam_source")' in workflow
+        assert 'select(.commit_role == "thirdparty_source")' in workflow
+        assert 'select(.commit_role == "build_definition")' in workflow
+        assert '.source_commits[] | select(.role ==' not in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
@@ -292,7 +305,15 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         "run",
         "archive-artifacts",
     ]
-    for workflow in (genkai, gadi):
+    for cluster, workflow in (("genkai", genkai), ("gadi", gadi)):
+        assert f"openfoam-{cluster}-build-log-" in workflow
+        assert f"openfoam-{cluster}-v2-" in workflow
+        assert f"openfoam-{cluster}-occdrivaer-65m-result-" in workflow
+        assert f'pattern: "openfoam-{cluster}-*"' in workflow
+        assert f'startswith("openfoam-{cluster}-")' in workflow
+        assert f'openfoam-artifacts/${{GITHUB_RUN_ID}}/{cluster}' in workflow
+        assert ".artifacts[].id" not in workflow
+        assert "cavity3d" not in workflow.lower()
         job_section = workflow.split("jobs:\n", 1)[1]
         jobs = [
             line[2:-1]
@@ -324,11 +345,12 @@ def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
     assert '<< locator.sha256 << "\\"}"' not in source
 
 
-def test_builder_verifies_only_upstream_in_process_sources() -> None:
+def test_builder_uses_the_pinned_unmodified_v2512_sources() -> None:
     script = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
 
-    assert 'select(.kind == "in_process_hook")' in script
-    assert "| .source_path" in script
+    assert 'openfoam_source_ref=refs/tags/OpenFOAM-v2512' in script
+    assert 'thirdparty_source_ref=refs/tags/v2512' in script
+    assert 'select(.kind == "in_process_hook")' not in script
     assert "jq -r '.source_paths[]'" not in script
     assert "OPENFOAM_BUILD_PARALLELISM" not in script
     assert "EXPERIMENT_METRICS_NATIVE_ROOT" not in script

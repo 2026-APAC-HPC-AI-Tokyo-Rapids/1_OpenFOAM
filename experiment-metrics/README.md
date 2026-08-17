@@ -14,5 +14,7 @@ cleanup. Producer fragments remain diagnostic artifacts; there is no merge,
 `metrics.jsonl`, physical projection, consumer view, conflict table, or replay.
 
 The run protocol remains separate because node/rank/stage settings are required
-to execute the job. OpenFOAM case preparation continues to use only the
-prepare-script SHA cache identity.
+to execute the job. It references the pinned workload definition instead of
+duplicating case identity, mesh provenance, solver, release, or iteration
+targets. Case cache identity covers the prepare script, official case bytes,
+verified mesh SHA-256, decomposition method, and rank count.

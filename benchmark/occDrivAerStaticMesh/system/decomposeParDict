@@ -1,7 +1,7 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  v2006                                 |
+|  \\    /   O peration     | Version:  v2412                                 |
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
@@ -10,42 +10,29 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    location    "system";
-    object      fvSchemes;
+    object      decomposeParDict;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-ddtSchemes
+#include       "include/caseDefinition"
+
+numberOfSubdomains  $nCores;
+
+// note: kahip decomposition can not be used in conjunction with new wall
+//       distance method "exactDistance" use hierachical instead
+method              $decompositionMethod; //kahip; //hierarchical;
+
+hierarchicalCoeffs
 {
-    default         Euler;
+    n               $nHierarchical;
+    delta           0.001;
+    order           xyz;
 }
 
-gradSchemes
+kahipCoeffs
 {
-    default         Gauss linear;
-    grad(p)         Gauss linear;
+    config          fast; // fast | eco | strong
+    imbalance       0.01;
 }
-
-divSchemes
-{
-    default         none;
-    div(phi,U)      Gauss linear;
-}
-
-laplacianSchemes
-{
-    default         Gauss linear orthogonal;
-}
-
-interpolationSchemes
-{
-    default         linear;
-}
-
-snGradSchemes
-{
-    default         orthogonal;
-}
-
 
 // ************************************************************************* //

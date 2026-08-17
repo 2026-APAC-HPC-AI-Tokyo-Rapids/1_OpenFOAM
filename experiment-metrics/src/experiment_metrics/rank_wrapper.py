@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--global-rank-env", required=True)
     parser.add_argument("--local-rank-env", required=True)
     parser.add_argument("--local-size-env", required=True)
+    parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--profile-rank", type=int)
     parser.add_argument("--profile-wrapper", type=Path)
     parser.add_argument("solver_argv", nargs=argparse.REMAINDER)
@@ -26,7 +27,9 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.solver_argv[:1] == ["--"]
         else arguments.solver_argv
     )
-    if not solver or not Path(solver[0]).is_absolute():
+    if arguments.capture_only and (solver or arguments.profile_rank is not None or arguments.profile_wrapper is not None):
+        raise ValueError("capture-only rank wrapper cannot launch a solver or profiler")
+    if not arguments.capture_only and (not solver or not Path(solver[0]).is_absolute()):
         raise ValueError("rank wrapper requires an absolute solver executable")
     if (arguments.profile_rank is None) != (arguments.profile_wrapper is None):
         raise ValueError("profile rank and wrapper must be specified together")
@@ -63,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         local_rank=local_rank,
         local_size=local_size,
     )
+    if arguments.capture_only:
+        return 0
     if rank == arguments.profile_rank:
         wrapper = str(arguments.profile_wrapper)
         os.execv(wrapper, [wrapper, *solver])

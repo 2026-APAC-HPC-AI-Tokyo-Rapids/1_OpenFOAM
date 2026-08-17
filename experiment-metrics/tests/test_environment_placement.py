@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from experiment_metrics import init_run
 from experiment_metrics.environment import (
     capture_snapshot,
     environment_facts,
@@ -14,6 +15,7 @@ from experiment_metrics.environment import (
 )
 from experiment_metrics.fact import canonical_json
 from experiment_metrics.placement import placement_fact
+from experiment_metrics.rank_wrapper import main as rank_wrapper_main
 
 
 def test_nul_environment_snapshot_projects_plain_utf8_values(tmp_path: Path) -> None:
@@ -86,3 +88,32 @@ def test_rank_placement_closes_global_node_and_local_axes(tmp_path: Path) -> Non
             expected_nodes=2,
             ranks_per_node=2,
         )
+
+
+def test_rank_wrapper_can_capture_placement_without_launching_solver(
+    tmp_path: Path,
+    registry_path: Path,
+    identities: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = init_run(None, tmp_path, identities, registry_path=registry_path)
+    placement_root = manifest.parents[1] / "source/placement"
+    monkeypatch.setenv("TEST_GLOBAL_RANK", "0")
+    monkeypatch.setenv("TEST_LOCAL_RANK", "0")
+    monkeypatch.setenv("TEST_LOCAL_SIZE", "1")
+
+    result = rank_wrapper_main([
+        "--manifest", str(manifest),
+        "--expected-ranks", "1",
+        "--expected-nodes", "1",
+        "--placement-root", str(placement_root),
+        "--global-rank-env", "TEST_GLOBAL_RANK",
+        "--local-rank-env", "TEST_LOCAL_RANK",
+        "--local-size-env", "TEST_LOCAL_SIZE",
+        "--capture-only",
+    ])
+
+    assert result == 0
+    document = json.loads((placement_root / "rank-0.json").read_text())
+    assert document["run_id"] == manifest.parents[1].name
+    assert document["global_rank"] == 0

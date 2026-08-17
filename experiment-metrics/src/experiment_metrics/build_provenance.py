@@ -15,10 +15,12 @@ from .fact import Fact, canonical_json
 from .manifest import SHA256, RunManifest
 
 EXECUTABLE_ROLES = (
-    "icoFoam",
-    "blockMesh",
+    "simpleFoam",
     "decomposePar",
     "checkMesh",
+    "renumberMesh",
+    "potentialFoam",
+    "applyBoundaryLayer",
     "mesh-facts",
     "partition-audit",
     "capture-hardware",
@@ -28,7 +30,7 @@ TOOLCHAIN_ROLES = (
     "compiler_c_version",
     "compiler_cxx_version",
     "mpirun_version",
-    "icofoam_dynamic",
+    "simplefoam_dynamic",
 )
 PARTITION_SOURCE_PATHS = (
     "experiment-metrics/native/partition-audit/Make/files",
@@ -101,7 +103,7 @@ def capture_build_state(
         ("compiler_c_version", [str(compiler_c), "--version"]),
         ("compiler_cxx_version", [str(compiler_cxx), "--version"]),
         ("mpirun_version", [str(launcher), "--version"]),
-        ("icofoam_dynamic", [str(readelf), "--dynamic", str(resolved["icoFoam"])]),
+        ("simplefoam_dynamic", [str(readelf), "--dynamic", str(resolved["simpleFoam"])]),
     )
     observations = [
         _capture_command(role, argv, raw_root, root) for role, argv in commands

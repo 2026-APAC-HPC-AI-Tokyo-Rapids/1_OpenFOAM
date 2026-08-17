@@ -7,15 +7,11 @@ import pytest
 from experiment_metrics.registry import Registry
 
 
-def test_default_registry_requires_one_validated_pstream_consensus() -> None:
+def test_default_registry_does_not_require_removed_pstream_instrumentation() -> None:
     registry = Registry.load(Path(__file__).parents[1] / "registry/openfoam-v2.toml")
-    required = registry.required_keys("bench", expected_pstream_ranks=120)
+    required = registry.required_keys("bench")
 
-    assert {key for key in required if key.startswith("solver.pstream.")} == {
-        "solver.pstream.startup_applied",
-        "solver.pstream.runtime_current",
-        "solver.pstream.change_events",
-    }
+    assert not {key for key in required if key.startswith("solver.pstream.")}
     assert {
         "solver.runtime_header",
         "solver.step_timings",
@@ -43,9 +39,7 @@ def test_default_registry_requires_one_validated_pstream_consensus() -> None:
 def test_default_registry_expands_multi_node_hardware_axis() -> None:
     registry = Registry.load(Path(__file__).parents[1] / "registry/openfoam-v2.toml")
 
-    required = registry.required_keys(
-        "bench", expected_pstream_ranks=4, expected_nodes=2
-    )
+    required = registry.required_keys("bench", expected_nodes=2)
 
     assert {key for key in required if key.startswith("hardware.minimal.node.")} == {
         "hardware.minimal.node.0",
@@ -80,9 +74,7 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
     assert {"pbs_log", "pjm_log", "workload_member"}.issubset(
         registry.artifact_roles.run_bundle_source_roles
     )
-    assert "profile.vtune_hotspots" in registry.required_keys(
-        "profile", expected_pstream_ranks=2
-    )
+    assert "profile.vtune_hotspots" in registry.required_keys("profile")
     assert {
         "artifact.subject_manifest",
         "artifact.build_sidecar",
@@ -90,7 +82,6 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
         "artifact.instrumentation_bundle",
         "artifact.workload_manifest",
         "artifact.network_stdout",
-        "openfoam.pstream-rank-events/v1",
     }.issubset(
         {
             source_id
@@ -121,4 +112,4 @@ required_for = ["bench"]
         + "\n"
     )
     with pytest.raises(ValueError, match="wildcard"):
-        Registry.load(path).required_keys("bench", expected_pstream_ranks=1)
+        Registry.load(path).required_keys("bench")

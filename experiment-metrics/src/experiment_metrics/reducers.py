@@ -4,11 +4,12 @@ from decimal import Decimal
 
 from .fact import Fact
 from .imb import IMBResult
+from .protocol import RunProtocol
 from .solver_log import ParsedSolverLog, evaluate_official
 
 
-def solver_log_facts(parsed: ParsedSolverLog) -> tuple[Fact, ...]:
-    official = evaluate_official(parsed)
+def solver_log_facts(parsed: ParsedSolverLog, protocol: RunProtocol) -> tuple[Fact, ...]:
+    official = evaluate_official(parsed, iterations=protocol.iteration_target, expected_cells=protocol.expected_cells, ranks=protocol.ranks, release=protocol.release, solver=protocol.solver)
     facts: list[Fact] = [
         Fact("solver.step_timings", _json_value(list(parsed.step_timings))),
         Fact("solver.pressure_solves", _json_value(list(parsed.pressure_solves))),
@@ -18,10 +19,16 @@ def solver_log_facts(parsed: ParsedSolverLog) -> tuple[Fact, ...]:
             {
                 "schema_version": "openfoam-official-result/v1",
                 "valid": official.valid,
-                "fvops_trim_m": _decimal_text(official.fvops_trim_m),
-                "seconds_per_step": _decimal_text(official.seconds_per_step),
-                "trim_seconds": _decimal_text(official.trim_seconds),
-                "steps": len(parsed.step_timings),
+                "average_wall_clock_seconds_per_iteration": _decimal_text(official.average_wall_clock_sec),
+                "standard_deviation_seconds": _decimal_text(official.standard_deviation_sec),
+                "measured_iterations": official.measured_iterations,
+                "configured_iterations": protocol.iteration_target,
+                "workload_id": protocol.workload_id,
+                "workload_identity": protocol.expected_workload_identity,
+                "cells": protocol.expected_cells,
+                "solver": protocol.solver,
+                "distribution": protocol.distribution,
+                "release": protocol.release,
                 "ranks": parsed.observed_nprocs,
                 "nodes": len(parsed.observed_hosts) if parsed.observed_hosts else None,
             },

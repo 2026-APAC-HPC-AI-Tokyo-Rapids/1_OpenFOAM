@@ -163,6 +163,7 @@ def parser() -> argparse.ArgumentParser:
     solver_log = commands.add_parser("record-solver-log")
     _runtime_common(solver_log)
     solver_log.add_argument("--log", type=Path, required=True)
+    solver_log.add_argument("--protocol", type=Path, required=True)
     solver_log.add_argument("--fragment-id", default="solver-log")
 
     imb = commands.add_parser("record-imb-mpi1")
@@ -173,12 +174,6 @@ def parser() -> argparse.ArgumentParser:
     imb.add_argument("--protocol", type=Path, required=True)
     imb.add_argument("--source-member", required=True)
     imb.add_argument("--fragment-id", default="imb-mpi1")
-
-    pstream = commands.add_parser("record-pstream")
-    _runtime_common(pstream)
-    pstream.add_argument("--source-dir", type=Path, required=True)
-    pstream.add_argument("--protocol", type=Path, required=True)
-    pstream.add_argument("--fragment-id", default="pstream")
 
     build_provision = commands.add_parser("record-build-provision")
     _runtime_common(build_provision)
@@ -192,7 +187,7 @@ def parser() -> argparse.ArgumentParser:
     mesh = commands.add_parser("record-mesh")
     _runtime_common(mesh)
     mesh.add_argument("--decompose-dict", type=Path, required=True)
-    mesh.add_argument("--block-mesh-log", type=Path, required=True)
+    mesh.add_argument("--check-mesh-log", type=Path, required=True)
     mesh.add_argument("--decompose-log", type=Path, required=True)
 
     profile_hardware = commands.add_parser("record-profile-hardware")
@@ -218,6 +213,7 @@ def parser() -> argparse.ArgumentParser:
     workload.add_argument("--manifest", type=Path, required=True)
     workload.add_argument("--case-root", type=Path, required=True)
     workload.add_argument("--output-root", type=Path, required=True)
+    workload.add_argument("--definition", type=Path, required=True)
 
     package = commands.add_parser("package")
     package.add_argument("--manifest", type=Path, required=True)
@@ -516,14 +512,13 @@ def main(argv: list[str] | None = None) -> int:
             return 128 + (termination.signal or 0)
         return 127
     if arguments.command == "record-solver-log":
+        from .manifest import RunManifest
+        from .protocol import RunProtocol
         from .reducers import solver_log_facts
         from .solver_log import parse_solver_log
 
-        facts = solver_log_facts(
-            parse_solver_log(
-                arguments.log.read_text(encoding="utf-8", errors="replace")
-            )
-        )
+        manifest = RunManifest.load(arguments.manifest)
+        facts = solver_log_facts(parse_solver_log(arguments.log.read_text(encoding="utf-8", errors="replace")), RunProtocol.load(arguments.protocol, manifest.purpose))
         print(
             collect_once(
                 arguments.manifest,
@@ -579,28 +574,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    if arguments.command == "record-pstream":
-        from .manifest import RunManifest
-        from .protocol import RunProtocol
-        from .pstream import pstream_facts
-
-        manifest = RunManifest.load(arguments.manifest)
-        protocol = RunProtocol.load(arguments.protocol, manifest.purpose)
-        facts = pstream_facts(
-            arguments.source_dir,
-            run_id=manifest.run_id,
-            expected_ranks=tuple(range(protocol.expected_pstream_ranks)),
-        )
-        print(
-            collect_once(
-                arguments.manifest,
-                arguments.runtime_dir,
-                "runner.pstream_parser",
-                lambda: facts,
-                fragment_id=arguments.fragment_id,
-            )
-        )
-        return 0
     if arguments.command == "record-build-provision":
         from .manifest import RunManifest
         from .postrun import build_provision_fact
@@ -649,7 +622,7 @@ def main(argv: list[str] | None = None) -> int:
         from .postrun import mesh_facts_from_logs
 
         facts = mesh_facts_from_logs(
-            arguments.block_mesh_log,
+            arguments.check_mesh_log,
             arguments.decompose_log,
             arguments.decompose_dict,
         )
@@ -710,6 +683,7 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.manifest,
                 arguments.case_root,
                 arguments.output_root,
+                arguments.definition,
             )
         )
         return 0

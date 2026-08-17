@@ -154,7 +154,6 @@ class Registry:
         self,
         purpose: str,
         *,
-        expected_pstream_ranks: int,
         expected_nodes: int = 1,
     ) -> frozenset[str]:
         """Expand every required pattern, rejecting undeclared axis semantics."""
@@ -165,11 +164,6 @@ class Registry:
                 continue
             if "*" not in item.pattern:
                 required.add(item.pattern)
-            elif item.pattern in _RANK_PATTERNS:
-                required.update(
-                    item.pattern.replace("*", str(rank))
-                    for rank in range(expected_pstream_ranks)
-                )
             elif item.pattern == "hardware.minimal.node.*":
                 required.update(
                     item.pattern.replace("*", str(node))
@@ -503,12 +497,3 @@ def _purposes(value: object) -> frozenset[str]:
     ):
         raise ValueError("registry required_for must contain bench and/or profile")
     return frozenset(value)
-
-
-_RANK_PATTERNS = frozenset(
-    {
-        "solver.pstream.startup_applied.rank.*",
-        "solver.pstream.runtime_current.rank.*",
-        "solver.pstream.change_events.rank.*",
-    }
-)

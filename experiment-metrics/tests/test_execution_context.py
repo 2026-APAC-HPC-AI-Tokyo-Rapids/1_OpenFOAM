@@ -10,6 +10,7 @@ from experiment_metrics.fact import canonical_json
 
 REGISTRY = Path(__file__).parents[1] / "registry/openfoam-v2.toml"
 FIXTURES = Path(__file__).parent / "fixtures"
+WORKLOAD = Path(__file__).parents[2] / "benchmark/workload.json"
 
 
 def test_execution_context_validates_two_node_rank_and_transport_axes(
@@ -17,12 +18,12 @@ def test_execution_context_validates_two_node_rank_and_transport_axes(
 ) -> None:
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
-    digest = "a" * 64
     protocol = tmp_path / "protocol.toml"
     protocol.write_text(
         f"""
 [protocol]
-schema_version = "openfoam-v2-run-protocol/v1"
+schema_version = "openfoam-v2-run-protocol/v2"
+workload_definition = "{WORKLOAD}"
 [variant.bench]
 expected_stages = ["solver"]
 nodes = 2
@@ -30,8 +31,6 @@ ranks = 2
 resource_group = "test"
 transport_policy = "ofi"
 transport_environment = {{ I_MPI_FABRICS = "ofi" }}
-workload_id = "test"
-expected_workload_identity = "{digest}"
 [variant.profile]
 expected_stages = ["solver"]
 nodes = 2
@@ -39,8 +38,6 @@ ranks = 2
 resource_group = "test"
 transport_policy = "ofi"
 transport_environment = {{ I_MPI_FABRICS = "ofi" }}
-workload_id = "test"
-expected_workload_identity = "{digest}"
 """.strip()
         + "\n"
     )
@@ -73,6 +70,11 @@ expected_workload_identity = "{digest}"
                 "schema_version": "scheduler-request/v1",
                 "nodes": 2,
                 "ranks": 2,
+                "iterations": 80,
+                "workload_id": "occDrivAerStaticMesh-65M",
+                "distribution": "OpenFOAM.com",
+                "release": "v2512",
+                "solver": "simpleFoam",
                 "resource_group": "test",
                 "transport_policy": "ofi",
             }

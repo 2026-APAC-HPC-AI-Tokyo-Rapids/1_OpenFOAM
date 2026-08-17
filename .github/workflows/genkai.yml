@@ -6,12 +6,6 @@ on:
       profile:
         required: true
         type: boolean
-      profile_rank:
-        required: true
-        type: string
-      profile_analysis:
-        required: true
-        type: string
       node_count:
         required: true
         type: string
@@ -23,6 +17,8 @@ permissions:
 env:
   BUILD_ARCHIVE_DIR: /home/pj26000080/share/openfoam-build/builds
   GIT_MIRROR_DIR: /fast/pj26000080/git-mirror
+  OPENFOAM_SOURCE_OID: 5a55da3fb12800863bf76122c50bb0850222cab0
+  THIRDPARTY_SOURCE_OID: 1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0
 
 defaults:
   run:
@@ -38,6 +34,7 @@ jobs:
       experiment_preset: ${{ steps.protocol.outputs.experiment_preset }}
       prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
       source_archive_key: ${{ steps.select.outputs.source_archive_key }}
+      build_cache_key: ${{ steps.select.outputs.build_cache_key }}
 
     steps:
       - name: Checkout repository history
@@ -69,7 +66,7 @@ jobs:
             commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"
             if [[ "${commit_message}" == '[require-build]'* ]]; then
               echo "The commit requests a new OpenFOAM build"
-              echo "action=build" >> "${GITHUB_OUTPUT}"
+              printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
           fi
@@ -84,17 +81,21 @@ jobs:
               sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
               expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")" || continue
               expected_sha="$(jq -er '.build_archive.sha256' "${sidecar}")" || continue
+              jq -e --arg openfoam "${OPENFOAM_SOURCE_OID}" --arg thirdparty "${THIRDPARTY_SOURCE_OID}" '(.source_commits[] | select(.commit_role == "openfoam_source") | .oid) == $openfoam and (.source_commits[] | select(.commit_role == "thirdparty_source") | .oid) == $thirdparty and .label_bits == 32 and ([.runtime_objects[] | select(.kind == "executable") | .role] | sort) == ["applyBoundaryLayer","capture-hardware","checkMesh","decomposePar","mesh-facts","partition-audit","potentialFoam","renumberMesh","simpleFoam"]' "${sidecar}" >/dev/null || continue
+              build_definition=$(jq -er '.source_commits[] | select(.commit_role == "build_definition") | .oid' "${sidecar}") || continue
+              git cat-file -e "${build_definition}^{commit}" 2>/dev/null || continue
+              git diff --quiet "${build_definition}" "${GITHUB_SHA}" -- scripts/build-openfoam.sh scripts/build-openfoam-task.sh experiment-metrics/native experiment-metrics/src/experiment_metrics/build_provenance.py experiment-metrics/src/experiment_metrics/probes/capture_hardware.py || continue
               [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
               [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
               echo "Selected ${archive}"
-              printf 'action=reuse\nsource_archive_key=%s\n' "${run_id}" >> "${GITHUB_OUTPUT}"
+              printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
               exit 0
             done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 20 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
             commit="$(git rev-parse "${commit}^" 2>/dev/null || true)"
           done
 
           echo "No reusable OpenFOAM build archive was found; falling back to a new build"
-          echo "action=build" >> "${GITHUB_OUTPUT}"
+          printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
 
   reuse-build:
     name: Reuse OpenFOAM build
@@ -133,7 +134,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-build-log-${{ github.run_id }}-${{ github.run_attempt }}
+          name: openfoam-genkai-build-log-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.BUILD_DIR }}/logs
           if-no-files-found: warn
           compression-level: 1
@@ -169,7 +170,7 @@ jobs:
           install -d -m 2775 "${OPENFOAM_RUNTIME_ROOT}"
           provision_dir="$(mktemp -d "${OPENFOAM_RUNTIME_ROOT}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXXXX")"
           echo "provision_dir=${provision_dir}" >> "${GITHUB_OUTPUT}"
-          mkdir -p "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results" "${provision_dir}/task"
+          mkdir -p "${provision_dir}/benchmark" "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/logs" "${provision_dir}/results"
           archive="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
           sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
           expected_size="$(jq -er '.build_archive.size_bytes' "${sidecar}")"
@@ -179,12 +180,13 @@ jobs:
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/platforms/genkai/run-openfoam.pjm" "${GITHUB_WORKSPACE}/platforms/genkai/prepare-openfoam-case.pjm" "${provision_dir}/scripts/"
-          install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/task/"
-          cp -a "${GITHUB_WORKSPACE}/benchmark/cavity3D-64M" "${provision_dir}/task/"
+          install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/benchmark/"
+          cp -a "${GITHUB_WORKSPACE}/benchmark/occDrivAerStaticMesh" "${provision_dir}/benchmark/"
+          install -m 0644 "${GITHUB_WORKSPACE}/benchmark/workload.json" "${provision_dir}/benchmark/workload.json"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
-          # Keep all installed runtime dependencies, excluding source and build trees.
-          tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='*.C' --exclude='*.H' --exclude='*.c' --exclude='*.h' --exclude='./OpenFOAM/src' --exclude='./OpenFOAM/applications' --exclude='./OpenFOAM/wmake' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
+          # Keep OpenFOAM headers and wmake: the official coded wall-clock function object compiles on first use.
+          tar -I zstd -xf "${archive}" -C "${provision_dir}" --exclude='*.o' --exclude='./OpenFOAM/applications' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
 
       - name: Cleanup failed OpenFOAM provisioning
         if: failure() && steps.provision_runtime.outputs.provision_dir != ''
@@ -199,13 +201,13 @@ jobs:
     runs-on: [self-hosted, genkai]
 
     concurrency:
-      group: genkai-openfoam-case-${{ needs.select-build.outputs.prepare_script_sha256 }}
+      group: genkai-openfoam-case-${{ needs.select-build.outputs.experiment_preset }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}
 
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
 
     steps:
-      - name: Run blockMesh and decomposePar when uncached
+      - name: Stage mesh, validate it, and decompose when uncached
         run: |
           experiment_preset='${{ needs.select-build.outputs.experiment_preset }}'
           [[ "${experiment_preset}" =~ ^[a-z0-9-]+$ ]]
@@ -218,7 +220,19 @@ jobs:
           esac
           prepare_root="/fast/pj26000080/openfoam-case-prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${prepare_root}"
-          prepare_target="${prepare_root}/case"
+          workload_dir="/home/pj26000080/share/openfoam-workload"
+          workload_archive="${workload_dir}/polyMesh_65M.tar.gz"
+          workload_temporary="${workload_archive}.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+          install -d -m 2775 "${workload_dir}"
+          trap 'rm -f -- "${workload_temporary}"' EXIT
+          if [[ ! -f "${workload_archive}" || "$(stat -c '%s' "${workload_archive}")" != "$(jq -r '.mesh.size_bytes' "${PROVISION_DIR}/benchmark/workload.json")" || "$(sha256sum "${workload_archive}" | awk '{print $1}')" != "$(jq -r '.mesh.sha256' "${PROVISION_DIR}/benchmark/workload.json")" ]]; then
+            curl --fail --location --retry 3 "$(jq -r '.mesh.url' "${PROVISION_DIR}/benchmark/workload.json")" --output "${workload_temporary}"
+            test "$(stat -c '%s' "${workload_temporary}")" = "$(jq -r '.mesh.size_bytes' "${PROVISION_DIR}/benchmark/workload.json")"
+            test "$(md5sum "${workload_temporary}" | awk '{print $1}')" = "$(jq -r '.mesh.md5' "${PROVISION_DIR}/benchmark/workload.json")"
+            test "$(sha256sum "${workload_temporary}" | awk '{print $1}')" = "$(jq -r '.mesh.sha256' "${PROVISION_DIR}/benchmark/workload.json")"
+            mv -- "${workload_temporary}" "${workload_archive}"
+          fi
+          trap - EXIT
           cleanup() {
             original_status=$?
             if [[ -n "${job_id:-}" ]]; then
@@ -232,7 +246,7 @@ jobs:
           }
           trap cleanup EXIT
           prepare_cache_root="${HOME}/../share/openfoam-case-cache"
-          submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 -x "PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_DECOMPOSITION_PROFILE=${prepare_decomposition_profile},PREPARE_SUBDOMAINS=${prepare_subdomains},PREPARE_TARGET=${prepare_target},PROVISION_DIR=${PROVISION_DIR}" -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
+          submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 -x "PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_DECOMPOSITION_PROFILE=${prepare_decomposition_profile},PREPARE_SUBDOMAINS=${prepare_subdomains},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}" -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
           printf '%s\n' "${submission}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${submission}")"
           test -n "${job_id}"
@@ -290,7 +304,7 @@ jobs:
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
           fi
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
-          control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
+          control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
           if [[ "${purpose}" == profile ]]; then
             control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
           fi
@@ -318,7 +332,7 @@ jobs:
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
           trap - EXIT
-          job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}" --profile-rank '${{ inputs.profile_rank }}' --profile-analysis '${{ inputs.profile_analysis }}')"
+          job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pjm_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
@@ -365,11 +379,10 @@ jobs:
         if: always() && steps.v2_context.outputs.pjm_job_id != ''
         run: |
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-scheduler-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --job-id "${PJM_JOB_ID}" || true
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --log "${RUN_DIR}/logs/solver.log" || true
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-pstream --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-dir "${RUN_DIR}/domain/pstream" || true
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --log "${RUN_DIR}/logs/solver.log" --protocol "${OPENFOAM_PROTOCOL_PATH}" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-execution-context --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --host-snapshot "${RUN_DIR}/source/env/host-exec.snapshot" --placement-root "${RUN_DIR}/source/placement" --scheduler-request "${RUN_DIR}/control/scheduler-request.json" --scheduler-accounting "${RUN_DIR}/control/scheduler-accounting.json" --decompose-dict "${RUN_DIR}/source/mesh/decomposeParDict" --solver-log "${RUN_DIR}/logs/solver.log" || true
           args=(package --manifest "${RUN_MANIFEST}")
-          for pair in 'control/run-manifest.json:run_manifest' 'control/instrumentation-bundle.json:instrumentation_bundle' 'control/build-sidecar.json:build_sidecar' 'control/build-provision-validation.json:build_provision_validation' 'control/job-entry.json:job_entry' 'control/scheduler-accounting.json:scheduler_accounting' 'control/scheduler-request.json:scheduler_request' 'control/scheduler-terminal.json:scheduler_terminal' 'control/submission-result.json:scheduler_submission_result' 'logs/blockMesh.log:block_mesh_log' 'logs/decomposePar.log:decompose_par_log' 'logs/profile-location.txt:postrun_source' 'logs/solver.log:solver_log' "logs/${PJM_JOB_ID}.pjm.log:pjm_log" 'results/result.txt:official_result' 'source/env/host-exec.snapshot:host_exec_environment' 'source/env/job-entry.snapshot:job_entry_environment' 'source/network/imb-mpi1/argv.json:imb_mpi1_argv' 'source/network/imb-mpi1/stderr.txt:imb_mpi1_stderr' 'source/network/imb-mpi1/stdout.txt:imb_mpi1_stdout' 'source/scheduler/accounting.stderr:scheduler_accounting_stderr' 'source/scheduler/accounting.stdout:scheduler_accounting_stdout' 'source/scheduler/submission.stderr:scheduler_submission_stderr' 'source/scheduler/submission.stdout:scheduler_submission_stdout'
+          for pair in 'control/run-manifest.json:run_manifest' 'control/instrumentation-bundle.json:instrumentation_bundle' 'control/build-sidecar.json:build_sidecar' 'control/build-provision-validation.json:build_provision_validation' 'control/job-entry.json:job_entry' 'control/scheduler-accounting.json:scheduler_accounting' 'control/scheduler-request.json:scheduler_request' 'control/scheduler-terminal.json:scheduler_terminal' 'control/submission-result.json:scheduler_submission_result' 'logs/checkMesh.log:check_mesh_log' 'logs/decomposePar.log:decompose_par_log' 'logs/renumberMesh.log:renumber_mesh_log' 'logs/potentialFoam.log:potential_foam_log' 'logs/applyBoundaryLayer.log:apply_boundary_layer_log' 'logs/profile-location.txt:postrun_source' 'logs/solver.log:solver_log' "logs/${PJM_JOB_ID}.pjm.log:pjm_log" 'results/result.txt:official_result' 'source/env/host-exec.snapshot:host_exec_environment' 'source/env/job-entry.snapshot:job_entry_environment' 'source/network/imb-mpi1/argv.json:imb_mpi1_argv' 'source/network/imb-mpi1/stderr.txt:imb_mpi1_stderr' 'source/network/imb-mpi1/stdout.txt:imb_mpi1_stdout' 'source/scheduler/accounting.stderr:scheduler_accounting_stderr' 'source/scheduler/accounting.stdout:scheduler_accounting_stdout' 'source/scheduler/submission.stderr:scheduler_submission_stderr' 'source/scheduler/submission.stdout:scheduler_submission_stdout'
           do
             relative="${pair%%:*}"
             if [[ -f "${RUN_DIR}/${relative}" ]]; then
@@ -379,9 +392,6 @@ jobs:
           while IFS= read -r -d '' path; do
             args+=(--member "${path#"${RUN_DIR}/"}:rank_placement")
           done < <(find "${RUN_DIR}/source/placement" -type f -name 'rank-*.json' -print0 | sort -z)
-          while IFS= read -r -d '' path; do
-            args+=(--member "${path#"${RUN_DIR}/"}:pstream_source")
-          done < <(find "${RUN_DIR}/domain/pstream" -type f -print0 | sort -z)
           while IFS= read -r -d '' path; do
             args+=(--member "${path#"${RUN_DIR}/"}:minimal_hardware")
           done < <(find "${RUN_DIR}/source/hardware" -type f -name 'node-*.json' -print0 | sort -z)
@@ -411,7 +421,7 @@ jobs:
         if: always() && steps.v2_context.outputs.pjm_job_id != ''
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-v2-${{ steps.v2_context.outputs.run_id }}
+          name: openfoam-genkai-v2-${{ steps.v2_context.outputs.run_id }}
           path: |
             ${{ steps.v2_context.outputs.run_dir }}/artifact-manifest.json
             ${{ steps.v2_context.outputs.run_dir }}/run-artifacts.tar.zst
@@ -419,11 +429,11 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Upload cavity3D result
+      - name: Upload occDrivAerStaticMesh result
         if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: openfoam-cavity3d-result-${{ github.run_id }}-${{ github.run_attempt }}
+          name: openfoam-genkai-occdrivaer-65m-result-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.v2_context.outputs.run_dir }}/results
           if-no-files-found: error
           compression-level: 0
@@ -453,6 +463,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: "openfoam-genkai-*"
 
       - name: Connect to home server through Tailscale
         uses: tailscale/github-action@v4
@@ -473,15 +484,11 @@ jobs:
 
       - name: Copy artifacts to home server
         run: |
-          ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}"
-          scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/"
+          ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/genkai"
+          scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/genkai/"
 
       - name: Delete copied GitHub artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[].id' |
-          while read -r artifact_id
-          do
-            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
-          done
+          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("openfoam-genkai-")) | .id' | while read -r artifact_id; do gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"; done

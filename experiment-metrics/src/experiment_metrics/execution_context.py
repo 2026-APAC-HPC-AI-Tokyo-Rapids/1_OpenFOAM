@@ -86,6 +86,11 @@ def _validate_request(request: dict[str, object], protocol: RunProtocol) -> None
         or request.get("ranks") != protocol.ranks
         or request.get("resource_group") != protocol.resource_group
         or request.get("transport_policy") != protocol.transport_policy
+        or request.get("workload_id") != protocol.workload_id
+        or request.get("distribution") != protocol.distribution
+        or request.get("release") != protocol.release
+        or request.get("solver") != protocol.solver
+        or request.get("iterations") != protocol.iteration_target
     ):
         raise ValueError("scheduler request differs from protocol")
 
