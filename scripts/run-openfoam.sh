@@ -126,6 +126,7 @@ stage_at() {
 # profile capture; the executable identity remains the tracked probe itself.
 probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
 export PATH="${probe_python_dir}:${PATH}"
+source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"
 
 MPIEXEC=$(command -v mpirun)
 DECOMPOSE_PAR=$(command -v decomposePar)
@@ -134,7 +135,6 @@ CHECK_MESH=$(command -v checkMesh)
 RENUMBER_MESH=$(command -v renumberMesh)
 POTENTIAL_FOAM=$(command -v potentialFoam)
 APPLY_BOUNDARY_LAYER=$(command -v applyBoundaryLayer)
-RESTORE_ZERO_DIR=$(command -v restore0Dir)
 MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
@@ -173,7 +173,7 @@ cache_dir=$(sed -n 's/^cache_dir=//p' "${LOG_DIR}/case-prepare.log" | tail -n 1)
 install -m 0644 "${cache_dir}/manifest.json" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${OPENFOAM_ITERATIONS};/" system/controlDict
-"${RESTORE_ZERO_DIR}" -processor
+restore0Dir -processor
 stage renumber_mesh "${LOG_DIR}/renumberMesh.log" "${solver_launch[@]}" "${RENUMBER_MESH}" -constant -overwrite -parallel -fileHandler uncollated
 stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POTENTIAL_FOAM}" -initialiseUBCs -parallel -fileHandler uncollated
 stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated

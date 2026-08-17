@@ -76,6 +76,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '"${OPENFOAM_SOLVER}" == simpleFoam' in text
     assert '"${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com' in text
     assert '"${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M' in text
+    assert 'source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"' in text
+    assert "RESTORE_ZERO_DIR=$(command -v restore0Dir)" not in text
+    assert "restore0Dir -processor" in text
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
