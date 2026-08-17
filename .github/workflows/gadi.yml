@@ -231,7 +231,7 @@ jobs:
           cleanup() {
             status=$?
             trap - EXIT
-            if [[ "${status}" -ne 0 ]]; then qdel "${job_id:-}" 2>/dev/null || true; cat "${prepare_root}/pbs.log" 2>/dev/null || true; fi
+            if [[ "${status}" -ne 0 ]]; then qdel "${job_id:-}" 2>/dev/null || true; cat "${prepare_root}/pbs.log" 2>/dev/null || true; rm -rf -- "${PROVISION_DIR:?}"; fi
             rm -rf -- "${prepare_root}"
             exit "${status}"
           }
