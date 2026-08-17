@@ -202,6 +202,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
     assert "runs-on: [self-hosted, gadi]" in workflow
+    assert "group: gadi-openfoam-runtime" in workflow
+    assert "cancel-in-progress: false" in workflow
     assert "/scratch/hb15/tk7779/openfoam/gadi" in workflow
     assert "/home/pj26000080" not in workflow
     assert "submit-pbs-run" in workflow
