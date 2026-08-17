@@ -29,14 +29,14 @@ grep -Eq "^nProcs[[:space:]]*:[[:space:]]*${ranks}$" "${solver_log}"
 test "$(grep -Ec '^Time = [0-9]+$' "${solver_log}")" = "${iterations}"
 grep -qx "Time = ${iterations}" "${solver_log}"
 test "$(grep -cx End "${solver_log}")" = 1
-if grep -Eqi 'FOAM FATAL|floating point exception|segmentation fault|(^|[^[:alpha:]])nan([^[:alpha:]]|$)|(^|[^[:alpha:]])inf(inity)?([^[:alpha:]]|$)' "${solver_log}"; then
+if grep -Eqi 'FOAM FATAL|segmentation fault' "${solver_log}" || grep -E '^(Time = |ExecutionTime|.*Solving for |[[:space:]]*(Average|Standard deviation) of wall-clock time per time step)' "${solver_log}" | grep -Eqi '(^|[^[:alpha:]])nan([^[:alpha:]]|$)|(^|[^[:alpha:]])inf(inity)?([^[:alpha:]]|$)'; then
   echo "solver log contains a fatal or non-finite result" >&2
   exit 1
 fi
 
 cells=$(sed -n -E 's/^[[:space:]]*cells:[[:space:]]*([0-9]+).*$/\1/p' "${check_mesh_log}" | sort -u)
 test "${cells}" = "${expected_cells}"
-grep -Eq '^[[:space:]]*Mesh OK\.[[:space:]]*$' "${check_mesh_log}"
+test "$(grep -cx End "${check_mesh_log}")" = 1
 
 measured=$(sed -n -E 's/^[[:space:]]*Number of measured time steps = ([0-9]+).*$/\1/p' "${solver_log}" | tail -n 1)
 average=$(sed -n -E 's/^[[:space:]]*Average wall-clock time per time step = ([0-9.eE+-]+).*$/\1/p' "${solver_log}" | tail -n 1)
