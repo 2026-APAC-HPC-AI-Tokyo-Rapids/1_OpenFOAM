@@ -9,7 +9,7 @@ Gadiでは、小ファイルを大量に置く処理と、長く保存する大�
 
 Gadiの`/tmp`と`/dev/shm`はlogin node上の約126 GiBのtmpfsです。`/dev/shm`は`noexec`なので実行ファイルを生成するビルドには使いませんが、ccacheの保存物には使えます。ビルド終了時に`/tmp`の展開物、中間生成物、ccacheの一時ファイルを削除し、`/dev/shm`の一次ccacheはlogin nodeが保持する間だけ再利用します。実行前に`/scratch`へ展開する実行環境も一時物とし、Actionsの終了処理で削除します。
 
-OpenFOAM runtime 1件の展開には約35,000--37,000 inodeを使い、展開物は計算と成果物回収が終わるまで必要です。2026年8月17日に3 runを同時にProvisionしたところ、`hb15`のinode hard limit 212,100へ同時に到達し、3件とも`tar: Disk quota exceeded`で失敗しました（Actions `32002206618`、`32002206644`、`32002207026`）。失敗した3展開物を削除するとinode使用量は210,900から121,823へ戻りました。Gadi workflowは`gadi-openfoam-runtime`でrun全体を直列化し、1つの展開runtimeをcleanupしてから次を開始します。この制約はGadi内だけに適用し、玄界を待たせません。
+OpenFOAM runtime 1件の展開には約35,000--37,000 inodeを使います。2026年8月17日に3 runを同時にProvisionしたところ、`hb15`のinode hard limit 212,100へ同時に到達し、3件とも`tar: Disk quota exceeded`で失敗しました（Actions `32002206618`、`32002206644`、`32002207026`）。失敗した3展開物を削除するとinode使用量は210,900から121,823へ戻りました。runtimeはBuild archive SHA-256ごとに`runtime-cache`へ1回だけ展開し、各runからsymlinkして共有します。初回展開だけを`.gadi-populate.lock`の`flock`で保護し、異なるrunのProvision、PBS、成果物回収は並行可能なままにします。
 
 32 KiBのファイル4096個を作成した実測では、`/dev/shm`と`/tmp`が約0.08秒、`/scratch`が約5秒でした。一次ccacheを`/dev/shm`、別のlogin nodeからも使う共有ccacheを`/scratch/hb15/tk7779/openfoam/gadi/ccache`へ置きます。`~/.config/ccache/ccache.conf`で一次ccacheを`max_size = 10GB`とし、共有ccacheはビルド後に`ccache --trim-dir`で10 GBまで整理します。`max_size`は共有ccacheに適用されず、容量による整理ではinode数も保証されないため、最初の実ビルド後に共有ccacheの実ファイル数も確認します。
 
