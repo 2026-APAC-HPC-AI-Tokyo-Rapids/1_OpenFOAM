@@ -6,7 +6,7 @@
 
 手動実行は実行先、ノード数、通常計測かプロファイルかを入力欄から受け取る。コミットメッセージは読まない。プロファイルも同じ入口から起動し、同時に選んだ各クラスタへ同じ実行モードを渡す。
 
-`[require-build]`はpush時だけ有効である。手動実行と`[require-build]`のないpushは同じクラスタの既存成果物を探し、利用できるものがなければビルドする。
+`[require-build]`はpush時だけ有効である。手動実行と`[require-build]`のないpushは、対象commitからfirst-parentを1 commitずつ親方向へ辿り、最初に見つかった同じクラスタの利用可能な成果物を使う。Actions全体をworkflow実行日時順には探索しない。利用できるものがなければビルドする。
 
 ## 共通部分と固有部分
 
@@ -16,7 +16,7 @@
 
 ## 記憶領域と再利用
 
-玄界は短命なビルド領域と一次ccacheをlogin nodeの`/dev/shm`、ソースの鏡像と共有ccacheを`/fast`、圧縮成果物を共有領域へ置く。Gadiは`/dev/shm`が`noexec`なので短命なビルド領域をlogin nodeの`/tmp`へ置き、一次ccacheだけを`/dev/shm`へ置く。圧縮したソースと成果物、共有ccache、ケースキャッシュ、実行領域、回収記録は`/scratch`へ置く。展開したビルド領域、ccacheの一時ファイル、実行環境はActionsの終了処理で削除する。
+玄界は短命なビルド領域と一次ccacheをlogin nodeの`/dev/shm`、ソースの鏡像と共有ccacheを`/fast`、圧縮成果物を共有領域へ置く。Gadiは`/dev/shm`が`noexec`なので短命なビルド領域をlogin nodeの`/tmp`へ置き、一次ccacheだけを`/dev/shm`へ置く。圧縮したソースと成果物、共有ccache、ケースキャッシュ、実行領域、回収記録は`/scratch`へ置く。展開したビルド領域とccacheの一時ファイルはActionsの終了処理で削除する。Gadiの実行環境はBuild archive SHA-256ごとの共有runtime cacheとして保持し、run固有のsymlinkだけを削除する。
 
 ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。異なるコンパイラ、MPI、ABIの成果物を共有しない。
 
@@ -42,7 +42,7 @@
 
 2ノードと4ノードは資源対応を単体試験で確認し、必要な実験時に実計算を行う。プロファイル値は通常計測との性能比較には使わない。
 
-両クラスタともIntel C++ 2025.1.1とIntel MPI 2021.15を基準とする。Gadiは`intel-compiler-llvm/2025.1.1`と`intel-mpi/2021.15.0`、課題`hb15`、投入先`normalsr`を使う。玄界は`intel/2025.1.3`と`impi`、投入先`a-batch`を使う。login nodeの物理コア数に合わせ、ビルド並列数はGadiが48、玄界が120である。Gadiのノード内通信は`shm`、ノード間通信は`shm:ofi`とする。login node上の新規ビルド、計算ノード上のMPI実行、VTune計測まで確認済みである。これらを変える場合は新規ビルドを行い、変更理由をコミット本文へ記録する。
+両クラスタともIntel C++ 2025.1.1とIntel MPI 2021.15を基準とする。Gadiは`intel-compiler-llvm/2025.1.1`と`intel-mpi/2021.15.0`、課題`hb15`、投入先`normalsr`を使う。玄界は`intel/2025.1.3`と`impi`、投入先`a-batch`を使う。login nodeの物理コア数と実測したメモリ上限に合わせ、ビルド並列数はGadiが16、玄界が120である。玄界のIcx用Make preprocessorは、compute nodeでも`cc1`を解決できるgcc-toolset-11の`cpp`へ固定する。Gadiのノード内通信は`shm`、ノード間通信は`shm:ofi`とする。これらを変える場合は新規ビルドを行い、変更理由をコミット本文へ記録する。
 
 ## Gadiの空き容量警告
 
