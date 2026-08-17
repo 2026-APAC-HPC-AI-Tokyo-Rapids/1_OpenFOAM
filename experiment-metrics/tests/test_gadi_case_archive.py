@@ -11,7 +11,7 @@ STAGE_RANK_CONTEXT = ROOT / "platforms/gadi/stage-rank-context.sh"
 COLLECT_RANK_PLACEMENT = ROOT / "platforms/gadi/collect-rank-placement.sh"
 
 
-def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) -> None:
+def test_gadi_stages_the_complete_case_on_every_node(tmp_path: Path) -> None:
     cache_identity = "a" * 64
     expanded = tmp_path / "expanded"
     case = expanded / "case"
@@ -43,37 +43,23 @@ def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) 
     archive_dir = tmp_path / "archives" / cache_identity
     archive_dir.parent.mkdir()
 
-    subprocess.run(
-        [SCRIPT, "create", expanded, archive_dir, cache_identity, "2", "2"], check=True
-    )
-    subprocess.run(
-        [SCRIPT, "verify", archive_dir, cache_identity, "2", "2"], check=True
-    )
+    subprocess.run([SCRIPT, "create", expanded, archive_dir, cache_identity], check=True)
+    subprocess.run([SCRIPT, "verify", archive_dir, cache_identity], check=True)
+    archive_manifest = json.loads((archive_dir / "manifest.json").read_text())
+    assert archive_manifest["schema_version"] == "openfoam-case-archive/v2"
+    assert archive_manifest["number_of_subdomains"] == 4
+    assert archive_manifest["archive"]["name"] == "case.tar.zst"
 
-    common = subprocess.run(
-        ["tar", "-I", "zstd", "-tf", archive_dir / "common.tar.zst"],
+    contents = subprocess.run(
+        ["tar", "-I", "zstd", "-tf", archive_dir / "case.tar.zst"],
         check=True,
         capture_output=True,
         text=True,
     ).stdout
-    node0 = subprocess.run(
-        ["tar", "-I", "zstd", "-tf", archive_dir / "node-000.tar.zst"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    node1 = subprocess.run(
-        ["tar", "-I", "zstd", "-tf", archive_dir / "node-001.tar.zst"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    assert "constant/transportProperties" in common
-    assert "constant/polyMesh/owner" not in common
-    assert "processor0/" in node0 and "processor1/" in node0
-    assert "processor2/" not in node0
-    assert "processor2/" in node1 and "processor3/" in node1
-    assert "processor0/" not in node1
+    assert "constant/transportProperties" in contents
+    assert "constant/polyMesh/owner" in contents
+    for rank in range(4):
+        assert f"processor{rank}/" in contents
 
     runtime = tmp_path / "runtime/OpenFOAM"
     (runtime / "etc").mkdir(parents=True)
@@ -82,18 +68,20 @@ def test_gadi_case_archive_splits_processor_directories_by_node(tmp_path: Path) 
     (runtime / "bin/tools/RunFunctions").write_text(
         'restore0Dir() { for directory in processor*; do mkdir -p "${directory}/0"; cp 0.orig/* "${directory}/0/"; done; }\n'
     )
-    target = tmp_path / "jobfs/openfoam-case/occDrivAerStaticMesh"
-    subprocess.run(
-        [STAGE, archive_dir, cache_identity, "2", "2", "80", target, runtime.parent],
-        check=True,
-        env={"PATH": "/usr/bin:/bin", "PMI_RANK": "1"},
-    )
-
-    assert (target / "processor2/0/U").read_text() == "velocity\n"
-    assert (target / "processor3/0/U").read_text() == "velocity\n"
-    assert not (target / "processor0").exists()
-    assert not (target / "constant/polyMesh").exists()
-    assert (target / "system/controlDict").read_text() == "endTime 80;\n"
+    targets = [
+        tmp_path / "node0/openfoam-case/occDrivAerStaticMesh",
+        tmp_path / "node1/openfoam-case/occDrivAerStaticMesh",
+    ]
+    for target in targets:
+        subprocess.run(
+            [STAGE, archive_dir, cache_identity, "80", target, runtime.parent],
+            check=True,
+            env={"PATH": "/usr/bin:/bin"},
+        )
+        for rank in range(4):
+            assert (target / f"processor{rank}/0/U").read_text() == "velocity\n"
+        assert (target / "constant/polyMesh/owner").read_text() == "serial mesh\n"
+        assert (target / "system/controlDict").read_text() == "endTime 80;\n"
 
 
 def test_gadi_rank_context_stays_local_until_node_leader_collects_it(tmp_path: Path) -> None:

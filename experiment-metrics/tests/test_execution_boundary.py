@@ -281,6 +281,16 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         'case_archive_root="/scratch/hb15/${USER}/openfoam/gadi/case-archives"'
         in wrapper
     )
+    assert '"${archive_dir}/case.tar.zst"' in (
+        ROOT / "platforms/gadi/stage-openfoam-case.sh"
+    ).read_text(encoding="utf-8")
+    assert "common.tar.zst" not in (
+        ROOT / "platforms/gadi/archive-openfoam-case.sh"
+    ).read_text(encoding="utf-8")
+    assert "node-NNN.tar.zst" not in (
+        ROOT / "platforms/gadi/archive-openfoam-case.sh"
+    ).read_text(encoding="utf-8")
+    assert "PREPARE_NODES" not in workflow
     assert "--openfoam-arg -hostRoots" in wrapper
     assert 'host_roots="((\\\".*\\\" \\\"${PBS_JOBFS}/openfoam-case\\\"))"' in wrapper
     assert 'io_ranks+="$(( node * ranks_per_node )) "' in wrapper

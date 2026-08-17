@@ -37,7 +37,7 @@ identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISI
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 case_archive_dir="${case_archive_root}/${cache_identity}"
 case_dir="${PBS_JOBFS}/openfoam-case/occDrivAerStaticMesh"
-"${mpirun_path}" -hosts "${hosts}" -np "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/gadi/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${OPENFOAM_NODES}" "${ranks_per_node}" "${OPENFOAM_ITERATIONS}" "${case_dir}" "${runtime_root}"
+"${mpirun_path}" -hosts "${hosts}" -np "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/gadi/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${OPENFOAM_ITERATIONS}" "${case_dir}" "${runtime_root}"
 rank_context_root="${PBS_JOBFS}/openfoam-run"
 "${mpirun_path}" -hosts "${hosts}" -np "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/gadi/stage-rank-context.sh" "${RUN_MANIFEST}" "${rank_context_root}"
 host_roots="((\".*\" \"${PBS_JOBFS}/openfoam-case\"))"
