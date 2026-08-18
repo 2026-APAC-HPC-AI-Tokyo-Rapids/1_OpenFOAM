@@ -2,8 +2,8 @@
 
 ## モジュール境界
 
-実装名は `scheduler_pjm` とする。現在のGenkai/PJMだけを対象とし、
-self-hosted runnerがジョブ終了後に1回だけ取得する。
+実装名は `scheduler_pjm` とする。現在の玄界/PJMだけを対象とし、
+セルフホステッドランナーがジョブ終了後に1回だけ取得する。
 
 PJMの全環境変数は[実行環境モジュール](03-platform.md)が`env.*`として保存する。
 環境変数で得られる値は`scheduler.*`へ複製しない。このモジュールが保存するのは、
@@ -42,7 +42,7 @@ headerとdataをtabでsplitし、data fieldを`--choose`へ指定した順序で
 
 `mmszu` はPJM表示のMiB丸め値ではなく、括弧内に併記されるbytes値を使う。
 `elp`も`DD hh:mm:ss (s)`の`s`を使い、1秒未満が切り上げられるPJM値として保存する。
-`sdt`はGenkaiのsystem timezoneであるAsia/Tokyoを付け、例えば
+`sdt`は玄界のsystem timezoneであるAsia/Tokyoを付け、例えば
 `2026/07/30 12:34:56`を`2026-07-30T12:34:56+09:00`へ変換する。
 `uctmut`と`sctmut`の定義単位はmillisecondである。`pjstat`が失敗した場合や
 出力されなかった項目は、該当キーを空文字で送る。
@@ -72,5 +72,5 @@ headerとdataをtabでsplitし、data fieldを`--choose`へ指定した順序で
   <https://software.fujitsu.com/jp/manual/manualfiles/m220010/j2ul2466/02enz008/j2ul-2466-02enz0.pdf>
 - Fujitsu HPC user guide, job status and statistics:
   <https://doc.cloud.global.fujitsu.com/lib/common/jp/hpc-user-manual/CheckJobStatus/>
-- Genkai resource groups:
+- 玄界 resource groups:
   <https://www.cc.kyushu-u.ac.jp/scp/en/usage/resource_groups/>

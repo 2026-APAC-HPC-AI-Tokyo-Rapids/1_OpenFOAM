@@ -1,6 +1,6 @@
 # 玄界とGadiでのOpenFOAM実行
 
-Genkai 上で OpenFOAM の競技ワークロードを実行し、ビルド方法や実行性能の改善による影響を比較するためのリポジトリです。
+玄界およびGadi上でOpenFOAMの競技ワークロードを実行し、ビルド方法や実行性能の改善による影響を比較するためのリポジトリです。
 
 現在の対象は、OpenFOAM.com v2512の`simpleFoam`で実行する公式`occDrivAerStaticMesh`粗格子（65,334,765セル）です。公式ケースのコミット、Zenodo上のメッシュのMD5/SHA-256、ノード数ごとの40/80/150反復は[`benchmark/workload.json`](benchmark/workload.json)を正本とします。玄界とGadiのどちらでも、同じ課題で通常計測とVTuneプロファイルを実行します。
 

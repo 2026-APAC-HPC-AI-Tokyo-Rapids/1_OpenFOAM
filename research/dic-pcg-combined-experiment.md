@@ -2,95 +2,64 @@
 
 ## 目的と対象範囲
 
-source levelの候補を一つずつ分離して評価し、4 nodeで事前に定めた1%の前進基準を
-単独で超えた次の2変更だけを統合した。
+ソースコードレベルの改善候補を個別に評価し、4ノード測定で事前に定めた1%の性能改善基準を単独で達成した以下の2つの変更を統合した。
 
-- DIC前処理のforward/backward substitutionをcell単位のgatherへ変更する。
-- PCGのresidual更新とL1 norm集計を同一loopへ統合する。
+- DIC前処理のforward/backward substitutionをセル単位のgather処理へ変更する。
+- PCGの残差（residual）更新とL1ノルム集計を同一ループへ統合（loop fusion）する。
 
-比較した候補と判断は次のとおりである。
+比較した候補と採用判断は以下のとおりである。
 
 | 候補 | 測定結果 | 判断 |
 |---|---:|---|
-| DIC cell-gather | 4 node平均 8.1490 M FVOPS | 統合候補 |
-| PCG loop fusion | 4 node平均 8.1490 M FVOPS | 統合候補 |
-| symmetric `Amul` CSR | 1 node平均 1.5803 M FVOPS | baseline範囲未満のため棄却 |
-| DIC + PCG | 4 node平均 8.4573 M FVOPS | 採用 |
+| DIC cell-gather | 4ノード平均 8.1490 M FVOPS | 統合候補 |
+| PCG loop fusion | 4ノード平均 8.1490 M FVOPS | 統合候補 |
+| 対称 `Amul` CSR | 1ノード平均 1.5803 M FVOPS | ベースライン未満のため棄却 |
+| DIC + PCG | 4ノード平均 8.4573 M FVOPS | 採用 |
 
-OpenFOAM source commit `b6164259aca1a06da1352efc2b31bd6b43fe19e7`は、変更前の
-source baselineにDICとPCGの2変更だけを適用した実験用commitである。最終的には
-source repositoryの`master`へmerge commit `7d59c05ec`として統合した。性能低下が
-2回再現したsymmetric `Amul` CSRは含めていない。Workload、DP/Int64 build、toolchain、
-partition、rank placement、MPI設定、公式parserは変更していない。
+OpenFOAMソースコードのコミット `b6164259aca1a06da1352efc2b31bd6b43fe19e7` は、変更前のソースベースラインにDICとPCGの2つの変更のみを適用した実験用コミットである。最終的にはソースリポジトリの `master` ブランチへマージコミット `7d59c05ec` として統合した。2回の測定で性能低下が再現した対称 `Amul` CSRは含めていない。ワークロード、倍精度/64ビット整数ビルド、ツールチェーン、領域分割（partition）、ランク配置、MPI設定、公式パーサーの判定条件は変更していない。
 
 ## 実装内容
 
-DICではstableなlosort groupを使ってforward substitutionをupper cellごとに集約し、
-owner-start groupを逆順に走査してbackward substitutionをlower cellごとに集約する。
-依存方向とcell内のoperand順は維持する。20,000件の合法なLDU addressingを用いた
-`-O0`および`-O3`の事前試験では、変更前後の結果がbit単位で一致した。
+DICでは安定な `losort` グループを用いてforward substitutionをupperセルごとに集約し、`owner-start` グループを逆順に走査してbackward substitutionをlowerセルごとに集約する。依存方向とセル内のオペランド順序は維持する。20,000件の有効なLDUアドレッシングを用いた `-O0` および `-O3` での事前単体テストにおいて、変更前後の計算結果がビット単位で完全一致することを確認した。
 
-PCGでは`psi`とresidualを更新するloopにresidualのL1集計を統合し、PCG iterationごとの
-residual array全走査を1回削減する。集計順、`solveScalar`、`sumOp`、communicator、
-message tagおよびglobal reduction回数は変えない。Pipelined CGへのalgorithm変更ではない。
+PCGでは `psi` と残差を更新するループ内に残差のL1ノルム集計を統合し、PCG反復ごとの残差配列全走査を1回削減した。集計順序、`solveScalar`、`sumOp`、コミュニケータ、メッセージタグ、およびグローバルリダクション回数は変更していない。Pipelined CGへのアルゴリズム変更ではない。
 
-## Build来歴と1 nodeの数値検証
+## ビルド来歴と1ノードでの数値検証
 
-利用側commit `a0fba38483c9d4314804f2820da50a1820c399ec`は、combined source branchを
-固定して新規buildを要求した。Push Actions `31661914834`はexact source OID
-`b6164259...`をcheckoutし、build archive #328を公開した。
+利用側コミット `a0fba38483c9d4314804f2820da50a1820c399ec` で統合ソースブランチを指定し、新規ビルドを要求した。GitHub Actions実行 `31661914834` は厳密なソースOID `b6164259...` をチェックアウトし、ビルドアーカイブ #328 を公開した。
 
-- Size：476,470,983 byte
+- サイズ：476,470,983 バイト
 - SHA-256：`2849a7985b485360a532c301920d67c24632cb879df276444b84d68381a5e3c2`
 
-1 node qualificationのrun `r-68fc530086528eeeb9c77bbd7efc0acc`は公式`VALID`で、
-1.7834 M FVOPS、35.888 s/stepだった。`End`を検出し、NaN/Infなし、5/5 step、
-10/10 pressure solveを完了し、全solveが正確に321 iterationだった。Pressure residual列は
-baselineと字句単位で完全一致した。Workload manifestとmesh-cache manifestにも差がなく、
-120件のrank/CPU placement recordもすべて一致した。
+1ノードでの検証実行（Run `r-68fc530086528eeeb9c77bbd7efc0acc`）は公式判定で `VALID` となり、1.7834 M FVOPS、35.888 秒/ステップを記録した。正常終了（`End`）を検出し、NaN/Infなし、5/5ステップ、10/10圧力計算を完了し、全計算が正確に321反復で収束した。圧力残差の推移列はベースラインと字句単位で完全一致した。ワークロードマニフェストおよびメッシュキャッシュマニフェストにも差分はなく、120件のランク/CPU配置記録もすべて一致した。
 
-## 4 node反復測定
+## 4ノード環境での反復測定
 
-次の2 runはexact build archive #328をhardlinkで再利用しており、OpenFOAMを再buildして
-いない。
+以下の2回の実行は、同一のビルドアーカイブ #328 をハードリンクで再利用しており、OpenFOAMの再ビルドは行っていない。
 
-| Actions | Run ID | FVOPS_trim | s/step | 公式判定 |
+| Actions実行 | Run ID | FVOPS_trim | 秒/ステップ | 公式判定 |
 |---|---|---:|---:|---|
 | `31662737506` | `r-1ec10cd2d04f8ac54f7a2c42938a10c7` | 8.4824 M | 7.545 | VALID |
 | `31662737579` | `r-765790d354b02123a1b337e253635d44` | 8.4321 M | 7.590 | VALID |
 
-両runとも5/5 stepと10/10 solveを完了し、全solveが321 iteration、`End`あり、
-NaN/Infなしだった。Residual軌跡は同じlayoutのbaselineと一致した。Placement recordは
-各run 448件で、4 nodeそれぞれ112 rank、global rank 0--447、local rank 0--111、
-追跡対象のbalanced singleton CPU affinityと一致した。
+両実行ともに5/5ステップと10/10計算を完了し、全計算が321反復、`End`あり、NaN/Infなしで終了した。残差軌跡は同一レイアウトのベースラインと一致した。配置記録は各実行448件で、4ノードそれぞれ112ランク、グローバルランク0〜447、ローカルランク0〜111であり、追跡対象のバランス型シングルCPUアフィニティと完全に合致した。
 
-Preparation PJMとsolver PJMはすべてterminalである。公式result、manifest、固定run bundleは
-home serverへcopyしてhashを検証した後、GitHub上の一時artifactを削除した。実験由来の
-PJM job、build directory、provision directoryは残っていない。
+ケース準備およびソルバーのPJMジョブはすべて正常終了した。公式判定結果、マニフェスト、固定実行バンドルを自宅サーバーへコピーしてハッシュを検証した後、GitHub上の一時アーティファクトを削除した。実験由来のPJMジョブ、ビルドディレクトリ、プロビジョニングディレクトリの残留はない。
 
 ## 結論
 
-確立済みの4 node baselineは5 runのmedianが7.9900 M、範囲が7.9850--8.0050 Mである。
-Combinedの2 run平均は8.4573 Mで、baseline medianより5.85%高く、両sampleともbaselineの
-全範囲を上回った。また、DICまたはPCGを単独適用した2 run平均8.1490 Mより3.78%高い。
-したがって2変更の効果は共存し、combined buildは単独候補より明確に優れる。
+確立済みの4ノードベースラインは5回の測定の中央値（median）が7.9900 M、範囲が7.9850〜8.0050 Mである。
+統合版（Combined）の2回平均は8.4573 Mであり、ベースライン中央値より5.85%高く、両サンプルともベースラインの全範囲を上回った。また、DICまたはPCGを単独適用した2回平均（8.1490 M）よりも3.78%高い。
+したがって2つの改善効果は競合せず共存し、統合ビルドは単独候補よりも明確に優れた性能を示した。
 
-DIC cell-gatherとPCG loop fusionの組合せを採用する。数値不変性、exact build provenance、
-4 nodeでの反復改善、artifact archivalおよびcleanupはすべてE2E完了条件を満たした。
-利用側`main`はsource repositoryの一時的なexperiment branchではなく、統合後の`master`を
-checkoutして新規buildする。
+DIC cell-gatherとPCG loop fusionの組み合わせを正式採用とする。数値の不変性、厳密なビルド来歴、4ノードでの再現性のある性能向上、アーティファクト保管およびクリーンアップのすべてにおいてE2E完了条件を満たした。利用側の `main` ブランチは、ソースリポジトリの一時的な実験ブランチではなく、統合後の `master` をチェックアウトして新規ビルドを行う。
 
-## main統合後の資格確認
+## mainブランチ統合後の動作確認
 
-Source repositoryの`master`へmerge commit `7d59c05ec3af21853d094ef29285e23d27823671`を
-pushし、利用側`main`へmerge commit `aabccc1ffa4beab265360b976c70cc09e987058a`をpushした。
-利用側の最終tree差分は`research/**`だけだったためpush eventはpaths-ignoreとなったが、
-source内容は変わっている。そこでActions `31663467385`を`require_build=true`で明示的に
-dispatchし、過去archiveを再利用しない新規buildから標準1 node E2Eを実行した。
+ソースリポジトリの `master` へマージコミット `7d59c05ec3af21853d094ef29285e23d27823671` をプッシュし、利用側リポジトリの `main` へマージコミット `aabccc1ffa4beab265360b976c70cc09e987058a` をプッシュした。
+利用側の最終的なファイル差分が `research/**` のみであったためプッシュ時のActionsはpaths-ignoreでスキップされたが、ソース内容は更新されている。そこでGitHub Actions実行 `31663467385` を `require_build=true` で手動実行し、過去アーカイブを再利用しないクリーンな新規ビルドから標準の1ノードE2E検証を実施した。
 
-Build sidecarはbuild definition `aabccc1...`、OpenFOAM source `7d59c05ec...`、ThirdParty
-source `ba502701...`を記録している。Run `r-d5241fd4393e3114f4a053e6aa1826ee`、solver PJM
-`6469460`は終了code 0でterminalとなり、公式parserは次を出力した。
+ビルドサイドカーには、ビルド定義 `aabccc1...`、OpenFOAMソース `7d59c05ec...`、ThirdPartyソース `ba502701...` が記録されている。Run `r-d5241fd4393e3114f4a053e6aa1826ee`、ソルバーPJMジョブ `6469460` は終了コード0で正常終了し、公式判定パーサーは以下の結果を出力した。
 
 ```text
 checks: End=1 nan_or_inf=0 steps=5/5 p_solves=10/10 solves_at_321_iters=10/10 ranks=120 nodes=1 cells=unverified
@@ -98,8 +67,4 @@ STATUS: VALID
 RESULT: FVOPS_trim=1.7186M  s_per_step=37.240  trim_time=148.96s  steps=5  ranks=120  nodes=1
 ```
 
-Pressure residual列とworkload manifestはbaselineと完全一致し、placement recordは120件、
-scheduler accountingは1 node、`EXT`、exit code 0だった。Build、provision、case preparation、
-solver、home archiveの全jobが成功し、実験由来のPJM jobは残っていない。これにより、
-experiment branchではなく両repositoryの既定ブランチから同じ最適化を再buildし、公式taskを
-完走できることを確認した。
+圧力残差列とワークロードマニフェストはベースラインと完全一致し、配置記録は120件、スケジューラのアカウンティング情報は1ノード、`EXT`、終了コード0であった。ビルド、プロビジョニング、ケース準備、ソルバー実行、自宅サーバーへのアーカイブ保存の全ジョブが成功し、実験由来の残留PJMジョブはない。これにより、実験ブランチではなく両リポジトリの既定ブランチから同一の最適化版を再ビルドし、公式タスクを正常に完走できることが確認された。

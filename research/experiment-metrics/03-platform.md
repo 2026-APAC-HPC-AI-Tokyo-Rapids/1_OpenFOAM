@@ -4,7 +4,7 @@
 
 実装名は `platform` とする。計算開始前に、計算ノード上の同じPythonプロセスから
 OS、CPU、メモリ、全環境変数を取得し、1バッチで送る。
-現在の対象はGenkai node group Aの1ノードCPU実行である。
+現在の対象は玄界ノードグループAの1ノードCPU実行である。
 
 PJM変数の確定、`module load`、OpenFOAM bashrc、MPI設定、認証設定をすべて終えた後、
 meshingの前に取得する。それ以降は実行条件となる環境を変更しない。構成取得をsolverと
@@ -47,7 +47,7 @@ LC_ALL=C lscpu --json
 `field`末尾のコロンを1つ除いた文字列をキー、`data`を値とする。必要なfieldを
 名前で選ぶ。表示位置や空白へ依存しない。
 
-Genkai node group Aの公称構成はIntel Xeon Platinum 8490H、60 cores×2 sockets、
+玄界ノードグループAの公称構成はIntel Xeon Platinum 8490H、60 cores×2 sockets、
 512 GiBであるが、公称値をメトリクスとして埋め込まず、実ノードの値を取得する。
 
 ## `/proc/meminfo` の読み方
@@ -102,5 +102,5 @@ byte列をRFC 4648 standard Base64（改行なし、`=`paddingあり）でencode
   <https://docs.python.org/3/library/platform.html#platform.freedesktop_os_release>
 - util-linux `lscpu`: <https://man7.org/linux/man-pages/man1/lscpu.1.html>
 - Linux `/proc/meminfo`: <https://docs.kernel.org/filesystems/proc.html>
-- Genkai hardware:
+- 玄界 hardware:
   <https://www.cc.kyushu-u.ac.jp/scp/en/system/genkai/hardware/>

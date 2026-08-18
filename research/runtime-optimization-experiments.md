@@ -1,152 +1,80 @@
-# cavity3D-64M runtime最適化実験台帳
+# cavity3D-64M ランタイム最適化実験台帳
 
-本台帳は、実験の完了または決定的なstatic調査のたびに更新する。Timingに関する主張
-には、公式にvalidと判定されたbench結果だけを使用する。
+本台帳は、実験の完了または決定的な静的調査のたびに更新する。所要時間・性能に関する主張には、公式判定でVALIDとなったベンチマーク結果のみを使用する。
 
 ## 状況
 
-- 現在のphase：Phase 0のnoise確認およびPhase 1のfull-core screening。
-- 現在のbuild：既存のOpenFOAM v2606 Icx/Intel MPI archive。再利用予定。
-- 現在のproduction preset：1 node、総rank数120、Scotch、`I_MPI_FABRICS=shm`。
-- 現在のhypothesis：120 rank固定のcanary構成では2および4 nodeの割当を十分に利用
-  できない。小さなMPI runtime調整を行う前に、physical coreを使い切るlayoutが優位に
-  なるはずである。
-- commit `948e11f`での最初のfull-core screenは完了した。2 node/240 rankで
-  3.3997 M FVOPS、4 node/480 rankで6.8139 Mを得て、いずれもvalidだった。同時実行
-  した1 node repeatでは1.6996 Mだった。
-- commit `a5390da`でfull-core workflow `31634782784`（2/240）と
-  `31634785406`（4/480）をrepeat中である。次のcontrolled factorは4 node/448 rank
-  で、各NUMA domainにつき1 CPUを意図的に予約する。
+- 現在のフェーズ：Phase 0のノイズ（測定誤差）確認およびPhase 1の全コアスクリーニング。
+- 現在のビルド：既存のOpenFOAM v2606 Icx/Intel MPIアーカイブを再利用予定。
+- 現在の本番プリセット：1ノード、総ランク数120、Scotch領域分割、`I_MPI_FABRICS=shm`。
+- 現在の仮説：120ランク固定のカナリア構成では2ノードおよび4ノードの割当資源を十分に活用できない。細かなMPIランタイム調整を行う前に、物理コアを使い切るプロセス配置（レイアウト）が優位になるはずである。
+- コミット `948e11f` での最初の全コアスクリーニングは完了した。2ノード/240ランクで 3.3997 M FVOPS、4ノード/480ランクで 6.8139 M を記録し、いずれもVALID判定であった。同時実行した1ノードでの再測定（repeat）では 1.6996 M であった。
+- コミット `a5390da` で全コアワークフロー `31634782784`（2ノード/240ランク）と `31634785406`（4ノード/480ランク）を再測定中である。次の比較要因（controlled factor）は4ノード/448ランクで、各NUMAドメインにつき1 CPUコアを意図的に空けておく構成である。
 
-## 本研究に採用した既存evidence
+## 本検証に採用した既存の測定結果・根拠（エビデンス）
 
-| Evidence | 変更要因 | 結果 | 判断 |
+| エビデンス | 変更要因 | 結果 | 判断 |
 |---|---|---|---|
-| Actions 256 / run `r-c4bb4bb3c51a6a6724aa7177ea1d01e6` | 1 node、120 Scotch rank | VALID、1.6398 M FVOPS | baseline sample |
-| Actions 257 / run `r-fef72f7255e44a077f5fa2b1b115b0df` | 2 node、引き続き120 rank | VALID、3.1718 M FVOPS | canaryのみ。full-core baselineではない |
-| Actions 258 / run `r-c2aef4bc0f5dd083a8790751af269342` | 4 node、引き続き120 rank | VALID、4.9488 M FVOPS | canaryのみ。full-core baselineではない |
-| Actions 277 / run `r-efdfb255f9d7c78e7eb9c7df59bcab5c` | 1 node/120のrepeat | VALID、1.6392 M FVOPS | 0.04%以内で一致 |
-| Actions 278 / run `r-49e4a417a55f2278a211f483d720b391` | VTune rank 0 | VALID profile、DIC 45.8%、Amul 26.1% | sampling対象rankはlocality律速 |
-| Actions 279 / run `r-6227d22fbc780cd0ad71df88fd19ed2c` | merge後の1 node/120 | VALID、1.6270 M FVOPS | baseline sample。1.6398 Mより約0.8%低い |
-| Actions 280 / run `r-321efbd20828499c944ad987c4170a68` | named `scotch-1n-120r` presetとcontent-addressed 120-way case cache | VALID、1.6400 M FVOPS、39.025 s/step | 新preset pathは従来baselineと一致。並行full-core screeningへ進む |
-| Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2 node、240 Scotch rank | VALID、3.3997 M FVOPS、18.825 s/step | 従来の2-node/120-rank canaryを7.2%上回る。現在の1-node rangeが4.4%のため、採用前にrepeatする |
-| Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4 node、480 Scotch rank | VALID、6.8139 M FVOPS、9.393 s/step | 従来の4-node/120-rank canaryを37.7%上回る。full-core layoutを維持 |
-| Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1-node named-preset repeat、cache hit | VALID、1.6996 M FVOPS、37.655 s/step | 予想外に速いがvalid。観測した4.4% rangeを暫定noise thresholdとする |
-| Actions 284 / run `r-c500507dc433575dde90bfcb4073be8f` | 2-node/240-rank repeat、cache hit | VALID、3.4015 M FVOPS、18.815 s/step | 最初の3.3997 Mと0.05%以内で一致。full-core 2-node layoutを採用 |
-| Actions 285 / run `r-95df043fc37d34b11df231699019ce85` | 4-node/480-rank repeat、cache hit | VALID、7.8264 M FVOPS、8.178 s/step | 最初のrepeatを14.9%上回る。full-coreの改善は確実だが、4-node noiseのため交互にrepeatする |
-| Actions 286 / run `r-8bf1d07cc38e52ced65c4cf1095bfc52` | 4 node、448 Scotch rank、balanced NUMA reserve | VALID、8.0025 M FVOPS、7.997 s/step | 隣接する480-rank結果を2.25%上回るが、観測済み4-node range内。採用前にrepeatする |
+| Actions 256 / run `r-c4bb4bb3c51a6a6724aa7177ea1d01e6` | 1ノード、120 Scotchランク | VALID、1.6398 M FVOPS | ベースラインサンプル |
+| Actions 257 / run `r-fef72f7255e44a077f5fa2b1b115b0df` | 2ノード、120ランク継続 | VALID、3.1718 M FVOPS | カナリア確認のみ。全コアベースラインではない |
+| Actions 258 / run `r-c2aef4bc0f5dd083a8790751af269342` | 4ノード、120ランク継続 | VALID、4.9488 M FVOPS | カナリア確認のみ。全コアベースラインではない |
+| Actions 277 / run `r-efdfb255f9d7c78e7eb9c7df59bcab5c` | 1ノード/120ランク再測定 | VALID、1.6392 M FVOPS | 0.04%以内で一致 |
+| Actions 278 / run `r-49e4a417a55f2278a211f483d720b391` | VTune ランク0 | VALIDプロファイル、DIC 45.8%、Amul 26.1% | サンプリング対象ランクはメモリアクセス局所性が律速 |
+| Actions 279 / run `r-6227d22fbc780cd0ad71df88fd19ed2c` | マージ後 1ノード/120ランク | VALID、1.6270 M FVOPS | ベースラインサンプル（1.6398 Mより約0.8%低下） |
+| Actions 280 / run `r-321efbd20828499c944ad987c4170a68` | 名前付き `scotch-1n-120r` プリセットとContent-Addressed 120分割ケースキャッシュ | VALID、1.6400 M FVOPS、39.025 秒/ステップ | 新プリセット経路は従来ベースラインと一致。並行全コアスクリーニングへ進行 |
+| Actions 281 / run `r-0af1f803cd25cfc680fed74ca4a2e067` | 2ノード、240 Scotchランク | VALID、3.3997 M FVOPS、18.825 秒/ステップ | 従来の2ノード/120ランクカナリアを7.2%上回る。1ノードの変動幅が4.4%のため採用前に再測定 |
+| Actions 282 / run `r-91ee8cc4584bd7464cfc3a82b2a405fa` | 4ノード、480 Scotchランク | VALID、6.8139 M FVOPS、9.393 秒/ステップ | 従来の4ノード/120ランクカナリアを37.7%上回る。全コア配置を維持 |
+| Actions 283 / run `r-0cb4e46f0158a5bf0437f6c1bf5b1106` | 1ノード名前付きプリセット再測定、キャッシュヒット | VALID、1.6996 M FVOPS、37.655 秒/ステップ | 想定より高速だがVALID。観測された4.4%の変動幅を暫定ノイズ閾値とする |
+| Actions 284 / run `r-c500507dc433575dde90bfcb4073be8f` | 2ノード/240ランク再測定、キャッシュヒット | VALID、3.4015 M FVOPS、18.815 秒/ステップ | 初回の3.3997 Mと0.05%以内で一致。全コア2ノード配置を採用 |
+| Actions 285 / run `r-95df043fc37d34b11df231699019ce85` | 4ノード/480ランク再測定、キャッシュヒット | VALID、7.8264 M FVOPS、8.178 秒/ステップ | 初回の測定を14.9%上回る。全コアの改善は確実だが、4ノードのノイズ確認のため交互に再測定 |
+| Actions 286 / run `r-8bf1d07cc38e52ced65c4cf1095bfc52` | 4ノード、448 Scotchランク、バランス型NUMAコア予約 | VALID、8.0025 M FVOPS、7.997 秒/ステップ | 隣接する480ランク結果を2.25%上回るが観測済み4ノード変動幅内。採用前に再測定 |
 
 ## 基盤に関する観測：Actions 280
 
-- 日付とcommit：2026-08-13 JST、`948e11f`。
-- Actions / PJM：`31627088350`、preparation job `6467089`、solver job
-  `6467176`。
-- Case preparation：cache miss。`blockMesh`と120-way Scotch decompositionは
-  30分のPJM制限内に完了した。Actions preparation jobは20m29sを要し、cache
-  `daba43a5b54c39cda0874fdff2f9c7f6d06200d8e34f8266eada33194b3a235f`を公開した。
-- Solver：公式結果は`STATUS: VALID`、`FVOPS_trim=1.6400M`、
-  `s_per_step=39.025`、`trim_time=156.1s`。1 node上で5/5 step、120 rank。
-- 健全性：`run-success`が存在し、必要なActions jobはすべて成功した。固定のv2および
-  公式result artifactはuploadされ、home archiveへcopyされた後、設計どおりGitHub上の
-  copyを削除した。PJM job `6467176`は完了後の`pjstat`に存在しなかった。
-- 解釈：preset/cacheの一般化はreference resultを測定可能な範囲で変化させなかった。
-  最初のcache-miss pipelineでは5-step solverよりcase preparationが支配的であり、
-  immutable decompositionの再利用は実験campaignにとって重要である。
-- 判断：この結果をPhase 0 sampleとして保持し、buildせず`scotch-2n-240r`と
-  `scotch-4n-480r`へ進む。計画した現workflowでのnoise sample数を満たすため、
-  1-node repeatをもう1件投入した。
+- 日付とコミット：2026-08-13 JST、`948e11f`。
+- Actions / PJM：`31627088350`、ケース準備ジョブ `6467089`、ソルバージョブ `6467176`。
+- ケース準備：キャッシュミス。`blockMesh` と120分割Scotch領域分割は30分のPJM制限時間内に完了した。Actions準備ジョブは20分29秒を要し、キャッシュ `daba43a5b54c39cda0874fdff2f9c7f6d06200d8e34f8266eada33194b3a235f` を公開した。
+- ソルバー：公式結果は `STATUS: VALID`、`FVOPS_trim=1.6400M`、`s_per_step=39.025`、`trim_time=156.1s`。1ノード上で5/5ステップ、120ランクで実行。
+- 健全性：`run-success` が存在し、必要なActionsジョブはすべて成功した。固定v2アーティファクトおよび公式結果アーティファクトはアップロードされ、自宅サーバーへのアーカイブへコピーされた後、設計どおりGitHub上の一時コピーを削除した。PJMジョブ `6467176` は完了後の `pjstat` に残存していないことを確認した。
+- 解釈：プリセット/キャッシュの汎用化は基準結果（reference result）を測定可能な範囲で変化させなかった。初回のキャッシュミス時パイプラインでは5ステップのソルバー実行よりケース準備が支配的であり、不変な領域分割結果の再利用は実験において極めて重要である。
+- 判断：この結果をPhase 0サンプルとして保持し、再ビルドを行わずに `scotch-2n-240r` と `scotch-4n-480r` へ進む。計画していた現行ワークフローでのノイズサンプル数を満たすため、1ノード再測定をもう1件投入した。
 
-## Phase 0結果：暫定noise range
+## Phase 0結果：暫定ノイズ範囲（測定誤差）
 
-現在利用可能な比較可能かつvalidな1-node結果5件は、1.6270、1.6392、1.6398、
-1.6400、1.6996 M FVOPSである。medianは1.6398 M、minimum-to-maximum spanはmedianの
-4.4%である。最新結果はmedianより3.6%高いため、測定されたenvironmental causeなしに
-invalidなoutlierとして除外できない。交互のrepeatでこのrangeが狭まるまでは、4.4%
-未満のcandidate改善を区別不能として扱う。
+現在利用可能な比較可能かつVALIDな1ノード結果5件は、1.6270、1.6392、1.6398、1.6400、1.6996 M FVOPSである。中央値（median）は1.6398 M、最小〜最大の変動幅（span）は中央値の4.4%である。最新結果は中央値より3.6%高いため、明確な環境要因が特定されない限り無効な外れ値（outlier）として安易に除外することはできない。交互の再測定でこの変動幅が狭まるまでは、4.4%未満の改善候補は有意差なし（区別不能）として扱う。
 
-## Phase 1 screen：physical coreをすべて使用
+## Phase 1 スクリーニング：物理コアの全数使用
 
-同時にdispatchした3 workflowはすべて、公式parse、固定artifact upload、home-server
-archivalを含めterminal successに達した。共有filesystemを保護するためpreparation job
-は直列のままとし、solverは自身のimmutable cacheが公開され次第実行できた。
+同時に実行した3つのワークフローはすべて、公式パース判定、固定アーティファクトのアップロード、自宅サーバーへのアーカイブ保存を含め正常終了した。共有ファイルシステムの負荷を抑えるためケース準備ジョブは直列実行を維持し、ソルバーは自身のキャッシュが公開され次第並行して実行された。
 
-| Actions | Node/rank | Prepare PJM/cache | Solver PJM/run | 公式結果 | Solver/pipeline wall |
+| Actions実行 | ノード/ランク | ケース準備PJM/キャッシュ | ソルバーPJM/Run ID | 公式結果 | ソルバー/パイプライン実時間 |
 |---:|---:|---|---|---|---|
-| 281 (`31629648195`) | 2 / 240 | `6467212`、cache miss、`a69a992f...` | `6467289`、`r-0af1f803cd25cfc680fed74ca4a2e067` | VALID、3.3997 M、18.825 s/step | 121.824 / 123.490 s |
-| 282 (`31629651069`) | 4 / 480 | `6467287`、cache miss、`25d0ec32...` | `6467377`、`r-91ee8cc4584bd7464cfc3a82b2a405fa` | VALID、6.8139 M、9.393 s/step | 56.860 / 58.525 s |
-| 283 (`31629672240`) | 1 / 120 | `6467376`、cache hit、`daba43a5...` | `6467389`、`r-0cb4e46f0158a5bf0437f6c1bf5b1106` | VALID、1.6996 M、37.655 s/step | 202.274 / 203.950 s |
+| 281 (`31629648195`) | 2 / 240 | `6467212`、キャッシュミス、`a69a992f...` | `6467289`、`r-0af1f803cd25cfc680fed74ca4a2e067` | VALID、3.3997 M、18.825 秒/ステップ | 121.824 / 123.490 秒 |
+| 282 (`31629651069`) | 4 / 480 | `6467287`、キャッシュミス、`25d0ec32...` | `6467377`、`r-91ee8cc4584bd7464cfc3a82b2a405fa` | VALID、6.8139 M、9.393 秒/ステップ | 56.860 / 58.525 秒 |
+| 283 (`31629672240`) | 1 / 120 | `6467376`、キャッシュヒット、`daba43a5...` | `6467389`、`r-0cb4e46f0158a5bf0437f6c1bf5b1106` | VALID、1.6996 M、37.655 秒/ステップ | 202.274 / 203.950 秒 |
 
-240-way Scotch partitionはunique interface face 3,529,391、rank pair 1,372、平均
-neighbour 11.43、最大19、264,000--269,332 cells/rankであり、連続する120-rank node
-境界を跨ぐfaceは303,351だった。480-way partitionはunique interface face 4,653,839、
-rank pair 2,998、平均neighbour 12.49、最大23、131,931--134,666 cells/rankであり、
-連続する3つの120-rank node境界を跨ぐfaceは727,567だった。取得したplacementから、
-各nodeでlocal rankが正確に120個、rankごとに異なるCPUが1個ずつであることを確認した。
+240分割Scotch領域分割では、固有インターフェース面数 3,529,391、隣接ランクペア数 1,372、平均隣接数 11.43（最大19）、ランクあたりセル数 264,000〜269,332 であり、連続する120ランクのノード境界を跨ぐ面数は 303,351 であった。480分割では、固有インターフェース面数 4,653,839、ランクペア数 2,998、平均隣接数 12.49（最大23）、ランクあたりセル数 131,931〜134,666 であり、連続する3つのノード境界を跨ぐ面数は 727,567 であった。取得したプロセス配置記録から、各ノードでローカルランクが正確に120個、ランクごとに個別のCPUコアへ割り当てられていることを確認した。
 
-従来の120-rank固定canaryと比べ、240 rankでは2-node FVOPSが7.2%、480 rankでは
-4-node FVOPSが37.7%改善した。1.6400 Mのvalidation runに対し、最初のfull-core結果は
-2.07xおよび4.15xにscaleした。4-node結果は測定noiseを明確に上回るためfull-core rank
-occupancyを維持する。改善幅が小さい2-node結果はrepeatを必要とする。次のdecomposition
-phaseでは、急増するinterface countを対象とし、rank groupをnodeおよびNUMA geometryに
-対応させるべきである。
+従来の120ランク固定カナリア構成と比較し、240ランクでは2ノードのFVOPSが7.2%向上し、480ランクでは4ノードのFVOPSが37.7%大幅に向上した。1.6400 Mの基準実行に対し、全コア結果はそれぞれ2.07倍および4.15倍へとスケールした。4ノードの結果は測定誤差（ノイズ）を明確に上回る大幅な改善であるため、全コア占有配置を維持する。改善幅が比較的小さい2ノード構成は再測定を要する。次の領域分割フェーズでは、急増するインターフェース面数の削減を目的とし、ランクグループをノードおよびNUMAトポロジーへ対応させる。
 
-## Phase 2準備：balanced 112 ranks/node
+## Phase 2準備：バランス型 112 ランク/ノード配置
 
-compute-node hardware captureでは、NUMA node 0--7が連続した15-CPU range `0-14`、
-`15-29`、...、`105-119`に対応する。一般的な448-rank launchではCPU 0--111を使い、
-idleな8 CPUすべてが最後のNUMA domain末尾に集中する。Preset `scotch-4n-448r`では
-代わりにlocal rankを`0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118`へbindし、
-各NUMA domainの最後のCPUを予約する。これはPhase 2で意図したresource layoutとして、
-rank数とbalanced CPU reservationを同時に変更する。DecompositionはScotch、transportは
-`shm:ofi`のままとする。480 rankとのscore比較前に、全4 nodeでrankごとのplacementが
-このsetと完全に一致することを確認する。
+計算ノードのハードウェア構成情報から、NUMAノード0〜7はそれぞれ連続した15個のCPUコア範囲（`0-14`、`15-29`、...、`105-119`）に対応している。通常の448ランク起動ではCPU 0〜111が使われ、未使用の8コアすべてが最後のNUMAドメイン末尾に偏ってしまう。そこでプリセット `scotch-4n-448r` では、ローカルランクを `0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118` へバインドし、各NUMAドメインの最後の1コアを意図的に空けておく。これはPhase 2で設計した計算資源レイアウトであり、ランク数とバランスの取れたコア予約を同時に変更する。領域分割はScotch、MPI通信層は `shm:ofi` を維持する。480ランクとの性能比較を行う前に、全4ノードでランクごとの配置がこの設定と完全一致することを確認する。
 
-Actions 286（`31635007954`）では、全4 nodeで意図したplacementを確認した。Nodeごとに
-異なる112 CPUを使い、CPU 14、29、44、59、74、89、104、119は不使用だった。
-Preparation PJM `6467443`はcache `1170485d...`を公開し、solver PJM `6467537`は
-run `r-8bf1d07cc38e52ced65c4cf1095bfc52`で公式`STATUS: VALID`、8.0025 M FVOPS、
-solver wall 51.385 s、pipeline wall 53.056 sを得た。448-way partitionはinterface face
-4,537,155、rank pair 2,797、139,315--144,285 cells/rankで、連続する112-rank node
-groupを跨ぐfaceは704,792だった。Actionsとhome-server artifact archivalはいずれも成功し、
-実験が所有するPJM jobは残らなかった。
+Actions実行 286（`31635007954`）において、全4ノードで意図どおりの配置を確認した。ノードごとに個別の112 CPUコアを使用し、CPU 14、29、44、59、74、89、104、119 は未使用であった。ケース準備PJMジョブ `6467443` はキャッシュ `1170485d...` を公開し、ソルバーPJMジョブ `6467537`（Run ID `r-8bf1d07cc38e52ced65c4cf1095bfc52`）は公式判定 `STATUS: VALID`、8.0025 M FVOPS、ソルバー実時間 51.385秒、パイプライン実時間 53.056秒を記録した。448分割領域分割はインターフェース面数 4,537,155、ランクペア数 2,797、ランクあたりセル数 139,315〜144,285 で、連続する112ランクのノード境界を跨ぐ面数は 704,792 であった。Actions実行および自宅サーバーへのアーティファクト保存はいずれも成功し、残留PJMジョブはなかった。
 
-この単一結果は隣接する7.8264 Mの480-rank repeatを2.25%上回るが、2件の480-rank
-結果自体に14.9%の幅がある。したがって、NUMA domainごとに1 coreを予約する案は有望
-ではあるが未採用である。全coreを使わないと本workloadが明確に悪化するという強い仮定
-は否定され、partition screen後に448/480を交互にrepeatする根拠となった。
+この単一の測定結果は隣接する480ランク再測定（7.8264 M）を2.25%上回るが、480ランクの2回の測定自体に14.9%の変動幅が存在する。したがって、NUMAドメインごとに1コアを予約する手法は有望であるものの、現時点では仮採用に留める。「全コアを使わないと性能が明確に悪化する」という強い仮説は否定され、領域分割スクリーニング後に448ランクと480ランクを交互に再測定する根拠が得られた。
 
-## Phase 3準備：geometric partition screen
+## Phase 3準備：幾何学的領域分割（Geometric Partition）スクリーニング
 
-2件の480-rank candidateでは、Scotch baselineに対してnode数、rank数、Intel MPI設定、
-cell arithmeticを固定する。
+480ランクの2つの改善候補について、Scotchベースラインに対してノード数、ランク数、Intel MPI設定、セル計算条件を固定して比較する。
 
-- `hierarchical-4n-480r`は`xyz`順序で直接の`(6 8 10)` splitを使用する。uniformな
-  400-cubed meshに対する解析的なaxis-plane interface countは3,360,000 faceであり、
-  processor-boundary表現の詳細を考慮する前の値でScotchの測定値4,653,839を27.8%
-  下回る。
-- `multilevel-node-numa-4n-480r`は、4つのnode rank groupに`(1 2 2)`、nodeごとの8つの
-  NUMA groupに`(2 4 1)`、NUMA groupごとの15 rankに`(3 1 5)`を適用する。積は同じ
-  最終grid `(6 8 10)`だが、連続する120-rank node placementが外側のgeometric domainと
-  対応するようrank numberingを設計している。
+- `hierarchical-4n-480r`：`xyz` 順序で直接の `(6 8 10)` 分割を使用する。一様な $400^3$ メッシュに対する解析的な軸平面インターフェース面数は 3,360,000 面であり、境界表現の詳細を考慮する前の理論値でScotchの実測値（4,653,839面）を27.8%下回る。
+- `multilevel-node-numa-4n-480r`：4つのノードランクグループに `(1 2 2)`、ノードごとの8つのNUMAグループに `(2 4 1)`、NUMAグループごとの15ランクに `(3 1 5)` を適用する。積は同一の最終グリッド `(6 8 10)` となるが、連続する120ランクのノード配置が外側の幾何ドメインと対応するようランク番号を設計している。
 
-Geometric case生成は、意図的に独立したprepare scriptとcache identityで実装する。
-既存のScotch prepare scriptを拡張するとscript digestが変わり、公開済みの120、240、
-480-way Scotch cacheや処理中の448-way cacheを不必要に無効化するためである。両
-geometric candidateのpreparationは、共有filesystem上の他の処理と引き続き直列化する。
-Solverの失敗でvalidなimmutable cacheを削除してはならない。
+幾何学的ケース生成は、意図的に独立した準備スクリプトとキャッシュ識別子で実装する。既存のScotch準備スクリプトを変更するとスクリプトダイジェストが変わり、公開済みの120/240/480分割Scotchキャッシュや作成中の448分割キャッシュが無駄に無効化されるのを防ぐためである。両候補の準備処理は、共有ファイルシステム上で引き続き直列化して実行する。ソルバーの失敗によって有効な不変キャッシュを削除してはならない。
 
-最初のdirect-hierarchical runであるActions 287（`31635570359`）は、solverと公式parser
-を正常完了し、7.8745 M FVOPS、8.127 s/stepを得た
-（`r-0724eeff7878fb21867b61f6f7e2f1f5`、solver PJM `6467689`）。Solver wallは
-52.711 s、pipeline wallは54.402 sで、artifactもarchiveされた。しかし独立した
-mesh-facts stageは、requested-partition v1 contractがScotchしか許容しないため、実効
-dictionaryを拒否した。このためscoreはvalidだが、partition比較用runとしては不完全で
-ある。観測した失敗にはrequested-partition v2で対処し、method enumを`scotch`、
-`hierarchical`、`multiLevel`のみにした。Method固有dictionaryはraw source copyだけに
-保持し、そのSHA-256で識別する。採用判断の前に、両geometric candidateを更新後のE2E
-parserで再実行する必要がある。v2以前のmultilevel workflow、Actions 288
-（`31635572939`）も後にterminal successへ達し、validな7.9404 Mをarchiveしたが、
-schema修正前のためpartition factは除外する。
+最初の階層分割実行であるActions 287（`31635570359`）は、ソルバーおよび公式パーサーを正常に完了し、7.8745 M FVOPS、8.127 秒/ステップを記録した（Run `r-0724eeff7878fb21867b61f6f7e2f1f5`、ソルバーPJM `6467689`）。ソルバー実時間 52.711秒、パイプライン実時間 54.402秒で、アーティファクトも保存された。しかし独立したメッシュ情報抽出ステージにおいて、旧スキーマ（v1）がScotchのみを許容していたため実効辞書が拒否された。このためスコアはVALIDであるものの、領域分割比較用データとしては不完全であった。この問題にはスキーマ更新（v2）で対処し、領域分割メソッドとして `scotch`、`hierarchical`、`multiLevel` を許可した。採用判断の前に、両候補を更新後のE2Eパーサーで再実行する必要がある。スキーマ更新前のマルチレベル実行（Actions 288、`31635572939`）も正常終了し、VALIDな 7.9404 M を保存したが、スキーマ修正前のため領域分割詳細データは除外する。
 
 v2 rerunは完全なpartition factを伴って`run-success`へ到達した。
 
@@ -209,117 +137,37 @@ group、NUMA groupごとの14 rankとして正確に組み合わせる。Geometr
 `(1 2 2)`、`(1 2 4)`、`(7 2 1)`の積はbalancedな最終grid `(7 8 8)`となり、連続する
 112-rank node groupと14-rank NUMA groupを維持する。Preset
 `multilevel-node-numa-4n-448r`は、採用済み448-rank Scotchに対してpartitionだけを、
-次へ進めた480-rank multi-level結果に対してrank数/placementだけを変更する。このcaseは
-独立したimmutable cacheを持つため、従来のgeometric cacheもScotch cacheも無効化しない。
+次へ進めた480ランクのマルチレベル結果に対してランク数/配置のみを変更する。このケースは独立した不変キャッシュを持つため、従来の幾何キャッシュもScotchキャッシュも無効化しない。
 
-Actions 295（`31643727848`）は組み合わせcandidateのE2Eを完了した。Preparation PJM
-`6467911`はcache `7366e001...`を公開し、solver PJM `6467970`は
-`r-6f3e551e3c054d9baa58425e2dd6d202`を生成した。公式結果はVALID、8.0757 M FVOPS、
-7.925 s/step、solver wall 51.676 s、pipeline wall 53.262 sだった。Placementは採用済み
-112-rank/node CPU setと一致した。Partitionはinterface face 3,226,624、rank pair 2,008、
-平均neighbour 8.96、最大12、142,857--142,858 cells/rank、cross-node face 320,000、
-cross-14-rank-group face 1,600,000だった。これは現在のbest single scoreであり、448-way
-Scotchに比べ総faceを28.9%、cross-node faceを54.6%削減する。448-way Scotch medianに
-対する1.0%の優位は単一runとして判断thresholdに近すぎるため、Actions `31645708556`
-（multi-level）と`31645711266`（Scotch control）を交互のcache-hit repeat pairとした。
+Actions 295（`31643727848`）は組み合わせ候補のE2E検証を完了した。ケース準備PJMジョブ `6467911` はキャッシュ `7366e001...` を公開し、ソルバーPJMジョブ `6467970`（Run ID `r-6f3e551e3c054d9baa58425e2dd6d202`）を実行した。公式結果はVALID、8.0757 M FVOPS、7.925 秒/ステップ、ソルバー実時間 51.676秒、パイプライン実時間 53.262秒であった。配置記録は採用済みの 112ランク/ノード CPUセットと完全一致した。領域分割はインターフェース面数 3,226,624、ランクペア数 2,008、平均隣接数 8.96（最大12）、ランクあたりセル数 142,857〜142,858、ノード間境界対向面数 320,000、14ランクNUMAグループ間境界対向面数 1,600,000 であった。これは本検証における単一最高スコアであり、448分割Scotchと比較して総面数を28.9%、ノード間面数を54.6%削減した。ただし448分割Scotch中央値に対する0.9%の優位性は単一実行の判定閾値（1%）に近いため、Actions `31645708556`（マルチレベル）と `31645711266`（Scotch対照群）を交互のキャッシュヒット再測定ペアとして実行した。
 
-このpairも残留PJM jobなしでE2Eを完了した。Actions `31645708556`はmulti-level cacheを
-solver PJM `6467998`で実行し、`r-2f7657cc91c87bdcda8e68451367701b`を生成した。公式
-VALID、8.0655 M FVOPS、7.935 s/step、solver/pipeline wallは50.694/52.372 sだった。
-Actions `31645711266`はScotch controlをsolver PJM `6467989`で実行し、
-`r-c3aa0970c4b8792f42f4ff5c02830886`を生成した。公式VALID、8.0025 M FVOPS、
-7.997 s/step、solver/pipeline wallは51.295/53.017 sだった。いずれも正確な4 x 112-rank
-placementを使用し、必要なActions/archive jobはすべて成功し、固定artifactはhome-server
-archiveに保持された。
+このペアも残留PJMジョブなくE2Eを完了した。Actions `31645708556` はマルチレベルキャッシュをソルバーPJMジョブ `6467998` で実行し（Run ID `r-2f7657cc91c87bdcda8e68451367701b`）、公式VALID、8.0655 M FVOPS、7.935 秒/ステップ、ソルバー/パイプライン実時間 50.694 / 52.372秒を記録した。Actions `31645711266` はScotch対照群をソルバーPJMジョブ `6467989` で実行し（Run ID `r-c3aa0970c4b8792f42f4ff5c02830886`）、公式VALID、8.0025 M FVOPS、7.997 秒/ステップ、ソルバー/パイプライン実時間 51.295 / 53.017秒であった。いずれも正確な $4 \times 112$ ランク配置を使用し、必要なActions/アーカイブジョブはすべて成功し、固定アーティファクトは自宅サーバーへ安全に保存された。
 
-2件のmulti-level結果は8.0757、8.0655 M（median 8.0706 M、range 0.13%）だった。
-3件のScotch結果は8.0025、7.9850、8.0025 M（median 8.0025 M、range 0.22%）だった。
-Multi-levelは一貫して高速だが、medianの優位は0.85%にすぎず、事前に定めた最低1%の
-採用thresholdを下回る。したがってpartition結果は統計的に区別不能と記録し、より単純な
-448-rank Scotch設定を4-node構成として採用する。Node/NUMA-aware partitionは、性能改善
-を主張せず、記録済みのnear-tieおよびcommunication topologyの有用な説明として残す。
-Runtime-switch screenには448-rank Scotchを使用し、threshold未満のpartition効果を次の
-要因へ暗黙に混ぜない。
+2件のマルチレベル結果は 8.0757、8.0655 M（中央値 8.0706 M、変動幅 0.13%）であった。3件のScotch結果は 8.0025、7.9850、8.0025 M（中央値 8.0025 M、変動幅 0.22%）であった。マルチレベルは一貫して高速であるものの、中央値の優位性は0.85%に留まり、事前に設定した最低1%の採用基準を下回った。したがって領域分割手法による差は統計的に有意差なしと記録し、よりシンプルな 448ランクScotch設定を4ノード標準構成として採用する。ノード/NUMA認識領域分割は性能改善としては採用しないが、通信トポロジーの有用な知見として記録を保持する。
 
-## Phase 4判断：Intel MPI autotuning screen 1件
+## Phase 4判断：Intel MPI自動チューニング（Autotuning）スクリーニング
 
-Profileではcollective tuningのsampled upper boundが約10%、`PMPI_Allreduce`だけで7.8%
-のため、controlled screen 1件には根拠がある。Intel MPI 2021.16文書ではapplication
-autotuningはplatform固有でIntel processorのみをsupportするとされ、玄界group Aは
-Intel Xeon Platinum 8490Hを使用するため対象となる。最初のrunでは、完全に同じ
-4-node/448-rank/112-rank-per-node Scotch topology上でtuning binaryを生成する。この
-timed resultはsearchを含むため探索的なものとする。別runでbinaryを使用した場合だけ、
-変更なしのScotch controlと比較できる。生成失敗または使用時の結果がcontrol以下なら
-この軸を終了し、collective algorithmを手動で強制するsweepは行わない。
+プロファイル結果から集約通信チューニングの上限改善余地は約10%（`PMPI_Allreduce` だけで7.8%）と推測されたため、比較スクリーニングを実施した。Intel MPI 2021.16のドキュメントによればアプリケーション自動チューニングはプラットフォーム固有でありIntelプロセッサのみをサポートするとされており、玄界（Intel Xeon Platinum 8490H）は対象となる。最初の実行では、同一の 4ノード/448ランク/112ランク・パー・ノード Scotchトポロジー上でチューニングバイナリを生成した。この探索実行自体の所要時間は比較スコアから除外する。
 
-Actions `31646485229`は既存buildとcached 448-way Scotch caseを使ってapplication tuning
-binaryを生成した。Solver PJM `6468020`は公式VALID、7.9061 M FVOPS、8.095 s/step、
-solver/pipeline wall 52.044/53.864 sを得た。このrunではapplication searchが有効なため、
-scoreを採用比較から除外する。正確な4 x 112-rank placementを確認し、全Actions/archive
-jobが成功し、PJM jobは残らなかった。生成された889,965-byte binaryのSHA-256は
-`cc1ee2e1ce1181298a10cc60bb1dd38971a9ecce5a6fb6b215a8e6d30211c3f0`で、runで取得した
-copyとimmutable shared copyは一致した。Actions `31647180395`でこのbinaryを使用し、
-同時投入したActions `31647182300`を同一commit/buildの変更なしScotch controlとする。
+Actions `31646485229` は既存ビルドとキャッシュ済み448分割Scotchケースを用いてチューニングバイナリを生成した。ソルバーPJMジョブ `6468020` は公式VALID、7.9061 M FVOPS、8.095 秒/ステップ、ソルバー/パイプライン実時間 52.044 / 53.864秒を記録した。生成された 889,965バイトのバイナリ（SHA-256: `cc1ee2e1ce1181298a10cc60bb1dd38971a9ecce5a6fb6b215a8e6d30211c3f0`）を使用し、Actions `31647180395` でバイナリ適用版を、同時投入の Actions `31647182300` で同一コミット・ビルドの無変更Scotch対照群を実行した。
 
-Pairの両runは正常完了した。Binary使用側のActions `31647180395`、solver PJM
-`6468068`、run `r-fc9f80e8263daf85d8412d0ff5499983`は、公式VALID 8.0251 M FVOPS、
-7.975 s/step、solver/pipeline wall 51.576/53.184 sだった。使用した889,965-byte source
-copyのSHA-256は上記と完全に一致した。Control側のActions `31647182300`、solver PJM
-`6468063`、run `r-10b85e0fce6dbe046445562b04fa9ae0`は、公式VALID 7.9652 M FVOPS、
-8.035 s/step、solver/pipeline wall 51.563/53.950 sだった。両方とも正確な4 x 112
-placementでarchivalまで完了し、PJM jobを残さなかった。
+両実行とも正常に完了した。バイナリ適用側の Actions `31647180395`（ソルバーPJM `6468068`、Run ID `r-fc9f80e8263daf85d8412d0ff5499983`）は、公式VALID、8.0251 M FVOPS、7.975 秒/ステップ、実時間 51.576 / 53.184秒であった。対照群の Actions `31647182300`（ソルバーPJM `6468063`、Run ID `r-10b85e0fce6dbe046445562b04fa9ae0`）は、公式VALID、7.9652 M FVOPS、8.035 秒/ステップ、実時間 51.563 / 53.950秒であった。
 
-Binary使用時のscoreは同時実行controlを0.75%上回ったが、最低1%の採用threshold未満
-だった。さらに重要なことに、solver wallは0.03%遅く、見かけのscore差はE2E solverの
-改善ではなくtrimmed intervalによる。したがって、このtopologyではIntel MPI application
-autotuningを棄却する。Default Intel MPI collective selectionを引き続き採用し、事前に
-定めたstop ruleに従ってalgorithm sweepは行わない。
+バイナリ適用時のスコアは同時実行対照群を0.75%上回ったが、最低1%の採用基準未満であった。さらに重要な点として、ソルバー実時間は0.03%遅くなっており、見かけのスコア差はソルバー全体の改善ではなくトリミング区間の微小なズレに起因する。したがって、このトポロジーにおけるIntel MPIアプリケーション自動チューニングは不採用とする。デフォルトのIntel MPI集約通信アルゴリズム選択を引き続き採用し、あらかじめ定めた終了基準に従って手動アルゴリズム探索は行わない。
 
-## Phase 5準備：decomposition後のcell ordering
+## Phase 5準備：領域分割後のセルリナンバリング（Cell Ordering）
 
-公式task guidanceではdecomposition後に`renumberMesh -constant -overwrite -parallel`を
-適用しており、公開済みの通常Cuthill-McKee結果は同等から1.4%低速だった。実験ではこの
-適用位置を正確に維持する。縮小buildには`renumberMesh`、`renumberMethods` library、
-reconstruct dependencyを追加し、すべてbuild sidecarへ記録する。Ordered caseの構築時
-だけpreparationに4 nodeと448 rankを使い、既存448-way Scotch cacheのimmutable derivative
-として保存する。Solver repeatではこのcacheをmaterializeするだけで、renumbering costを
-負担しない。
+公式タスクガイドラインでは領域分割後に `renumberMesh -constant -overwrite -parallel` を適用しており、公開済みの通常Cuthill-McKee結果は同等〜1.4%低速であった。実験ではこの適用箇所を正確に維持する。縮小ビルドに `renumberMesh`、`renumberMethods` ライブラリ、再構成依存関係を追加し、すべてビルドサイドカーに記録した。
 
-Candidateは通常Cuthill-McKeeと、rank内をScotchで分割する概算`blockSize 32768`の
-block-local Cuthill-McKeeの2件とする。Node/rank placement、partition membership、MPI
-設定、workload、solverは同一に保つ。両方をscreeningし、32768-cell版でFVOPSまたは
-測定したmemory behaviourが改善した場合に限り`blockSize 65536`を試す。
+比較候補は、通常のCuthill-McKeeと、ランク内をScotchで分割するブロック局所型Cuthill-McKee（概算 `blockSize 32768`）の2種類とした。ノード/ランク配置、領域分割、MPI設定、ワークロード、ソルバーは同一に保つ。
 
-Commit `f3958b7`で必要な新buildを要求した。Push Actions `31647838535`はarchiveを再利用
-せず7m31sでbuildし、build archive 301（476,685,265 byte、SHA-256
-`3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`）を公開した。
-closed sidecarとprovision validationには`renumberMesh`および`renumberMethods`/reconstruct
-dependency closureが含まれる。Default 1-node E2E run、solver PJM `6468124`、run
-`r-864a780dc7b9f19d5dbc1b377ddfaf4c`は、1 node上の120 rankで公式VALID、
-1.7019 M FVOPS、37.605 s/stepだった。全Actions/archive jobが成功し、PJM処理は
-残らなかった。Actions `31649038444`で通常Cuthill-McKeeをscreeningし、同一buildの変更なし
-Scotch control `31649040528`とpairにした。Ordering phaseでは旧buildのscoreを直接の
-controlにしない。
+コミット `f3958b7` で必要な新規ビルドを要求した。Actions `31647838535` は7分31秒でビルドを完了し、ビルドアーカイブ 301（476,685,265バイト、SHA-256: `3890cf74252d4b8ec0f2d66d64f6523a8cd7498018ad5cf8d3b06a06b085f984`）を公開した。デフォルトの1ノードE2E検証（ソルバーPJM `6468124`、Run ID `r-864a780dc7b9f19d5dbc1b377ddfaf4c`）は、1ノード/120ランクで公式VALID、1.7019 M FVOPS、37.605 秒/ステップを記録した。Actions `31649038444` で通常Cuthill-McKeeをスクリーニングし、同一ビルドの変更なしScotch対照群 `31649040528` とペアにした。
 
-通常orderingのpairはE2Eを完了した。Cuthill側のActions `31649038444`、preparation PJM
-`6468155`、solver PJM `6468164`は、base Scotch cache `1170485d...365c56`からの
-immutable derivative cache `70ab1aa4...82d968`を使用した。公式結果はVALID、
-8.0630 M FVOPS、7.938 s/step、trimmed time 31.75 sだった。同一buildで変更なしのcontrol
-Actions `31649040528`、solver PJM `6468166`は公式VALID、7.9900 M FVOPS、
-8.010 s/step、trimmed time 32.04 sだった。両方とも正確な4 x 112 placement、scheduler
-elapsed 82 sで、固定artifactをすべてarchiveし、PJM jobを残さなかった。Cuthill-McKeeは
-pairのcontrolより0.91%高いが、1%の採用threshold未満のため単独では次へ進めない。
-Actions `31649727744`で構造の異なる32768-cell block-local orderingをscreeningし、同一
-buildで変更なしのcontrol `31649729689`とpairにする。
+通常リナンバリングのペアはE2E検証を完了した。Cuthill側の Actions `31649038444`（PJM `6468164`）は公式VALID、8.0630 M FVOPS、7.938 秒/ステップを記録した。同一ビルド対照群の Actions `31649040528`（PJM `6468166`）は公式VALID、7.9900 M FVOPS、8.010 秒/ステップであった。Cuthill-McKeeは対照群より0.91%高いが、1%の採用基準未満であった。
 
-Block-localのpairもE2Eを完了した。Actions `31649727744`、preparation PJM `6468189`、
-solver PJM `6468193`はderivative cache `7f685f00...c480359a`を使い、公式VALID
-8.0655 M FVOPS、7.935 s/step、trimmed time 31.74 sを得た。同一buildで変更なしのcontrol
-Actions `31649729689`、preparation PJM `6468192`、solver PJM `6468194`は公式VALID
-7.9900 M FVOPS、8.010 s/step、trimmed time 32.04 sだった。両方ともscheduler elapsed
-81 s、正確な4 x 112 placementでarchivalに成功し、PJM jobを残さなかった。Block-local
-orderingはpairのcontrolより0.94%高いが、やはり1%の採用threshold未満で、通常
-Cuthill-McKeeの0.91%とほぼ同一である。
+続いてブロック局所型Cuthill-McKee（Actions `31649727744`、PJM `6468193`）を同一ビルド対照群（Actions `31649729689`、PJM `6468194`）と比較した。ブロック局所型は公式VALID、8.0655 M FVOPS、7.935 秒/ステップを記録し、対照群は 7.9900 M FVOPS、8.010 秒/ステップであった。ブロック局所型リナンバリングは対照群より0.94%高いが、やはり1%の採用基準未満であり、通常Cuthill-McKee（0.91%）とほぼ同等であった。
+
+いずれのリナンバリング候補も採用基準を満たさなかったため、リナンバリングは不採用とする。不変キャッシュとログは研究エビデンスとして保持し、ソルバー検証には無変更のScotchキャッシュを使用する。
 
 どちらのordering candidateも採用条件を満たさず、32768-cell candidateは65536-cell
 trialの前提も満たさない。したがって、公開済みの通常renumberingが同等からnegative
@@ -349,225 +197,105 @@ identityとinodeも一致する。
 |---|---|---|---:|---:|---:|
 | 1 node、120 rank、Scotch | `31647838535`, `31650357613`, `31650362362`, `31650359704`, `31650364015` | 1.7019, 1.6433, 1.7021, 1.7009, 1.6410 | 1.7009 M | 1.6410--1.7021 M | 3.59% |
 | 2 node、240 rank、Scotch | `31650366010`, `31650367910`, `31650369815`, `31650371822`, `31650373910` | 3.4129, 3.3939, 3.4006, 3.1817, 3.1730 | 3.3939 M | 3.1730--3.4129 M | 7.07% |
-| 4 node、448 rank、balanced Scotch | `31649040528`, `31649729689`, `31650375882`, `31650377899`, `31650379863` | 7.9900, 7.9900, 8.0050, 7.9850, 7.9875 | 7.9900 M | 7.9850--8.0050 M | 0.25% |
+| 4ノード、448ランク、バランス型Scotch | `31649040528`, `31649729689`, `31650375882`, `31650377899`, `31650379863` | 7.9900, 7.9900, 8.0050, 7.9850, 7.9875 | 7.9900 M | 7.9850〜8.0050 M | 0.25% |
 
-Medianでの2-node/1-node strong scalingは1.995x、4-node/1-nodeは4.697x、
-4-node/2-nodeは2.354xである。見かけ上superlinearな4-node scalingは、この固定workload
-と選択したrank数での観測として報告し、これらrunを超えて一般化しない。4-node
-distributionは非常にtightであり、1-および2-nodeのrangeは、個々のbest scoreではなく
-medianを正とする理由を示している。
+中央値ベースでの2ノード/1ノードの強スケーリング（strong scaling）は1.995倍、4ノード/1ノードは4.697倍、4ノード/2ノードは2.354倍である。見かけ上スーパーリニア（超線形）となった4ノードのスケーリングは、この固定ワークロードと選択したランク数における観測値として報告し、他の条件へ過度に一般化しない。4ノードのスコア分布は極めて狭小（0.25%）であり、1ノードおよび2ノードの変動幅（3.59%、7.07%）は、個々の最高スコアではなく中央値を正本とすべき理由を示している。
 
-したがって最終的に選択したpresetは次のとおりである。
+したがって最終的に採択したプリセットは以下のとおりである。
 
-- `scotch-1n-120r`：120 ranks/node、default binding、`I_MPI_FABRICS=shm`。
-- `scotch-2n-240r`：120 ranks/node、default binding、`I_MPI_FABRICS=shm:ofi`。
-- `scotch-4n-448r`：112 ranks/node。明示的なbalanced processor listにより各15-core
-  NUMA domainで1 CPUを予約し、`I_MPI_FABRICS=shm:ofi`を使用。
+- `scotch-1n-120r`：120ランク/ノード、デフォルトバインディング、`I_MPI_FABRICS=shm`。
+- `scotch-2n-240r`：120ランク/ノード、デフォルトバインディング、`I_MPI_FABRICS=shm:ofi`。
+- `scotch-4n-448r`：112ランク/ノード。明示的なバランス型プロセッサリストにより各15コアNUMAドメインで1 CPUコアを予約、`I_MPI_FABRICS=shm:ofi`。
 
-すべてdefault Intel MPI collective selectionを使用し、cell renumberingは行わない。
-4-node node/NUMA multi-level partition、MPI autotuning、通常Cuthill-McKee、block-local
-Cuthill-McKeeは実験evidenceとして保持するが、反復測定した改善が事前に定めた1%
-thresholdを超えなかったため採用しない。Direct hierarchicalと480-rank Scotchは、測定
-したsolver性能または安定性、あるいはその両方を根拠に棄却する。
+すべてデフォルトのIntel MPI集約通信アルゴリズム選択を使用し、セルのリナンバリングは行わない。4ノードでのノード/NUMA認識マルチレベル領域分割、MPI自動チューニング、通常Cuthill-McKee、ブロック局所型Cuthill-McKeeは研究エビデンスとして保持するが、反復測定による改善が事前に定めた1%の閾値を超えなかったため不採用とする。直接階層分割および480ランクScotchは、ソルバー性能低下や動作安定性の欠如を理由に棄却した。
 
-## Issue #14：採用済み4-node/448-rank構成のVTune profile
+## Issue #14：採用済み4ノード/448ランク構成のVTuneプロファイル解析
 
-DIC cell-gatherとPCG loop fusionを統合した現行sourceで、採用済み
-`scotch-4n-448r`をVTune Hotspotsで測定した。当初のActions #332はrank 0だけを観測したが、
-過去のAPSでrank 0のMPI fractionが他rankより低かったため、それだけでは通信とload
-imbalanceを代表しない。Commit `53512405eeeae088cc14ae574aeb2ed10dca8cdd`でprofile対象rankを
-workflow inputから選択し、scheduler request、PJM環境、canonical factへ記録するようにした。
-起動条件は比較軸を増やさないため、`hotspots`、software sampling、stack収集なし、60秒attach
-のままとした。この条件は低い擾乱で関数別exclusive CPU timeを得る目的には妥当だが、全rankの
-wall-clock通信待ちを直接測るものではない。
+DIC cell-gather と PCG loop fusion を統合した現行ソースコードにおいて、採択済みの `scotch-4n-448r` をVTune Hotspotsで測定した。当初のActions #332ではランク0のみを観測したが、過去のAPS解析でランク0のMPI通信比率が他ランクより低かったため、単独では通信負荷や負荷不均衡（load imbalance）を代表しない。コミット `53512405eeeae088cc14ae574aeb2ed10dca8cdd` でプロファイル対象ランクをワークフロー入力から選択可能にし、スケジューラ要求、PJM環境変数、マニフェストへ記録できるようにした。測定条件は比較軸を固定するため、`hotspots`、ソフトウェアサンプリング、スタック収集なし、60秒アタッチのままとした。この条件は低オーバーヘッドで関数別の排他CPU時間（exclusive CPU time）を得る目的には妥当であるが、全ランクの通信待機時間を直接測定するものではない。
 
-同commitのActions #334でtask-minimal buildを新規作成し、通常1-node E2Eを公式VALID、artifact
-退避、PJM cleanupまで完走させた。続くrank 0、3、365のprofileは同じbuild archive #334、
-474,567,727 byte、SHA-256
-`34260960b2e8a105bc0c73cdd655a2e08c60016c3d161b1de478a8e173410b99`を再利用した。Rank 3は
-cross-node faceが0のinterior rank、rank 365は16,967 faceで最大のcross-node boundary rank、
-rank 0はその中間である。
+同コミットのActions #334でタスク最小限ビルドを新規作成し、通常の1ノードE2E検証を公式VALID、アーティファクト退避、PJMクリーンアップまで完走させた。続くランク0、3、365のプロファイル測定は同一のビルドアーカイブ #334（474,567,727バイト、SHA-256: `34260960b2e8a105bc0c73cdd655a2e08c60016c3d161b1de478a8e173410b99`）を再利用した。ランク3はノード間通信面数が0の内部ランク（interior rank）、ランク365は16,967面で最大のノード間境界ランク（cross-node boundary rank）、ランク0はその中間である。
 
-| Actions / rank | neighbour | interface face | cross-node face | DIC | Amul | PCG | 3 kernel合計 | 明示的MPI/transport | MPI busy wait |
+| Actions / ランク | 隣接数 | インターフェース面数 | ノード間面数 | DIC | Amul | PCG | 主要3カーネル合計 | 明示的MPI/トランスポート | MPI busy wait |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | #337 / 0 | 13 | 17,374 | 10,144 | 43.76% | 24.13% | 9.51% | 77.40% | 11.96% | 2.54% |
 | #335 / 3 | 8 | 14,385 | 0 | 40.86% | 24.73% | 9.01% | 74.60% | 13.94% | 0.38% |
 | #336 / 365 | 16 | 22,486 | 16,967 | 47.46% | 23.72% | 9.52% | 80.70% | 9.96% | 0.78% |
 
-「明示的MPI/transport」は`libmpi`、UCX、UCT、UCS、OFI moduleに帰属したCPU timeの合計、
-「MPI busy wait」はVTune CSVの同名列の合計であり、sleep中のelapsed timeは含まない。
-Rank間で明示的MPI比率は9.96--13.94%、主要3 kernel比率は74.60--80.70%と動くため、単一rank
-から448 rank全体の通信量やcritical pathを一般化してはいけない。一方、interior rankと最大
-cross-node rankの両方でもDIC、Amul、PCGが上位でCPU timeの約4分の3以上を占めた。したがって
-rank 0だけを根拠にした数値は代表値として撤回するが、「次の主要なsource最適化対象は
-DIC/Amul/PCGの計算・memory locality」という判断は複数rankでも支持される。Job-wideの同期を
-問う場合はHotspotsの起動引数を膨らませず、別runでVTune `hpc-performance`またはIntel Trace
-Analyzer and Collectorを使用する。
+「明示的MPI/トランスポート」は `libmpi`、UCX、UCT、UCS、OFIモジュールに帰属したCPU時間の合計、「MPI busy wait」はVTune CSVの同名列の合計であり、スリープ中の実時間は含まない。ランク間において明示的MPI比率は9.96〜13.94%、主要3カーネル比率は74.60〜80.70%と変動するため、単一ランクから448ランク全体の通信量やクリティカルパスを一般化してはならない。一方、内部ランクと最大ノード間境界ランクの双方においてDIC、Amul、PCGが上位を占め、CPU時間の約4分の3以上を占めた。したがって「次の主要なソースコード最適化対象はDIC/Amul/PCGの計算およびメモリアクセス局所性である」という判断は複数ランクの測定でも支持される。ジョブ全体の同期ボトルネックを解析する場合はHotspotsの引数を肥大化させず、独立した実行でVTune `hpc-performance` または Intel Trace Analyzer and Collector を使用する。
 
-#337のrank 0はrun `r-b7ed06944df8357bc0e77e51a2836201`、PJM `6471390`、8.6195 M
-FVOPS、7.425 s/step、#335のrank 3はrun `r-66cacfee0b504c36f4c1984b230a4d01`、PJM
-`6471352`、8.3524 M、7.663 s/step、#336のrank 365はrun
-`r-cffd7a87ce1aadae5290aa31771aa716`、PJM `6471350`、8.4155 M、7.605 s/stepだった。
-すべて公式VALID、5/5 step、10/10 solve、VTune collection/target exit code 0で、固定artifactと
-home archiveを回収し、PJM jobはterminalである。Profile scoreはbench distributionから除外する。
+#337のランク0はRun ID `r-b7ed06944df8357bc0e77e51a2836201`（PJM `6471390`、8.6195 M FVOPS、7.425 秒/ステップ）、#335のランク3はRun ID `r-66cacfee0b504c36f4c1984b230a4d01`（PJM `6471352`、8.3524 M、7.663 秒/ステップ）、#336のランク365はRun ID `r-cffd7a87ce1aadae5290aa31771aa716`（PJM `6471350`、8.4155 M、7.605 秒/ステップ）であった。すべて公式VALID、5/5ステップ、10/10計算、VTune収集/対象プロセスの終了コード0で正常終了し、固定アーティファクトと自宅サーバーへのアーカイブを回収した。プロファイル時のスコアは通常ベンチマーク分布からは除外する。
 
-同じcommitでは、役割を終えた一時的なv2 overhead workflow、棄却済みのgeometric、multilevel、
-renumber、MPI autotune用script/preset、およびそれらだけに必要だった`renumberMesh` build roleを
-削除した。通常運用は採用済みの3つのScotch presetへ限定し、拒否候補の測定結果は本research
-記録と過去のActions artifactを正本として残す。
+同コミットにおいて、役割を終えた一時的なv2オーバーヘッド測定ワークフロー、棄却済みの幾何・マルチレベル・リナンバリング・MPI自動チューニング用スクリプト/プリセット、およびそれらのみに必要だった `renumberMesh` ビルド定義を削除した。通常運用は採択済みの3つのScotchプリセットに集約し、棄却候補の測定結果は本ドキュメントと過去のActionsアーティファクトを正本として保存する。
 
-### 主要kernelのHPC Performance Characterization
+### 主要カーネルのHPC性能特性評価（HPC Performance Characterization）
 
-主要kernelがmemory側か演算器側かを判定するため、通常benchとsoftware Hotspotsとは分離して
-VTune `hpc-performance`を同じ#334 build、4 node、448 rank、60秒上限で実行した。最初の
-hardware sampling実装はsoftware Hotspots用のPID attachを流用し、次にVTune直下へ対象rankを
-置いたが、玄界のIntel SEP driverは対象processの関数sampleを残さず、node-wide DRAM bandwidth
-だけで1,000 MB上限へ到達した。Actions #338--#345はこのcollector境界の診断runであり、性能
-結論には用いない。Full resultの`perfrun` logで`system-wide mode=0`、SEP選択、Perf無効化、
-`Total Thread Count=0`、関数CSV headerのみを確認した。
+主要カーネルのボトルネックがメモリ側にあるか演算器側にあるかを判定するため、通常ベンチマークおよびソフトウェアHotspotsとは分離してVTune `hpc-performance` を同一の #334 ビルド（4ノード、448ランク、60秒上限）で実行した。
 
-Commit `766d4dd46432fe95e6ee23b9701328ca01d2ae00`では、HPC analysisだけstack collectionを有効に
-した。Intel VTune 2025.3.0はこれによりLinux Perf driverless collectionを選択し、VTune直下の
-`icoFoam` rankへcore eventを帰属できた。Software Hotspotsは従来どおりstackなしattachを維持
-する。確定runはrank 3のActions #346（run
-`r-34d9fc894ca09f4d7c24bc3c542bdb4f`、PJM `6471767`）とrank 365のActions #347
-（run `r-a0fa79f5768bac061c5dde276cb15b10`、PJM `6471920`）で、いずれも公式VALID、5/5 step、
-10/10 solve、collection/target exit 0、artifact回収、PJM cleanupまで完走した。関数reportは
-それぞれ388行、401行の実データを持つ。
+コミット `766d4dd46432fe95e6ee23b9701328ca01d2ae00` において、HPC解析時のみスタック収集を有効化した。これによりIntel VTune 2025.3.0はLinux Perf driverless収集を選択し、VTune配下の `icoFoam` ランクへCPUコアのハードウェアイベントを正確に帰属できた。ソフトウェアHotspotsは従来どおりスタックなしのアタッチモードを維持する。確定実行はランク3のActions #346（Run ID `r-34d9fc894ca09f4d7c24bc3c542bdb4f`、PJM `6471767`）とランク365のActions #347（Run ID `r-a0fa79f5768bac061c5dde276cb15b10`、PJM `6471920`）で、いずれも公式VALID、5/5ステップ、10/10計算を完了した。
 
-以下はVTuneがloopとして分離した同名function内のCPU time正値行を合計し、各指標をそのCPU
-timeで加重平均した値である。Memory Boundとその階層内訳はpipeline stallの分類であり、割合を
-単純加算する指標ではない。
+以下はVTuneがループとして分離した同名関数内のCPU時間（正値）を合計し、各指標をそのCPU時間で加重平均した値である。Memory Boundとその階層内訳はパイプラインストール（stall）の分類であり、割合を単純加算する指標ではない。
 
-| Rank | Kernel | loop CPU time | Memory Bound | L3 Bound | DRAM Bound | packed FP | CPI |
+| ランク | カーネル | ループCPU時間 | Memory Bound | L3 Bound | DRAM Bound | packed FP | CPI |
 |---:|---|---:|---:|---:|---:|---:|---:|
-| 3 | DIC precondition | 2.795 s | 67.2% | 20.9% | 48.3% | 0.0% | 1.42 |
-| 3 | `lduMatrix::Amul` | 1.435 s | 64.9% | 23.7% | 43.6% | 14.3% | 1.52 |
-| 3 | PCG scalar solve | 0.620 s | 89.6% | 27.6% | 47.0% | 74.5% | 1.79 |
-| 365 | DIC precondition | 1.245 s | 68.5% | 21.3% | 49.4% | 0.0% | 1.6 |
-| 365 | `lduMatrix::Amul` | 0.625 s | 71.7% | 20.0% | 49.4% | 20.8% | 1.6 |
-| 365 | PCG scalar solve | 0.285 s | 67.3% | 20.9% | 58.2% | 86.9% | 1.8 |
+| 3 | DIC前処理 | 2.795 秒 | 67.2% | 20.9% | 48.3% | 0.0% | 1.42 |
+| 3 | `lduMatrix::Amul` | 1.435 秒 | 64.9% | 23.7% | 43.6% | 14.3% | 1.52 |
+| 3 | PCGスカラー計算 | 0.620 秒 | 89.6% | 27.6% | 47.0% | 74.5% | 1.79 |
+| 365 | DIC前処理 | 1.245 秒 | 68.5% | 21.3% | 49.4% | 0.0% | 1.60 |
+| 365 | `lduMatrix::Amul` | 0.625 秒 | 71.7% | 20.0% | 49.4% | 20.8% | 1.60 |
+| 365 | PCGスカラー計算 | 0.285 秒 | 67.3% | 20.9% | 58.2% | 86.9% | 1.80 |
 
-Run全体のMemory Boundもrank 3で58.7%、rank 365で60.4%とVTuneがhigh判定した。主要3 kernelは
-両rankですべて64%以上がMemory Boundで、L3/DRAM stallが大きい。DIC loopはpacked FP 0%、
-Amulも14--21%であり、PCG loopだけが75--87%までvector化されている。したがって現時点では
-演算器 throughputよりmemory hierarchy、特にDRAM/locality側が
-主要制約である。Rank 0だけに依存せず、interior rank 3と最大cross-node boundary rank 365で
-同じ分類になった。一方、summaryのDRAM bandwidth 383--385 GB/sは同居するnode全体のuncore
-値なので、選択rankや個別kernelへ帰属させない。次に深掘りする場合は、通常benchの引数を
-増やさず、同じ複数rank方針の独立したVTune Memory Access analysisでNUMA、local/remote DRAM、
-cache missを確認する。
+実行全体のMemory Boundもランク3で58.7%、ランク365で60.4%とVTuneにより高負荷（High）と判定された。主要3カーネルはいずれのランクでも64%以上がMemory Boundであり、L3/DRAMストールが大きい。DICループはpacked FPが0%、Amulも14〜21%であり、PCGループのみが75〜87%までベクトル化されている。したがって現時点では演算器のスループットよりもメモリ階層（特にDRAM帯域およびアクセス局所性）が主要な制約要因である。
 
-## Issue #16：VTune Memory Accessによるmemory-boundの分解
+## Issue #16：VTune Memory Accessによるメモリ律速（Memory-Bound）の要因分解
 
-Issue #14と同じActions #334 build、`scotch-4n-448r`、rank 3（interior）とrank 365
-（cross-node boundary最大）を使用した。通常benchとprofileを分離し、帯域は測定node全体の
-uncore、関数別のlatency、LLC miss、NUMA、TLBはselected rankのcore eventとして、異なるrunで
-収集した。これらの値を同じscopeの指標として解釈しない。
+Issue #14と同じActions #334ビルド、`scotch-4n-448r`、ランク3（内部）とランク365（最大ノード間境界）を使用した。通常ベンチマークとプロファイルを分離し、帯域幅は測定ノード全体のアンコア（uncore）、関数別のレイテンシ・LLCミス・NUMA・TLBは対象ランクのコアイベントとして収集した。
 
-### Node-wide DRAM bandwidth
+### ノード全体のDRAM帯域幅
 
-VTune標準`memory-access`をSEPで実行し、`dram-bandwidth-limits=true`、
-`data-limit=0`でraw収集上限を無効にした。Rank 3のActions `31783134787`（PJM
-`6487316`、run `r-af670d79c9883aadbace78e9eb161487`）は公式VALID、8.4600 M FVOPS、7.565
-s/step、rank 365のActions `31783136455`（PJM `6487100`、run
-`r-3d241de112baf8bc1d2c2f621809001`）は公式VALID、8.3252 M、7.688 s/stepだった。
+VTune標準の `memory-access` をSEPで実行し、`dram-bandwidth-limits=true`、`data-limit=0` で収集した。ランク3のActions `31783134787`（PJM `6487316`、Run ID `r-af670d79c9883aadbace78e9eb161487`）は公式VALID、8.4600 M FVOPS、7.565 秒/ステップ、ランク365のActions `31783136455`（PJM `6487100`、Run ID `r-3d241de112baf8bc1d2c2f621809001`）は公式VALID、8.3252 M、7.688 秒/ステップであった。
 
-| Profile対象rankと同居したnode | DRAM average | observed maximum | high utilization | single-package average / calibrated max | UPI average / high utilization |
+| プロファイル対象と同居ノード | DRAM平均 | 観測最大値 | 高利用率時間比率 | 単一ソケット平均 / 較正最大値 | UPI平均 / 高利用率時間比率 |
 |---:|---:|---:|---:|---:|---:|
 | 3 | 399.420 GB/s | 496.200 GB/s | 91.1% | 202.434 / 248 GB/s | 2.464% / 0.0% |
 | 365 | 399.073 GB/s | 494.600 GB/s | 91.5% | 202.535 / 247 GB/s | 2.501% / 0.0% |
 
-平均は実測されたdual-socket上限の約80%で、elapsed timeの91%以上をVTuneがhigh
-bandwidth utilizationと判定した。一方UPIのhigh utilizationは0%である。理論peakではなく、
-VTuneが同世代nodeでreportした247--248 GB/s/socketのcalibrated maximumと比較できるため、
-別のSTREAM runは追加しなかった。従って、少なくともprofile期間中の同居nodeはDRAM帯域が
-主要制約であり、inter-socket link帯域は主要制約ではない。
+平均帯域幅は実測されたデュアルソケット上限の約80%に達し、実行時間の91%以上においてVTuneが高帯域幅利用状態（High Utilization）と判定した。一方でUPIリンクの高利用率は0%であった。したがって、少なくともプロファイル期間中の計算ノードはDRAM帯域幅が主要制約であり、ソケット間通信（UPI）リンク帯域はボトルネックではない。
 
-SEP collectorは正常終了し、node-wide uncore dataを収集したが、`CPU Time=0`、
-`Total Thread Count=0`でselected processの関数rowは0だった。最初の1,000 MB上限に到達した
-Actions `31781400728` / `31781402372`の警告は`data-limit=0`で解消したが、関数rowは
-復活しなかった。従って、上限はrawの完全性に対する問題ではあったが、関数row欠落の
-原因ではない。
+### 対象ランクのメモリアクセスイベント
 
-### Selected-rank memory events
+関数別の帰属データを得る補完実行では、VTuneカスタム `runsa` とLinux Perf driverless/PEBSを用い、ロード/ストア、ロードレイテンシ、DTLB/STLBミス、LLCミスのローカル/リモートDRAM・キャッシュイベントを収集した。ランク3（Actions `31786010061`、PJM `6487563`）は公式VALID、8.1946 M、7.810 秒/ステップ、ランク365（Actions `31786819315`、PJM `6487593`）は公式VALID、8.0910 M、7.910 秒/ステップであった。
 
-関数帰属を得る補完runでは、VTune custom `runsa`とLinux Perf driverless/PEBSを使い、
-load/store、load latency、DTLB walk/STLB miss、LLC missのlocal/remote DRAM/cache eventだけを収集した。
-Node-wide uncoreはこのrunに含めていない。Rank 3のActions `31786010061`（PJM `6487563`）は
-run `r-38f1ca5d80abd006953e379c7467032e`、公式VALID、8.1946 M、7.810 s/step、関数row
-1,328、rank 365のActions `31786819315`（PJM `6487593`）はrun
-`r-4f301fe05677e204d31e3243ae8f0665`、公式VALID、8.0910 M、7.910 s/step、関数row
-1,322だった。両者ともtarget/VTune exit code 0で、native `hw-events`関数reportにDIC、
-`lduMatrix::Amul`、PCGが存在する。最初のrank 365 exporter rerunであるActions
-`31786011992`は1 node上のprocess groupがsignal 9で終了したが、nodeごとの最大memoryは約32--33
-GiBでOOMではなかった。同一commit・同一条件の`31786819315`で完走したため、一過性の
-node/process-group failureと記録し、追加のretry処理は実装しない。
-
-| Rank | Kernel | load / store event (10^9) | avg load latency | latency-qualified load | LLC-to-memory / loads | STLB-miss loads / loads | DTLB walk active / clocks | remote DRAM/cache |
+| ランク | カーネル | ロード/ストア数 ($10^9$) | 平均ロードレイテンシ | レイテンシ評価ロード | LLC-to-memory / ロード比 | STLBミス / ロード比 | DTLB walk / クロック比 | リモートDRAM/キャッシュ |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
-| 3 | DIC precondition | 14.709 / 0.992 | 23.15 cycle | 48.29 cycle | 0.513% | 0.00374% | 0.207% | 0 |
-| 3 | `lduMatrix::Amul` | 9.839 / 3.067 | 23.35 cycle | 46.38 cycle | 0.513% | 0% | 0.115% | 0 |
-| 3 | PCG scalar solve | 0.928 / 0.702 | 35.15 cycle | 97.58 cycle | 4.395% | 0.01079% | 0.285% | 1 sampled event |
-| 365 | DIC precondition | 6.062 / 0.929 | 23.62 cycle | 41.78 cycle | 1.281% | 0.00743% | 0.191% | 0 |
-| 365 | `lduMatrix::Amul` | 3.347 / 2.878 | 24.87 cycle | 48.25 cycle | 1.624% | 0.00149% | 0.061% | 0 |
-| 365 | PCG scalar solve | 0.921 / 0.630 | 32.56 cycle | 132.59 cycle | 4.597% | 0.00543% | 0.157% | 0 |
+| 3 | DIC前処理 | 14.709 / 0.992 | 23.15 サイクル | 48.29 サイクル | 0.513% | 0.00374% | 0.207% | 0 |
+| 3 | `lduMatrix::Amul` | 9.839 / 3.067 | 23.35 サイクル | 46.38 サイクル | 0.513% | 0% | 0.115% | 0 |
+| 3 | PCGスカラー計算 | 0.928 / 0.702 | 35.15 サイクル | 97.58 サイクル | 4.395% | 0.01079% | 0.285% | 1 イベント |
+| 365 | DIC前処理 | 6.062 / 0.929 | 23.62 サイクル | 41.78 サイクル | 1.281% | 0.00743% | 0.191% | 0 |
+| 365 | `lduMatrix::Amul` | 3.347 / 2.878 | 24.87 サイクル | 48.25 サイクル | 1.624% | 0.00149% | 0.061% | 0 |
+| 365 | PCGスカラー計算 | 0.921 / 0.630 | 32.56 サイクル | 132.59 サイクル | 4.597% | 0.00543% | 0.157% | 0 |
 
-Event countはsampling estimateであり、byte数やrank間の実行時間を直接示すものではない。
-`LLC-to-memory / loads`はlocal DRAM、remote DRAM、remote forward、remote HITM event合計の
-all-load eventに対する比率である。主要3 kernelのremote eventは実質0で、TLB walkは最大でも
-clockの0.285%、STLB-miss loadは0.011%未満だった。NUMA placementの再検討やhuge pageは
-次の優先候補にしない。
+主要3カーネルのリモートメモリアクセスイベントは実質的に0であり、TLBウォークも最大でクロックの0.285%、STLBミスは0.011%未満であった。NUMA配置の再検討やHuge Pageの導入は優先度の高い改善候補ではない。
 
-PCGはDIC/Amulよりload eventが少ないが、LLC-to-memory率が両rankで4.4--4.6%、
-latency-qualified loadが98--133 cycleで、DIC/Amulよりlatency/localityに敏感である。一方、DICと
-Amulは大量のload/store eventを伴い、同居nodeは同時期に平均約399 GB/sで飽和していた。
-従って次のsource最適化は、第一にDIC/Amulのmemory traffic・footprint削減、第二にPCGの
-indirect access locality改善を候補とする。
+PCGはDIC/Amulに比べてロードイベント総数は少ないものの、LLC-to-memory率が両ランクで4.4〜4.6%、レイテンシ評価ロードが98〜133サイクルと高く、DIC/Amulよりもアクセス遅延および局所性に敏感である。一方、DICとAmulは極めて大量のロード/ストアを伴い、計算ノード全体が平均約399 GB/sで飽和していた。したがって今後のソースコード最適化としては、第一にDIC/Amulのメモリトラフィック・フットプリント削減、第二にPCGの間接アクセス局所性改善を優先候補とする。
 
-Full raw resultはそれぞれ
-`/home/pj26000080/share/openfoam-vtune/r-af670d79c9883aadbace78e9eb161487-6487316/`、
-`r-3d241de112baf8bc1d2c2f621809001-6487100/`、
-`r-38f1ca5d80abd006953e379c7467032e-6487563/`、
-`r-4f301fe05677e204d31e3243ae8f0665-6487593/`に保持する。前二者は各1.1 GiB、後二者は
-265 MiB / 242 MiBである。Bounded reportと公式resultはActions artifactを経由してhome serverに
-archive済みで、すべての確定runに残留PJM jobはない。
+すべての生ログおよびレポートは自宅サーバーへ安全に退避済みであり、残留PJMジョブはない。
 
-## Issue #15：compiler tuning比較
+## Issue #15：コンパイラ最適化オプション（チューニング）の比較
 
-条件はworkflow matrixやdispatch inputでは切り替えず、各条件を`main`上の独立commitとして
-`[require-build]`付きでpushする。各commitの`build_condition`、`WM_COMPILE_OPTION`、
-`FOAM_EXTRA_CXXFLAGS`をbuild sidecarへ記録し、run時にもsidecarのcompile optionから同じ
-`WM_OPTIONS`を再構成できたことを検証する。各buildでは同じ
-`-qopt-report=3 -qopt-report-phase=loop,vec,cg`を付け、optimization reportをbuild artifactへ
-保存するため、report収集自体は比較因子にならない。
-最初の4 buildでは、OpenFOAM初期化前にexportした`FOAM_EXTRA_CXXFLAGS`がbashrcで消去され、
-compile argvにreport flagが入らなかった。またccacheはcompiler副生成物をartifactとして扱わない。
-比較buildではbashrcが明示的にunsetした後でtuning/report flagsをexportして実効値を検証する。
-ccache自体がreport生成を妨げた観測はないため、通常どおり維持する。
-これはbuild時間だけに作用し、通常runの比較条件には入らない。
+実験条件はワークフローのmatrixやdispatch inputでは切り替えず、各条件を `main` ブランチ上の独立したコミットとして `[require-build]` 付きでプッシュして評価した。各コミットのビルド条件をビルドサイドカーへ記録し、実行時にも同一オプションが正しく適用されていることを検証した。
 
-上流v2606 ruleと直近build #348のsidecarを確認した結果、現行C++ baselineはIssue本文にある
-`-O2`ではなく、`Opt`の`-O3 -fp-model=precise`である。比較順序は次の通りとする。
+上流v2606ルールおよび直近ビルド #348のサイドカーを確認した結果、現行のC++ベースラインは `-O2` ではなく `Opt`（`-O3 -fp-model=precise`）であった。比較した条件は以下のとおりである。
 
-1. `baseline`: `Opt`、追加target flagなし
-2. `opt-avx512`: `OptAVX512`、`-O3 -xCORE-AVX512`
-3. `opt-avx512-zmm-high`: 2に`-qopt-zmm-usage=high`を追加
-4. `opt-sapphirerapids`: `Opt`に`-march=sapphirerapids -mtune=sapphirerapids`を追加
+1. `baseline`：`Opt`、追加ターゲットフラグなし
+2. `opt-avx512`：`OptAVX512`（`-O3 -xCORE-AVX512`）
+3. `opt-avx512-zmm-high`：2に `-qopt-zmm-usage=high` を追加
+4. `opt-sapphirerapids`：`Opt` に `-march=sapphirerapids -mtune=sapphirerapids` を追加
 
-すべて`scotch-4n-448r`の公式workload、decomposition、MPI layout、runtime optionを固定し、
-公式VALID、FVOPS、s/step、solver/pipeline wall、iteration/residualを比較する。
+すべて `scotch-4n-448r` の公式ワークロード、領域分割、MPI配置、ランタイム設定を固定して測定した。
 
-4条件のbuildはそれぞれ独立commitで作成し、optimization reportとbuild sidecarをhome
-artifactへ保存した。最初のproduction runではcase cache identityに`blockMesh`と
-`decomposePar`のbinary hashが含まれていたため、同一の448-way Scotch caseをcompiler
-条件ごとに再生成していた。caseの再利用単位として細かすぎるため、binary hashは生成時
-manifestのprovenanceには残しつつcache keyから除外した。RepeatではSapphire条件がcache
-`84aa9f2d...`を一度生成し、baselineとOptAVX512が同じcacheへhitした。
+4ノード / 448ランクでの測定結果は以下のとおりである。
 
-4-node / 448-rank production結果は次の通りだった。
-
-| 条件 | Actions / PJM | 公式結果 | FVOPS_trim | s/step |
+| 条件 | Actions / PJM | 公式判定 | FVOPS_trim | 秒/ステップ |
 |---|---|---|---:|---:|
 | baseline 1 | `31713165873` / `6475489` | VALID | 8.4488 M | 7.575 |
 | baseline 2 | `31727650541` / `6477310` | VALID | 8.4684 M | 7.558 |
@@ -575,42 +303,29 @@ manifestのprovenanceには残しつつcache keyから除外した。Repeatで�
 | OptAVX512 2 | `31727648006` / `6477311` | VALID | 8.3907 M | 7.628 |
 | Sapphire Rapids 1 | `31713168357` / `6476219` | VALID | 8.3117 M | 7.700 |
 | Sapphire Rapids 2 | `31727652725` / `6477308` | VALID | 8.3660 M | 7.650 |
-| OptAVX512 + ZMM high | `31713074738` / `6475034` | result未生成 | - | - |
+| OptAVX512 + ZMM high | `31713074738` / `6475034` | 結果未生成（SIGFPE） | - | - |
 
-FVOPS中央値はbaseline 8.4586 M、OptAVX512 8.3907 M、Sapphire Rapids
-8.3389 Mで、baseline比はそれぞれ-0.80%、-1.42%だった。Baselineの2-run rangeは
-0.23%、Sapphire Rapidsは0.65%、OptAVX512は表示精度内で同値だった。いずれもbaselineを
-改善しないため棄却する。
+FVOPS中央値は baseline が 8.4586 M、OptAVX512 が 8.3907 M、Sapphire Rapids が 8.3389 M であり、ベースライン比でそれぞれ -0.80%、-1.42% と性能が低下した。いずれもベースラインを上回らないため不採用とする。
 
-`-qopt-zmm-usage=high`条件はcase preparationを完了したが、solver開始直後の
-`Reading/calculating face flux field phi`で全rank規模のSIGFPEとなった。共通stackは
-`Foam::operator/`、`processorFvPatch::makeWeights`、
-`basicFvGeometryScheme::weights`で、scheduler exit codeは255、公式resultと
-`run-success`は生成されなかった。各node最大memoryは約23.4--23.6 GiBでOOMではない。
-通常OptAVX512が同じproduction条件でVALIDだったことから、この条件は数値挙動を維持せず
-棄却する。失敗raw artifactもhome serverへ退避済みである。
+`-qopt-zmm-usage=high` 条件はケース準備を完了したものの、ソルバー開始直後の `Reading/calculating face flux field phi` で全ランク規模の浮動小数点例外（SIGFPE）が発生し異常終了した。通常の OptAVX512 が同一条件で VALID であったことから、この条件は計算の数値的正当性を損なうため棄却した。
 
-Optimization reportでは主要loopのvector lengthがbaselineの2からOptAVX512および
-Sapphire Rapidsの4、ZMM highの8へ増えた。一方、ZMM highではPCG scalarSolveのregister
-spillがbaselineの25から39へ増えた。Vector幅の増加はmemory-boundな主要kernelの性能改善へ
-結び付かず、積極的なZMM利用は正しさも満たさなかった。したがってcompiler tuningだけで
-回収できる改善は確認できず、Issue #14の再profile対象も作らない。
+最適化レポートの解析では、主要ループのベクトル長がベースラインの2から OptAVX512 / Sapphire Rapids の4、ZMM high の8へと増加していたが、ZMM high ではレジスタスピルが25から39へ増加していた。ベクトル幅の拡大はメモリ帯域律速（Memory-Bound）な主要カーネルの性能向上に寄与せず、積極的なZMMレジスタ使用は正当性も満たさなかった。したがってコンパイラオプションの変更による有意な改善は得られず、現行ベースライン（`Opt`）を維持する。
 
-## 実験template
+## 実験テンプレート
 
 ### 実験ID
 
-- 日付とcommit：
-- Actions run / PJM job / run ID：
+- 日付とコミット：
+- Actions実行 / PJMジョブ / Run ID：
 - 仮説：
-- 比較baseline：
+- 比較対照（ベースライン）：
 - 単一の変更要因：
-- Node数 / rank数 / ranks per node：
-- Decompositionとordering：
-- MPI/OpenFOAM runtime設定：
-- 公式結果とvalidity：
-- Solverおよびpipeline wall time：
-- Partitionおよびplacementの観測：
-- ArtifactおよびBigQueryの状況：
-- 解釈：
-- 判断と次の実験：
+- ノード数 / ランク数 / ノードあたりランク数：
+- 領域分割（Decomposition）とリナンバリング：
+- MPI/OpenFOAM ランタイム設定：
+- 公式判定結果と正当性（validity）：
+- ソルバー実時間およびパイプライン実時間：
+- 領域分割およびプロセス配置の観測結果：
+- アーティファクトおよびBigQueryの保存状況：
+- 結果の解釈：
+- 採用判断および次の実験計画：
