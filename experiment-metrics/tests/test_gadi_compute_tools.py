@@ -44,3 +44,8 @@ def test_gadi_stages_compute_tools_with_the_openfoam_runtime(tmp_path: Path) -> 
     assert (target / "OpenFOAM/platforms/linux64IcxDPInt32Opt/bin/simpleFoam").is_file()
     assert (target / "experiment-metrics/.venv/bin/python").is_file()
     assert (target / "scripts/exec-profiler.sh").is_file()
+
+    prepare_target = tmp_path / "prepare-runtime"
+    subprocess.run(["bash", STAGE_SCRIPT, build_archive, sidecar, prepare_target], check=True)
+    assert (prepare_target / "OpenFOAM/platforms/linux64IcxDPInt32Opt/bin/simpleFoam").is_file()
+    assert not (prepare_target / "experiment-metrics").exists()
