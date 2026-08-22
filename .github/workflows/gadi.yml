@@ -86,7 +86,7 @@ jobs:
               printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
               exit 0
             done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
-            commit=$(git rev-parse "${commit}^" 2>/dev/null || true)
+            commit=$(git rev-parse --verify "${commit}^" 2>/dev/null || true)
           done
           echo '再利用可能なGadi向け成果物がないため、新しくビルドします'
           printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"

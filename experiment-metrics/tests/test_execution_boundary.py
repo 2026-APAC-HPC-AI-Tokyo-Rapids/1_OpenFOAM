@@ -361,7 +361,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
             in workflow
         )
         assert 'commit="${GITHUB_SHA}"' in workflow
-        assert 'git rev-parse "${commit}^"' in workflow
+        assert 'git rev-parse --verify "${commit}^"' in workflow
         assert "git diff --quiet" not in workflow
         assert "git cat-file" not in workflow
         assert "commit_role" not in workflow
