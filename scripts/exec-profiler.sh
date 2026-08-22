@@ -14,6 +14,7 @@ set -euo pipefail
 [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
 target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
 install -d -m 0700 "$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")"
+vtune_cli_log="$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")/collection.log"
 
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hotspots)
@@ -21,7 +22,9 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     target_pid=$!
     trap 'kill -TERM "${target_pid}" 2>/dev/null || true; wait "${target_pid}" 2>/dev/null || true; exit 143' TERM INT
     set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}"
+    # attach後のVTuneは対象とは別プロセスで結果をfinalizeする。進捗表示を対象の
+    # stdoutへ混ぜると公式parserがsolverの行を認識できないため、専用記録へ分離する。
+    "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     vtune_status=$?
     wait "${target_pid}"
     target_status=$?

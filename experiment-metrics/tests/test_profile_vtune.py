@@ -250,10 +250,12 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
     launcher.write_text("#!/bin/sh\nexec \"$@\"\n")
     launcher.chmod(0o755)
     vtune = tmp_path / "vtune"
-    vtune.write_text(f"#!/bin/sh\nexit {vtune_exit}\n")
+    vtune.write_text(
+        f"#!/bin/sh\nprintf 'vtune-progress\\n'\nprintf 'vtune-warning\\n' >&2\nexit {vtune_exit}\n"
+    )
     vtune.chmod(0o755)
     target = tmp_path / "target"
-    target.write_text(f"#!/bin/sh\nexit {target_exit}\n")
+    target.write_text(f"#!/bin/sh\nprintf 'solver-output\\n'\nexit {target_exit}\n")
     target.chmod(0o755)
     status = tmp_path / "profile/raw/vtune-summary/collection-status.json"
     environment = {
@@ -270,9 +272,16 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
         ["bash", str(ROOT / "scripts/exec-profiler.sh"), str(target)],
         env=environment,
         check=False,
+        capture_output=True,
+        text=True,
     )
 
     assert completed.returncode == expected_exit
+    assert completed.stdout == "solver-output\n"
+    assert completed.stderr == ""
+    assert (status.parent / "collection.log").read_text() == (
+        "vtune-progress\nvtune-warning\n"
+    )
     document = json.loads(status.read_text())
     assert document["vtune_exit_code"] == vtune_exit
     assert document["target_exit_code"] == target_exit
