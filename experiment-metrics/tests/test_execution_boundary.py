@@ -152,6 +152,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "OPENFOAM_EXPERIMENT_PRESET" not in workflow
     assert "--profile-rank" not in workflow
     assert "--profile-analysis" not in workflow
+    assert '--profile-condition "${PROVISION_DIR}/benchmark/profile.json"' in workflow
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow
     assert "profile_mode" not in workflow
     assert "perf-stat" not in workflow
@@ -352,6 +353,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "profile_analysis:" not in workflow
         assert "--profile-rank" not in workflow
         assert "--profile-analysis" not in workflow
+        assert '--profile-condition "${PROVISION_DIR}/benchmark/profile.json"' in workflow
         assert (
             'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000'
             in workflow

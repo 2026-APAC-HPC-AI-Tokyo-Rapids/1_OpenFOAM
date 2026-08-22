@@ -190,6 +190,7 @@ jobs:
           install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-rank-context.sh platforms/gadi/collect-rank-placement.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
+          install -m 0644 benchmark/profile.json "${provision_dir}/benchmark/profile.json"
           install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
@@ -285,7 +286,7 @@ jobs:
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
-          control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/archive-openfoam-case.sh platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/provision-openfoam-runtime.sh platforms/gadi/run-openfoam.pbs platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/archive-openfoam-case.sh platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/provision-openfoam-runtime.sh platforms/gadi/run-openfoam.pbs platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
@@ -310,7 +311,7 @@ jobs:
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
           trap - EXIT
-          job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/gadi/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/gadi/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}")
+          job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/gadi/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/gadi/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}" --profile-condition "${PROVISION_DIR}/benchmark/profile.json")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
           echo "PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pbs_job_id=${job_id}" >> "${GITHUB_OUTPUT}"

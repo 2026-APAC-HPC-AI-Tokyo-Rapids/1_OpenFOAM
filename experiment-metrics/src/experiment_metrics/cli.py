@@ -10,6 +10,28 @@ from .recording import collect_once
 from .stage_runner import run_stage
 
 
+def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str]:
+    path = arguments.profile_condition
+    if path is None:
+        return arguments.profile_rank, arguments.profile_analysis
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or set(document) != {
+        "schema_version",
+        "analysis",
+        "rank",
+    }:
+        raise ValueError("profile condition must be a closed v1 object")
+    if document["schema_version"] != "openfoam-profile-condition/v1":
+        raise ValueError("unsupported profile condition schema")
+    rank = document["rank"]
+    analysis = document["analysis"]
+    if not isinstance(rank, int) or isinstance(rank, bool) or rank < 0:
+        raise ValueError("profile condition rank must be a non-negative integer")
+    if analysis not in {"hotspots", "hpc-performance", "memory-access"}:
+        raise ValueError("unsupported profile analysis")
+    return rank, analysis
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="experiment-metrics")
     commands = root.add_subparsers(dest="command", required=True)
@@ -81,6 +103,7 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--pjm-script-repository-path", required=True)
     submit.add_argument("--execution-script", type=Path, required=True)
     submit.add_argument("--provision-dir", type=Path, required=True)
+    submit.add_argument("--profile-condition", type=Path)
     submit.add_argument("--profile-rank", type=int, default=0)
     submit.add_argument(
         "--profile-analysis",
@@ -94,6 +117,7 @@ def parser() -> argparse.ArgumentParser:
     submit_pbs.add_argument("--pbs-script-repository-path", required=True)
     submit_pbs.add_argument("--execution-script", type=Path, required=True)
     submit_pbs.add_argument("--provision-dir", type=Path, required=True)
+    submit_pbs.add_argument("--profile-condition", type=Path)
     submit_pbs.add_argument("--profile-rank", type=int, default=0)
     submit_pbs.add_argument(
         "--profile-analysis",
@@ -352,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "submit-run":
         from .scheduler import submit_run
 
+        profile_rank, profile_analysis = _profile_condition(arguments)
+
         outcome = submit_run(
             manifest_path=arguments.manifest,
             runtime_dir=arguments.runtime_dir,
@@ -359,14 +385,16 @@ def main(argv: list[str] | None = None) -> int:
             pjm_script_repository_path=arguments.pjm_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
-            profile_rank=arguments.profile_rank,
-            profile_analysis=arguments.profile_analysis,
+            profile_rank=profile_rank,
+            profile_analysis=profile_analysis,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)
         return 0 if outcome.job_id is not None else 1
     if arguments.command == "submit-pbs-run":
         from .pbs_scheduler import submit_pbs_run
+
+        profile_rank, profile_analysis = _profile_condition(arguments)
 
         outcome = submit_pbs_run(
             manifest_path=arguments.manifest,
@@ -375,8 +403,8 @@ def main(argv: list[str] | None = None) -> int:
             pbs_script_repository_path=arguments.pbs_script_repository_path,
             execution_script=arguments.execution_script,
             provision_dir=arguments.provision_dir,
-            profile_rank=arguments.profile_rank,
-            profile_analysis=arguments.profile_analysis,
+            profile_rank=profile_rank,
+            profile_analysis=profile_analysis,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)

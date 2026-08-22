@@ -178,6 +178,7 @@ jobs:
           install -m 0755 "${GITHUB_WORKSPACE}/platforms/genkai/run-openfoam.pjm" "${GITHUB_WORKSPACE}/platforms/genkai/prepare-openfoam-case.pjm" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/benchmark/"
           cp -a "${GITHUB_WORKSPACE}/benchmark/occDrivAerStaticMesh" "${provision_dir}/benchmark/"
+          install -m 0644 "${GITHUB_WORKSPACE}/benchmark/profile.json" "${provision_dir}/benchmark/profile.json"
           install -m 0644 "${GITHUB_WORKSPACE}/benchmark/workload.json" "${provision_dir}/benchmark/workload.json"
           cp -a "${GITHUB_WORKSPACE}/experiment-metrics" "${provision_dir}/experiment-metrics"
           uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
@@ -301,7 +302,7 @@ jobs:
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
           fi
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
-          control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
+          control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
           if [[ "${purpose}" == profile ]]; then
             control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
           fi
@@ -329,7 +330,7 @@ jobs:
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
           trap - EXIT
-          job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}")"
+          job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}" --profile-condition "${PROVISION_DIR}/benchmark/profile.json")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pjm_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
