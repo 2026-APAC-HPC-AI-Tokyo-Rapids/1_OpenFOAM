@@ -167,6 +167,7 @@ MESH_FACTS=$(command -v mesh-facts)
 PARTITION_AUDIT=$(command -v partition-audit)
 CAPTURE_HARDWARE=$(command -v capture-hardware)
 JQ=$(command -v jq)
+ENV=$(command -v env)
 
 provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${runtime_root}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
@@ -218,8 +219,9 @@ stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # coded function objectの初回コンパイルをVTuneの60秒収集区間へ混ぜない。
   # -postProcessはsolver反復を行わずfunction objectだけを初期化・実行し、生成した
-  # 共有libraryを後続の正式solver実行が再利用する。
-  stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  # 共有libraryを後続の正式solver実行が再利用する。公式function objectは0反復の終了時に0/0を
+  # 計算するため、warmupだけFPE trapを無効化する。solverの実行環境は変更しない。
+  stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
   install -d -m 2770 "${vtune_root}"
   install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"
 fi
