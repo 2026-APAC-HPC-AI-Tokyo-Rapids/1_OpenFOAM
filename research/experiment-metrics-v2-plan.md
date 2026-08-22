@@ -631,7 +631,7 @@ score eligibilityである。reopen triggerは対象clusterのnode modelまた�
 | 確定 | complete recordのsubsetであるfirst/last/count/average等をrawへ重複保存しない |
 | 確定 | bench/profileを分離し、取得できなかった値とprofile専用familyは値だけNULL、原因/status/欠損用recordなしとする。run-level statusは`collection_complete`だけ |
 | 確定 | 実験用途として多段retry、fallback source、field別reason registryを作らない |
-| 確定 | 固定v2 artifactの移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する。OpenFOAMのVTune完全結果は固定artifactへ重複格納せず、home-labがクラスタから直接取得する |
+| 確定 | 固定v2 artifactの移管は現行OpenFOAMのGitHub Artifact -> home-lab runner -> home RAIDを基準とし、Qwenへも同じ経路を移植する。OpenFOAMのVTune完全結果とParaView caseは固定artifactへ重複格納せず、home-lab runnerがクラスタから直接取得する |
 | 確定 | home artifactは自動expireせず、容量が実際に問題になった時だけ手動整理する。専用quarantineは作らない |
 | 確定 | D-003: collectorはmulti-node対応とし、Genkai 1/2/4 nodeを初版実機conformance対象にする。nodes/ranks/resource/transportは独立field・独立列とし、設定を束ねるID/object/manifestは作らない |
 | 確定 | 非擾乱確認はcollector実装中にだけ行い、結果・専用run・metric・artifact・decision recordを保存しない |

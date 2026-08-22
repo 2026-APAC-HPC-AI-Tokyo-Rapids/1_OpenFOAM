@@ -398,7 +398,12 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert f"openfoam-{cluster}-occdrivaer-65m-result-" in workflow
         assert f'pattern: "openfoam-{cluster}-*"' in workflow
         assert f'startswith("openfoam-{cluster}-")' in workflow
-        assert f"openfoam-artifacts/${{GITHUB_RUN_ID}}/{cluster}" in workflow
+        assert "OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts" in workflow
+        assert f'"${{OPENFOAM_ARTIFACT_ARCHIVE_ROOT}}/${{GITHUB_RUN_ID}}/{cluster}"' in workflow
+        assert "runs-on: [self-hosted, home-lab]" in workflow
+        assert "tailscale/github-action" not in workflow
+        assert "ARTIFACT_SERVER_SSH_PRIVATE_KEY" not in workflow
+        assert "tomokazu@tomokazu-ubuntu-server" not in workflow
         assert "profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}" in workflow
         assert "- name: VTuneとParaViewの完全結果をrun単位で直接転送" in workflow
         assert "if: inputs.profile && needs.run.result == 'success'" in workflow

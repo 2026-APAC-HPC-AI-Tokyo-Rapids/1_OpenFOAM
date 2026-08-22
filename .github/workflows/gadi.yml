@@ -392,10 +392,12 @@ jobs:
     name: 成果物を自宅サーバーへ保管
     needs: run
     if: always() && needs.run.outputs.artifact_uploaded == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, home-lab]
     permissions:
       actions: write
       contents: read
+    env:
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
     steps:
       - name: VTune転送処理を取得
         uses: actions/checkout@v7
@@ -405,22 +407,6 @@ jobs:
         with:
           path: artifacts
           pattern: "openfoam-gadi-*"
-      - name: Tailscale経由で自宅サーバーへ接続
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:apac-hpc-ai-actions
-          ping: tomokazu-ubuntu-server
-      - name: SSHを設定
-        env:
-          ARTIFACT_SERVER_SSH_PRIVATE_KEY: ${{ secrets.ARTIFACT_SERVER_SSH_PRIVATE_KEY }}
-        run: |
-          install -d -m 0700 "${HOME}/.ssh"
-          printf '%s\n' "${ARTIFACT_SERVER_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
-          chmod 0600 "${HOME}/.ssh/id_ed25519"
-          ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
-
       - name: VTuneとParaViewの完全結果をrun単位で直接転送
         if: inputs.profile && needs.run.result == 'success'
         env:
@@ -428,12 +414,13 @@ jobs:
         run: |
           profile_run_id=${PROFILE_RUN_ID}
           [[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          ssh tomokazu@tomokazu-ubuntu-server "OPENFOAM_ARTIFACT_ARCHIVE_ROOT=/hdd_raid/samba/net_share/openfoam-artifacts bash -s -- --cluster gadi --github-run-id '${GITHUB_RUN_ID}' --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
+          scripts/transfer-vtune-result.sh --cluster gadi --github-run-id "${GITHUB_RUN_ID}" --profile-run-id "${profile_run_id}"
 
-      - name: 成果物を自宅サーバーへ転送
+      - name: 成果物を自宅サーバーへ配置
         run: |
-          ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/gadi"
-          scp -r artifacts/. "tomokazu@tomokazu-ubuntu-server:/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/gadi/"
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/gadi"
+          install -d -m 0750 "${destination}"
+          cp -a artifacts/. "${destination}/"
 
       - name: 転送済みのGitHub成果物を削除
         env:
