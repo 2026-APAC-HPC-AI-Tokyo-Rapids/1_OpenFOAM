@@ -14,7 +14,7 @@ set -euo pipefail
 
 module purge
 module load intel-compiler-llvm/2025.1.1 intel-mpi/2021.15.0
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then module load intel-vtune/2025.3.0; fi
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then module load intel-vtune/2025.3.0; export OPENFOAM_VTUNE_COLLECT_MEMORY_BANDWIDTH=false; fi
 
 mpirun_path=$(command -v mpirun)
 hosts=$(awk '!seen[$0]++' "${PBS_NODEFILE}" | paste -sd, -)

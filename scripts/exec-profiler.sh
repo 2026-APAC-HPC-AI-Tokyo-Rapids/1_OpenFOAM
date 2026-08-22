@@ -12,6 +12,8 @@ set -euo pipefail
 : "${PROVISION_DIR:?provision directory is required}"
 : "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
 [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
+collect_memory_bandwidth=${OPENFOAM_VTUNE_COLLECT_MEMORY_BANDWIDTH:-true}
+[[ "${collect_memory_bandwidth}" == true || "${collect_memory_bandwidth}" == false ]]
 compute_tools_root=${OPENFOAM_COMPUTE_TOOLS_ROOT:-${PROVISION_DIR}}
 [[ "${compute_tools_root}" == /* ]]
 target_launcher="${compute_tools_root}/scripts/allow-vtune-attach.py"
@@ -31,7 +33,7 @@ case "${OPENFOAM_VTUNE_ANALYSIS}" in
     "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     ;;
   hpc-performance)
-    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth=true -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
+    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth="${collect_memory_bandwidth}" -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     ;;
   memory-access)
     # 対象プロセスの事象と、同居ノード全体のアンコア帯域カウンタを収集する。

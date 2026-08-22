@@ -30,6 +30,8 @@ PBSの投入先は課題`hb15`の`normalsr`です。投入、待機、終了確�
 
 ビルドと実行には`intel-compiler-llvm/2025.1.1`と`intel-mpi/2021.15.0`を使用します。これは玄界と同じIntel C++ 2025.1.1、Intel MPI 2021.15系です。プロファイル取得時のみ`intel-vtune/2025.3.0`も読み込みます。
 
+Gadiの計算ノードにはVTune sampling driverが有効化されていない。2026年8月23日の`hpc-performance`と`memory-access`実行では、solverは公式VALIDまで完走したがVTuneはmemory bandwidth収集を開始できず終了値1となった。このためGadiのHPC Performance Characterizationでは`collect-memory-bandwidth=false`としてdriverlessのコアイベントを収集し、node-wideアンコア帯域は報告しない。標準Memory Accessによるnode-wide帯域はGadiでは収集不能として扱い、selected-rankのメモリアクセス特性には成功済みの`memory-access-core`（Perf driverless/PEBS）を使用する。玄界はsampling driverによる帯域収集実績があるため従来のtrueを維持する。
+
 補助ツールのビルド用にGCC 16.1.0とccacheの`a89f5010f1c8edf231184b3a3a77654e12e4a288`を`~/.local`へ導入しています。玄界と同様に、`~/.local/.setenv`へ`PATH`、`LD_LIBRARY_PATH`、`MANPATH`、`PKG_CONFIG_PATH`などをまとめ、`~/.bashrc`から読み込みます。コンパイラを指定する環境変数はここでは設定せず、OpenFOAMのコンパイラはIntel oneAPIのままとします。GCCの48並列ビルドはログインノードのメモリ不足で停止したため、GCCのみ16並列、ccacheは48並列でビルドします。ソースと中間生成物は`/tmp`上で作成し、導入完了後に削除します。
 
 GitHub Actionsランナーの`/`は約124 MiBの読み取り専用zramであり、作業領域の実際の空き容量とは無関係です。Actionsの「Free space left: 88 MB」はこの`/`を検知した警告です。実際の`_work`およびOpenFOAMのデータは`/scratch/hb15`上に配置されています。2026年8月16日の`lquota`確認では、課題`hb15`の使用量は26.93 GiB / 1.00 TiB、inodeは75,868 / 202,000であり、いずれもクォータ内でした。この警告をクォータ超過と誤認しないようにします。

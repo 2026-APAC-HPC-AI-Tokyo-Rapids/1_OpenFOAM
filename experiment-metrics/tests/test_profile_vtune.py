@@ -338,3 +338,14 @@ def test_hardware_profile_wrapper_attaches_without_stopping_target(
         "target_exit_code": 0,
         "vtune_exit_code": 0,
     }
+
+
+def test_gadi_hpc_profile_disables_driver_dependent_memory_bandwidth() -> None:
+    profiler = (ROOT / "scripts/exec-profiler.sh").read_text(encoding="utf-8")
+    gadi = (ROOT / "platforms/gadi/run-openfoam.pbs").read_text(encoding="utf-8")
+    genkai = (ROOT / "platforms/genkai/run-openfoam.pjm").read_text(encoding="utf-8")
+
+    assert 'collect_memory_bandwidth=${OPENFOAM_VTUNE_COLLECT_MEMORY_BANDWIDTH:-true}' in profiler
+    assert '-knob collect-memory-bandwidth="${collect_memory_bandwidth}"' in profiler
+    assert "export OPENFOAM_VTUNE_COLLECT_MEMORY_BANDWIDTH=false" in gadi
+    assert "OPENFOAM_VTUNE_COLLECT_MEMORY_BANDWIDTH" not in genkai
