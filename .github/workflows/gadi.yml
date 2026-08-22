@@ -193,7 +193,9 @@ jobs:
           install -m 0644 benchmark/profile.json "${provision_dir}/benchmark/profile.json"
           install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
           cp -a experiment-metrics "${provision_dir}/experiment-metrics"
-          uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev
+          uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev --no-editable
+          tar --use-compress-program='zstd -T0 -3' -cf "${provision_dir}/compute-tools.tar.zst" -C "${provision_dir}" experiment-metrics scripts platforms/gadi
+          jq -n -c --arg path compute-tools.tar.zst --argjson size_bytes "$(stat -c '%s' "${provision_dir}/compute-tools.tar.zst")" --arg sha256 "$(sha256sum "${provision_dir}/compute-tools.tar.zst" | awk '{print $1}')" '{schema_version:"openfoam-compute-tools-archive/v1",archive:{path:$path,size_bytes:$size_bytes,sha256:$sha256}}' > "${provision_dir}/control/compute-tools.json"
 
       - name: 配備失敗時のOpenFOAM実行環境を削除
         if: failure() && steps.provision.outputs.provision_dir != ''

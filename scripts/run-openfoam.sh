@@ -20,6 +20,7 @@ local_rank_env=
 local_size_env=
 profile_root=
 runtime_root=
+compute_tools_root=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
@@ -38,6 +39,7 @@ do
     --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
     --profile-root) [[ $# -ge 2 ]]; profile_root=$2; shift 2 ;;
     --runtime-root) [[ $# -ge 2 ]]; runtime_root=$2; shift 2 ;;
+    --compute-tools-root) [[ $# -ge 2 ]]; compute_tools_root=$2; shift 2 ;;
     --openfoam-arg) [[ $# -ge 2 ]]; openfoam_args+=("$2"); shift 2 ;;
     *) printf 'run-openfoamの未知の引数です: %s\n' "$1" >&2; exit 64 ;;
   esac
@@ -85,8 +87,9 @@ esac
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 
 runtime_root=${runtime_root:-${PROVISION_DIR}}
+compute_tools_root=${compute_tools_root:-${PROVISION_DIR}}
 case_dir=${case_dir:-${RUN_DIR}/work/occDrivAerStaticMesh}
-[[ "${runtime_root}" == /* && "${case_dir}" == /* ]]
+[[ "${runtime_root}" == /* && "${compute_tools_root}" == /* && "${case_dir}" == /* ]]
 if [[ -z "${prepared_case_manifest}" ]]; then
   [[ "${case_cache_root}" == /* ]]
 else
@@ -99,6 +102,7 @@ SOURCE_DIR="${RUN_DIR}/source"
 RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
+RANK_PYTHON="${compute_tools_root}/experiment-metrics/.venv/bin/python"
 rank_manifest=${rank_manifest:-${RUN_MANIFEST}}
 rank_placement_root=${rank_placement_root:-${SOURCE_DIR}/placement}
 [[ "${rank_manifest}" == /* && "${rank_placement_root}" == /* ]]
@@ -113,6 +117,7 @@ vtune_root="${profile_root}/${profile_run_id}"
 OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
+export OPENFOAM_COMPUTE_TOOLS_ROOT="${compute_tools_root}"
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
 install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${RUN_DIR}/domain"
 "${METRICS_CLI}" supervisor-start --manifest "${RUN_MANIFEST}" --state "${SUPERVISOR_STATE}" --job-id "${job_id}"
@@ -153,7 +158,7 @@ stage_at() {
 # 計測記録処理には配備したPythonが必要である。最小構成の直接計測とMPI経由の
 # プロファイル計測の両方で、このPythonをPATHの先頭に置く。実行ファイルの識別情報は
 # 追跡対象の計測ツール自身を維持する。
-probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"
+probe_python_dir="${compute_tools_root}/experiment-metrics/.venv/bin"
 export PATH="${probe_python_dir}:${PATH}"
 set +u
 source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"
@@ -231,14 +236,14 @@ fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]; then
-  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
+  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # まず全ランクが配置を記録する。その後、選択したランクがプロファイラへ置き換わる。
   # プロファイラからsimpleFoamを直接起動し、VTuneがPythonの配置記録処理ではなく
   # ソルバーを追跡するようにする。
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${PROVISION_DIR}/experiment-metrics/.venv/bin/python" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 fi
@@ -264,7 +269,7 @@ fi
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && -n "${paraview_collector}" ]]; then
   paraview_output_dir="${vtune_root}/paraview"
   "${node_launch[@]}" "${paraview_collector}" "${CASE_DIR}" "${paraview_output_dir}" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))" "${OPENFOAM_NODES}" "${global_rank_env}"
-  "${PROVISION_DIR}/scripts/finalize-paraview-case.sh" "${paraview_output_dir}" "${RUN_ID}" "${profile_run_id}" "${OPENFOAM_NODES}"
+  "${compute_tools_root}/scripts/finalize-paraview-case.sh" "${paraview_output_dir}" "${RUN_ID}" "${profile_run_id}" "${OPENFOAM_NODES}"
 fi
 
 "${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" > "${RESULTS_DIR}/result.txt"

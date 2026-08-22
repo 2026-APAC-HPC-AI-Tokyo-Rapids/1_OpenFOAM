@@ -101,8 +101,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
     assert 'stage profile_warmup "${LOG_DIR}/profile-warmup.log"' in text
     assert '"${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel' in text
-    assert '--profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh"' in text
-    assert '"${PROVISION_DIR}/scripts/allow-vtune-attach.py"' in (
+    assert '--profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh"' in text
+    assert '"${compute_tools_root}/scripts/allow-vtune-attach.py"' in (
         (ROOT / "scripts/exec-profiler.sh").read_text()
     )
     assert '"${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"' in text
@@ -123,7 +123,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     # 導入したハードウェア計測ツールのshebangはenv python3である。玄界のOS標準
     # Pythonは古いため、直接起動とMPI起動のどちらでも、計測ツールの引数を変えずに
     # 配備したPythonを継承する必要がある。
-    python_path = 'probe_python_dir="${PROVISION_DIR}/experiment-metrics/.venv/bin"'
+    python_path = 'probe_python_dir="${compute_tools_root}/experiment-metrics/.venv/bin"'
     export_path = 'export PATH="${probe_python_dir}:${PATH}"'
     assert python_path in text
     assert '[[ -x "${probe_python_dir}/python3" ]]' not in text
@@ -280,6 +280,11 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert builder_path.stat().st_mode & 0o111
     assert 'tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}"' in builder
     assert 'runtime_root="${PBS_JOBFS}/openfoam-runtime"' in wrapper
+    assert '"${PROVISION_DIR}/compute-tools.tar.zst"' in wrapper
+    assert 'uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev --no-editable' in workflow
+    assert '--compute-tools-root "${runtime_root}"' in wrapper
+    assert 'RANK_PYTHON="${compute_tools_root}/experiment-metrics/.venv/bin/python"' in runner
+    assert 'profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh"' in runner
     assert 'case_dir="${PBS_JOBFS}/openfoam-case/occDrivAerStaticMesh"' in wrapper
     assert (
         'case_archive_root="/scratch/hb15/${USER}/openfoam/gadi/case-archives"'

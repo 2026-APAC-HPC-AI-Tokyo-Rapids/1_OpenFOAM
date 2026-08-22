@@ -12,7 +12,9 @@ set -euo pipefail
 : "${PROVISION_DIR:?provision directory is required}"
 : "${OPENFOAM_VTUNE_DURATION_SEC:=60}"
 [[ "${OPENFOAM_VTUNE_DURATION_SEC}" =~ ^[1-9][0-9]*$ ]]
-target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
+compute_tools_root=${OPENFOAM_COMPUTE_TOOLS_ROOT:-${PROVISION_DIR}}
+[[ "${compute_tools_root}" == /* ]]
+target_launcher="${compute_tools_root}/scripts/allow-vtune-attach.py"
 install -d -m 0700 "$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")"
 vtune_cli_log="$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")/collection.log"
 
