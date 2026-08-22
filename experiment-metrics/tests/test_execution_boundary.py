@@ -99,6 +99,8 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '--expected-nodes "${OPENFOAM_NODES}"' in text
     assert '--stderr-path "${IMB_STDERR}" --timeout-sec 600' in text
     assert '--profile-rank "${OPENFOAM_VTUNE_RANK}"' in text
+    assert 'stage profile_warmup "${LOG_DIR}/profile-warmup.log"' in text
+    assert '"${SIMPLE_FOAM}" -dry-run -parallel' in text
     assert '--profile-wrapper "${PROVISION_DIR}/scripts/exec-profiler.sh"' in text
     assert '"${PROVISION_DIR}/scripts/allow-vtune-attach.py"' in (
         (ROOT / "scripts/exec-profiler.sh").read_text()

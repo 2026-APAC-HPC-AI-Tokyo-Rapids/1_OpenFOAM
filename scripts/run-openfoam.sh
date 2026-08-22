@@ -216,6 +216,10 @@ stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POT
 stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated "${openfoam_args[@]}"
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
+  # coded function objectの初回コンパイルをVTuneの60秒収集区間へ混ぜない。
+  # -dry-runは書込みなしの1反復でcase setupを検査し、生成した共有libraryだけを
+  # 後続の正式solver実行が再利用する。
+  stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${solver_launch[@]}" "${SIMPLE_FOAM}" -dry-run -parallel -fileHandler uncollated "${openfoam_args[@]}"
   install -d -m 2770 "${vtune_root}"
   install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"
 fi

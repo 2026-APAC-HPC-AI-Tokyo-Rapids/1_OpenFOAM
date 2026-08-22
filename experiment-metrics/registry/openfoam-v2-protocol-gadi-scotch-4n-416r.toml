@@ -16,4 +16,4 @@ ranks = 416
 resource_group = "normalsr"
 transport_policy = "shm:ofi"
 transport_environment = { I_MPI_FABRICS = "shm:ofi" }
-expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "solver", "minimal_hardware_capture", "profile_hardware_capture", "network_imb_mpi1"]
+expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "profile_warmup", "solver", "minimal_hardware_capture", "profile_hardware_capture", "network_imb_mpi1"]
