@@ -16,48 +16,35 @@ target_launcher="${PROVISION_DIR}/scripts/allow-vtune-attach.py"
 install -d -m 0700 "$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")"
 vtune_cli_log="$(dirname -- "${OPENFOAM_VTUNE_STATUS_PATH}")/collection.log"
 
+# 60秒の収集終了と正式solverの終了は独立させる。VTuneから対象を起動すると
+# duration到達時に対象rankも停止するため、すべてのanalysisで既に起動したsolverへattachする。
+"${target_launcher}" "$@" &
+target_pid=$!
+trap 'kill -TERM "${target_pid}" 2>/dev/null || true; wait "${target_pid}" 2>/dev/null || true; exit 143' TERM INT
+set +e
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
   hotspots)
-    "${target_launcher}" "$@" &
-    target_pid=$!
-    trap 'kill -TERM "${target_pid}" 2>/dev/null || true; wait "${target_pid}" 2>/dev/null || true; exit 143' TERM INT
-    set +e
     # attach後のVTuneは対象とは別プロセスで結果をfinalizeする。進捗表示を対象の
     # stdoutへ混ぜると公式parserがsolverの行を認識できないため、専用記録へ分離する。
     "${OPENFOAM_VTUNE_PATH}" -collect hotspots -knob sampling-mode=sw -knob enable-stack-collection=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
-    vtune_status=$?
-    wait "${target_pid}"
-    target_status=$?
-    set -e
     ;;
   hpc-performance)
-    set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth=true -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
-    target_status=$?
-    # -return-app-exitcode makes the CLI status authoritative for the target.
-    # 後続のレポート生成で収集結果を独立に検証する。
-    vtune_status=0
-    set -e
+    "${OPENFOAM_VTUNE_PATH}" -collect hpc-performance -knob enable-stack-collection=true -knob collect-memory-bandwidth=true -knob dram-bandwidth-limits=false -knob analyze-openmp=false -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     ;;
   memory-access)
-    set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect memory-access -knob analyze-mem-objects=false -knob dram-bandwidth-limits=true -knob analyze-openmp=false -data-limit=0 -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
-    target_status=$?
-    # Memory Access収集処理から選択ランクを起動し、プロセスの事象とノード全体の
-    # アンコア帯域カウンタを同時に収集できるようにする。
-    vtune_status=0
-    set -e
+    # 対象プロセスの事象と、同居ノード全体のアンコア帯域カウンタを収集する。
+    "${OPENFOAM_VTUNE_PATH}" -collect memory-access -knob analyze-mem-objects=false -knob dram-bandwidth-limits=true -knob analyze-openmp=false -data-limit=0 -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     ;;
   memory-access-core)
     memory_access_core_events='CPU_CLK_UNHALTED.THREAD:sa=1900000,INST_RETIRED.ANY:sample:sa=1900000,MEM_INST_RETIRED.ALL_LOADS:sa=100003,MEM_INST_RETIRED.ALL_STORES:sa=100003,MEM_TRANS_RETIRED.LOAD_LATENCY_GT_4:sa=10003,DTLB_LOAD_MISSES.STLB_HIT:cmask=1:sa=10003,DTLB_LOAD_MISSES.WALK_ACTIVE:sa=10003,DTLB_LOAD_MISSES.WALK_COMPLETED_4K:sa=10003,DTLB_LOAD_MISSES.WALK_COMPLETED_2M_4M:sa=10003,DTLB_LOAD_MISSES.WALK_COMPLETED_1G:sa=10003,DTLB_STORE_MISSES.STLB_HIT:cmask=1:sa=10003,DTLB_STORE_MISSES.WALK_ACTIVE:sa=10003,DTLB_STORE_MISSES.WALK_COMPLETED_4K:sa=10003,DTLB_STORE_MISSES.WALK_COMPLETED_2M_4M:sa=10003,DTLB_STORE_MISSES.WALK_COMPLETED_1G:sa=10003,MEM_INST_RETIRED.STLB_MISS_LOADS:sa=10003,MEM_INST_RETIRED.STLB_MISS_STORES:sa=10003,MEM_LOAD_L3_MISS_RETIRED.LOCAL_DRAM:sa=10003,MEM_LOAD_L3_MISS_RETIRED.REMOTE_DRAM:sa=10003,MEM_LOAD_L3_MISS_RETIRED.REMOTE_FWD:sa=10003,MEM_LOAD_L3_MISS_RETIRED.REMOTE_HITM:sa=10003'
-    set +e
-    "${OPENFOAM_VTUNE_PATH}" -collect-with runsa -knob enable-driverless-collection=true -knob enable-pebs-collection=true -knob event-config="${memory_access_core_events}" -data-limit=0 -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -return-app-exitcode -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -- "$@"
-    target_status=$?
-    vtune_status=0
-    set -e
+    "${OPENFOAM_VTUNE_PATH}" -collect-with runsa -knob enable-driverless-collection=true -knob enable-pebs-collection=true -knob event-config="${memory_access_core_events}" -data-limit=0 -duration="${OPENFOAM_VTUNE_DURATION_SEC}" -result-dir "${OPENFOAM_VTUNE_RESULT_DIR}" -target-pid "${target_pid}" > "${vtune_cli_log}" 2>&1
     ;;
   *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
+vtune_status=$?
+wait "${target_pid}"
+target_status=$?
+set -e
 status_tmp="${OPENFOAM_VTUNE_STATUS_PATH}.tmp-$$"
 printf '{"schema_version":"vtune-collection-status/v1","target_exit_code":%d,"vtune_exit_code":%d}\n' "${target_status}" "${vtune_status}" > "${status_tmp}"
 mv -- "${status_tmp}" "${OPENFOAM_VTUNE_STATUS_PATH}"

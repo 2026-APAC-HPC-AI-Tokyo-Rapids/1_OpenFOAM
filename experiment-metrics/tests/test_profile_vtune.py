@@ -287,8 +287,10 @@ def test_profile_wrapper_keeps_solver_status_authoritative(
     assert document["target_exit_code"] == target_exit
 
 
-@pytest.mark.parametrize("analysis", ["hpc-performance", "memory-access"])
-def test_hardware_profile_wrapper_launches_target_through_vtune(
+@pytest.mark.parametrize(
+    "analysis", ["hpc-performance", "memory-access", "memory-access-core"]
+)
+def test_hardware_profile_wrapper_attaches_without_stopping_target(
     tmp_path: Path, analysis: str
 ) -> None:
     provision = tmp_path / "provision/scripts"
@@ -299,15 +301,16 @@ def test_hardware_profile_wrapper_launches_target_through_vtune(
     vtune = tmp_path / "vtune"
     vtune.write_text(
         "#!/bin/sh\n"
-        "while [ \"$#\" -gt 0 ] && [ \"$1\" != -- ]; do shift; done\n"
-        "[ \"$#\" -gt 0 ] && shift\n"
-        "printf '%s' \"$1\" > \"$FAKE_VTUNE_TARGET_PATH\"\n"
-        "exec \"$@\"\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  if [ \"$1\" = -target-pid ]; then printf '%s' \"$2\" > \"$FAKE_VTUNE_TARGET_PID_PATH\"; exit 0; fi\n"
+        "  shift\n"
+        "done\n"
+        "exit 64\n"
     )
     vtune.chmod(0o755)
     marker = tmp_path / "target-ran"
     target = tmp_path / "target"
-    target.write_text(f"#!/bin/sh\nprintf ran > {marker}\n")
+    target.write_text(f"#!/bin/sh\nprintf ran > {marker}\nsleep 0.1\n")
     target.chmod(0o755)
     status = tmp_path / "profile/raw/vtune-summary/collection-status.json"
     environment = {
@@ -318,7 +321,7 @@ def test_hardware_profile_wrapper_launches_target_through_vtune(
         "OPENFOAM_VTUNE_ANALYSIS": analysis,
         "OPENFOAM_VTUNE_DURATION_SEC": "1",
         "PROVISION_DIR": str(tmp_path / "provision"),
-        "FAKE_VTUNE_TARGET_PATH": str(tmp_path / "vtune-target"),
+        "FAKE_VTUNE_TARGET_PID_PATH": str(tmp_path / "vtune-target-pid"),
     }
 
     completed = subprocess.run(
@@ -329,7 +332,7 @@ def test_hardware_profile_wrapper_launches_target_through_vtune(
 
     assert completed.returncode == 0
     assert marker.read_text() == "ran"
-    assert (tmp_path / "vtune-target").read_text() == str(target)
+    assert int((tmp_path / "vtune-target-pid").read_text()) > 0
     assert json.loads(status.read_text()) == {
         "schema_version": "vtune-collection-status/v1",
         "target_exit_code": 0,
