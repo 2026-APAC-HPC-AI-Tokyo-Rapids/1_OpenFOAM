@@ -153,6 +153,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "--profile-rank" not in workflow
     assert "--profile-analysis" not in workflow
     assert '--profile-condition "${PROVISION_DIR}/benchmark/profile.json"' in workflow
+    assert "memory-access-core" in (ROOT / "scripts/exec-profiler.sh").read_text(encoding="utf-8")
     assert "openfoam-profile-vtune-hotspots-v1.json" in workflow
     assert "profile_mode" not in workflow
     assert "perf-stat" not in workflow

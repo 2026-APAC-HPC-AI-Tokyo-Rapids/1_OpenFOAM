@@ -71,7 +71,7 @@ OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
 : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
 case "${OPENFOAM_VTUNE_ANALYSIS}" in
-  hotspots|hpc-performance|memory-access) ;;
+  hotspots|hpc-performance|memory-access|memory-access-core) ;;
   *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
 esac
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)

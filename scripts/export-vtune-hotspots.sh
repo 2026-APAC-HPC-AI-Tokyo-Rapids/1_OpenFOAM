@@ -25,6 +25,16 @@ done
 summary_dir="${RUN_DIR}/profile/raw/vtune-summary"
 install -d -m 0700 "${summary_dir}"
 
+if [[ "${OPENFOAM_VTUNE_ANALYSIS}" == memory-access-core ]]; then
+  "${OPENFOAM_VTUNE_PATH}" -quiet -report summary -result-dir "${result_dirs[0]}" > "${summary_dir}/memory-core-summary.txt"
+  "${OPENFOAM_VTUNE_PATH}" -quiet -report hw-events -result-dir "${result_dirs[0]}" -group-by function,module -format csv -csv-delimiter comma > "${summary_dir}/memory-core-functions.csv"
+  test -s "${summary_dir}/memory-core-summary.txt"
+  grep -q '^Function,Module,.*Hardware Event Count:' "${summary_dir}/memory-core-functions.csv"
+  (( $(wc -l < "${summary_dir}/memory-core-functions.csv") > 1 ))
+  printf '## Intel VTune selected-rank memory events\n\n- Profiled MPI rank: %s\n- Analysis: memory-access-core\n- Collector: Perf driverless hardware event sampling with PEBS\n- Function rows: %s\n- Node-wide uncore events: not collected in this supplemental run\n' "${OPENFOAM_VTUNE_RANK}" "$(( $(wc -l < "${summary_dir}/memory-core-functions.csv") - 1 ))" > "${summary_dir}/summary.md"
+  exit 0
+fi
+
 # VTune 2025はレポート生成に成功しても-report-outputへ空ファイルを返す場合が
 # あるため、CSVレポートは標準出力から取得する。
 "${OPENFOAM_VTUNE_PATH}" -quiet -report hotspots -result-dir "${result_dirs[0]}" -group-by function,module -column time -format csv -csv-delimiter comma > "${summary_dir}/hotspots.csv"

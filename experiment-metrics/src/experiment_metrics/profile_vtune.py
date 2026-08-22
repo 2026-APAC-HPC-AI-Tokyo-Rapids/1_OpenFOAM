@@ -121,7 +121,12 @@ def record_vtune_hotspots(
         raise ValueError("VTune facts require the bound profile run")
     if profiled_rank < 0 or collection_duration_sec <= 0 or limit <= 0:
         raise ValueError("VTune rank, duration, and summary limit are invalid")
-    if analysis_type not in {"hotspots", "hpc-performance", "memory-access"}:
+    if analysis_type not in {
+        "hotspots",
+        "hpc-performance",
+        "memory-access",
+        "memory-access-core",
+    }:
         raise ValueError("VTune analysis type is invalid")
     expected_root = run_dir / "profile/raw/vtune-summary"
     expected = {

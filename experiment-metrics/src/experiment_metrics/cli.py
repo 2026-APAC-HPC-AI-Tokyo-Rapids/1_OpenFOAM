@@ -27,7 +27,12 @@ def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str]:
     analysis = document["analysis"]
     if not isinstance(rank, int) or isinstance(rank, bool) or rank < 0:
         raise ValueError("profile condition rank must be a non-negative integer")
-    if analysis not in {"hotspots", "hpc-performance", "memory-access"}:
+    if analysis not in {
+        "hotspots",
+        "hpc-performance",
+        "memory-access",
+        "memory-access-core",
+    }:
         raise ValueError("unsupported profile analysis")
     return rank, analysis
 
@@ -107,7 +112,7 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("--profile-rank", type=int, default=0)
     submit.add_argument(
         "--profile-analysis",
-        choices=["hotspots", "hpc-performance", "memory-access"],
+        choices=["hotspots", "hpc-performance", "memory-access", "memory-access-core"],
         default="hotspots",
     )
 
@@ -121,7 +126,7 @@ def parser() -> argparse.ArgumentParser:
     submit_pbs.add_argument("--profile-rank", type=int, default=0)
     submit_pbs.add_argument(
         "--profile-analysis",
-        choices=["hotspots", "hpc-performance", "memory-access"],
+        choices=["hotspots", "hpc-performance", "memory-access", "memory-access-core"],
         default="hotspots",
     )
 

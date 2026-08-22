@@ -42,7 +42,12 @@ def submit_pbs_run(
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
         raise ValueError("a nonzero profile rank requires a profile run")
-    if profile_analysis not in {"hotspots", "hpc-performance", "memory-access"}:
+    if profile_analysis not in {
+        "hotspots",
+        "hpc-performance",
+        "memory-access",
+        "memory-access-core",
+    }:
         raise ValueError("unsupported VTune profile analysis")
     if manifest.purpose != "profile" and profile_analysis != "hotspots":
         raise ValueError("hardware characterization requires a profile run")
