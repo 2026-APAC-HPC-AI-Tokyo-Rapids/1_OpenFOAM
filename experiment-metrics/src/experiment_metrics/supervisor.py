@@ -35,10 +35,10 @@ def start_supervisor(manifest_path: Path, state_path: Path, *, job_id: str) -> P
     }
     _atomic_json(run_dir / "control/job-entry.json", entry, replace=False)
     state = {
-        "schema_version": "supervisor-state/v1",
+        "schema_version": "supervisor-state/v2",
         "run_id": manifest.run_id,
         "started_at": started_at,
-        "started_monotonic_ns": time.monotonic_ns(),
+        "started_monotonic_ns": str(time.monotonic_ns()),
         "pipeline_started_monotonic_ns": None,
         "pipeline_finished_monotonic_ns": None,
     }
@@ -52,16 +52,16 @@ def mark_pipeline(state_path: Path, mark: str) -> Path:
     if mark == "start":
         if state["pipeline_started_monotonic_ns"] is not None:
             raise ValueError("pipeline start was already recorded")
-        state["pipeline_started_monotonic_ns"] = now
+        state["pipeline_started_monotonic_ns"] = str(now)
     elif mark == "finish":
-        started = state["pipeline_started_monotonic_ns"]
+        started = _monotonic_ns(state["pipeline_started_monotonic_ns"])
         if (
-            not isinstance(started, int)
+            started is None
             or state["pipeline_finished_monotonic_ns"] is not None
             or now < started
         ):
             raise ValueError("pipeline finish has no valid start")
-        state["pipeline_finished_monotonic_ns"] = now
+        state["pipeline_finished_monotonic_ns"] = str(now)
     else:
         raise ValueError("pipeline mark must be start or finish")
     _atomic_json(state_path, state, replace=True)
@@ -80,7 +80,9 @@ def finish_supervisor(
     if state["run_id"] != manifest.run_id or not isinstance(exit_code, int):
         raise ValueError("supervisor finish identity is invalid")
     finished_ns = time.monotonic_ns()
-    started_ns = state["started_monotonic_ns"]
+    started_ns = _monotonic_ns(state["started_monotonic_ns"])
+    if started_ns is None:
+        raise ValueError("supervisor start time is absent")
     if finished_ns < started_ns:
         raise ValueError("supervisor monotonic clock moved backwards")
     entry = _json(run_dir / "control/job-entry.json")
@@ -94,9 +96,9 @@ def finish_supervisor(
         Fact("run.exit_code", exit_code),
         Fact("scheduler.job_entry_job_id", entry["scheduler_job_id"]),
     ]
-    pipeline_start = state["pipeline_started_monotonic_ns"]
-    pipeline_finish = state["pipeline_finished_monotonic_ns"]
-    if isinstance(pipeline_start, int) and isinstance(pipeline_finish, int):
+    pipeline_start = _monotonic_ns(state["pipeline_started_monotonic_ns"])
+    pipeline_finish = _monotonic_ns(state["pipeline_finished_monotonic_ns"])
+    if pipeline_start is not None and pipeline_finish is not None:
         facts.append(
             Fact(
                 "perf.pipeline.wall_time_sec",
@@ -127,13 +129,28 @@ def _state(path: Path) -> dict[str, object]:
     }
     if (
         set(value) != required
-        or value["schema_version"] != "supervisor-state/v1"
+        or value["schema_version"] != "supervisor-state/v2"
         or not isinstance(value["run_id"], str)
         or not isinstance(value["started_at"], str)
-        or not isinstance(value["started_monotonic_ns"], int)
+        or _monotonic_ns(value["started_monotonic_ns"]) is None
+        or not all(
+            item is None or _monotonic_ns(item) is not None
+            for item in (
+                value["pipeline_started_monotonic_ns"],
+                value["pipeline_finished_monotonic_ns"],
+            )
+        )
     ):
         raise ValueError("supervisor state has an invalid schema")
     return value
+
+
+def _monotonic_ns(value: object) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]+", value) is None:
+        raise ValueError("supervisor monotonic time is invalid")
+    return int(value)
 
 
 def _member(path: Path, run_dir: Path) -> dict[str, object]:

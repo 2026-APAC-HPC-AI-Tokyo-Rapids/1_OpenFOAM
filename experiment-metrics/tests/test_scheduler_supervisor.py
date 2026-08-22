@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import experiment_metrics.supervisor as supervisor_module
 from experiment_metrics import init_run
 from experiment_metrics.scheduler import (
     capture_scheduler_terminal,
@@ -273,11 +274,26 @@ def test_parse_scheduler_accounting_rejects_wrong_per_node_column_count() -> Non
 def test_supervisor_captures_entry_lifecycle_and_pipeline(
     tmp_path: Path,
     identities: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monotonic_values = iter(
+        [
+            9_116_724_826_774_456,
+            9_116_724_826_774_556,
+            9_116_724_826_774_656,
+            9_116_724_826_774_756,
+        ]
+    )
+    monkeypatch.setattr(
+        supervisor_module.time, "monotonic_ns", lambda: next(monotonic_values)
+    )
     manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
     run_dir = manifest.parents[1]
     state = run_dir / "domain/supervisor-state.json"
     start_supervisor(manifest, state, job_id="9876")
+    state_document = json.loads(state.read_text())
+    assert state_document["schema_version"] == "supervisor-state/v2"
+    assert state_document["started_monotonic_ns"] == "9116724826774456"
     mark_pipeline(state, "start")
     mark_pipeline(state, "finish")
     fragment = finish_supervisor(manifest, state, exit_code=0)
