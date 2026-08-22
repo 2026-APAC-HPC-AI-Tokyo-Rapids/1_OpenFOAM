@@ -24,4 +24,6 @@
 
 プロファイルも通常実行と同じ`OpenFOAM`から起動します。MPIランク0へ60秒間Intel VTuneの`hotspots`解析を接続して計測します。
 計測後、上位ホットスポットはGitHub Actionsの実行概要に表として表示されます。Perfetto用のトレースは生成しません。
-VTuneの完全な結果は、玄界では`/home/pj26000080/share/openfoam-vtune/`、Gadiでは`/scratch/hb15/tk7779/openfoam/gadi/profile/`以下に保持され、実行概要に保存先が記録されます。
+VTuneの完全な結果は計算中だけクラスタの共有ファイルシステムへ出力します。プロファイルの成功後、GitHub-hosted runnerはTailscale経由で自宅サーバーへ制御要求だけを送り、自宅サーバーがクラスタから結果を直接取得します。検証済みの圧縮結果とmanifestは`/hdd_raid/samba/net_share/openfoam-vtune/<cluster>/<run-id>-<scheduler-job-id>/`へ保存し、転送と検証に成功したクラスタ原本は削除します。転送に失敗した場合は原本をクラスタ側へ残します。
+
+自宅サーバーでは`~/.config/openfoam-vtune-transfer/env`を`0600`で保持し、`OPENFOAM_VTUNE_GENKAI_SSH_TARGET`、`OPENFOAM_VTUNE_GENKAI_ROOT`、`OPENFOAM_VTUNE_GADI_SSH_TARGET`、`OPENFOAM_VTUNE_GADI_ROOT`、`OPENFOAM_VTUNE_ARCHIVE_ROOT`を設定します。このファイルはリポジトリへ置きません。接続には自宅サーバー上の既存SSH鍵を使い、パスワードや`sshpass`は使用しません。

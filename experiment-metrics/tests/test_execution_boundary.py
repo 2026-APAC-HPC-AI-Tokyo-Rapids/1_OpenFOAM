@@ -389,6 +389,11 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert f'pattern: "openfoam-{cluster}-*"' in workflow
         assert f'startswith("openfoam-{cluster}-")' in workflow
         assert f"openfoam-artifacts/${{GITHUB_RUN_ID}}/{cluster}" in workflow
+        assert "profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}" in workflow
+        assert "- name: VTune完全結果を自宅サーバーへ直接転送" in workflow
+        assert "if: inputs.profile && needs.run.result == 'success'" in workflow
+        assert f"--cluster {cluster} --profile-run-id" in workflow
+        assert 'scripts/transfer-vtune-result.sh' in workflow
         assert ".artifacts[].id" not in workflow
         assert "cavity3d" not in workflow.lower()
         job_section = workflow.split("jobs:\n", 1)[1]

@@ -6,7 +6,7 @@
 
 この文書は、玄界上でOpenFOAM v2606の`simpleFoam`を使ったmotorBike試験について、実行時プロファイルと起動設定の調整結果を記録する。改善対象はMPI配置、MPIとOpenFOAMの実行時設定、プロファイラの起動設定に限定し、OpenFOAMのソース自体は変更しない。
 
-過去のAPSとVTuneの完全な結果はGitHubの成果物とは別に保存している。
+過去のAPSとVTuneの完全な結果はGitHubの成果物とは別に保存している。現在のVTune完全結果の正本は自宅サーバーの`/hdd_raid/samba/net_share/openfoam-vtune`である。
 
 ```text
 ~/openfoam-profile/<github-run-id>-<pjm-job-id>/
@@ -15,7 +15,7 @@
 新しいVTune専用プロファイルは、用途別の次の場所へ保存する。
 
 ```text
-/home/pj26000080/share/openfoam-vtune/<run-id>-<pjm-job-id>/rank-<profile-rank>/
+/hdd_raid/samba/net_share/openfoam-vtune/<cluster>/<run-id>-<scheduler-job-id>/vtune-result.tar.zst
 ```
 
 共有プロファイル領域と実行ごとのディレクトリの権限は`2770`である。この記録を作成した時点で、プロファイル全体は約3.0 GiBを使用していた。
@@ -170,7 +170,7 @@ HPC Characterizationの結果もAPSと同様に、倍精度演算のベクトル
 4. `nPollProcInterfaces=0`を維持する。`-1`で完了済みインターフェースを即時処理すると、この課題は約9%遅くなった。
 5. Intel MPIの自動調整は、適切なランク数を決めた後だけ試す。性能の悪い240ランク配置は約2秒改善したが、120ランク配置は56秒から58秒へ悪化した。調整ファイルは構成依存であり、ノード数、ノードあたりランク数、通信方式、MPI版が同じ場合だけ再利用する。
 6. 新しいケースでは、1ランクあたりセル数を基準にランク数を振り、APSでMPI時間と不均衡を定量化する。その後、APSで計算時間が最も大きいランクを特定してVTuneを実行する。
-7. VTuneの完全な結果は`/home/pj26000080/share/openfoam-vtune`へ保存し、検証済みのテキストやCSV要約をプロファイル成果物と計測値経路へ公開する。
+7. VTuneの完全な結果はプロファイル終了後に自宅サーバーがクラスタから直接取得する。圧縮結果を検証して自宅側へ確定した後だけクラスタ原本を削除し、検証済みのテキストやCSV要約はプロファイル成果物と計測値経路へ公開する。
 8. 将来ソース変更が許可された場合は、Gauss-Seidel平滑化、制限付き勾配計算、`lduMatrix`の残差と積、非常に高頻度の大域縮約を調査する。現在の作業ではこれらの算法を変更しない。
 
 Intelは、`I_MPI_STATS`または`aps`によるAPS、`mpirun -gtool`による特定MPIランクのプロファイル、`I_MPI_PIN_PROCESSOR_LIST`によるプロセス固定、`I_MPI_TUNING_MODE=auto`による集合通信の自動調整を次の資料で説明している。
@@ -185,4 +185,4 @@ Intelは、`I_MPI_STATS`または`aps`によるAPS、`mpirun -gtool`による特
 
 プッシュ起動は常に通常計測とし、外部プロファイラを付けずにソルバーを起動する。手動実行では`bench`または`profile`を選ぶ。プロファイル実行はソースやビルド成果物を変更せず、`profile_rank`入力で選択したMPIランク（既定値は0）へ一定時間だけVTuneのホットスポット収集を接続する。ランク0は計算上のホットスポット発見に引き続き有用だが、APSがランク0を非典型と示しているため、代表的な通信の結論には内部ランクやノード境界ランクの追加計測が必要である。
 
-VTuneの完全な結果は`/home/pj26000080/share/openfoam-vtune`以下に保持する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。
+VTuneの完全な結果は一時的にクラスタのprofile rootへ生成し、自宅サーバーがSSHで直接取得する。自宅側では`tar.zst`の可読性、サイズ、SHA-256をmanifestへ記録し、検証後に`/hdd_raid/samba/net_share/openfoam-vtune/<cluster>/<run-id>-<scheduler-job-id>/`へ確定する。クラスタ原本は確定後だけ削除する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。

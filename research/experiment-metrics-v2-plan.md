@@ -631,7 +631,7 @@ score eligibilityである。reopen triggerは対象clusterのnode modelまた�
 | 確定 | complete recordのsubsetであるfirst/last/count/average等をrawへ重複保存しない |
 | 確定 | bench/profileを分離し、取得できなかった値とprofile専用familyは値だけNULL、原因/status/欠損用recordなしとする。run-level statusは`collection_complete`だけ |
 | 確定 | 実験用途として多段retry、fallback source、field別reason registryを作らない |
-| 確定 | artifact移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する |
+| 確定 | 固定v2 artifactの移管は現行OpenFOAMのGitHub Artifact -> Tailscale/SSH -> home RAIDを基準とし、Qwenへも同じ経路を移植する。OpenFOAMのVTune完全結果は固定artifactへ重複格納せず、home-labがクラスタから直接取得する |
 | 確定 | home artifactは自動expireせず、容量が実際に問題になった時だけ手動整理する。専用quarantineは作らない |
 | 確定 | D-003: collectorはmulti-node対応とし、Genkai 1/2/4 nodeを初版実機conformance対象にする。nodes/ranks/resource/transportは独立field・独立列とし、設定を束ねるID/object/manifestは作らない |
 | 確定 | 非擾乱確認はcollector実装中にだけ行い、結果・専用run・metric・artifact・decision recordを保存しない |
@@ -717,7 +717,7 @@ rollbackは実行設定と実装を直前版へ戻して新しいrunを投入す
 - 各key patternのownerが一意で、distinct後のrun/key conflictがゼロである。
 - BigQuery停止時もhomeまたはGitHub ArtifactのJSONLから同じlogical row集合を再送できる。
 - 成功・失敗・timeout runのexpected log/JSONLをGitHub Artifactへuploadし、upload成功後はruntimeを削除できる。
-- OpenFOAM基準移管でSCPが失敗した時はGitHub Artifactを削除せず、archive jobを再実行できる。
+- OpenFOAM固定成果物のSCPが失敗した時はGitHub Artifactを削除せず、archive jobを再実行できる。VTune完全結果の直接取得または検証が失敗した時はクラスタ原本を削除しない。
 - profile runの全raw attachmentをhome pathから読め、bench archiveにはprofile pathも欠損用
   recordもなく、対応Sheet列がNULLだけになる。
 - 全baseline golden logでofficial validityとFVOPSが`parse_result.sh`に一致する。

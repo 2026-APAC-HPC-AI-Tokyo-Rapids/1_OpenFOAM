@@ -249,6 +249,7 @@ jobs:
     runs-on: [self-hosted, gadi]
     outputs:
       artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
+      profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
       OPENFOAM_RUN_ROOT: /scratch/hb15/tk7779/openfoam/gadi/runs
@@ -313,6 +314,7 @@ jobs:
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
           echo "PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
           echo "pbs_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
+          echo "profile_run_id=${run_id}-${job_id}" >> "${GITHUB_OUTPUT}"
 
       - name: OpenFOAMジョブの終了を待機
         run: |
@@ -392,6 +394,9 @@ jobs:
       actions: write
       contents: read
     steps:
+      - name: VTune転送処理を取得
+        uses: actions/checkout@v7
+
       - name: ワークフロー成果物を取得
         uses: actions/download-artifact@v8
         with:
@@ -412,6 +417,14 @@ jobs:
           printf '%s\n' "${ARTIFACT_SERVER_SSH_PRIVATE_KEY}" > "${HOME}/.ssh/id_ed25519"
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
+
+      - name: VTune完全結果を自宅サーバーへ直接転送
+        if: inputs.profile && needs.run.result == 'success'
+        run: |
+          profile_run_id='${{ needs.run.outputs.profile_run_id }}'
+          [[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+          ssh tomokazu@tomokazu-ubuntu-server "bash -s -- --cluster gadi --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
+
       - name: 成果物を自宅サーバーへ転送
         run: |
           ssh tomokazu@tomokazu-ubuntu-server mkdir -p -- "/hdd_raid/samba/net_share/openfoam-artifacts/${GITHUB_RUN_ID}/gadi"
