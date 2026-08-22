@@ -177,6 +177,37 @@ HPC Performance Characterizationも同じ60秒区間で別runとして取得し�
 
 確定runはHotspotsのランク0/168がそれぞれRun ID `r-a1b63aaf1503a7e04418763ca1f802b6` / `r-8823f456ad868ffda582261ab06baf9d`、PJM `6561080` / `6561124`、HPCのランク0/168がRun ID `r-c017d8cec58d31f53a99b56242f91b10` / `r-4fe6195d21cb0e71825bf2043302c0c2`、PJM `6561850` / `6561860` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
 
+### NCI Gadiでの再検証（2026-08-23）
+
+同じ公式タスクをGadiの4ノード、416 MPIランク（104ランク/ノード）で再検証した。Gadi上の実際の領域分割ではランク0のノード間境界面数は0、ランク59は全ランク中最大の10,472面であったため、この2ランクを内部ランクと最大ノード間境界ランクの代表とした。玄界の448ランク結果とはハードウェア、MPI配置、領域分割が異なるため、秒/反復や各比率をクラスタ間の性能差として直接比較しない。
+
+| ランク / Actions | PBS / Run ID | 秒/反復 | Gauss-Seidel smooth | `lduMatrix::residual` | `PMPI_Allreduce` | `lduMatrix::Amul` | 明示的MPI/transport | MPI busy wait |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 / `32583868264` | `177070940.gadi-pbs` / `r-c535f88f2fc47b7f9253c731fd68c248` | 2.05453 | 18.36% | 11.63% | 8.75% | 6.20% | 13.89% | 3.74% |
+| 59 / `32588095802` | `177074652.gadi-pbs` / `r-1c71a7dcd0b8dcbcf79d37247c12cfe3` | 2.04385 | 16.33% | 11.52% | 6.83% | 6.22% | 15.50% | 2.61% |
+
+両ランクとも公式parserはVALIDで、VTune収集プロセスと対象プロセスの終了コードは0であった。上位の計算カーネルは一致した一方、MPI比率はランクごとに変動した。これはselected rankのCPU samplingであり、416ランク全体のwall-clock imbalanceやcritical pathを表すものではない。
+
+HPC Performance Characterizationは、GadiにVTune sampling driverがないことを踏まえてメモリ帯域収集を無効化し、Linux Perf driverlessのコアイベントで再実行した。初回の標準設定（Actions `32589820812` / `32589831654`）はsolverと公式parserがVALIDだったものの、「memory bandwidth collection requires sampling driver」でVTuneが終了コード1となった。これは計算結果の不正ではなく、Gadiで利用できないnode-wide帯域収集を要求したことが原因である。修正後の確定結果は次のとおりである。
+
+| ランク / Actions | PBS / Run ID | 秒/反復 | Memory Bound | Cache Bound | DRAM Bound | packed FP | CPI |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 0 / `32594112966` | `177080269.gadi-pbs` / `r-0fc82f723eab238359f88e5ce0443967` | 2.18463 | 48.6% | 23.6% | 28.4% | 17.4% | 0.609 |
+| 59 / `32594130332` | `177080345.gadi-pbs` / `r-828545427e553f20f25a1b113840493b` | 2.16387 | 63.1% | 19.3% | 37.5% | 16.9% | 1.049 |
+
+同名関数内のCPU時間が正値のループをCPU時間で加重平均した値は以下である。Memory BoundとL3/DRAM Boundはストール分類であり、単純に加算しない。
+
+| ランク | 関数 | ループCPU時間 | Memory Bound | L3 Bound | DRAM Bound | packed FP | CPI |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 0 | Gauss-Seidel smooth | 5.175秒 | 35.60% | 12.73% | 33.15% | 42.95% | 0.767 |
+| 0 | `lduMatrix::residual` | 2.550秒 | 70.02% | 24.13% | 27.72% | 60.48% | 1.384 |
+| 0 | `lduMatrix::Amul` | 1.070秒 | 39.78% | 40.01% | 22.54% | 51.40% | 0.874 |
+| 59 | Gauss-Seidel smooth | 6.855秒 | 41.71% | 10.86% | 36.06% | 26.15% | 0.765 |
+| 59 | `lduMatrix::residual` | 1.800秒 | 40.42% | 2.56% | 20.04% | 41.02% | 1.240 |
+| 59 | `lduMatrix::Amul` | 1.160秒 | 46.90% | 25.79% | 21.64% | 47.20% | 1.439 |
+
+run全体では最大ノード間境界のランク59がランク0よりMemory Boundであったが、関数別指標はランク間の変動も大きい。両ランクともrun全体のpacked FPは約17%と低く、Gadiでもメモリ側の改善を優先する根拠になった。ただし、driverless収集ではnode-wide DRAM帯域値を取得していないため、Gadiの帯域飽和をこの結果だけで断定しない。
+
 ### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
 
 DIC cell-gather と PCG loop fusion を統合した現行ソースコードにおいて、採択済みの `scotch-4n-448r` をVTune Hotspotsで測定した。当初のActions #332ではランク0のみを観測したが、過去のAPS解析でランク0のMPI通信比率が他ランクより低かったため、単独では通信負荷や負荷不均衡（load imbalance）を代表しない。コミット `53512405eeeae088cc14ae574aeb2ed10dca8cdd` でプロファイル対象ランクをワークフロー入力から選択可能にし、スケジューラ要求、PJM環境変数、マニフェストへ記録できるようにした。測定条件は比較軸を固定するため、`hotspots`、ソフトウェアサンプリング、スタック収集なし、60秒アタッチのままとした。この条件は低オーバーヘッドで関数別の排他CPU時間（Exclusive CPU Time）を得る目的には妥当であるが、全ランクの通信待機時間を直接測定するものではない。
@@ -241,6 +272,28 @@ selected-rankのPEBSイベントによる主要3関数の結果は次のとお�
 Gauss-Seidelは両ランクで最大のload/storeトラフィックを持ち、残差計算とAmulはGauss-SeidelよりLLC-to-memory率とlong-load latencyが高い。したがって第一候補はGauss-Seidelのメモリトラフィック削減、次点は残差計算とAmulのキャッシュ局所性改善である。主要3関数のremoteイベントは0、STLB missは0.0015%未満、DTLB walkは最大0.202%である。NUMA再配置やHuge Pageは優先度の高い候補としない。
 
 標準Memory Accessのランク0/168はRun ID `r-238e8bbd894d0ee04528f02cb9573897` / `r-2d004aa368ff80dfcd1d062035cd9f53`、PJM `6561875` / `6561925`、core eventのランク0/168はRun ID `r-adc73c31121a2f7141e6c8dd22d41516` / `r-540a5633b9a9abc270a3ae46dc752562`、PJM `6561930` / `6561938` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
+
+### NCI Gadiでの再検証（2026-08-23）
+
+Issue #14と同じ4ノード/416ランク、ランク0/59でMemory Accessを再検証した。標準 `memory-access` のActions `32589842414` / `32589851532` はsolverと公式parserがVALIDだったが、VTuneはGadiにsampling driverがないためnode-wideメモリ帯域を収集できず終了コード1となった。したがってGadiについては標準Memory AccessからDRAM帯域値を報告せず、Perf driverless/PEBSの `memory-access-core` を関数別分析の確定値とする。
+
+| ランク / Actions | PBS / Run ID | 公式結果 | VTune関数row |
+|---:|---|---|---:|
+| 0 / `32589860310` | `177076438.gadi-pbs` / `r-45785d4dab4729eac5baa8bb8ec8e1ee` | VALID、2.07872秒/反復 | 1,763 |
+| 59 / `32589869873` | `177076386.gadi-pbs` / `r-4b67bfbfd162daef97b5f800024280a6` | VALID、2.07692秒/反復 | 1,805 |
+
+| ランク | 関数 | load / store | 平均load latency | long-load latency | LLC-to-memory / load | STLB miss / load | DTLB walk / clocks | remote |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 | Gauss-Seidel smooth | 12.205 / 2.372 G | 15.77 cycle | 19.16 cycle | 0.0320% | 0.01065% | 0.712% | 0 |
+| 0 | `lduMatrix::residual` | 6.878 / 1.730 G | 23.18 cycle | 52.31 cycle | 0.4872% | 0% | 0.141% | 0 |
+| 0 | `lduMatrix::Amul` | 4.865 / 1.419 G | 20.78 cycle | 26.64 cycle | 0.3475% | 0.00308% | 0.251% | 0 |
+| 59 | Gauss-Seidel smooth | 13.661 / 2.553 G | 101.74 cycle | 21.48 cycle | 0.1358% | 0.01611% | 0.810% | 0 |
+| 59 | `lduMatrix::residual` | 8.274 / 2.111 G | 75.91 cycle | 50.55 cycle | 0.5241% | 0.01995% | 0.870% | 0 |
+| 59 | `lduMatrix::Amul` | 4.642 / 1.419 G | 107.20 cycle | 25.02 cycle | 0.5129% | 0.01401% | 0.722% | 0 |
+
+Gauss-Seidelは両ランクで最大のload/store量を持ち、残差計算とAmulはLLC-to-memory率やlong-load latencyが相対的に高いという玄界と同じ傾向であった。ランク59の総レイテンシから算出した平均load latencyはランク0より大幅に高い一方、long-load latency自体は同程度であり、単一runから416ランク全体へ一般化しない。remoteイベントは全6関数で0、STLB missは0.02%未満、DTLB walkは0.9%未満であるため、GadiでもNUMA再配置やHuge Pageを最優先候補とする根拠は得られなかった。
+
+全Gadi runの固定ログと公式結果はActions run単位で自宅サーバーへ保存した。full VTune結果が生成されたrunでは `large-output/vtune/vtune-result.tar.zst`、ParaView用processor群は全runで単一の `large-output/paraview/paraview-case.tar.zst` とし、いずれも `/hdd_raid/samba/net_share/openfoam-artifacts/<actions-id>/gadi/<artifact>/` 配下に置いた。転送は `home-lab` ラベルのself-hosted runnerである `tomokazu-ubuntu-server` からGadiへ直接SSHしてpullし、検証後にGadi側原本を削除する。GitHub-hosted runnerやTailscaleを大容量データ経路に使用しない。初回にVTune結果が生成されなかった4 runについても、修正後の転送処理で `vtune_result_available=false` を明示し、ParaView archiveと固定エラーログを回収した。
 
 ### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
 
