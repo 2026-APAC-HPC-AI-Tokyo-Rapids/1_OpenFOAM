@@ -3,6 +3,7 @@
 set -euo pipefail
 
 cluster=
+github_run_id=
 profile_run_id=
 config_path=${OPENFOAM_VTUNE_TRANSFER_CONFIG:-${HOME}/.config/openfoam-vtune-transfer/env}
 ssh_bin=${OPENFOAM_VTUNE_SSH_BIN:-ssh}
@@ -11,13 +12,14 @@ while [[ $# -gt 0 ]]
 do
   case "$1" in
     --cluster) [[ $# -ge 2 ]]; cluster=$2; shift 2 ;;
+    --github-run-id) [[ $# -ge 2 ]]; github_run_id=$2; shift 2 ;;
     --profile-run-id) [[ $# -ge 2 ]]; profile_run_id=$2; shift 2 ;;
     --config) [[ $# -ge 2 ]]; config_path=$2; shift 2 ;;
     *) printf '未知のVTune転送引数です: %s\n' "$1" >&2; exit 64 ;;
   esac
 done
 
-[[ -f "${config_path}" ]]
+[[ -f "${config_path}" && "${github_run_id}" =~ ^[1-9][0-9]*$ ]]
 if [[ "${profile_run_id}" =~ ^(r-[0-9a-f]{32})-([0-9]+([.][A-Za-z0-9.-]+)?)$ ]]; then
   run_id=${BASH_REMATCH[1]}
   scheduler_job_id=${BASH_REMATCH[2]}
@@ -28,8 +30,8 @@ fi
 
 # shellcheck source=/dev/null
 source "${config_path}"
-: "${OPENFOAM_VTUNE_ARCHIVE_ROOT:?自宅側VTune保存先が必要です}"
-[[ "${OPENFOAM_VTUNE_ARCHIVE_ROOT}" == /* && "${OPENFOAM_VTUNE_ARCHIVE_ROOT}" != / ]]
+: "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT:?自宅側OpenFOAM成果物保存先が必要です}"
+[[ "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}" == /* && "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}" != / ]]
 
 case "${cluster}" in
   genkai)
@@ -47,22 +49,27 @@ case "${cluster}" in
 esac
 [[ "${source_root}" == /* && "${source_root}" != / ]]
 
-cluster_root="${OPENFOAM_VTUNE_ARCHIVE_ROOT}/${cluster}"
-destination="${cluster_root}/${profile_run_id}"
-archive="${destination}/vtune-result.tar.zst"
+run_artifact_dir="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${github_run_id}/${cluster}/openfoam-${cluster}-v2-${run_id}"
+destination="${run_artifact_dir}/large-output"
+vtune_archive="${destination}/vtune/vtune-result.tar.zst"
+paraview_archive="${destination}/paraview/paraview-case.tar.zst"
 manifest="${destination}/manifest.json"
 
-validate_archive() {
-  local expected_size actual_size expected_sha actual_sha
-  [[ -f "${archive}" && -f "${manifest}" ]]
-  jq -e --arg cluster "${cluster}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_root}/${profile_run_id}" 'select(.schema_version == "openfoam-vtune-archive/v1" and .cluster == $cluster and .profile_run_id == $profile_run_id and .run_id == $run_id and .scheduler_job_id == $scheduler_job_id and .source_target == $source_target and .source_path == $source_path and .archive.path == "vtune-result.tar.zst")' "${manifest}" >/dev/null
-  expected_size=$(jq -er '.archive.size_bytes' "${manifest}")
-  expected_sha=$(jq -er '.archive.sha256' "${manifest}")
-  actual_size=$(stat -c '%s' "${archive}")
-  actual_sha=$(sha256sum "${archive}" | awk '{print $1}')
-  [[ "${expected_size}" =~ ^[0-9]+$ && "${expected_size}" == "${actual_size}" ]]
-  [[ "${expected_sha}" =~ ^[0-9a-f]{64}$ && "${expected_sha}" == "${actual_sha}" ]]
-  tar -I zstd -tf "${archive}" | awk -v prefix="${profile_run_id}/" 'index($0, prefix) != 1 { bad = 1 } $0 != prefix { payload = 1 } END { exit(bad || !payload) }'
+validate_destination() {
+  local expected_size actual_size expected_sha actual_sha relative
+  [[ -f "${vtune_archive}" && -f "${paraview_archive}" && -f "${destination}/paraview/manifest.json" && -f "${manifest}" ]]
+  jq -e --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_root}/${profile_run_id}" 'select(.schema_version == "openfoam-large-output-archive/v1" and .cluster == $cluster and .github_run_id == $github_run_id and .profile_run_id == $profile_run_id and .run_id == $run_id and .scheduler_job_id == $scheduler_job_id and .source_target == $source_target and .source_path == $source_path)' "${manifest}" >/dev/null
+  for relative in vtune/vtune-result.tar.zst paraview/paraview-case.tar.zst paraview/manifest.json; do
+    expected_size=$(jq -er --arg relative "${relative}" '.files[] | select(.path == $relative) | .size_bytes' "${manifest}")
+    expected_sha=$(jq -er --arg relative "${relative}" '.files[] | select(.path == $relative) | .sha256' "${manifest}")
+    actual_size=$(stat -c '%s' "${destination}/${relative}")
+    actual_sha=$(sha256sum "${destination}/${relative}" | awk '{print $1}')
+    [[ "${expected_size}" =~ ^[0-9]+$ && "${expected_size}" == "${actual_size}" ]]
+    [[ "${expected_sha}" =~ ^[0-9a-f]{64}$ && "${expected_sha}" == "${actual_sha}" ]]
+  done
+  tar -I zstd -tf "${vtune_archive}" | awk 'NF { found = 1 } END { exit(!found) }'
+  tar -I zstd -tf "${paraview_archive}" | awk '$0 == "occDrivAerStaticMesh.foam" { found = 1 } END { exit(!found) }'
+  jq -e --arg run_id "${run_id}" --arg profile_run_id "${profile_run_id}" 'select(.schema_version == "openfoam-paraview-archive/v1" and .run_id == $run_id and .profile_run_id == $profile_run_id and .archive.path == "paraview-case.tar.zst")' "${destination}/paraview/manifest.json" >/dev/null
 }
 
 remove_source() {
@@ -81,16 +88,16 @@ REMOTE_DELETE
 }
 
 if [[ -e "${destination}" ]]; then
-  validate_archive
+  validate_destination
   remove_source
-  printf 'home_archive=%s\nsource_removed=%s\n' "${archive}" "${source_root}/${profile_run_id}"
+  printf 'home_large_output=%s\nsource_removed=%s\n' "${destination}" "${source_root}/${profile_run_id}"
   exit 0
 fi
 
-install -d -m 0750 "${cluster_root}"
-staging="${cluster_root}/.${profile_run_id}.incoming-${$}"
+install -d -m 0750 "${run_artifact_dir}"
+staging="${run_artifact_dir}/.large-output.incoming-${$}"
 [[ ! -e "${staging}" ]]
-install -d -m 0750 "${staging}"
+install -d -m 0750 "${staging}/vtune" "${staging}/paraview"
 cleanup() {
   local status=$?
   trap - EXIT
@@ -98,30 +105,42 @@ cleanup() {
   exit "${status}"
 }
 trap cleanup EXIT
-staging_archive="${staging}/vtune-result.tar.zst"
 
-"${ssh_bin}" "${source_target}" bash -s -- "${source_root}" "${profile_run_id}" > "${staging_archive}" <<'REMOTE_ARCHIVE'
+"${ssh_bin}" "${source_target}" bash -s -- "${source_root}" "${profile_run_id}" > "${staging}/vtune/vtune-result.tar.zst" <<'REMOTE_VTUNE'
 set -euo pipefail
 root=$(realpath -e -- "$1")
 profile_run_id=$2
-[[ "${root}" == /* && "${root}" != / ]]
-[[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-candidate="${root}/${profile_run_id}"
-candidate_real=$(realpath -e -- "${candidate}")
-[[ -d "${candidate_real}" && ! -L "${candidate}" && "$(dirname -- "${candidate_real}")" == "${root}" && "$(basename -- "${candidate_real}")" == "${profile_run_id}" ]]
-result_count=$(find "${candidate_real}" -mindepth 1 -maxdepth 1 -type d | wc -l)
-[[ "${result_count}" -eq 1 ]]
-find "${candidate_real}" -mindepth 2 -print -quit | grep -q .
-tar -I zstd -cf - -C "${root}" "${profile_run_id}"
-REMOTE_ARCHIVE
+candidate=$(realpath -e -- "${root}/${profile_run_id}")
+[[ "$(dirname -- "${candidate}")" == "${root}" && "$(basename -- "${candidate}")" == "${profile_run_id}" ]]
+readarray -d '' results < <(find "${candidate}" -mindepth 1 -maxdepth 1 -type d ! -name paraview -print0)
+[[ "${#results[@]}" -eq 1 ]]
+[[ -n "$(find "${results[0]}" -mindepth 1 -print -quit)" ]]
+tar -I zstd -cf - -C "${candidate}" "$(basename -- "${results[0]}")"
+REMOTE_VTUNE
 
-tar -I zstd -tf "${staging_archive}" | awk -v prefix="${profile_run_id}/" 'index($0, prefix) != 1 { bad = 1 } $0 != prefix { payload = 1 } END { exit(bad || !payload) }'
-archive_size=$(stat -c '%s' "${staging_archive}")
-archive_sha=$(sha256sum "${staging_archive}" | awk '{print $1}')
+"${ssh_bin}" "${source_target}" bash -s -- "${source_root}" "${profile_run_id}" <<'REMOTE_PARAVIEW' | tar -xf - -C "${staging}"
+set -euo pipefail
+root=$(realpath -e -- "$1")
+profile_run_id=$2
+candidate=$(realpath -e -- "${root}/${profile_run_id}")
+[[ "$(dirname -- "${candidate}")" == "${root}" && "$(basename -- "${candidate}")" == "${profile_run_id}" ]]
+paraview="${candidate}/paraview"
+[[ -f "${paraview}/paraview-case.tar.zst" && -f "${paraview}/manifest.json" ]]
+expected_size=$(jq -er '.archive.size_bytes' "${paraview}/manifest.json")
+expected_sha=$(jq -er '.archive.sha256' "${paraview}/manifest.json")
+[[ "$(stat -c '%s' "${paraview}/paraview-case.tar.zst")" == "${expected_size}" ]]
+[[ "$(sha256sum "${paraview}/paraview-case.tar.zst" | awk '{print $1}')" == "${expected_sha}" ]]
+tar -cf - -C "${candidate}" paraview
+REMOTE_PARAVIEW
+
+tar -I zstd -tf "${staging}/vtune/vtune-result.tar.zst" | awk 'NF { found = 1 } END { exit(!found) }'
+tar -I zstd -tf "${staging}/paraview/paraview-case.tar.zst" | awk '$0 == "occDrivAerStaticMesh.foam" { found = 1 } END { exit(!found) }'
 created_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-jq -n -c --arg cluster "${cluster}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_root}/${profile_run_id}" --arg created_utc "${created_utc}" --arg sha256 "${archive_sha}" --argjson size_bytes "${archive_size}" '{schema_version:"openfoam-vtune-archive/v1",cluster:$cluster,profile_run_id:$profile_run_id,run_id:$run_id,scheduler_job_id:$scheduler_job_id,source_target:$source_target,source_path:$source_path,created_utc:$created_utc,archive:{path:"vtune-result.tar.zst",size_bytes:$size_bytes,sha256:$sha256}}' > "${staging}/manifest.json"
+files=()
+for relative in vtune/vtune-result.tar.zst paraview/paraview-case.tar.zst paraview/manifest.json; do files+=("$(jq -n -c --arg path "${relative}" --argjson size_bytes "$(stat -c '%s' "${staging}/${relative}")" --arg sha256 "$(sha256sum "${staging}/${relative}" | awk '{print $1}')" '{path:$path,size_bytes:$size_bytes,sha256:$sha256}')"); done
+printf '%s\n' "${files[@]}" | jq -s -c --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_root}/${profile_run_id}" --arg created_utc "${created_utc}" '{schema_version:"openfoam-large-output-archive/v1",cluster:$cluster,github_run_id:$github_run_id,profile_run_id:$profile_run_id,run_id:$run_id,scheduler_job_id:$scheduler_job_id,source_target:$source_target,source_path:$source_path,created_utc:$created_utc,files:.}' > "${staging}/manifest.json"
 mv -T -- "${staging}" "${destination}"
 trap - EXIT
-validate_archive
+validate_destination
 remove_source
-printf 'home_archive=%s\nsource_removed=%s\n' "${archive}" "${source_root}/${profile_run_id}"
+printf 'home_large_output=%s\nsource_removed=%s\n' "${destination}" "${source_root}/${profile_run_id}"

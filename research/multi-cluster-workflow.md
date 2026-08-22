@@ -40,7 +40,7 @@
 
 手動実行によるプロファイル確認は実行`31943260640`で行った。入力で両クラスタ、1ノード、`hotspots`解析、ランク0を指定し、コミットメッセージに依存せず両方の既存ビルドを再利用した。玄界はPJM `6504040`、GadiはPBS `176404848.gadi-pbs`で完走した。両方とも公式判定が`STATUS: VALID`、VTuneの対象処理とVTune自身の終了値が0で、ホットスポット要約、プロファイル生データ、固定成果物、公式結果、自宅サーバーへの保管まで成功した。
 
-固定v2成果物はGitHub Artifactを経由して自宅サーバーへ移管する。これとは別のVTune完全結果はクラスタ上で一時生成し、profile成功後にhome-labがSSHで直接取得する。自宅側で圧縮archiveを検証してmanifestとともに確定した後だけ、対応するクラスタ原本を削除する。
+固定v2成果物はGitHub Artifactを経由して自宅サーバーへ移管する。VTune完全結果とParaView用の単一分割ケースarchiveは大容量のためクラスタ上で一時生成し、profile成功後にhome-labがSSHで直接取得する。自宅側で各archiveの可読性、容量、SHA-256を検証し、`openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ確定した後だけ、対応するクラスタ原本を削除する。
 
 2ノードと4ノードは資源対応を単体試験で確認し、必要な実験時に実計算を行う。プロファイル値は通常計測との性能比較には使わない。
 

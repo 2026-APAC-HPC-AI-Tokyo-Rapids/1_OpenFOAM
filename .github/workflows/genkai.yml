@@ -174,7 +174,7 @@ jobs:
           test "$(stat -c '%s' "${archive}")" = "${expected_size}"
           test "$(sha256sum "${archive}" | awk '{print $1}')" = "${expected_sha}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
-          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" "${provision_dir}/scripts/"
+          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" "${GITHUB_WORKSPACE}/scripts/archive-paraview-case.sh" "${GITHUB_WORKSPACE}/scripts/finalize-paraview-case.sh" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/platforms/genkai/run-openfoam.pjm" "${GITHUB_WORKSPACE}/platforms/genkai/prepare-openfoam-case.pjm" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/benchmark/"
           cp -a "${GITHUB_WORKSPACE}/benchmark/occDrivAerStaticMesh" "${provision_dir}/benchmark/"
@@ -304,7 +304,7 @@ jobs:
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           control_plane_files=(.github/workflows/genkai.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml)
           if [[ "${purpose}" == profile ]]; then
-            control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
+            control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/archive-paraview-case.sh scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh scripts/finalize-paraview-case.sh)
           fi
           control_plane_files+=(platforms/genkai/prepare-openfoam-case.pjm platforms/genkai/run-openfoam.pjm scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
@@ -483,12 +483,14 @@ jobs:
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
 
-      - name: VTune完全結果を自宅サーバーへ直接転送
+      - name: VTuneとParaViewの完全結果をrun単位で直接転送
         if: inputs.profile && needs.run.result == 'success'
+        env:
+          PROFILE_RUN_ID: ${{ needs.run.outputs.profile_run_id }}
         run: |
-          profile_run_id='${{ needs.run.outputs.profile_run_id }}'
+          profile_run_id=${PROFILE_RUN_ID}
           [[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          ssh tomokazu@tomokazu-ubuntu-server "bash -s -- --cluster genkai --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
+          ssh tomokazu@tomokazu-ubuntu-server "OPENFOAM_ARTIFACT_ARCHIVE_ROOT=/hdd_raid/samba/net_share/openfoam-artifacts bash -s -- --cluster genkai --github-run-id '${GITHUB_RUN_ID}' --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
 
       - name: 成果物を自宅サーバーへ転送
         run: |

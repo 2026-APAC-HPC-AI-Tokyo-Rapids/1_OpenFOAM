@@ -6,16 +6,17 @@
 
 この文書は、玄界上でOpenFOAM v2606の`simpleFoam`を使ったmotorBike試験について、実行時プロファイルと起動設定の調整結果を記録する。改善対象はMPI配置、MPIとOpenFOAMの実行時設定、プロファイラの起動設定に限定し、OpenFOAMのソース自体は変更しない。
 
-過去のAPSとVTuneの完全な結果はGitHubの成果物とは別に保存している。現在のVTune完全結果の正本は自宅サーバーの`/hdd_raid/samba/net_share/openfoam-vtune`である。
+過去のAPSとVTuneの完全な結果はGitHubの成果物とは別に保存している。2026年8月23日以降のVTuneとParaView完全結果は、自宅サーバーのActions run単位の成果物ツリーを正本とする。旧`openfoam-vtune`配下は過去runの履歴として保持する。
 
 ```text
 ~/openfoam-profile/<github-run-id>-<pjm-job-id>/
 ```
 
-新しいVTune専用プロファイルは、用途別の次の場所へ保存する。
+新しいprofile runの大容量成果物は次の場所へ保存する。
 
 ```text
-/hdd_raid/samba/net_share/openfoam-vtune/<cluster>/<run-id>-<scheduler-job-id>/vtune-result.tar.zst
+/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/vtune/vtune-result.tar.zst
+/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/paraview/paraview-case.tar.zst
 ```
 
 共有プロファイル領域と実行ごとのディレクトリの権限は`2770`である。この記録を作成した時点で、プロファイル全体は約3.0 GiBを使用していた。
@@ -185,4 +186,4 @@ Intelは、`I_MPI_STATS`または`aps`によるAPS、`mpirun -gtool`による特
 
 プッシュ起動は常に通常計測とし、外部プロファイラを付けずにソルバーを起動する。手動実行では`bench`または`profile`を選ぶ。プロファイル実行はソースやビルド成果物を変更せず、`profile_rank`入力で選択したMPIランク（既定値は0）へ一定時間だけVTuneのホットスポット収集を接続する。ランク0は計算上のホットスポット発見に引き続き有用だが、APSがランク0を非典型と示しているため、代表的な通信の結論には内部ランクやノード境界ランクの追加計測が必要である。
 
-VTuneの完全な結果は一時的にクラスタのprofile rootへ生成し、自宅サーバーがSSHで直接取得する。自宅側では`tar.zst`の可読性、サイズ、SHA-256をmanifestへ記録し、検証後に`/hdd_raid/samba/net_share/openfoam-vtune/<cluster>/<run-id>-<scheduler-job-id>/`へ確定する。クラスタ原本は確定後だけ削除する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。
+VTuneの完全な結果とParaView用の最終分割ケースは一時的にクラスタのprofile rootへ生成し、自宅サーバーがSSHで直接取得する。ParaView用データは全`processor*`と`occDrivAerStaticMesh.foam`を単一の`paraview-case.tar.zst`にまとめる。自宅側で可読性、サイズ、SHA-256を検証し、Actions runの固定v2成果物ディレクトリ配下へ確定した後だけクラスタ原本を削除する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。

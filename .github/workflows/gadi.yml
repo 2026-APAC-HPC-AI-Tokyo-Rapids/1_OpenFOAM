@@ -186,7 +186,7 @@ jobs:
           sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
           platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
-          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh "${provision_dir}/scripts/"
+          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
           install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-rank-context.sh platforms/gadi/collect-rank-placement.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
@@ -287,7 +287,7 @@ jobs:
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
           control_plane_files=(.github/workflows/gadi.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/gadi/archive-openfoam-case.sh platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/provision-openfoam-runtime.sh platforms/gadi/run-openfoam.pbs platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
-          if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh); fi
+          if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/archive-paraview-case.sh scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh scripts/finalize-paraview-case.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
           for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
@@ -419,12 +419,14 @@ jobs:
           chmod 0600 "${HOME}/.ssh/id_ed25519"
           ssh-keyscan -H tomokazu-ubuntu-server >> "${HOME}/.ssh/known_hosts"
 
-      - name: VTune完全結果を自宅サーバーへ直接転送
+      - name: VTuneとParaViewの完全結果をrun単位で直接転送
         if: inputs.profile && needs.run.result == 'success'
+        env:
+          PROFILE_RUN_ID: ${{ needs.run.outputs.profile_run_id }}
         run: |
-          profile_run_id='${{ needs.run.outputs.profile_run_id }}'
+          profile_run_id=${PROFILE_RUN_ID}
           [[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          ssh tomokazu@tomokazu-ubuntu-server "bash -s -- --cluster gadi --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
+          ssh tomokazu@tomokazu-ubuntu-server "OPENFOAM_ARTIFACT_ARCHIVE_ROOT=/hdd_raid/samba/net_share/openfoam-artifacts bash -s -- --cluster gadi --github-run-id '${GITHUB_RUN_ID}' --profile-run-id '${profile_run_id}'" < scripts/transfer-vtune-result.sh
 
       - name: 成果物を自宅サーバーへ転送
         run: |
