@@ -13,11 +13,14 @@ PROFILE_RUN_ID = "r-0123456789abcdef0123456789abcdef-12345"
 GITHUB_RUN_ID = "987654321"
 
 
-def _environment(tmp_path: Path, *, broken_ssh: bool = False) -> tuple[dict[str, str], Path, Path]:
+def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool = True) -> tuple[dict[str, str], Path, Path]:
     source_root = tmp_path / "cluster-profile"
     result = source_root / PROFILE_RUN_ID / "rank-0-hotspots.result"
-    result.mkdir(parents=True)
-    (result / "data.0").write_bytes(b"vtune raw data\n")
+    if vtune_result:
+        result.mkdir(parents=True)
+        (result / "data.0").write_bytes(b"vtune raw data\n")
+    else:
+        result.parent.mkdir(parents=True)
     paraview = source_root / PROFILE_RUN_ID / "paraview"
     paraview.mkdir()
     case = tmp_path / "paraview-case"
@@ -82,6 +85,7 @@ def test_transfer_archives_validates_and_removes_source(tmp_path: Path) -> None:
     manifest = json.loads((destination / "manifest.json").read_text())
     assert manifest["schema_version"] == "openfoam-large-output-archive/v1"
     assert manifest["profile_run_id"] == PROFILE_RUN_ID
+    assert manifest["vtune_result_available"] is True
     assert (destination / "vtune" / "vtune-result.tar.zst").is_file()
     assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
     assert not (source_root / PROFILE_RUN_ID).exists()
@@ -89,6 +93,21 @@ def test_transfer_archives_validates_and_removes_source(tmp_path: Path) -> None:
     repeated = _run(environment)
     assert repeated.returncode == 0, repeated.stderr
     assert not any(path.name.startswith(".") for path in destination.parent.iterdir())
+
+
+def test_transfer_keeps_paraview_when_vtune_produced_no_result(tmp_path: Path) -> None:
+    environment, source_root, archive_root = _environment(tmp_path, vtune_result=False)
+
+    completed = _run(environment)
+
+    assert completed.returncode == 0, completed.stderr
+    destination = archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
+    manifest = json.loads((destination / "manifest.json").read_text())
+    assert manifest["vtune_result_available"] is False
+    assert not (destination / "vtune").exists()
+    assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
+    assert [entry["path"] for entry in manifest["files"]] == ["paraview/paraview-case.tar.zst", "paraview/manifest.json"]
+    assert not (source_root / PROFILE_RUN_ID).exists()
 
 
 def test_transfer_uses_no_target_directory_move() -> None:

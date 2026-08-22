@@ -42,6 +42,8 @@
 
 固定v2成果物はGitHub Artifactを経由し、自宅サーバー上の`home-lab` runnerが同じサーバーのRAIDへ配置する。VTune完全結果とParaView用の単一分割ケースarchiveは大容量のためクラスタ上で一時生成し、profile成功後に同じrunnerがSSHで直接取得する。GitHub-hosted runner、Tailscale、自宅サーバーへの二段目のSSHは保管経路に含めない。自宅側で各archiveの可読性、容量、SHA-256を検証し、`openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ確定した後だけ、対応するクラスタ原本を削除する。
 
+VTuneが解析開始前に失敗して完全結果ディレクトリを生成しなかったrunでは、固定profile artifactに収集statusとエラーログを残し、`large-output/manifest.json`の`vtune_result_available`をfalseにする。存在しないVTune archiveを必須にしてParaView回収まで失敗させず、単一ParaView archiveの検証と保存を独立して完了させる。
+
 2ノードと4ノードは資源対応を単体試験で確認し、必要な実験時に実計算を行う。プロファイル値は通常計測との性能比較には使わない。
 
 両クラスタともIntel C++ 2025.1.1とIntel MPI 2021.15を基準とする。Gadiは`intel-compiler-llvm/2025.1.1`と`intel-mpi/2021.15.0`、課題`hb15`、投入先`normalsr`を使う。玄界は`intel/2025.1.3`と`impi`、投入先`a-batch`を使う。ログインノードの物理コア数と実測したメモリ上限に合わせ、ビルド並列数はGadiが16、玄界が120である。玄界のIcx用Makeプリプロセッサは、計算ノードでも`cc1`を解決できるgcc-toolset-11の`cpp`へ固定する。Gadiのノード内通信は`shm`、ノード間通信は`shm:ofi`とする。これらを変える場合は新規ビルドを行い、変更理由をコミット本文へ記録する。

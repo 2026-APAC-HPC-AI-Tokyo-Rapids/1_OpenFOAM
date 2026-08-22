@@ -24,6 +24,6 @@
 
 プロファイルも通常実行と同じ`OpenFOAM`から起動します。MPIランク0へ60秒間Intel VTuneの`hotspots`解析を接続して計測します。
 計測後、上位ホットスポットはGitHub Actionsの実行概要に表として表示されます。Perfetto用のトレースは生成しません。
-VTuneの完全な結果とParaView用の最終分割ケースは計算中だけクラスタの共有ファイルシステムへ出力します。プロファイルの成功後、自宅サーバー上の`home-lab` runnerがクラスタから結果を直接取得します。検証済みの圧縮結果とmanifestは`/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ保存し、転送と検証に成功したクラスタ原本は削除します。ParaView用データは単一の`paraview-case.tar.zst`を展開し、`occDrivAerStaticMesh.foam`を開きます。転送に失敗した場合は原本をクラスタ側へ残します。
+VTuneの完全な結果とParaView用の最終分割ケースは計算中だけクラスタの共有ファイルシステムへ出力します。プロファイルの成功後、自宅サーバー上の`home-lab` runnerがクラスタから結果を直接取得します。検証済みの圧縮結果とmanifestは`/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ保存し、転送と検証に成功したクラスタ原本は削除します。VTuneが結果ディレクトリを生成しなかった場合も、失敗ログを含む固定profile artifactとParaViewケースを保存し、large-output manifestの`vtune_result_available=false`で完全結果が存在しないことを明示します。ParaView用データは単一の`paraview-case.tar.zst`を展開し、`occDrivAerStaticMesh.foam`を開きます。転送に失敗した場合は原本をクラスタ側へ残します。
 
 自宅サーバーでは`~/.config/openfoam-vtune-transfer/env`を`0600`で保持し、`OPENFOAM_VTUNE_GENKAI_SSH_TARGET`、`OPENFOAM_VTUNE_GENKAI_ROOT`、`OPENFOAM_VTUNE_GADI_SSH_TARGET`、`OPENFOAM_VTUNE_GADI_ROOT`を設定します。自宅側の保存rootはworkflowが`OPENFOAM_ARTIFACT_ARCHIVE_ROOT`として渡します。このファイルはリポジトリへ置きません。接続には自宅サーバー上の既存SSH鍵を使い、パスワードや`sshpass`は使用しません。
