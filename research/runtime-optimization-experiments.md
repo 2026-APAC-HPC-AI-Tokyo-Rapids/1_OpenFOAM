@@ -140,6 +140,45 @@ Actions `31646485229` は既存ビルドとキャッシュ済み448分割Scotch�
 
 ## Issue #14：採用済み4ノード/448ランク構成のVTuneプロファイル解析
 
+### 公式タスク `occDrivAerStaticMesh-65M` での再測定（2026-08-22）
+
+Issue #18とSlackの公式告知で確定した公式タスクに合わせ、OpenFOAM.com `v2512`、`simpleFoam`、65,334,765セル、`scotch-4n-448r`、150反復で取り直した。ソース、メッシュ、物理・数値モデルは公式入力を変更していない。プロファイルは通常ベンチマークと分離し、各実験条件は `benchmark/profile.json` だけを変更した個別コミットから起動した。
+
+448ランクの実配置と `decomposePar` のprocessor interfaceを照合した結果、ランク0は隣接数12、interface 19,117面、ノード間面数0の内部ランクである。ランク168は隣接数27、interface 27,178面、ノード間面数10,975で全448ランク中の最大である。この2点を内部ランクと最大ノード間境界ランクの代表とした。
+
+Hotspotsはソフトウェアサンプリング、stackなし、60秒attachで収集した。
+
+| ランク / Actions | Gauss-Seidel smooth | `lduMatrix::residual` | `PMPI_Allreduce` | `lduMatrix::Amul` | MPI | transport | MPI busy wait |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 / `32557452891` | 15.34% | 10.98% | 8.95% | 5.80% | 15.83% | 4.24% | 5.62% |
+| 168 / `32557788753` | 16.21% | 11.05% | 5.70% | 5.54% | 11.37% | 2.87% | 2.71% |
+
+旧 `icoFoam` で主要だったDIC/PCGではなく、新タスクではGauss-Seidel平滑化と残差計算が上位を占めた。両ランクで上位関数は安定している一方、MPIとbusy waitの比率はランク間で動く。これは単一ランクのCPU samplingであり、448ランク全体のwall-clock imbalanceやcritical pathとはみなさない。
+
+HPC Performance Characterizationも同じ60秒区間で別runとして取得した。実行全体のノードワイド指標は次のとおりである。
+
+| ランク / Actions | Memory Bound | Cache Bound | DRAM平均 | 高帯域利用時間 | packed FP | CPI |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 / `32559332236` | 61.4% | 18.1% | 400.798 GB/s | 99.8% | 14.9% | 0.836 |
+| 168 / `32559614531` | 63.8% | 17.9% | 404.585 GB/s | 99.9% | 15.0% | 1.192 |
+
+関数内でVTuneが分離したCPU時間正値ループを同名関数ごとにCPU時間で加重すると次の値となる。Memory BoundとL3/DRAMはストール分類であり、単純に加算する指標ではない。
+
+| ランク | 関数 | Memory Bound | L3 Bound | DRAM Bound | packed FP |
+|---:|---|---:|---:|---:|---:|
+| 0 | Gauss-Seidel smooth | 46.2% | 12.7% | 31.7% | 17.9% |
+| 0 | `lduMatrix::residual` | 71.9% | 15.2% | 49.7% | 23.8% |
+| 0 | `lduMatrix::Amul` | 62.4% | 26.9% | 38.5% | 24.9% |
+| 168 | Gauss-Seidel smooth | 44.4% | 10.2% | 32.1% | 19.4% |
+| 168 | `lduMatrix::residual` | 69.0% | 15.2% | 50.7% | 31.3% |
+| 168 | `lduMatrix::Amul` | 70.0% | 18.0% | 41.7% | 37.4% |
+
+実行全体は両ランクと61%以上がMemory Boundで、DRAMはほぼ全収集時間に高帯域利用であった。主要関数のうち残差計算とAmulは特にメモリ制約が強い。Gauss-Seidelは関数内に異なる性質のループを含むが、最大CPU時間のループは両ランクとも約65% Memory Boundである。したがって新タスクでもメモリトラフィックと局所性を第一の最適化対象とする。全体のpacked FPは約15%と低く、ベクトル化は二次的候補として残る。
+
+確定runはHotspotsのランク0/168がそれぞれRun ID `r-a1b63aaf1503a7e04418763ca1f802b6` / `r-8823f456ad868ffda582261ab06baf9d`、PJM `6561080` / `6561124`、HPCのランク0/168がRun ID `r-c017d8cec58d31f53a99b56242f91b10` / `r-4fe6195d21cb0e71825bf2043302c0c2`、PJM `6561850` / `6561860` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
+
+### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
+
 DIC cell-gather と PCG loop fusion を統合した現行ソースコードにおいて、採択済みの `scotch-4n-448r` をVTune Hotspotsで測定した。当初のActions #332ではランク0のみを観測したが、過去のAPS解析でランク0のMPI通信比率が他ランクより低かったため、単独では通信負荷や負荷不均衡（load imbalance）を代表しない。コミット `53512405eeeae088cc14ae574aeb2ed10dca8cdd` でプロファイル対象ランクをワークフロー入力から選択可能にし、スケジューラ要求、PJM環境変数、マニフェストへ記録できるようにした。測定条件は比較軸を固定するため、`hotspots`、ソフトウェアサンプリング、スタック収集なし、60秒アタッチのままとした。この条件は低オーバーヘッドで関数別の排他CPU時間（Exclusive CPU Time）を得る目的には妥当であるが、全ランクの通信待機時間を直接測定するものではない。
 
 同コミットのActions #334でタスク最小限ビルドを新規作成し、通常の1ノードE2E検証を公式VALID、アーティファクト退避、PJMクリーンアップまで完走させた。続くランク0、3、365のプロファイル測定は同一のビルドアーカイブ #334（474,567,727バイト、SHA-256: `34260960b2e8a105bc0c73cdd655a2e08c60016c3d161b1de478a8e173410b99`）を再利用した。ランク3はノード間通信面数が0の内部ランク（interior rank）、ランク365は16,967面で最大のノード間境界ランク（cross-node boundary rank）、ランク0はその中間である。
@@ -176,6 +215,34 @@ DIC cell-gather と PCG loop fusion を統合した現行ソースコードに�
 実行全体のMemory Boundもランク3で58.7%、ランク365で60.4%とVTuneにより高負荷（High）と判定された。主要3カーネルはいずれのランクでも64%以上がMemory Boundであり、L3/DRAMストールが大きい。DICループはpacked FPが0%、Amulも14〜21%であり、PCGループのみが75〜87%までベクトル化されている。したがって現時点では演算器のスループットよりもメモリ階層（特にDRAM帯域およびアクセス局所性）が主要な制約要因である。
 
 ## Issue #16：VTune Memory Accessによるメモリ律速（Memory-Bound）の要因分解
+
+### 公式タスク `occDrivAerStaticMesh-65M` での再測定（2026-08-22）
+
+Issue #14の新タスクと同じOpenFOAM.com `v2512` / `simpleFoam` / 4ノード / 448ランク / 150反復、ランク0と最大ノード間境界のランク168で取り直した。標準 `memory-access` は同居ノードのアンコア帯域幅、補完の `memory-access-core` はselected rankのPerf driverless/PEBSイベントを収集する別runである。
+
+| ランク / Actions | DRAM平均 | 観測最大 | 高利用率時間 | single-package平均 / 較正最大 | DRAM BW Bound | UPI平均 / 高利用率時間 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 / `32559806220` | 422.944 GB/s | 494.500 GB/s | 99.7% | 215.842 / 247 GB/s | 86.4% | 9.326% / 0.0% |
+| 168 / `32560022792` | 426.630 GB/s | 494.700 GB/s | 100.0% | 218.415 / 247 GB/s | 87.9% | 9.405% / 0.0% |
+
+両ノードとも平均DRAM帯域は観測最大の85%以上、single-package平均はVTune較正最大の87%前後に達した。収集時間のほぼ全てがDRAM高利用率状態で、UPIの高利用率時間は0%である。ノード全体の第一制約はDRAM帯域幅である。標準Memory AccessはSEPのnode-wideアンコアを正常に取得したが、旧タスクと同様に `CPU Time=0` / 関数row 0であるため、関数別の判定には使わない。
+
+selected-rankのPEBSイベントによる主要3関数の結果は次のとおりである。`LLC-to-memory`はlocal/remote DRAMとremote cache/fwdの合計をload数で割った値、`remote`はremote DRAM/fwd/HITMの関数帰属イベント数である。
+
+| ランク | 関数 | load / store | 平均load latency | long-load latency | LLC-to-memory / load | STLB miss / load | DTLB walk / clocks | remote |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 | Gauss-Seidel smooth | 11.345 / 2.395 G | 27.00 cycle | 22.06 cycle | 0.061% | 0.00044% | 0.163% | 0 |
+| 0 | `lduMatrix::residual` | 7.062 / 1.787 G | 30.75 cycle | 55.41 cycle | 0.519% | 0.00142% | 0.080% | 0 |
+| 0 | `lduMatrix::Amul` | 4.219 / 1.393 G | 39.50 cycle | 40.21 cycle | 0.445% | 0% | 0.165% | 0 |
+| 168 | Gauss-Seidel smooth | 11.967 / 2.346 G | 18.95 cycle | 17.21 cycle | 0.050% | 0.00084% | 0.202% | 0 |
+| 168 | `lduMatrix::residual` | 6.785 / 1.795 G | 24.43 cycle | 49.90 cycle | 0.485% | 0.00147% | 0.088% | 0 |
+| 168 | `lduMatrix::Amul` | 4.248 / 1.341 G | 19.81 cycle | 35.22 cycle | 0.434% | 0.00118% | 0.180% | 0 |
+
+Gauss-Seidelは両ランクで最大のload/storeトラフィックを持ち、残差計算とAmulはGauss-SeidelよりLLC-to-memory率とlong-load latencyが高い。したがって第一候補はGauss-Seidelのメモリトラフィック削減、次点は残差計算とAmulのキャッシュ局所性改善である。主要3関数のremoteイベントは0、STLB missは0.0015%未満、DTLB walkは最大0.202%である。NUMA再配置やHuge Pageは優先度の高い候補としない。
+
+標準Memory Accessのランク0/168はRun ID `r-238e8bbd894d0ee04528f02cb9573897` / `r-2d004aa368ff80dfcd1d062035cd9f53`、PJM `6561875` / `6561925`、core eventのランク0/168はRun ID `r-adc73c31121a2f7141e6c8dd22d41516` / `r-540a5633b9a9abc270a3ae46dc752562`、PJM `6561930` / `6561938` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
+
+### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
 
 Issue #14と同じActions #334ビルド、`scotch-4n-448r`、ランク3（内部）とランク365（最大ノード間境界）を使用した。通常ベンチマークとプロファイルを分離し、帯域幅は測定ノード全体のアンコア（uncore）、関数別のレイテンシ・LLCミス・NUMA・TLBは対象ランクのコアイベントとして収集した。
 
