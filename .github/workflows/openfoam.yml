@@ -1,5 +1,6 @@
 name: OpenFOAM
 
+# push起動ではコミットメッセージのcluster、nodes、profileマーカーから実験条件を決める。
 on:
   push:
     paths-ignore:
