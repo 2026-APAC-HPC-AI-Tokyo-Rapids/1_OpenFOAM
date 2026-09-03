@@ -79,7 +79,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
         'I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"'
     ) in wrapper_text
     assert "OPENFOAM_PROFILE_DIR" not in text
-    assert 'vtune_root="${profile_root}/${profile_run_id}"' in text
+    assert 'vtune_root="${large_output_dir}/vtune"' in text
     assert "/home/pj26000080" not in text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in wrapper_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in wrapper_text
@@ -217,7 +217,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     builder = builder_path.read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
-    assert "runs-on: [self-hosted, gadi]" in workflow
+    assert "runs-on: [self-hosted, home-lab]" in workflow
+    assert "shell: gadi-shell --github-shell {0}" in workflow
     runtime_provisioner = (
         ROOT / "platforms/gadi/provision-openfoam-runtime.sh"
     ).read_text(encoding="utf-8")
@@ -331,6 +332,16 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "select-actions-target.sh" not in entry
 
 
+def test_cluster_steps_use_home_lab_remote_shells() -> None:
+    for cluster in ("genkai", "gadi"):
+        workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text(
+            encoding="utf-8"
+        )
+        assert f"shell: {cluster}-shell --github-shell {{0}}" in workflow
+        assert f"runs-on: [self-hosted, {cluster}]" not in workflow
+        assert "runs-on: [self-hosted, home-lab]" in workflow
+
+
 def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() -> None:
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
     genkai = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
@@ -405,11 +416,14 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert "ARTIFACT_SERVER_SSH_PRIVATE_KEY" not in workflow
         assert "tomokazu@tomokazu-ubuntu-server" not in workflow
         assert "profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}" in workflow
+        assert "run_dir: ${{ steps.v2_context.outputs.run_dir }}" in workflow
         assert "- name: VTuneとParaViewの完全結果をrun単位で直接転送" in workflow
         assert "if: inputs.profile && needs.run.result == 'success'" in workflow
         assert f"--cluster {cluster} --github-run-id" in workflow
         assert "--profile-run-id" in workflow
+        assert "--source-dir" in workflow
         assert 'scripts/transfer-vtune-result.sh' in workflow
+        assert 'scripts/remove-openfoam-runtime.sh' in workflow
         assert ".artifacts[].id" not in workflow
         assert "cavity3d" not in workflow.lower()
         job_section = workflow.split("jobs:\n", 1)[1]

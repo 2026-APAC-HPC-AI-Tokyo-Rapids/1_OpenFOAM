@@ -23,12 +23,12 @@ env:
 
 defaults:
   run:
-    shell: bash --login -eo pipefail {0}
+    shell: gadi-shell --github-shell {0}
 
 jobs:
   select-build:
     name: OpenFOAMビルドを選択
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     outputs:
       action: ${{ steps.select.outputs.action }}
       source_archive_key: ${{ steps.select.outputs.source_archive_key }}
@@ -95,7 +95,7 @@ jobs:
     name: OpenFOAMビルドを再利用
     needs: select-build
     if: needs.select-build.outputs.action == 'reuse'
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     steps:
       - name: 選択した成果物をハードリンク
         run: |
@@ -107,7 +107,7 @@ jobs:
     name: OpenFOAMをビルド
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     concurrency:
       group: gadi-openfoam-build
     env:
@@ -150,12 +150,18 @@ jobs:
           uv sync --project experiment-metrics --frozen --no-dev
           platforms/gadi/build-openfoam.sh
 
+      - name: OpenFOAMビルドログをrunnerへ回収
+        if: always()
+        continue-on-error: true
+        shell: home-lab-shell {0}
+        run: gadi-shell --pull "${BUILD_DIR}/logs" "${RUNNER_TEMP}/openfoam-gadi-build"
+
       - name: OpenFOAMビルドログを保存
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-gadi-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.BUILD_DIR }}/logs
+          path: ${{ runner.temp }}/openfoam-gadi-build/logs
           if-no-files-found: warn
           compression-level: 1
 
@@ -167,7 +173,7 @@ jobs:
     name: OpenFOAM実行環境を配備
     needs: [select-build, reuse-build, build-openfoam]
     if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     outputs:
       provision_dir: ${{ steps.provision.outputs.provision_dir }}
     steps:
@@ -207,7 +213,7 @@ jobs:
     name: OpenFOAMケースのキャッシュを準備
     needs: [select-build, provision]
     if: always() && needs.provision.result == 'success'
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     concurrency:
       group: gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}
     env:
@@ -249,10 +255,11 @@ jobs:
     name: OpenFOAMを実行
     needs: [select-build, provision, prepare-case]
     if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
-    runs-on: [self-hosted, gadi]
+    runs-on: [self-hosted, home-lab]
     outputs:
       artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
       profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}
+      run_dir: ${{ steps.v2_context.outputs.run_dir }}
     env:
       PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
       OPENFOAM_RUN_ROOT: /scratch/hb15/tk7779/openfoam/gadi/runs
@@ -359,6 +366,17 @@ jobs:
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
 
+      - name: 固定構成のv2成果物をrunnerへ回収
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
+        shell: home-lab-shell {0}
+        env:
+          REMOTE_RUN_DIR: ${{ steps.v2_context.outputs.run_dir }}
+        run: |
+          destination="${RUNNER_TEMP}/openfoam-gadi-run"
+          gadi-shell --pull "${REMOTE_RUN_DIR}/artifact-manifest.json" "${destination}"
+          gadi-shell --pull "${REMOTE_RUN_DIR}/run-artifacts.tar.zst" "${destination}"
+          gadi-shell --pull "${REMOTE_RUN_DIR}/profile-raw.tar.zst" "${destination}"
+
       - name: 固定構成のv2成果物を保存
         id: upload_v2
         if: always() && steps.v2_context.outputs.pbs_job_id != ''
@@ -366,18 +384,25 @@ jobs:
         with:
           name: openfoam-gadi-v2-${{ steps.v2_context.outputs.run_id }}
           path: |
-            ${{ steps.v2_context.outputs.run_dir }}/artifact-manifest.json
-            ${{ steps.v2_context.outputs.run_dir }}/run-artifacts.tar.zst
-            ${{ steps.v2_context.outputs.run_dir }}/profile-raw.tar.zst
+            ${{ runner.temp }}/openfoam-gadi-run/artifact-manifest.json
+            ${{ runner.temp }}/openfoam-gadi-run/run-artifacts.tar.zst
+            ${{ runner.temp }}/openfoam-gadi-run/profile-raw.tar.zst
           if-no-files-found: error
           compression-level: 0
+
+      - name: occDrivAerStaticMeshの結果をrunnerへ回収
+        if: success()
+        shell: home-lab-shell {0}
+        env:
+          REMOTE_RUN_DIR: ${{ steps.v2_context.outputs.run_dir }}
+        run: gadi-shell --pull "${REMOTE_RUN_DIR}/results" "${RUNNER_TEMP}/openfoam-gadi-run"
 
       - name: occDrivAerStaticMeshの結果を保存
         if: success()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-gadi-occdrivaer-65m-result-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.v2_context.outputs.run_dir }}/results
+          path: ${{ runner.temp }}/openfoam-gadi-run/results
           if-no-files-found: error
           compression-level: 0
 
@@ -393,6 +418,9 @@ jobs:
     needs: run
     if: always() && needs.run.outputs.artifact_uploaded == 'true'
     runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
     permissions:
       actions: write
       contents: read
@@ -411,16 +439,26 @@ jobs:
         if: inputs.profile && needs.run.result == 'success'
         env:
           PROFILE_RUN_ID: ${{ needs.run.outputs.profile_run_id }}
+          SOURCE_DIR: ${{ needs.run.outputs.run_dir }}/large-output
         run: |
           profile_run_id=${PROFILE_RUN_ID}
-          [[ "${profile_run_id}" =~ ^r-[0-9a-f]{32}-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
-          scripts/transfer-vtune-result.sh --cluster gadi --github-run-id "${GITHUB_RUN_ID}" --profile-run-id "${profile_run_id}"
+          source_dir=${SOURCE_DIR}
+          [[ "${profile_run_id}" =~ ^(r-[0-9a-f]{32})-[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+          run_id=${BASH_REMATCH[1]}
+          [[ "${source_dir}" == /* && "$(basename -- "${source_dir}")" == large-output && "$(basename -- "$(dirname -- "${source_dir}")")" == "${run_id}" ]]
+          scripts/transfer-vtune-result.sh --cluster gadi --github-run-id "${GITHUB_RUN_ID}" --profile-run-id "${profile_run_id}" --source-dir "${source_dir}"
 
       - name: 成果物を自宅サーバーへ配置
         run: |
           destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/gadi"
           install -d -m 0750 "${destination}"
           cp -a artifacts/. "${destination}/"
+
+      - name: 保管済みのクラスタruntimeを削除
+        if: ${{ ! inputs.profile || needs.run.result == 'success' }}
+        env:
+          RUN_DIR: ${{ needs.run.outputs.run_dir }}
+        run: scripts/remove-openfoam-runtime.sh --cluster gadi --run-dir "${RUN_DIR}"
 
       - name: 転送済みのGitHub成果物を削除
         env:

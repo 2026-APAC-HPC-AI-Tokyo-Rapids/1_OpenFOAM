@@ -10,7 +10,7 @@
 
 ## 共通部分と固有部分
 
-`scripts/build-openfoam-task.sh`、`scripts/prepare-openfoam-case.sh`、`scripts/run-openfoam.sh`は計算処理を共通化する。クラスタ別ワークフローは、ビルド選択、再利用またはビルド、プロビジョニング、ケース準備、実行、成果物保管という同じ形にする。ビルドはどちらもログインノード上のランナーで行う。ジョブ投入スクリプト、資源指定、モジュール設定はクラスタごとに持ち、PJMとPBSを一つの投入処理へ統合しない。
+`scripts/build-openfoam-task.sh`、`scripts/prepare-openfoam-case.sh`、`scripts/run-openfoam.sh`は計算処理を共通化する。クラスタ別ワークフローは、ビルド選択、再利用またはビルド、プロビジョニング、ケース準備、実行、成果物保管という同じ形にする。Actions jobは`home-lab` runnerで管理し、各クラスタのcustom shellがcheckoutとstep環境をrun固有一時領域へ転送してログインノード上で処理する。ジョブ投入スクリプト、資源指定、モジュール設定はクラスタごとに持ち、PJMとPBSを一つの投入処理へ統合しない。
 
 実行先の追加では、既存ワークフローへ大きな条件分岐を加えず、実行先固有の再利用可能ワークフローと`platforms/<cluster>/`を追加する。
 
@@ -20,11 +20,11 @@
 
 ビルド成果物、ソース圧縮ファイル、ケースキャッシュはクラスタごとに独立させる。ケースキャッシュは並列数と領域分割条件も識別する。Gadiでは完全な領域分割済みケースを一つの圧縮ファイルにし、実行時に各ノードが同じケース全体をノードローカルファイルシステムへ展開する。OpenFOAMには`-hostRoots`を渡し、各ランクがローカルの`processor*`ディレクトリを読む。異なるコンパイラ、MPI、ABIの成果物を共有しない。
 
-両クラスタとも、計算ノード上では計測値の断片を実行ディレクトリ内に閉じる。スケジューラの終了を確認して終了情報を記録した後、ログインノード上のランナーが全断片を一度だけBigQueryへ送る。BigQueryの資格情報は計算ジョブの環境へ渡さない。GitHubの成果物も同じランナーから保存する。
+両クラスタとも、計算ノード上では計測値の断片を実行ディレクトリ内に閉じる。スケジューラの終了を確認して終了情報を記録した後、ログインノード上のremote shellが全断片を一度だけBigQueryへ送る。BigQueryの資格情報は計算ジョブの環境へ渡さない。固定成果物はremote shellから`home-lab` runnerへ回収してGitHub Artifactへ保存する。
 
 ## 同時実行
 
-ランナーのラベルと同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiでは、展開した実行環境3件と実行固有のケース複製がinode上限へ到達した実測に基づき、共有展開物そのものを廃止する。同じケース圧縮ファイルを生成する準備だけをGadi内で直列化し、プロビジョニング、計算、回収そのものには同時実行制御を置かない。
+runnerラベルは`home-lab`へ統一し、同時実行制御名にはクラスタ名を含める。ビルドとケース生成はクラスタ内で必要な範囲だけ直列化し、玄界とGadiを相互に待たせない。Gadiでは、展開した実行環境3件と実行固有のケース複製がinode上限へ到達した実測に基づき、共有展開物そのものを廃止する。同じケース圧縮ファイルを生成する準備だけをGadi内で直列化し、プロビジョニング、計算、回収そのものには同時実行制御を置かない。
 
 ## 内容の識別
 
@@ -40,7 +40,7 @@
 
 手動実行によるプロファイル確認は実行`31943260640`で行った。入力で両クラスタ、1ノード、`hotspots`解析、ランク0を指定し、コミットメッセージに依存せず両方の既存ビルドを再利用した。玄界はPJM `6504040`、GadiはPBS `176404848.gadi-pbs`で完走した。両方とも公式判定が`STATUS: VALID`、VTuneの対象処理とVTune自身の終了値が0で、ホットスポット要約、プロファイル生データ、固定成果物、公式結果、自宅サーバーへの保管まで成功した。
 
-固定v2成果物はGitHub Artifactを経由し、自宅サーバー上の`home-lab` runnerが同じサーバーのRAIDへ配置する。VTune完全結果とParaView用の単一分割ケースarchiveは大容量のためクラスタ上で一時生成し、profile成功後に同じrunnerがSSHで直接取得する。GitHub-hosted runner、Tailscale、自宅サーバーへの二段目のSSHは保管経路に含めない。自宅側で各archiveの可読性、容量、SHA-256を検証し、`openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ確定した後だけ、対応するクラスタ原本を削除する。
+固定v2成果物はGitHub Artifactを経由し、自宅サーバー上の`home-lab` runnerが同じサーバーのRAIDへ配置する。VTune完全結果とParaView用の単一分割ケースarchiveは同じクラスタ側`RUN_DIR/large-output/`で一時生成し、profile成功後に同じrunnerがSSHで直接取得する。GitHub-hosted runner、Tailscale、自宅サーバーへの二段目のSSHは保管経路に含めない。自宅側で各archiveの可読性、容量、SHA-256を検証し、`openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`へ確定し、固定成果物も配置した後だけ、対応するクラスタ側`RUN_DIR`全体を削除する。
 
 VTuneが解析開始前に失敗して完全結果ディレクトリを生成しなかったrunでは、固定profile artifactに収集statusとエラーログを残し、`large-output/manifest.json`の`vtune_result_available`をfalseにする。存在しないVTune archiveを必須にしてParaView回収まで失敗させず、単一ParaView archiveの検証と保存を独立して完了させる。
 
@@ -48,10 +48,10 @@ VTuneが解析開始前に失敗して完全結果ディレクトリを生成し
 
 両クラスタともIntel C++ 2025.1.1とIntel MPI 2021.15を基準とする。Gadiは`intel-compiler-llvm/2025.1.1`と`intel-mpi/2021.15.0`、課題`hb15`、投入先`normalsr`を使う。玄界は`intel/2025.1.3`と`impi`、投入先`a-batch`を使う。ログインノードの物理コア数と実測したメモリ上限に合わせ、ビルド並列数はGadiが16、玄界が120である。玄界のIcx用Makeプリプロセッサは、計算ノードでも`cc1`を解決できるgcc-toolset-11の`cpp`へ固定する。Gadiのノード内通信は`shm`、ノード間通信は`shm:ofi`とする。これらを変える場合は新規ビルドを行い、変更理由をコミット本文へ記録する。
 
-## Gadiの空き容量警告
+## 移行前のGadi runnerで観測した空き容量警告
 
 GadiのActionsに出る空き88 MBの警告は`hb15`の容量やinode制限ではない。ランナー用ソフトウェア2.336.0は作業ディレクトリから`Directory.GetDirectoryRoot`で得た`/`に対して空き容量を調べる。Gadiログインノードの`/`は124 MBのzramで、実測した空き92,430,336バイトが警告の88 MiBと一致した。
 
-ランナーの`_work`は空き約4.7 PiBの`/scratch/hb15`、ビルド領域の`/tmp`は空き約122 GiBのtmpfs、一次ccacheの`/dev/shm`は空き約126 GiBのtmpfsにある。`hb15`の利用者クォータも容量27.19 GiB / 1 TiB、inode 80,018 / 202,000で超過していなかった。警告を避ける処理は各ワークフローへ加えず、ランナー側の監視対象を修正または設定できるようになった場合に、ランナーの管理作業として扱う。
+移行前runnerの`_work`は空き約4.7 PiBの`/scratch/hb15`、ビルド領域の`/tmp`は空き約122 GiBのtmpfs、一次ccacheの`/dev/shm`は空き約126 GiBのtmpfsにあった。`hb15`の利用者クォータも容量27.19 GiB / 1 TiB、inode 80,018 / 202,000で超過していなかった。現在はrunner本体を`home-lab`へ移したため、このrunner root警告は発生しない。Gadi側のビルド領域と一次ccacheの配置は維持する。
 
 Gadiのソース取得は、ランナーに設定済みの`gh`認証を読み取り専用で使う。現在のリポジトリへ発行される`GITHUB_TOKEN`では、組織内の非公開ソースリポジトリを読めないためである。組織共通の専用資格情報を用意した場合は、この依存を置き換える。

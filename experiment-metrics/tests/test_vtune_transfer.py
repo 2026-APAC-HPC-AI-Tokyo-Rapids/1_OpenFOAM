@@ -14,14 +14,15 @@ GITHUB_RUN_ID = "987654321"
 
 
 def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool = True) -> tuple[dict[str, str], Path, Path]:
-    source_root = tmp_path / "cluster-profile"
-    result = source_root / PROFILE_RUN_ID / "rank-0-hotspots.result"
+    runtime = tmp_path / "cluster-runs" / "runs" / "r-0123456789abcdef0123456789abcdef"
+    source_dir = runtime / "large-output"
+    result = source_dir / "vtune" / "rank-0-hotspots.result"
     if vtune_result:
         result.mkdir(parents=True)
         (result / "data.0").write_bytes(b"vtune raw data\n")
     else:
         result.parent.mkdir(parents=True)
-    paraview = source_root / PROFILE_RUN_ID / "paraview"
+    paraview = source_dir / "paraview"
     paraview.mkdir()
     case = tmp_path / "paraview-case"
     case.mkdir()
@@ -45,9 +46,7 @@ def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool
         "\n".join(
             (
                 "OPENFOAM_VTUNE_GENKAI_SSH_TARGET=fake-genkai",
-                "OPENFOAM_VTUNE_GENKAI_ROOT=" + str(source_root),
                 "OPENFOAM_VTUNE_GADI_SSH_TARGET=fake-gadi",
-                "OPENFOAM_VTUNE_GADI_ROOT=" + str(source_root),
                 "OPENFOAM_ARTIFACT_ARCHIVE_ROOT=" + str(archive_root),
                 "",
             )
@@ -62,12 +61,12 @@ def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool
     environment = os.environ.copy()
     environment["OPENFOAM_VTUNE_TRANSFER_CONFIG"] = str(config)
     environment["OPENFOAM_VTUNE_SSH_BIN"] = str(fake_ssh)
-    return environment, source_root, archive_root
+    return environment, source_dir, archive_root
 
 
-def _run(environment: dict[str, str], profile_run_id: str = PROFILE_RUN_ID) -> subprocess.CompletedProcess[str]:
+def _run(environment: dict[str, str], source_dir: Path, profile_run_id: str = PROFILE_RUN_ID) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(SCRIPT), "--cluster", "genkai", "--github-run-id", GITHUB_RUN_ID, "--profile-run-id", profile_run_id],
+        ["bash", str(SCRIPT), "--cluster", "genkai", "--github-run-id", GITHUB_RUN_ID, "--profile-run-id", profile_run_id, "--source-dir", str(source_dir)],
         check=False,
         text=True,
         capture_output=True,
@@ -75,10 +74,10 @@ def _run(environment: dict[str, str], profile_run_id: str = PROFILE_RUN_ID) -> s
     )
 
 
-def test_transfer_archives_validates_and_removes_source(tmp_path: Path) -> None:
-    environment, source_root, archive_root = _environment(tmp_path)
+def test_transfer_archives_validates_and_preserves_source(tmp_path: Path) -> None:
+    environment, source_dir, archive_root = _environment(tmp_path)
 
-    completed = _run(environment)
+    completed = _run(environment, source_dir)
 
     assert completed.returncode == 0, completed.stderr
     destination = archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
@@ -88,17 +87,17 @@ def test_transfer_archives_validates_and_removes_source(tmp_path: Path) -> None:
     assert manifest["vtune_result_available"] is True
     assert (destination / "vtune" / "vtune-result.tar.zst").is_file()
     assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
-    assert not (source_root / PROFILE_RUN_ID).exists()
+    assert source_dir.is_dir()
 
-    repeated = _run(environment)
+    repeated = _run(environment, source_dir)
     assert repeated.returncode == 0, repeated.stderr
     assert not any(path.name.startswith(".") for path in destination.parent.iterdir())
 
 
 def test_transfer_keeps_paraview_when_vtune_produced_no_result(tmp_path: Path) -> None:
-    environment, source_root, archive_root = _environment(tmp_path, vtune_result=False)
+    environment, source_dir, archive_root = _environment(tmp_path, vtune_result=False)
 
-    completed = _run(environment)
+    completed = _run(environment, source_dir)
 
     assert completed.returncode == 0, completed.stderr
     destination = archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
@@ -107,7 +106,7 @@ def test_transfer_keeps_paraview_when_vtune_produced_no_result(tmp_path: Path) -
     assert not (destination / "vtune").exists()
     assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
     assert [entry["path"] for entry in manifest["files"]] == ["paraview/paraview-case.tar.zst", "paraview/manifest.json"]
-    assert not (source_root / PROFILE_RUN_ID).exists()
+    assert source_dir.is_dir()
 
 
 def test_transfer_uses_no_target_directory_move() -> None:
@@ -115,12 +114,12 @@ def test_transfer_uses_no_target_directory_move() -> None:
 
 
 def test_transfer_keeps_source_when_stream_is_invalid(tmp_path: Path) -> None:
-    environment, source_root, archive_root = _environment(tmp_path, broken_ssh=True)
+    environment, source_dir, archive_root = _environment(tmp_path, broken_ssh=True)
 
-    completed = _run(environment)
+    completed = _run(environment, source_dir)
 
     assert completed.returncode != 0
-    assert (source_root / PROFILE_RUN_ID).is_dir()
+    assert source_dir.is_dir()
     assert not (archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output").exists()
 
 
@@ -129,23 +128,23 @@ def test_transfer_keeps_source_when_stream_is_invalid(tmp_path: Path) -> None:
     ("../../escape", "r-short-123", "r-0123456789abcdef0123456789abcdef-bad/job"),
 )
 def test_transfer_rejects_unsafe_profile_run_id(tmp_path: Path, profile_run_id: str) -> None:
-    environment, source_root, _ = _environment(tmp_path)
+    environment, source_dir, _ = _environment(tmp_path)
 
-    completed = _run(environment, profile_run_id)
+    completed = _run(environment, source_dir, profile_run_id)
 
     assert completed.returncode == 64
-    assert (source_root / PROFILE_RUN_ID).is_dir()
+    assert source_dir.is_dir()
 
 
 def test_transfer_refuses_mismatched_existing_archive(tmp_path: Path) -> None:
-    environment, source_root, archive_root = _environment(tmp_path)
+    environment, source_dir, archive_root = _environment(tmp_path)
     destination = archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
     destination.mkdir(parents=True)
     (destination / "vtune").mkdir()
     (destination / "vtune" / "vtune-result.tar.zst").write_bytes(b"not an archive")
     (destination / "manifest.json").write_text("{}\n")
 
-    completed = _run(environment)
+    completed = _run(environment, source_dir)
 
     assert completed.returncode != 0
-    assert (source_root / PROFILE_RUN_ID).is_dir()
+    assert source_dir.is_dir()

@@ -18,7 +18,7 @@ paraview_collector=
 global_rank_env=
 local_rank_env=
 local_size_env=
-profile_root=
+large_output_dir=
 runtime_root=
 compute_tools_root=
 while [[ $# -gt 0 ]]
@@ -37,7 +37,7 @@ do
     --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
     --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
     --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
-    --profile-root) [[ $# -ge 2 ]]; profile_root=$2; shift 2 ;;
+    --large-output-dir) [[ $# -ge 2 ]]; large_output_dir=$2; shift 2 ;;
     --runtime-root) [[ $# -ge 2 ]]; runtime_root=$2; shift 2 ;;
     --compute-tools-root) [[ $# -ge 2 ]]; compute_tools_root=$2; shift 2 ;;
     --openfoam-arg) [[ $# -ge 2 ]]; openfoam_args+=("$2"); shift 2 ;;
@@ -47,7 +47,7 @@ done
 [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
 [[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
 [[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
-[[ "${profile_root}" == /* ]]
+[[ "${large_output_dir}" == /* ]]
 for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
 do
   [[ "${rank_env}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
@@ -113,7 +113,7 @@ DECOMPOSE_PAR_DICT=system/decomposeParDict
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 profile_run_id="${RUN_ID}-${job_id}"
-vtune_root="${profile_root}/${profile_run_id}"
+vtune_root="${large_output_dir}/vtune"
 OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
@@ -267,7 +267,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && -n "${paraview_collector}" ]]; then
-  paraview_output_dir="${vtune_root}/paraview"
+  paraview_output_dir="${large_output_dir}/paraview"
   "${node_launch[@]}" "${paraview_collector}" "${CASE_DIR}" "${paraview_output_dir}" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))" "${OPENFOAM_NODES}" "${global_rank_env}"
   "${compute_tools_root}/scripts/finalize-paraview-case.sh" "${paraview_output_dir}" "${RUN_ID}" "${profile_run_id}" "${OPENFOAM_NODES}"
 fi
