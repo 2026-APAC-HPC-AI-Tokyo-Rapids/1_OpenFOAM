@@ -426,6 +426,8 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert "--source-dir" in workflow
         assert 'scripts/transfer-vtune-result.sh' in workflow
         assert 'scripts/remove-openfoam-runtime.sh' in workflow
+        assert f'--connection {cluster}-shell' in workflow
+        assert "if [[ '${{ inputs.profile }}' == true ]]; then" in workflow
         assert ".artifacts[].id" not in workflow
         assert "cavity3d" not in workflow.lower()
         job_section = workflow.split("jobs:\n", 1)[1]

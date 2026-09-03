@@ -431,7 +431,9 @@ jobs:
           destination="${RUNNER_TEMP}/openfoam-genkai-run"
           genkai-shell --pull "${REMOTE_RUN_DIR}/artifact-manifest.json" "${destination}"
           genkai-shell --pull "${REMOTE_RUN_DIR}/run-artifacts.tar.zst" "${destination}"
-          genkai-shell --pull "${REMOTE_RUN_DIR}/profile-raw.tar.zst" "${destination}"
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            genkai-shell --pull "${REMOTE_RUN_DIR}/profile-raw.tar.zst" "${destination}"
+          fi
 
       - name: 固定構成のv2成果物を保存
         id: upload_v2
@@ -520,7 +522,7 @@ jobs:
         if: ${{ ! inputs.profile || needs.run.result == 'success' }}
         env:
           RUN_DIR: ${{ needs.run.outputs.run_dir }}
-        run: scripts/remove-openfoam-runtime.sh --cluster genkai --run-dir "${RUN_DIR}"
+        run: scripts/remove-openfoam-runtime.sh --cluster genkai --connection genkai-shell --run-dir "${RUN_DIR}"
 
       - name: 転送済みのGitHub成果物を削除
         env:

@@ -26,6 +26,22 @@ def _run(environment: dict[str, str], run_dir: Path) -> subprocess.CompletedProc
     return subprocess.run(["bash", str(SCRIPT), "--cluster", "genkai", "--run-dir", str(run_dir)], check=False, text=True, capture_output=True, env=environment)
 
 
+def _run_with_connection(tmp_path: Path, run_dir: Path) -> subprocess.CompletedProcess[str]:
+    fake_connection = tmp_path / "genkai-shell"
+    fake_connection.write_text("#!/bin/sh\nexec \"$@\"\n")
+    fake_connection.chmod(0o755)
+    environment = os.environ.copy()
+    environment["PATH"] = f"{tmp_path}:{environment['PATH']}"
+    environment["OPENFOAM_VTUNE_TRANSFER_CONFIG"] = str(tmp_path / "missing.env")
+    return subprocess.run(
+        ["bash", str(SCRIPT), "--cluster", "genkai", "--connection", "genkai-shell", "--run-dir", str(run_dir)],
+        check=False,
+        text=True,
+        capture_output=True,
+        env=environment,
+    )
+
+
 def test_removes_exact_runtime_directory(tmp_path: Path) -> None:
     environment = _environment(tmp_path)
     run_dir = tmp_path / "openfoam-runs" / "runs" / RUN_ID
@@ -61,6 +77,33 @@ def test_missing_runtime_is_idempotent(tmp_path: Path) -> None:
     completed = _run(environment, run_dir)
 
     assert completed.returncode == 0, completed.stderr
+
+
+def test_connection_wrapper_does_not_require_legacy_config(tmp_path: Path) -> None:
+    run_dir = tmp_path / "openfoam-runs" / "runs" / RUN_ID
+    run_dir.mkdir(parents=True)
+
+    completed = _run_with_connection(tmp_path, run_dir)
+
+    assert completed.returncode == 0, completed.stderr
+    assert not run_dir.exists()
+
+
+def test_rejects_connection_for_another_cluster(tmp_path: Path) -> None:
+    run_dir = tmp_path / "openfoam-runs" / "runs" / RUN_ID
+    run_dir.mkdir(parents=True)
+    environment = os.environ.copy()
+
+    completed = subprocess.run(
+        ["bash", str(SCRIPT), "--cluster", "genkai", "--connection", "gadi-shell", "--run-dir", str(run_dir)],
+        check=False,
+        text=True,
+        capture_output=True,
+        env=environment,
+    )
+
+    assert completed.returncode != 0
+    assert run_dir.is_dir()
 
 
 def test_rejects_runtime_outside_runs_parent(tmp_path: Path) -> None:
