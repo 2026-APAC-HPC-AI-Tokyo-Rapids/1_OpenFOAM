@@ -59,18 +59,23 @@ def validate_imb_capture(
         raise ValueError("IMB argv record is not a closed argv/v1 object")
     argv = document["argv"]
     assert isinstance(argv, list)
-    if (
-        len(argv) != 19
-        or not Path(argv[0]).is_absolute()
-        or not Path(argv[5]).is_absolute()
-    ):
-        raise ValueError("IMB argv does not have the closed command shape")
-    expected_tail = [
-        "-np",
-        str(protocol.ranks),
-        "-ppn",
-        str(protocol.ranks_per_node),
-        argv[5],
+    _validate_imb_argv(argv, protocol)
+    results = parse_imb_mpi1(stdout)
+    validate_imb_results(results, protocol.ranks)
+    versions = [
+        next(group for group in match.groups() if group is not None)
+        for line in stdout.splitlines()
+        if (match := _VERSION.match(line))
+    ]
+    if len(versions) != 1:
+        raise ValueError("IMB output has no unique software version")
+    return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
+
+
+def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
+    """Accept only the launch forms emitted by the Genkai and Gadi adapters."""
+
+    expected_command = [
         "-npmin",
         str(protocol.ranks),
         "-msglog",
@@ -85,18 +90,38 @@ def validate_imb_capture(
         "Sendrecv",
         "Allreduce",
     ]
-    if argv[1:] != expected_tail:
-        raise ValueError("IMB argv differs from the protocol command")
-    results = parse_imb_mpi1(stdout)
-    validate_imb_results(results, protocol.ranks)
-    versions = [
-        next(group for group in match.groups() if group is not None)
-        for line in stdout.splitlines()
-        if (match := _VERSION.match(line))
+    command_length = len(expected_command) + 1
+    if len(argv) <= command_length:
+        raise ValueError("IMB argv does not have the closed command shape")
+    launcher = argv[:-command_length]
+    imb_command = argv[-command_length:]
+    if not Path(launcher[0]).is_absolute() or not Path(imb_command[0]).is_absolute():
+        raise ValueError("IMB argv does not have the closed command shape")
+    basic_launcher = [
+        launcher[0],
+        "-np",
+        str(protocol.ranks),
+        "-ppn",
+        str(protocol.ranks_per_node),
     ]
-    if len(versions) != 1:
-        raise ValueError("IMB output has no unique software version")
-    return IMBCapture(results, versions[0], protocol.ranks, 1, "dynamic")
+    allowed_launcher = launcher == basic_launcher
+    if len(launcher) == len(basic_launcher) + 3:
+        allowed_launcher = (
+            launcher[: len(basic_launcher)] == basic_launcher
+            and launcher[-3:-1] == ["-genv", "PATH"]
+            and bool(launcher[-1])
+        )
+    if len(launcher) == len(basic_launcher) + 2:
+        allowed_launcher = (
+            launcher[1] == "-hosts"
+            and bool(launcher[2])
+            and not launcher[2].startswith("-")
+            and launcher[3:] == basic_launcher[1:]
+        )
+    if not allowed_launcher:
+        raise ValueError("IMB argv does not have the closed launcher shape")
+    if imb_command[1:] != expected_command:
+        raise ValueError("IMB argv differs from the protocol command")
 
 
 def validate_imb_results(results: tuple[IMBResult, ...], process_count: int) -> None:

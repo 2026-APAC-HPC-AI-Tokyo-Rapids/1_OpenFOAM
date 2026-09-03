@@ -5,11 +5,82 @@ from pathlib import Path
 
 import pytest
 
-from experiment_metrics.imb import IMBResult, parse_imb_mpi1, validate_imb_results
+from experiment_metrics.imb import (
+    IMBResult,
+    _validate_imb_argv,
+    parse_imb_mpi1,
+    validate_imb_results,
+)
 from experiment_metrics.reducers import network_config_facts
 from experiment_metrics.registry import Registry
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+class _Protocol:
+    ranks = 120
+    ranks_per_node = 120
+
+
+def _imb_command() -> list[str]:
+    return [
+        "/opt/intel/mpi/bin/IMB-MPI1",
+        "-npmin",
+        "120",
+        "-msglog",
+        "0:22",
+        "-iter",
+        "1000",
+        "-time",
+        "1",
+        "-iter_policy",
+        "dynamic",
+        "PingPong",
+        "Sendrecv",
+        "Allreduce",
+    ]
+
+
+def test_imb_argv_accepts_both_cluster_launcher_shapes() -> None:
+    genkai = [
+        "/opt/intel/mpi/bin/mpirun",
+        "-np",
+        "120",
+        "-ppn",
+        "120",
+        "-genv",
+        "PATH",
+        "/opt/intel/mpi/bin:/usr/bin",
+        *_imb_command(),
+    ]
+    gadi = [
+        "/opt/nci/mpi/bin/mpirun",
+        "-hosts",
+        "gadi-gpu-v100-0001",
+        "-np",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
+
+    _validate_imb_argv(genkai, _Protocol())  # type: ignore[arg-type]
+    _validate_imb_argv(gadi, _Protocol())  # type: ignore[arg-type]
+
+
+def test_imb_argv_rejects_unowned_launcher_options() -> None:
+    argv = [
+        "/opt/intel/mpi/bin/mpirun",
+        "--allow-run-as-root",
+        "-np",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
+
+    with pytest.raises(ValueError, match="launcher shape"):
+        _validate_imb_argv(argv, _Protocol())  # type: ignore[arg-type]
 
 
 def test_imb_parser_handles_zero_scientific_values_and_warning_text() -> None:
