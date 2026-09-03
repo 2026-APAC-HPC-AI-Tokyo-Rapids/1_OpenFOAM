@@ -337,6 +337,7 @@ jobs:
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
           trap - EXIT
+          cd "${RUN_DIR}"
           job_id="$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pjm-script-repository-path platforms/genkai/run-openfoam.pjm --execution-script "${PROVISION_DIR}/scripts/run-openfoam.pjm" --provision-dir "${PROVISION_DIR}" --profile-condition "${PROVISION_DIR}/benchmark/profile.json")"
           test -n "${job_id}"
           echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"

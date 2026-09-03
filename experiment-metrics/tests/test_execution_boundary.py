@@ -137,6 +137,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
 
     assert "submit-run" in workflow
+    assert workflow.index('cd "${RUN_DIR}"') < workflow.index("submit-run")
     assert '--manifest "${RUN_MANIFEST}"' in workflow
     assert "--pjm-script-repository-path platforms/genkai/run-openfoam.pjm" in workflow
     assert "record-scheduler-terminal --manifest" in workflow
@@ -238,6 +239,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "/scratch/hb15/tk7779/openfoam/gadi" in workflow
     assert "/home/pj26000080" not in workflow
     assert "submit-pbs-run" in workflow
+    assert workflow.index('cd "${RUN_DIR}"') < workflow.index("submit-pbs-run")
     assert "record-pbs-terminal" in workflow
     assert (
         "/tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}"
