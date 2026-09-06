@@ -194,6 +194,15 @@ def parser() -> argparse.ArgumentParser:
     solver_log.add_argument("--log", type=Path, required=True)
     solver_log.add_argument("--protocol", type=Path, required=True)
     solver_log.add_argument("--fragment-id", default="solver-log")
+    solver_log.add_argument("--coefficient", type=Path)
+
+    coefficient = commands.add_parser("parse-coefficient")
+    coefficient.add_argument("--path", type=Path, required=True)
+    coefficient.add_argument("--iterations", type=int, required=True)
+    collect_coefficient = commands.add_parser("collect-coefficient")
+    collect_coefficient.add_argument("--case-root", type=Path, required=True)
+    collect_coefficient.add_argument("--output-root", type=Path, required=True)
+    collect_coefficient.add_argument("--iterations", type=int, required=True)
 
     imb = commands.add_parser("record-imb-mpi1")
     _runtime_common(imb)
@@ -544,6 +553,17 @@ def main(argv: list[str] | None = None) -> int:
         if termination.kind == "signal":
             return 128 + (termination.signal or 0)
         return 127
+    if arguments.command == "parse-coefficient":
+        from .coefficient import parse_coefficient
+
+        observation = parse_coefficient(arguments.path, arguments.iterations)
+        print(f"CD_SANITY: cd={observation['cd']} step={observation['step']} source_member=results/coefficient.dat reference={observation['reference']} (reference only; no pass/fail threshold)")
+        return 0
+    if arguments.command == "collect-coefficient":
+        from .coefficient import collect_coefficient
+
+        print(collect_coefficient(arguments.case_root, arguments.output_root, arguments.iterations))
+        return 0
     if arguments.command == "record-solver-log":
         from .manifest import RunManifest
         from .protocol import RunProtocol
@@ -552,6 +572,10 @@ def main(argv: list[str] | None = None) -> int:
 
         manifest = RunManifest.load(arguments.manifest)
         facts = solver_log_facts(parse_solver_log(arguments.log.read_text(encoding="utf-8", errors="replace")), RunProtocol.load(arguments.protocol, manifest.purpose))
+        if arguments.coefficient is not None:
+            from .coefficient import coefficient_fact
+
+            facts += (coefficient_fact(arguments.coefficient, RunProtocol.load(arguments.protocol, manifest.purpose).iteration_target),)
         print(
             collect_once(
                 arguments.manifest,

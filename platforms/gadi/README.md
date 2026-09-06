@@ -2,8 +2,8 @@
 
 Gadiでは、小さなファイルを大量に配置する処理と、長期間保存する大容量ファイルを明確に分離します。
 
-- ログインノード上のGitHub Actionsランナーの`/tmp`には、ソースの展開先、ビルド作業領域、ccacheの一時ファイルを置きます。
-- ログインノード上のランナーの`/dev/shm/ccache-${USER}`には、10 GBを上限とする一次ccacheを置きます。
+- GitHub Actions runner本体はhome-labにあり、`gadi-shell`でGadiログインノードへ処理を渡します。Gadi側の`/tmp`には、ソースの展開先、ビルド作業領域、ccacheの一時ファイルを置きます。
+- Gadiログインノードの`/dev/shm/ccache-${USER}`には、10 GBを上限とする一次ccacheを置きます。
 - `/scratch/hb15/tk7779/openfoam/gadi`には、圧縮ソース、検証済み公式メッシュ、ビルド成果物、共有ccache、領域分割済みケースのアーカイブ、実行記録と回収対象ファイルのみを置きます。
 - PBS計算ノードでは、OpenFOAM実行環境と完全な領域分割済みケースを各ノードの`$PBS_JOBFS`へ展開します。展開後の実行環境、非分割メッシュ、`processor*`ディレクトリは`/scratch`へ置きません。
 - 玄界の成果物やキャッシュをGadiで再利用しません。
@@ -24,7 +24,7 @@ OpenFOAM実行環境1件の展開には約35,000〜37,000 inodeを消費しま�
 
 計算ノードから外部ネットワークへの直接接続はできません。実行中の計測値断片は`/scratch`上の実行ディレクトリへ記録し、PBSジョブ終了後にログインノード上のランナーから一度だけ送信します。計算ノードへBigQueryの資格情報を環境変数等で渡すことはしません。
 
-GitHub Actionsランナーは、バージョンごとに用意した`shared/<version>/externals`を共有します。共有物の初回作成とバージョンの切り替えは運用者が手作業で行い、ワークフローや起動スクリプトから自動で作成・更新しません。各ランナーの`bin`、認証情報、診断ログ、作業領域は共有しません。
+home-labのrunnerはコンテナごとに動作し、SSH設定とcustom shellを読み取り専用で参照します。Gadi側にrunner本体は配置しません。接続経路の正本はhome-labの`/home/tomokazu/actions-runner/README.md`です。
 
 PBSの投入先は課題`hb15`の`normalsr`です。投入、待機、終了確認、資源指定はGadi専用スクリプトに分離し、PJM用の処理と混同しません。
 
@@ -34,4 +34,4 @@ Gadiの計算ノードにはVTune sampling driverが有効化されていない�
 
 補助ツールのビルド用にGCC 16.1.0とccacheの`a89f5010f1c8edf231184b3a3a77654e12e4a288`を`~/.local`へ導入しています。玄界と同様に、`~/.local/.setenv`へ`PATH`、`LD_LIBRARY_PATH`、`MANPATH`、`PKG_CONFIG_PATH`などをまとめ、`~/.bashrc`から読み込みます。コンパイラを指定する環境変数はここでは設定せず、OpenFOAMのコンパイラはIntel oneAPIのままとします。GCCの48並列ビルドはログインノードのメモリ不足で停止したため、GCCのみ16並列、ccacheは48並列でビルドします。ソースと中間生成物は`/tmp`上で作成し、導入完了後に削除します。
 
-GitHub Actionsランナーの`/`は約124 MiBの読み取り専用zramであり、作業領域の実際の空き容量とは無関係です。Actionsの「Free space left: 88 MB」はこの`/`を検知した警告です。実際の`_work`およびOpenFOAMのデータは`/scratch/hb15`上に配置されています。2026年8月16日の`lquota`確認では、課題`hb15`の使用量は26.93 GiB / 1.00 TiB、inodeは75,868 / 202,000であり、いずれもクォータ内でした。この警告をクォータ超過と誤認しないようにします。
+移行前のGadi上のrunnerでは、約124 MiBの読み取り専用zramである`/`を検知して「Free space left: 88 MB」と警告していました。当時の`_work`とOpenFOAMデータは`/scratch/hb15`上にあり、2026年8月16日の`lquota`は26.93 GiB / 1.00 TiB、inode 75,868 / 202,000でした。この履歴上の警告はhome-lab runnerの容量や現在のGadiクォータを示すものではありません。

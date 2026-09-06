@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 : "${BUILD_ARCHIVE_DIR:?}"
@@ -6,25 +7,26 @@ set -euo pipefail
 : "${GITHUB_RUN_ATTEMPT:?}"
 : "${GITHUB_RUN_ID:?}"
 : "${GITHUB_WORKSPACE:?}"
-: "${GIT_MIRROR_DIR:?}"
 : "${OPENFOAM_SOURCE_OID:?pinned OpenFOAM source commit is required}"
-: "${SOURCE_ARCHIVE_CACHE_DIR:?}"
 : "${THIRDPARTY_SOURCE_OID:?pinned ThirdParty source commit is required}"
-# ビルド仕様はここへ集約し、workflow からは実行ごとのパスと
-# GitHub Actions のメタデータだけを受け取る。
-openfoam_source_ref=refs/tags/OpenFOAM-v2512
-thirdparty_source_ref=refs/tags/v2512
-# genkai0001/0002は60コアのソケットを2基備える。物理コアだけを使い、
-# SMTの第2スレッドを別のコンパイル処理数には数えない。
-build_parallelism=120
+cluster="${1:?cluster (genkai or gadi) is required}"
 build_condition=baseline
 build_compile_option=Opt
 build_tuning_flags=
-optimization_report_flags='-qopt-report=3 -qopt-report-phase=loop,vec,cg'
-genkai_cpp=/opt/rh/gcc-toolset-11/root/usr/bin/cpp
+# クラスタ別設定は並列数、追加flags、source展開とmodule/記憶領域の差だけを所有する。
+case "${cluster}" in
+  genkai)
+    # shellcheck source=../platforms/genkai/build-environment.sh
+    source "${GITHUB_WORKSPACE}/platforms/genkai/build-environment.sh"
+    ;;
+  gadi)
+    # shellcheck source=../platforms/gadi/build-environment.sh
+    source "${GITHUB_WORKSPACE}/platforms/gadi/build-environment.sh"
+    ;;
+  *) echo "unsupported cluster: ${cluster}" >&2; exit 64 ;;
+esac
 export CC=mpiicx
 export CXX=mpiicpx
-build_extra_cxxflags="${build_tuning_flags:+${build_tuning_flags} }${optimization_report_flags}"
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -51,47 +53,14 @@ trap 'exit 143' TERM
 
 # 前回のビルドツリーを削除し、今回のビルドに必要なディレクトリを作成する。
 rm -rf -- "${BUILD_DIR:?}"
-install -d -m 2775 "${BUILD_ARCHIVE_DIR}" "${SOURCE_ARCHIVE_CACHE_DIR}" "${build_tree}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
+install -d -m "${build_directory_mode}" "${BUILD_ARCHIVE_DIR}" "${build_tree}" "${BUILD_DIR}/logs" "${BUILD_DIR}/ccache-tmp"
 install -d -m 0700 "${ccache_local_dir}"
 
-# OpenFOAM v2512 と対応する ThirdParty を、ソースリポジトリ側で管理される
-# 読み取り専用の共有 mirror からローカル clone する。
-git clone --no-checkout "${GIT_MIRROR_DIR}/3_OpenFOAM_Src.git" "${build_tree}/OpenFOAM"
-git -C "${build_tree}/OpenFOAM" checkout --detach "${openfoam_source_ref}"
-openfoam_source_algorithm="$(git -C "${build_tree}/OpenFOAM" rev-parse --show-object-format)"
-openfoam_source_oid="$(git -C "${build_tree}/OpenFOAM" rev-parse HEAD)"
-test "${openfoam_source_oid}" = "${OPENFOAM_SOURCE_OID}"
-
-git clone --no-checkout "${GIT_MIRROR_DIR}/4_OpenFOAM_ThirdParty_Src.git" "${build_tree}/ThirdParty"
-git -C "${build_tree}/ThirdParty" checkout --detach "${thirdparty_source_ref}"
-thirdparty_source_algorithm="$(git -C "${build_tree}/ThirdParty" rev-parse --show-object-format)"
-thirdparty_source_oid="$(git -C "${build_tree}/ThirdParty" rev-parse HEAD)"
-test "${thirdparty_source_oid}" = "${THIRDPARTY_SOURCE_OID}"
-
-# ビルドには worktree だけを使うため、成果物へ Git オブジェクトを含めない。
-rm -rf -- "${build_tree}/OpenFOAM/.git" "${build_tree}/ThirdParty/.git"
+prepare_build_sources
 ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 
-# 玄界の計算ノードではOS標準の/lib/cppが対応するcc1を解決できない。
-# ログインノードだけでなく、coded functionを実行時コンパイルする計算ノードでも
-# 利用できるOS提供のgcc-toolset-11プリプロセッサをIcx規則へ固定する。
-genkai_cpp_rule="${build_tree}/OpenFOAM/wmake/rules/linux64Icx/general"
-test -x "${genkai_cpp}"
-sed -i "s|^CPP        = /lib/cpp |CPP        = ${genkai_cpp} |" "${genkai_cpp_rule}"
-grep -Fqx "CPP        = ${genkai_cpp} -traditional-cpp \$(GFLAGS)" "${genkai_cpp_rule}"
-
-# v2512が要求するScotch 6.1.0を、玄界の共有ソースキャッシュから展開する。
-scotch_archive="${SOURCE_ARCHIVE_CACHE_DIR}/scotch-v6.1.0.tar.gz"
-test "$(sha256sum "${scotch_archive}" | awk '{print $1}')" = 4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1
-install -d "${build_tree}/ThirdParty/sources/scotch"
-tar -xzf "${scotch_archive}" -C "${build_tree}/ThirdParty/sources/scotch"
-mv "${build_tree}/ThirdParty/sources/scotch/scotch-v6.1.0" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0"
-
-module purge
-module load intel/2025.1.3 impi
-
 # 使用するコンパイラとccacheが利用可能であることを確認する。
-for build_tool in "${CC}" "${CXX}" "${genkai_cpp}" ccache
+for build_tool in "${CC}" "${CXX}" ccache
 do
   "${build_tool}" --version
 done
@@ -102,6 +71,7 @@ ccache --show-config
 # OpenFOAM の bashrc は未設定変数や中間コマンドの失敗を許容するため、
 # 初期化中だけ厳格なエラーチェックを緩める。
 set +eu
+# shellcheck source=/dev/null
 source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" WM_COMPILE_CONTROL=+ccache
 set -eu
 export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
@@ -118,13 +88,10 @@ ccache --zero-stats
   exit "${build_status}"
 }
 ccache --show-stats
-report_list="${BUILD_DIR}/logs/optimization-report-files.txt"
-find "${build_tree}/OpenFOAM" -type f -name '*.optrpt' -printf '%P\n' | LC_ALL=C sort > "${report_list}"
-test -s "${report_list}"
-tar -I zstd -cf "${BUILD_DIR}/logs/optimization-reports.tar.zst" -C "${build_tree}/OpenFOAM" -T "${report_list}"
+finish_cluster_build
 
 # 依存関係のない計測ツールの入口は、追跡中のソースからバイト単位で同一のまま
-# 導入し、ビルド成果物が所有する7番目の実行ファイルとする。
+# 導入し、ビルド成果物が所有する実行ファイルとする。
 install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/probes/capture_hardware.py" "${FOAM_APPBIN}/capture-hardware"
 
 # ツールチェーン環境と解決済みビルドパスが有効なうちに、圧縮前の意味的な入力を
@@ -132,7 +99,7 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag "CPP=${genkai_cpp}" --compile-flag SCOTCH_SOURCE_SHA256=4fe537f608f0fe39ec78807f90203f9cca1181deb16bfa93b7d4cd440e01bbd1 --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v mpiicx)" --compiler-cxx "$(command -v mpiicpx)" --mpi-launcher "$(command -v mpirun)" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" "${cluster_compile_flags[@]}" --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .

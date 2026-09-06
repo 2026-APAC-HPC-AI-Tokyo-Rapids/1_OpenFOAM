@@ -2,6 +2,7 @@
 
 > この文書は当初計画の履歴資料である。実装済みの送信keyと非収集項目は
 > `research/experiment-metrics-v2-key-catalog.md` を正本とする。
+> 本文のcavity3D・FVOPS・5ステップ評価は旧課題の履歴であり、現行scoreではない。現行のoccDrivAerStaticMeshは平均wall-clock秒/stepで評価する。[現行ルール対応表](official-rules.md)を参照。
 
 ## 目的
 

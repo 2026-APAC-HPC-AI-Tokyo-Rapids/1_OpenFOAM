@@ -1,5 +1,7 @@
 # cavity3D-64M ランタイム最適化研究計画
 
+> 旧cavity3D課題の計画を保存した履歴資料。本文の「現在」・FVOPS・ソース変更候補は当時の条件を指す。現行のv2512 occDrivAerStaticMesh課題へ適用しない。[現行ルール対応表](official-rules.md)を参照。
+
 ## 目的
 
 規定された計算内容や計算精度を変更することなく、玄界上での公式5ステップ `cavity3D-64M` ワークロードを最適化する。主要な評価指標は `benchmark/parse_result.sh` が出力する公式の `FVOPS_trim` とする。採用するすべての結果は `STATUS: VALID` であり、Actions、PJM、生ログ、BigQuery、アーティファクトに至る完全な来歴（provenance）を保持しなければならない。

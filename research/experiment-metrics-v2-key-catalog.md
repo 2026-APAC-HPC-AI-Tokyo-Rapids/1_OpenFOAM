@@ -9,8 +9,8 @@
 merge、finalize、projection、consumer view、conflict table、`metrics.jsonl`、自動再送は使わない。
 
 source trackは `source.track.head_commit`（このrepositoryのGit commit SHA）だけとする。
-pushは常にbench、手動dispatchだけがbench/profileを選択する。profileはVTune
-hotspotsへ一本化する。通常runでrank別environmentは収集しない。
+pushは`[profile]`、手動dispatchは`profile`入力でbench/profileを選択する。profile条件は
+`benchmark/profile.json`をcommitで追跡する。通常runでrank別environmentは収集しない。
 
 ## BigQueryへ送信するキー
 
@@ -25,8 +25,7 @@ JSON値もBigQuery上ではcanonical JSON文字列として格納する。
 | `artifact.build_manifest_sha256` | build manifest SHA-256 | build provenance |
 | `build.provenance` | OpenFOAM/ThirdParty commit、compiler/MPI、build artifact identity | compute-side build parser |
 | `build.provision` | 実行binary、MPI launcher/library、provision照合結果 | compute-side provision parser |
-| `workload.manifest` | workload ID、exact 7-member identity | compute-side workload capture |
-| `workload.member.{initial_u,initial_p,transport_properties,block_mesh_dict,control_dict,fv_schemes,fv_solution}` | solver入力7 fileの原byte（Base64） | compute-side workload capture |
+| `workload.manifest` | workload ID、公式case commit、各固定入力とメッシュのidentity | compute-side workload capture |
 | `scheduler.request` | nodes、ranks、resource group、transport、submit argv/script identity | runner submission |
 | `scheduler.{submit_job_id,job_entry_job_id}` | scheduler job ID | runner / compute |
 | `scheduler.accounting` | terminal state、elapsed、exit、node数、全体memory/CPU accountingとnode別usage配列 | runner postrun |
@@ -44,7 +43,8 @@ JSON値もBigQuery上ではcanonical JSON文字列として格納する。
 | `solver.step_timings` | simulation time、ExecutionTime、ClockTimeの順序付き配列 | runner saved-log parser |
 | `solver.pressure_solves` | pressure solve residual/iterationの順序付き配列 | runner saved-log parser |
 | `solver.log_markers` | End/bad-number/cell marker | runner saved-log parser |
-| `result.official` | validity、trim秒、FVOPS、公式result text | runner result parser |
+| `result.official` | validity、平均wall-clock秒/step、標準偏差、反復数、公式result text | runner result parser |
+| `result.aero_sanity` | 最終step・Cd・既報参考値・source member。独自の合否閾値なし | runner coefficient parser |
 | `solver.pstream.{startup_applied,runtime_current,change_events}` | 全rank一致を検証した共通Pstream値 | runner Pstream reducer |
 | `solver.pstream.rank_exceptions` | 共通値との差が実在するrankだけ（通常はkeyなし） | runner Pstream reducer |
 | `network.imb_mpi1.{process_count,message_size.*,iteration.*}` | IMB実行設定 | compute IMB parser |
@@ -53,8 +53,9 @@ JSON値もBigQuery上ではcanonical JSON文字列として格納する。
 | `profile.vtune_hotspots` | profile-only VTune設定、選択rank、version、source identity、全function hotspot | compute VTune parser |
 | `profile.hardware.node.<ordinal>` | profile-only postrun memory/NUMA detail | compute profile hardware parser |
 
-通常benchのstage集合は `case_prepare`、`solver`、`minimal_hardware_capture`、
-`network_imb_mpi1` である。profileだけ `profile_hardware_capture` を加える。
+通常benchのstage集合は `case_prepare`、`renumber_mesh`、`potential_foam`、`apply_boundary_layer`、
+`rank_placement`、`solver`、`minimal_hardware_capture`、`network_imb_mpi1` である。
+profileは独立`rank_placement`の代わりにsolverのwrapperで配置を記録し、`profile_warmup`と`profile_hardware_capture`を加える。
 IMBとprofile hardwareはsolver終了後の独立stageであり、solver性能比へ混ぜない。
 
 ## 復活した構成・性能比較情報の具体形
@@ -67,8 +68,8 @@ IMBとprofile hardwareはsolver終了後の独立stageであり、solver性能�
 {"schema_version":"mesh-topology/v2","cells":64000000,"faces":192480000,"points":64481201,"internal_faces":191520000}
 ```
 
-値はprepare時に既に保存された `blockMesh.log` の `nCells`、`nFaces`、`nPoints`、
-`nInternalFaces` から読む。meshを再度openしない。
+上のJSONは形式例で、セル数は旧課題の例示値。現行値はprepare時に保存した
+`checkMesh.log`から読む。meshを再度openしない。
 
 ### `mesh.partition.requested`
 
@@ -112,7 +113,7 @@ source track側には重複させず、このrepositoryについては `source.t
 - rankごとのprocessor mesh 5 memberのsize/hashは収集しない。
 - rankごとのcell/face/point/boundary addressingのsize/hashは収集しない。
 - rankごとのenvironment snapshotは生成・保存しない。
-- VTune profileは収集しない。
+- 通常benchではVTune profileを収集しない。
 - `collection_complete`、owner/type registry conflict、projection/consumer用keyは作らない。
 - DB側の最新値選択、merge、重複排除は行わない。
 

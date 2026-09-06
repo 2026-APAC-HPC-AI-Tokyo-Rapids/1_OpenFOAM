@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 9 ]]; then
-  echo "使用方法: $0 SOLVER_LOG CHECK_MESH_LOG RANKS NODES ITERATIONS EXPECTED_CELLS RELEASE WORKLOAD_ID DISTRIBUTION" >&2
+if [[ $# -ne 10 ]]; then
+  echo "使用方法: $0 SOLVER_LOG CHECK_MESH_LOG RANKS NODES ITERATIONS EXPECTED_CELLS RELEASE WORKLOAD_ID DISTRIBUTION COEFFICIENT_DAT" >&2
   exit 64
 fi
 solver_log=$1
@@ -14,6 +14,7 @@ expected_cells=$6
 release=$7
 workload_id=$8
 distribution=$9
+coefficient=${10}
 [[ "${ranks}" =~ ^[1-9][0-9]*$ && "${nodes}" =~ ^[124]$ && "${iterations}" =~ ^[1-9][0-9]*$ && "${expected_cells}" =~ ^[1-9][0-9]*$ ]]
 (( ranks % nodes == 0 ))
 case "${nodes}" in
@@ -43,6 +44,9 @@ average=$(sed -n -E 's/^[[:space:]]*Average wall-clock time per time step = ([0-
 stddev=$(sed -n -E 's/^[[:space:]]*Standard deviation of wall-clock time per time step = ([0-9.eE+-]+).*$/\1/p' "${solver_log}" | tail -n 1)
 [[ "${measured}" =~ ^[0-9]+$ && -n "${average}" && -n "${stddev}" ]]
 test "${measured}" = "$((iterations - 1))"
+metrics_cli="$(dirname "${BASH_SOURCE[0]}")/../experiment-metrics/.venv/bin/experiment-metrics"
+cd_sanity=$("${metrics_cli}" parse-coefficient --path "${coefficient}" --iterations "${iterations}")
 
 printf 'STATUS: VALID\n'
 printf 'RESULT: average_wall_clock_seconds_per_iteration=%s standard_deviation=%s measured_iterations=%s configured_iterations=%s cells=%s ranks=%s nodes=%s workload_id=%s distribution=%s release=%s solver=simpleFoam\n' "${average}" "${stddev}" "${measured}" "${iterations}" "${cells}" "${ranks}" "${nodes}" "${workload_id}" "${distribution}" "${release}"
+printf '%s\n' "${cd_sanity}"

@@ -214,8 +214,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     workflow = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/gadi/run-openfoam.pbs").read_text(encoding="utf-8")
     runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
-    builder_path = ROOT / "platforms/gadi/build-openfoam.sh"
-    builder = builder_path.read_text(encoding="utf-8")
+    builder_path = ROOT / "scripts/build-openfoam.sh"
+    builder = builder_path.read_text(encoding="utf-8") + (ROOT / "platforms/gadi/build-environment.sh").read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
     assert "runs-on: [self-hosted, home-lab]" in workflow
@@ -245,7 +245,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         "/tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}"
         in workflow
     )
-    assert "platforms/gadi/build-openfoam.sh" in workflow
+    assert 'scripts/build-openfoam.sh" gadi' in workflow
     assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
     assert (
         "gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
@@ -388,6 +388,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "git diff --quiet" not in workflow
         assert "git cat-file" not in workflow
         assert "commit_role" not in workflow
+        assert "scripts/build-inputs-match.sh" in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
@@ -462,7 +463,7 @@ def test_partition_audit_uses_json_writer_for_std_string_digest() -> None:
 
 
 def test_builder_uses_the_pinned_unmodified_v2512_sources() -> None:
-    script = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
+    script = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8") + (ROOT / "platforms/genkai/build-environment.sh").read_text(encoding="utf-8")
 
     assert "openfoam_source_ref=refs/tags/OpenFOAM-v2512" in script
     assert "thirdparty_source_ref=refs/tags/v2512" in script

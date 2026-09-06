@@ -66,7 +66,7 @@ if ! cache_valid; then
   (
     cd "${temporary}/case"
     "${check_mesh}" -constant -fileHandler uncollated > logs/checkMesh.log 2>&1
-    "${decompose_par}" -constant -force -fileHandler uncollated > logs/decomposePar.log 2>&1
+    "${decompose_par}" -constant -fileHandler uncollated > logs/decomposePar.log 2>&1
   )
   printf '%s\n' "${cache_identity}" > "${temporary}/READY"
   jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:"scotch",file_handler:"uncollated"}' > "${temporary}/manifest.json"

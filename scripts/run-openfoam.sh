@@ -219,6 +219,8 @@ install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${OPENFOAM_ITERATIONS};/" system/controlDict
+install -m 0644 system/controlDict "${SOURCE_DIR}/mesh/controlDict"
+install -m 0644 system/include/caseDefinition "${SOURCE_DIR}/mesh/caseDefinition"
 if [[ "${restore_case}" == true ]]; then restore0Dir -processor; fi
 stage renumber_mesh "${LOG_DIR}/renumberMesh.log" "${solver_launch[@]}" "${RENUMBER_MESH}" -constant -overwrite -parallel -fileHandler uncollated "${openfoam_args[@]}"
 stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POTENTIAL_FOAM}" -initialiseUBCs -parallel -fileHandler uncollated "${openfoam_args[@]}"
@@ -254,6 +256,9 @@ set -e
 if [[ "${solver_status}" -ne 0 ]]; then
   exit "${solver_status}"
 fi
+# This shell and MPI rank 0 share the first node's case root, including on Gadi.
+# Copy force coefficients to the persistent run before optional profile collection.
+"${METRICS_CLI}" collect-coefficient --case-root "${CASE_DIR}" --output-root "${RESULTS_DIR}" --iterations "${OPENFOAM_ITERATIONS}"
 if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
@@ -272,7 +277,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && -n "${paraview_collector}" ]]; the
   "${compute_tools_root}/scripts/finalize-paraview-case.sh" "${paraview_output_dir}" "${RUN_ID}" "${profile_run_id}" "${OPENFOAM_NODES}"
 fi
 
-"${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" > "${RESULTS_DIR}/result.txt"
+"${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" "${RESULTS_DIR}/coefficient.dat" > "${RESULTS_DIR}/result.txt"
 grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
 grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 

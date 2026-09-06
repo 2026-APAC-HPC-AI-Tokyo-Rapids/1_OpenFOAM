@@ -236,6 +236,12 @@ logical_type = "json"
 required_for = ["bench", "profile"]
 
 [[keys]]
+pattern = "result.aero_sanity"
+owner = "runner.log_parser"
+logical_type = "json"
+required_for = ["bench", "profile"]
+
+[[keys]]
 pattern = "network.imb_mpi1.process_count"
 owner = "network.parser"
 logical_type = "integer"
@@ -337,6 +343,7 @@ run_bundle_source_roles = [
   "build_sidecar",
   "check_mesh_log",
   "decompose_par_log",
+  "force_coefficients",
   "host_exec_environment",
   "imb_mpi1_argv",
   "imb_mpi1_stderr",
@@ -795,6 +802,15 @@ schema_id = "hardware-node/v1"
 required_when_applicable = true
 
 [[source]]
+id = "artifact.force_coefficients"
+producer_id = "runner.log_parser"
+source_role = "force_coefficients"
+storage = "run_bundle"
+path_template = [{ literal = "results/coefficient.dat" }]
+schema_id = "openfoam-force-coefficients/v1"
+required_when_applicable = true
+
+[[source]]
 id = "artifact.workload_manifest"
 producer_id = "runner.workload_manifest"
 source_role = "workload_manifest"
@@ -1204,6 +1220,18 @@ cardinality = "run"
 capture_id = "solver_log/v1"
 validator_id = "official_result/v1"
 reducer_id = "official_result/v1"
+
+[[fact]]
+id = "result.aero_sanity"
+key_pattern = "result.aero_sanity"
+source_id = "facts.solver_log"
+schema_id = "openfoam-aero-sanity/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "force_coefficients/v1"
+validator_id = "coefficient/v1"
+reducer_id = "coefficient/v1"
 
 [[fact]]
 id = "network.process_count"

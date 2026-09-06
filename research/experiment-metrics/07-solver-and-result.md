@@ -1,5 +1,7 @@
 # ソルバー状態・数値結果収集モジュール
 
+> 旧v2606 motorBike課題の設計資料。本文の追加function object・末尾100反復統計は現行課題へ適用しない。現行v2512 occDrivAerStaticMeshは固定公式入力を維持し、平均step時間と最終Cdを記録する。[現行キーカタログ](../experiment-metrics-v2-key-catalog.md)を参照。
+
 ## 目的とモジュール境界
 
 実装を次のcollectorへ分ける。
