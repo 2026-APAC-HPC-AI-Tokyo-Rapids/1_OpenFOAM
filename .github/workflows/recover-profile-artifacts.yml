@@ -1,0 +1,67 @@
+name: Recover collected Genkai profile artifacts
+
+# Temporary recovery for the two runs submitted before the transfer fix.
+# Remove this entry after their existing computation outputs are archived.
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Completed profile run whose collected artifacts need archiving
+        required: true
+        type: choice
+        options:
+          - '34052899061'
+          - '34054205977'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  archive:
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    env:
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      GH_TOKEN: ${{ github.token }}
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+    steps:
+      - uses: actions/checkout@v7
+      - name: Confirm the source run has finished
+        run: |
+          case "${SOURCE_RUN_ID}" in 34052899061|34054205977) ;; *) exit 64 ;; esac
+          test "$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .status)" = completed
+      - uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: artifacts
+          pattern: openfoam-genkai-*
+      - name: Archive the existing profile without another compute job
+        run: |
+          bundles=(artifacts/openfoam-genkai-v2-r-*)
+          test "${#bundles[@]}" -eq 1
+          bundle=${bundles[0]}
+          run_id=$(jq -er .logical_artifact_name "${bundle}/artifact-manifest.json")
+          [[ "${run_id}" =~ ^r-[0-9a-f]{32}$ ]]
+          for pair in run-artifacts.tar.zst:run_bundle profile-raw.tar.zst:profile_raw; do
+            archive=${pair%%:*}
+            role=${pair#*:}
+            expected_size=$(jq -er --arg role "${role}" '.files[] | select(.role == $role) | .size_bytes' "${bundle}/artifact-manifest.json")
+            expected_sha=$(jq -er --arg role "${role}" '.files[] | select(.role == $role) | .sha256' "${bundle}/artifact-manifest.json")
+            test "$(stat -c '%s' "${bundle}/${archive}")" = "${expected_size}"
+            test "$(sha256sum "${bundle}/${archive}" | awk '{print $1}')" = "${expected_sha}"
+          done
+          tar -I zstd -xOf "${bundle}/run-artifacts.tar.zst" control/run-manifest.json | jq -e --arg run_id "${run_id}" 'select(.run_id == $run_id and .run_purpose == "profile")'
+          scheduler_job_id=$(tar -I zstd -xOf "${bundle}/run-artifacts.tar.zst" control/job-entry.json | jq -er --arg run_id "${run_id}" 'select(.run_id == $run_id) | .scheduler_job_id')
+          [[ "${scheduler_job_id}" =~ ^[0-9]+$ ]]
+          tar -I zstd -xOf "${bundle}/run-artifacts.tar.zst" control/scheduler-accounting.json | jq -e --arg job_id "${scheduler_job_id}" 'select(.jid == $job_id and .ec.value == 0 and .pc.value == 0)'
+          tar -I zstd -xOf "${bundle}/run-artifacts.tar.zst" results/result.txt | grep '^STATUS: VALID$'
+          run_dir="/fast/pj26000080/openfoam-runs/runs/${run_id}"
+          scripts/transfer-vtune-result.sh --cluster genkai --github-run-id "${SOURCE_RUN_ID}" --profile-run-id "${run_id}-${scheduler_job_id}" --source-dir "${run_dir}/large-output"
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${SOURCE_RUN_ID}/genkai"
+          cp -a artifacts/. "${destination}/"
+          scripts/remove-openfoam-runtime.sh --cluster genkai --connection genkai-shell --run-dir "${run_dir}"
+          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("openfoam-genkai-")) | .id' | while read -r artifact_id; do gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"; done

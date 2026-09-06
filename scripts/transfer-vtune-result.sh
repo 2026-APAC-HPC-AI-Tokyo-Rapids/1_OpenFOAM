@@ -6,8 +6,6 @@ cluster=
 github_run_id=
 profile_run_id=
 source_dir=
-config_path=${OPENFOAM_VTUNE_TRANSFER_CONFIG:-${HOME}/.config/openfoam-vtune-transfer/env}
-ssh_bin=${OPENFOAM_VTUNE_SSH_BIN:-ssh}
 
 while [[ $# -gt 0 ]]
 do
@@ -16,12 +14,11 @@ do
     --github-run-id) [[ $# -ge 2 ]]; github_run_id=$2; shift 2 ;;
     --profile-run-id) [[ $# -ge 2 ]]; profile_run_id=$2; shift 2 ;;
     --source-dir) [[ $# -ge 2 ]]; source_dir=$2; shift 2 ;;
-    --config) [[ $# -ge 2 ]]; config_path=$2; shift 2 ;;
     *) printf '未知のVTune転送引数です: %s\n' "$1" >&2; exit 64 ;;
   esac
 done
 
-[[ -f "${config_path}" && "${github_run_id}" =~ ^[1-9][0-9]*$ ]]
+[[ "${github_run_id}" =~ ^[1-9][0-9]*$ ]]
 if [[ "${profile_run_id}" =~ ^(r-[0-9a-f]{32})-([0-9]+([.][A-Za-z0-9.-]+)?)$ ]]; then
   run_id=${BASH_REMATCH[1]}
   scheduler_job_id=${BASH_REMATCH[2]}
@@ -30,18 +27,11 @@ else
   exit 64
 fi
 
-# shellcheck source=/dev/null
-source "${config_path}"
 : "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT:?自宅側OpenFOAM成果物保存先が必要です}"
 [[ "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}" == /* && "${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}" != / ]]
 
 case "${cluster}" in
-  genkai)
-    source_target=${OPENFOAM_VTUNE_GENKAI_SSH_TARGET:?玄界SSH targetが必要です}
-    ;;
-  gadi)
-    source_target=${OPENFOAM_VTUNE_GADI_SSH_TARGET:?Gadi SSH targetが必要です}
-    ;;
+  genkai|gadi) connection="${cluster}-shell" ;;
   *)
     printf '未対応のVTune転送クラスタです: %s\n' "${cluster}" >&2
     exit 64
@@ -58,7 +48,7 @@ manifest="${destination}/manifest.json"
 validate_destination() {
   local expected_size actual_size expected_sha actual_sha relative vtune_result_available
   [[ -f "${paraview_archive}" && -f "${destination}/paraview/manifest.json" && -f "${manifest}" ]]
-  jq -e --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_dir}" 'select(.schema_version == "openfoam-large-output-archive/v1" and .cluster == $cluster and .github_run_id == $github_run_id and .profile_run_id == $profile_run_id and .run_id == $run_id and .scheduler_job_id == $scheduler_job_id and .source_target == $source_target and .source_path == $source_path)' "${manifest}" >/dev/null
+  jq -e --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_connection "${connection}" --arg source_path "${source_dir}" 'select(.schema_version == "openfoam-large-output-archive/v1" and .cluster == $cluster and .github_run_id == $github_run_id and .profile_run_id == $profile_run_id and .run_id == $run_id and .scheduler_job_id == $scheduler_job_id and .source_connection == $source_connection and .source_path == $source_path)' "${manifest}" >/dev/null
   vtune_result_available=$(jq -r 'if has("vtune_result_available") then .vtune_result_available elif any(.files[]; .path == "vtune/vtune-result.tar.zst") then true else false end | select(type == "boolean")' "${manifest}")
   [[ "${vtune_result_available}" == true || "${vtune_result_available}" == false ]]
   if [[ "${vtune_result_available}" == true ]]; then
@@ -105,7 +95,7 @@ trap cleanup EXIT
 
 vtune_result_available=true
 install -d -m 0750 "${staging}/vtune"
-if "${ssh_bin}" "${source_target}" bash -s -- "${source_dir}" "${run_id}" > "${staging}/vtune/vtune-result.tar.zst" <<'REMOTE_VTUNE'
+if "${connection}" bash -s -- "${source_dir}" "${run_id}" > "${staging}/vtune/vtune-result.tar.zst" <<'REMOTE_VTUNE'
 set -euo pipefail
 candidate=$(realpath -e -- "$1")
 run_id=$2
@@ -126,7 +116,7 @@ else
   if [[ "${status}" -eq 3 ]]; then vtune_result_available=false; else exit "${status}"; fi
 fi
 
-"${ssh_bin}" "${source_target}" bash -s -- "${source_dir}" "${run_id}" <<'REMOTE_PARAVIEW' | tar -xf - -C "${staging}"
+"${connection}" bash -s -- "${source_dir}" "${run_id}" <<'REMOTE_PARAVIEW' | tar -xf - -C "${staging}"
 set -euo pipefail
 candidate=$(realpath -e -- "$1")
 run_id=$2
@@ -146,7 +136,7 @@ created_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 files=()
 if [[ "${vtune_result_available}" == true ]]; then files+=("$(jq -n -c --arg path vtune/vtune-result.tar.zst --argjson size_bytes "$(stat -c '%s' "${staging}/vtune/vtune-result.tar.zst")" --arg sha256 "$(sha256sum "${staging}/vtune/vtune-result.tar.zst" | awk '{print $1}')" '{path:$path,size_bytes:$size_bytes,sha256:$sha256}')"); fi
 for relative in paraview/paraview-case.tar.zst paraview/manifest.json; do files+=("$(jq -n -c --arg path "${relative}" --argjson size_bytes "$(stat -c '%s' "${staging}/${relative}")" --arg sha256 "$(sha256sum "${staging}/${relative}" | awk '{print $1}')" '{path:$path,size_bytes:$size_bytes,sha256:$sha256}')"); done
-printf '%s\n' "${files[@]}" | jq -s -c --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_target "${source_target}" --arg source_path "${source_dir}" --arg created_utc "${created_utc}" --argjson vtune_result_available "${vtune_result_available}" '{schema_version:"openfoam-large-output-archive/v1",cluster:$cluster,github_run_id:$github_run_id,profile_run_id:$profile_run_id,run_id:$run_id,scheduler_job_id:$scheduler_job_id,source_target:$source_target,source_path:$source_path,created_utc:$created_utc,vtune_result_available:$vtune_result_available,files:.}' > "${staging}/manifest.json"
+printf '%s\n' "${files[@]}" | jq -s -c --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_connection "${connection}" --arg source_path "${source_dir}" --arg created_utc "${created_utc}" --argjson vtune_result_available "${vtune_result_available}" '{schema_version:"openfoam-large-output-archive/v1",cluster:$cluster,github_run_id:$github_run_id,profile_run_id:$profile_run_id,run_id:$run_id,scheduler_job_id:$scheduler_job_id,source_connection:$source_connection,source_path:$source_path,created_utc:$created_utc,vtune_result_available:$vtune_result_available,files:.}' > "${staging}/manifest.json"
 mv -T -- "${staging}" "${destination}"
 trap - EXIT
 validate_destination

@@ -13,7 +13,7 @@ PROFILE_RUN_ID = "r-0123456789abcdef0123456789abcdef-12345"
 GITHUB_RUN_ID = "987654321"
 
 
-def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool = True) -> tuple[dict[str, str], Path, Path]:
+def _environment(tmp_path: Path, *, broken_connection: bool = False, vtune_result: bool = True) -> tuple[dict[str, str], Path, Path]:
     runtime = tmp_path / "cluster-runs" / "runs" / "r-0123456789abcdef0123456789abcdef"
     source_dir = runtime / "large-output"
     result = source_dir / "vtune" / "rank-0-hotspots.result"
@@ -41,32 +41,19 @@ def _environment(tmp_path: Path, *, broken_ssh: bool = False, vtune_result: bool
     }
     (paraview / "manifest.json").write_text(json.dumps(paraview_manifest) + "\n")
     archive_root = tmp_path / "home-archive"
-    config = tmp_path / "transfer.env"
-    config.write_text(
-        "\n".join(
-            (
-                "OPENFOAM_VTUNE_GENKAI_SSH_TARGET=fake-genkai",
-                "OPENFOAM_VTUNE_GADI_SSH_TARGET=fake-gadi",
-                "OPENFOAM_ARTIFACT_ARCHIVE_ROOT=" + str(archive_root),
-                "",
-            )
-        )
-    )
-    fake_ssh = tmp_path / "fake-ssh"
-    if broken_ssh:
-        fake_ssh.write_text("#!/bin/sh\nprintf broken\n")
-    else:
-        fake_ssh.write_text("#!/bin/sh\nshift\nexec \"$@\"\n")
-    fake_ssh.chmod(0o755)
+    for cluster in ("genkai", "gadi"):
+        wrapper = tmp_path / f"{cluster}-shell"
+        wrapper.write_text("#!/bin/sh\nprintf broken\n" if broken_connection else "#!/bin/sh\nexec \"$@\"\n")
+        wrapper.chmod(0o755)
     environment = os.environ.copy()
-    environment["OPENFOAM_VTUNE_TRANSFER_CONFIG"] = str(config)
-    environment["OPENFOAM_VTUNE_SSH_BIN"] = str(fake_ssh)
+    environment["PATH"] = str(tmp_path) + os.pathsep + environment["PATH"]
+    environment["OPENFOAM_ARTIFACT_ARCHIVE_ROOT"] = str(archive_root)
     return environment, source_dir, archive_root
 
 
-def _run(environment: dict[str, str], source_dir: Path, profile_run_id: str = PROFILE_RUN_ID) -> subprocess.CompletedProcess[str]:
+def _run(environment: dict[str, str], source_dir: Path, profile_run_id: str = PROFILE_RUN_ID, *, cluster: str = "genkai") -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(SCRIPT), "--cluster", "genkai", "--github-run-id", GITHUB_RUN_ID, "--profile-run-id", profile_run_id, "--source-dir", str(source_dir)],
+        ["bash", str(SCRIPT), "--cluster", cluster, "--github-run-id", GITHUB_RUN_ID, "--profile-run-id", profile_run_id, "--source-dir", str(source_dir)],
         check=False,
         text=True,
         capture_output=True,
@@ -74,22 +61,25 @@ def _run(environment: dict[str, str], source_dir: Path, profile_run_id: str = PR
     )
 
 
-def test_transfer_archives_validates_and_preserves_source(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cluster", ["genkai", "gadi"])
+def test_transfer_archives_validates_and_preserves_source(tmp_path: Path, cluster: str) -> None:
     environment, source_dir, archive_root = _environment(tmp_path)
 
-    completed = _run(environment, source_dir)
+    completed = _run(environment, source_dir, cluster=cluster)
 
     assert completed.returncode == 0, completed.stderr
-    destination = archive_root / GITHUB_RUN_ID / "genkai" / "openfoam-genkai-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
+    destination = archive_root / GITHUB_RUN_ID / cluster / f"openfoam-{cluster}-v2-r-0123456789abcdef0123456789abcdef" / "large-output"
     manifest = json.loads((destination / "manifest.json").read_text())
     assert manifest["schema_version"] == "openfoam-large-output-archive/v1"
     assert manifest["profile_run_id"] == PROFILE_RUN_ID
+    assert manifest["source_connection"] == f"{cluster}-shell"
+    assert "source_target" not in manifest
     assert manifest["vtune_result_available"] is True
     assert (destination / "vtune" / "vtune-result.tar.zst").is_file()
     assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
     assert source_dir.is_dir()
 
-    repeated = _run(environment, source_dir)
+    repeated = _run(environment, source_dir, cluster=cluster)
     assert repeated.returncode == 0, repeated.stderr
     assert not any(path.name.startswith(".") for path in destination.parent.iterdir())
 
@@ -114,7 +104,7 @@ def test_transfer_uses_no_target_directory_move() -> None:
 
 
 def test_transfer_keeps_source_when_stream_is_invalid(tmp_path: Path) -> None:
-    environment, source_dir, archive_root = _environment(tmp_path, broken_ssh=True)
+    environment, source_dir, archive_root = _environment(tmp_path, broken_connection=True)
 
     completed = _run(environment, source_dir)
 
