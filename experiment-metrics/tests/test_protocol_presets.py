@@ -9,7 +9,7 @@ def test_selected_scotch_presets_are_self_consistent() -> None:
     expected = {
         "scotch-1n-120r": (1, 120, "shm"),
         "scotch-2n-240r": (2, 240, "shm:ofi"),
-        "scotch-4n-448r": (4, 448, "shm:ofi"),
+        "scotch-4n-480r": (4, 480, "shm:ofi"),
         "gadi-scotch-1n-104r": (1, 104, "shm"),
         "gadi-scotch-2n-208r": (2, 208, "shm:ofi"),
         "gadi-scotch-4n-416r": (4, 416, "shm:ofi"),

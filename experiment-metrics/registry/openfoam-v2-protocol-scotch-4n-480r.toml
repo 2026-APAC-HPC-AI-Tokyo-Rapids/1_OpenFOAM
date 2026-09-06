@@ -4,7 +4,7 @@ workload_definition = "../../benchmark/workload.json"
 
 [variant.bench]
 nodes = 4
-ranks = 448
+ranks = 480
 resource_group = "a-batch"
 transport_policy = "shm:ofi"
 transport_environment = { I_MPI_FABRICS = "shm:ofi" }
@@ -12,7 +12,7 @@ expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_bou
 
 [variant.profile]
 nodes = 4
-ranks = 448
+ranks = 480
 resource_group = "a-batch"
 transport_policy = "shm:ofi"
 transport_environment = { I_MPI_FABRICS = "shm:ofi" }

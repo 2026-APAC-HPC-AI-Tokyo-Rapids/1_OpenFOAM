@@ -52,7 +52,7 @@ jobs:
           case '${{ inputs.node_count }}' in
             1) experiment_preset=scotch-1n-120r ;;
             2) experiment_preset=scotch-2n-240r ;;
-            4) experiment_preset=scotch-4n-448r ;;
+            4) experiment_preset=scotch-4n-480r ;;
             *) echo '玄界のノード数には1、2、4のいずれかを指定してください' >&2; exit 64 ;;
           esac
           echo "experiment_preset=${experiment_preset}" >> "${GITHUB_OUTPUT}"
