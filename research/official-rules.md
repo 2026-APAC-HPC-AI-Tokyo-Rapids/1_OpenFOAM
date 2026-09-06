@@ -12,12 +12,14 @@
 | decomposePar -constant、restore0Dir -processor、renumberMesh -constant -overwrite -parallel | `scripts/prepare-openfoam-case.sh`、`scripts/run-openfoam.sh`、各段階ログ | 分割結果は同cluster/build/分割条件のcacheを再利用し、準備ログも回収 |
 | potentialFoam -initialiseUBCs -parallel、applyBoundaryLayer -ybl 0.0450244 -parallel、simpleFoam -parallel | `scripts/run-openfoam.sh`、段階別argv/log | 必須工程と既存switchを維持。追加I/O flagsは運営許可済み |
 | 平均wall-clock秒/step（2ステップ目以降） | `results/result.txt`、`result.official` | 小さいほど高速。準備・profileの時間を通常benchのscoreへ混ぜない |
-| 最終Cdとcoefficient.dat | Issue #22/#23、追跡Issue #27 | 回収・解析・実run検証を進行中。数値範囲による独自失格判定を設けない |
-| 実使用decomposeParDict/controlDict/caseDefinition | `source/mesh`、Issue #27 | 実使用入力の保存を拡充中 |
-| 同条件1/2/4ノードのscaling | Issue #24/#27 | 再生成可能な表と実run検証を進行中 |
+| 最終Cdとcoefficient.dat | `results/coefficient.dat`、`coefficient-source.json`、`result.aero_sanity` | 玄界bench/profileで回収・解析・永続保存・BigQuery一致を確認。数値範囲による独自失格判定なし。#22のGadi PBS実検証は障害復旧後に残る |
+| 実使用decomposeParDict/controlDict/caseDefinition | `source/mesh`、Issue #27 | 玄界1/2/4ノードの実入力保存と成果物からの再解析を確認 |
+| 同条件1/2/4ノードのscaling | `experiment_metrics.scaling`、Issue #24 | 同一e944313の実成果物で比較条件一致、表・172 UTF-8テキストファイルのexportを確認 |
 | 採点クラスタと資源 | Gadi `normalsr`、4 CPUノード | 玄界は参考。Gadi/ASPIRE-2A障害中とのユーザー連絡に基づき玄界で検証 |
 | 提出はテキスト、面接スライド | `submission/README.md` | mesh、processorディレクトリ、binaryを提出しない。Qwenと共通15〜20分の発表、10分Q&A。OpenFOAM評価は発表60%、性能40% |
 
 玄界での成功はGadiのPBS/node-local動作や公式スコア達成の証拠とはしない。Gadi実検証の未実施を明示したうえで、共通処理とクラスタ固有部分のfixtureを確認する。
+
+実行結果、ランク数比較、profileと観測された障害は[2026-09-07-official-e2e.md](2026-09-07-official-e2e.md)にまとめる。rawと比較用メトリクスの正本は、同文書から辿れるrun archiveとBigQueryに置く。
 
 旧cavity3D、motorBike、v2606、FVOPSに基づく研究記録は過去の判断を追えるよう履歴として保存する。現行の科学条件・採点・最適化候補の根拠には使わない。

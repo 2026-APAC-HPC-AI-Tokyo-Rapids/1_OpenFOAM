@@ -184,6 +184,6 @@ Intelは、`I_MPI_STATS`または`aps`によるAPS、`mpirun -gtool`による特
 
 ## プロファイル実装
 
-プッシュ起動は常に通常計測とし、外部プロファイラを付けずにソルバーを起動する。手動実行では`bench`または`profile`を選ぶ。プロファイル実行はソースやビルド成果物を変更せず、`profile_rank`入力で選択したMPIランク（既定値は0）へ一定時間だけVTuneのホットスポット収集を接続する。ランク0は計算上のホットスポット発見に引き続き有用だが、APSがランク0を非典型と示しているため、代表的な通信の結論には内部ランクやノード境界ランクの追加計測が必要である。
+現在の入口は共通の`OpenFOAM` workflowであり、pushは`[profile]`、手動実行は`profile`入力で通常計測から切り替える。プロファイル実行はソースやビルド成果物を変更せず、追跡対象のprotocolで指定したMPIランクへ一定時間だけVTune収集を接続する。異なるプロファイル条件は個別commitで追跡する。1ランクのサンプルだけで全ランクの通信特性を結論しない。
 
-VTuneの完全な結果とParaView用の最終分割ケースは、固定成果物と同じ`RUN_DIR`の`large-output/{vtune,paraview}`へ生成し、自宅サーバーがSSHで直接取得する。ParaView用データは全`processor*`と`occDrivAerStaticMesh.foam`を単一の`paraview-case.tar.zst`にまとめる。自宅側で可読性、サイズ、SHA-256を検証し、Actions runの固定v2成果物ディレクトリ配下へ確定した後だけクラスタ側`RUN_DIR`全体を削除する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。
+VTuneの完全な結果とParaView用の分割ケースは、固定成果物と同じ`RUN_DIR`の`large-output/{vtune,paraview}`へ生成し、home-lab runnerが既存クラスタ接続ラッパーで取得する。ParaView用データは全`processor*`と`occDrivAerStaticMesh.foam`を単一の`paraview-case.tar.zst`にまとめる。noWrite設定では保存済みfieldは時刻0であり、最終反復のfieldではない。自宅側で可読性、サイズ、SHA-256を検証し、Actions runの固定v2成果物ディレクトリ配下へ確定した後だけクラスタ側`RUN_DIR`全体を削除する。検証済みレポート、収集状態、JSON形式の事実、上限付きActions要約は、プロファイル成果物とexperiment-metricsの記録に残す。VTune実行ファイルの識別情報と版は、ビルド配備の観測情報で一度だけ管理する。
