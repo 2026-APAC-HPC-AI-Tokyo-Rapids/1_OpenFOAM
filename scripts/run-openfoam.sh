@@ -234,6 +234,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
   install -d -m 2770 "${vtune_root}"
   install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"
+  # v2512は既存coefficient.datがあると正式出力をcoefficient_0.datへ改名する。
+  # warmupのrawを退避し、正式solverが規定名へ出力できるようにする。
+  mv -T "${CASE_DIR}/postProcessing" "${RUN_DIR}/profile/raw/warmup-postProcessing"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"

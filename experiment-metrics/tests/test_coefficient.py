@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -79,3 +80,34 @@ def test_shell_and_metric_share_cd_without_a_threshold(tmp_path: Path) -> None:
     value = coefficient_fact(source, 40).logical_value
     assert f"cd={value['cd']} step={value['step']}" in output
     assert "no pass/fail threshold" in output
+
+
+def test_profile_warmup_preserves_raw_without_renaming_solver_coefficients(tmp_path: Path) -> None:
+    repository = Path(__file__).parents[2]
+    script = (repository / "scripts/run-openfoam.sh").read_text()
+    warmup = script[script.index('  stage profile_warmup '):]
+    warmup = warmup[:warmup.index('\nfi')]
+    case = tmp_path / "jobfs/case"
+    case.mkdir(parents=True)
+    run = tmp_path / "shared/run"
+    # The stub emits the post-processing file written by official v2512 at time 0.
+    harness = '''set -euo pipefail
+solver_launch=()
+openfoam_args=()
+stage() {
+  mkdir -p "${CASE_DIR}/postProcessing/forceCoeffsAll/0"
+  printf '# Time Cd\\n0 0.5\\n' > "${CASE_DIR}/postProcessing/forceCoeffsAll/0/coefficient.dat"
+}
+'''
+    subprocess.run(["bash", "-c", harness + warmup], env={**os.environ, "CASE_DIR": str(case), "RUN_DIR": str(run), "LOG_DIR": str(run / "logs"), "ENV": "/usr/bin/env", "SIMPLE_FOAM": "/simpleFoam", "vtune_root": str(run / "large-output/vtune")}, check=True)
+    saved = run / "profile/raw/warmup-postProcessing/forceCoeffsAll/0/coefficient.dat"
+    assert saved.read_text() == "# Time Cd\n0 0.5\n"
+    assert not (case / "postProcessing").exists()
+    # Reproduce writeFile::newFileAtTime: an existing file gets a _0 suffix.
+    official = case / "postProcessing/forceCoeffsAll/0/coefficient.dat"
+    official.parent.mkdir(parents=True)
+    selected = official.with_name("coefficient_0.dat") if official.exists() else official
+    selected.write_text("# Time Cd\n40 0.435\n")
+    target = collect_coefficient(case, run / "results", 40)
+    assert target.read_text() == "# Time Cd\n40 0.435\n"
+    assert saved.read_text() == "# Time Cd\n0 0.5\n"
