@@ -147,7 +147,7 @@ def test_export_rejects_missing_or_binary_input_before_creating_directory(tmp_pa
 
 
 def test_gadi_four_nodes_are_marked_scored():
-    series = [replace(run, cluster="gadi", transport="ucx", condition={**run.condition, "cluster": "gadi"}) for run in runs()]
+    series = [replace(run, cluster="gadi", condition={**run.condition, "cluster": "gadi"}) for run in runs()]
     table = render_scaling(series)
     assert "scored" in table
     assert "reference" not in table

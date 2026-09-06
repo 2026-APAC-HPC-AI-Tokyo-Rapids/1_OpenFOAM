@@ -6,9 +6,12 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import pytest
+
 from experiment_metrics.fact import canonical_json
 
 SCRIPT = Path(__file__).parents[2] / "scripts/prepare-openfoam-case.sh"
+LOGIN_CHECK = SCRIPT.with_name("check-openfoam-case-cache.sh")
 
 
 def _executable(path: Path, body: str) -> Path:
@@ -116,6 +119,64 @@ def _inputs(tmp_path: Path) -> tuple[Path, ...]:
         f"ranks=$(sed -n -E 's/^(nCores[[:space:]]+)([0-9]+);/\\2/p' system/include/caseDefinition)\nfor rank in $(seq 0 $((ranks - 1))); do mkdir -p \"processor${{rank}}\"; done\nprintf '%s\\n' decomposePar >> \"{counter}\"\n",
     )
     return source, archive, definition, sidecar, check_mesh, decompose_par, counter
+
+
+@pytest.mark.parametrize("cluster", ["genkai", "gadi"])
+def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path: Path, cluster: str) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, counter = _inputs(tmp_path)
+    provision = tmp_path / "provision"
+    (provision / "benchmark").mkdir(parents=True)
+    (provision / "control").mkdir()
+    (provision / "scripts").symlink_to(SCRIPT.parent, target_is_directory=True)
+    (provision / "platforms").symlink_to(SCRIPT.parents[1] / "platforms", target_is_directory=True)
+    (provision / "benchmark/occDrivAerStaticMesh").symlink_to(source, target_is_directory=True)
+    (provision / "benchmark/workload.json").symlink_to(definition)
+    (provision / "control/build-sidecar.json").symlink_to(sidecar)
+    cache_root = tmp_path / "cache"
+    command = [LOGIN_CHECK, cluster, provision, "4", cache_root, archive]
+    assert subprocess.run(command, capture_output=True).returncode == 75
+    assert not counter.exists()
+
+    expanded = tmp_path / "expanded" if cluster == "gadi" else cache_root
+    prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, "4", expanded], check=True, capture_output=True, text=True)
+    cache_dir = Path(next(line.removeprefix("cache_dir=") for line in prepared.stdout.splitlines() if line.startswith("cache_dir=")))
+    if cluster == "gadi":
+        archived = cache_root / cache_dir.name
+        subprocess.run([SCRIPT.parents[1] / "platforms/gadi/archive-openfoam-case.sh", "create", cache_dir, archived, cache_dir.name], check=True, capture_output=True)
+        cache_dir = archived
+    hits_before = counter.read_text()
+    hit = subprocess.run(command, check=True, capture_output=True, text=True)
+    assert "cache_hit=true" in hit.stdout
+    assert str(cache_dir) in hit.stdout
+    assert counter.read_text() == hits_before
+    # MPI decomposition and toolchain changes never reuse the old READY marker.
+    assert subprocess.run([*command[:3], "8", *command[4:]], capture_output=True).returncode == 75
+    original = sidecar.read_text()
+    sidecar.write_text(original.replace("WM_COMPILE_OPTION=Opt", "WM_COMPILE_OPTION=Debug"))
+    assert subprocess.run(command, capture_output=True).returncode == 75
+    sidecar.write_text(original)
+    case_member = source / "0.orig/U"
+    case_member.write_text("different input\n")
+    assert subprocess.run(command, capture_output=True).returncode == 75
+    case_member.write_text("U\n")
+    if cluster == "gadi":
+        (cache_dir / "case.tar.zst").write_bytes(b"damaged archive")
+    else:
+        (cache_dir / "READY").unlink()
+    assert subprocess.run(command, capture_output=True).returncode == 75
+    assert counter.read_text() == hits_before
+    archive.write_bytes(b"invalid official mesh")
+    assert subprocess.run(command, capture_output=True).returncode == 2
+
+
+@pytest.mark.parametrize("cluster", ["genkai", "gadi"])
+def test_workflow_checks_cache_before_prepare_submission(cluster: str) -> None:
+    workflow = (SCRIPT.parents[1] / f".github/workflows/{cluster}.yml").read_text()
+    stage = workflow.split("  prepare-case:", 1)[1].split("\n  run:", 1)[0]
+    assert stage.index(f'check-openfoam-case-cache.sh" {cluster}') < stage.index("$(pjsub" if cluster == "genkai" else "$(qsub")
+    assert 'then\n            exit 0\n          else\n            test "$?" -eq 75\n          fi' in stage
+    provision = workflow.split("  provision:", 1)[1].split("  prepare-case:", 1)[0]
+    assert "scripts/check-openfoam-case-cache.sh" in provision
 
 
 def test_prepare_case_uses_content_and_rank_specific_cache(tmp_path: Path) -> None:

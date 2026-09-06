@@ -152,9 +152,9 @@ def render_scaling(runs: list[ScalingRun]) -> str:
         differences = [key for key in run.condition if run.condition[key] != runs[0].condition[key]]
         if differences:
             raise ValueError("incompatible scaling conditions: " + ", ".join(differences))
-    # Genkai's single-node policy avoids OFI; its multinode policy requires it.
+    # Both cluster presets use shared memory alone on one node and OFI across nodes.
     transports = {run.transport for run in runs}
-    if len(transports) > 1 and not all(run.cluster == "genkai" and run.transport == ("shm" if run.nodes == 1 else "shm:ofi") for run in runs):
+    if len(transports) > 1 and not all(run.cluster in {"genkai", "gadi"} and run.transport == ("shm" if run.nodes == 1 else "shm:ofi") for run in runs):
         raise ValueError("incompatible transport policies")
     columns = ["nodes", "purpose", "ranks", "decomposition", "transport", "steps", "mean_step_s", "stddev_s", "Cd", "run"]
     ordered = sorted(runs, key=lambda run: (run.nodes, run.run_id))

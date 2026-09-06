@@ -191,7 +191,7 @@ jobs:
           sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
           platforms/gadi/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
-          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
+          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/check-openfoam-case-cache.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
           install -m 0755 platforms/gadi/run-openfoam.pbs platforms/gadi/prepare-openfoam-case.pbs platforms/gadi/wait-pbs-job.sh platforms/gadi/stage-openfoam-runtime.sh platforms/gadi/archive-openfoam-case.sh platforms/gadi/stage-openfoam-case.sh platforms/gadi/stage-rank-context.sh platforms/gadi/collect-rank-placement.sh "${provision_dir}/platforms/gadi/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
@@ -243,6 +243,11 @@ jobs:
             exit "${status}"
           }
           trap cleanup EXIT
+          if "${PROVISION_DIR}/scripts/check-openfoam-case-cache.sh" gadi "${PROVISION_DIR}" "${{ needs.select-build.outputs.ranks }}" "${prepare_cache_root}" "${workload_archive}"; then
+            exit 0
+          else
+            test "$?" -eq 75
+          fi
           exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
           job_id=$(qsub -P hb15 -q normalsr -l ncpus=104,mem=110GB,jobfs=100GB,storage=scratch/hb15 -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/gadi/prepare-openfoam-case.pbs")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]

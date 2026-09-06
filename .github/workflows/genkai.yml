@@ -181,7 +181,7 @@ jobs:
           test "$(stat -c '%s' "${archive}")" = "${expected_size}"
           test "$(sha256sum "${archive}" | awk '{print $1}')" = "${expected_sha}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
-          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" "${GITHUB_WORKSPACE}/scripts/archive-paraview-case.sh" "${GITHUB_WORKSPACE}/scripts/finalize-paraview-case.sh" "${provision_dir}/scripts/"
+          install -m 0755 "${GITHUB_WORKSPACE}/scripts/run-openfoam.sh" "${GITHUB_WORKSPACE}/scripts/prepare-openfoam-case.sh" "${GITHUB_WORKSPACE}/scripts/check-openfoam-case-cache.sh" "${GITHUB_WORKSPACE}/scripts/exec-profiler.sh" "${GITHUB_WORKSPACE}/scripts/allow-vtune-attach.py" "${GITHUB_WORKSPACE}/scripts/export-vtune-hotspots.sh" "${GITHUB_WORKSPACE}/scripts/archive-paraview-case.sh" "${GITHUB_WORKSPACE}/scripts/finalize-paraview-case.sh" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/platforms/genkai/run-openfoam.pjm" "${GITHUB_WORKSPACE}/platforms/genkai/prepare-openfoam-case.pjm" "${provision_dir}/scripts/"
           install -m 0755 "${GITHUB_WORKSPACE}/benchmark/parse_result.sh" "${provision_dir}/benchmark/"
           cp -a "${GITHUB_WORKSPACE}/benchmark/occDrivAerStaticMesh" "${provision_dir}/benchmark/"
@@ -250,6 +250,11 @@ jobs:
           }
           trap cleanup EXIT
           prepare_cache_root="${HOME}/../share/openfoam-case-cache"
+          if "${PROVISION_DIR}/scripts/check-openfoam-case-cache.sh" genkai "${PROVISION_DIR}" "${prepare_subdomains}" "${prepare_cache_root}" "${workload_archive}"; then
+            exit 0
+          else
+            test "$?" -eq 75
+          fi
           submission="$(pjsub -L rscgrp=a-batch -L node=1 --mpi proc=1 -x "PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_DECOMPOSITION_PROFILE=${prepare_decomposition_profile},PREPARE_SUBDOMAINS=${prepare_subdomains},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}" -o "${prepare_root}/%j.pjm.log" -j -N openfoam_prepare "${PROVISION_DIR}/scripts/prepare-openfoam-case.pjm")"
           printf '%s\n' "${submission}"
           job_id="$(sed -n 's/.*Job \([0-9][0-9]*\) submitted.*/\1/p' <<< "${submission}")"
