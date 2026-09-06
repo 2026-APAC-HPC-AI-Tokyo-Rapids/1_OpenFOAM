@@ -153,13 +153,6 @@ stage_at() {
   "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
-# capture-hardwareは追跡対象で依存関係のないPython計測ツールであり、導入時の
-# shebangは意図的に移植可能にしている。玄界のOS標準Pythonは3.6だが、計測ツールと
-# 計測記録処理には配備したPythonが必要である。最小構成の直接計測とMPI経由の
-# プロファイル計測の両方で、このPythonをPATHの先頭に置く。実行ファイルの識別情報は
-# 追跡対象の計測ツール自身を維持する。
-probe_python_dir="${compute_tools_root}/experiment-metrics/.venv/bin"
-export PATH="${probe_python_dir}:${PATH}"
 set +u
 source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"
 set -u
@@ -288,7 +281,8 @@ grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 # 非分割メッシュやprocessorメッシュを開き直したりハッシュ計算したりしない。
 "${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --check-mesh-log "${LOG_DIR}/checkMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'メッシュの計測値を記録できませんでした。ソルバーの結果は有効です' >&2
 
-minimal_hardware_argv=("${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
+# MPIの-genv PATHは呼出元で固定済み。OS Pythonへ戻らないよう配備済みinterpreterを明示する。
+minimal_hardware_argv=("${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then
   minimal_hardware_argv+=(--node-ordinal 0)
 else
@@ -310,7 +304,7 @@ fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e
-  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${node_launch[@]}" "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env "${global_rank_env}"
+  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${node_launch[@]}" "${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env "${global_rank_env}"
   profile_hardware_status=$?
   set -e
   if [[ "${profile_hardware_status}" -ne 0 ]]; then

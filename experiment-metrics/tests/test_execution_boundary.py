@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
@@ -120,17 +122,39 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "decomposePar" in prepare_text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in prepare_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in prepare_text
-    # 導入したハードウェア計測ツールのshebangはenv python3である。玄界のOS標準
-    # Pythonは古いため、直接起動とMPI起動のどちらでも、計測ツールの引数を変えずに
-    # 配備したPythonを継承する必要がある。
-    python_path = 'probe_python_dir="${compute_tools_root}/experiment-metrics/.venv/bin"'
-    export_path = 'export PATH="${probe_python_dir}:${PATH}"'
-    assert python_path in text
-    assert '[[ -x "${probe_python_dir}/python3" ]]' not in text
-    assert export_path in text
-    assert text.index(export_path) < text.index("CAPTURE_HARDWARE=$(command -v")
-    assert text.index(export_path) < text.index("stage minimal_hardware_capture")
-    assert text.index(export_path) < text.index("stage profile_hardware_capture")
+    assert 'minimal_hardware_argv=("${RANK_PYTHON}" "${CAPTURE_HARDWARE}"' in text
+    assert '"${node_launch[@]}" "${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode profile-postrun' in text
+
+
+def test_hardware_probe_uses_deployed_python_when_mpi_overrides_path(tmp_path: Path) -> None:
+    script = (ROOT / "scripts/run-openfoam.sh").read_text()
+    old_bin = tmp_path / "old-bin"
+    old_bin.mkdir()
+    old_python = old_bin / "python3"
+    old_python.write_text("#!/bin/bash\necho old-system-python >&2\nexit 91\n")
+    old_python.chmod(0o755)
+    mpi = tmp_path / "mpirun"
+    mpi.write_text(f'#!/bin/bash\nexport PATH="{old_bin}:/usr/bin:/bin"\nexec "$@"\n')
+    mpi.chmod(0o755)
+    probe = tmp_path / "capture-hardware"
+    probe.write_bytes((ROOT / "experiment-metrics/src/experiment_metrics/probes/capture_hardware.py").read_bytes())
+    probe.chmod(0o755)
+    assert subprocess.run([mpi, probe, "--help"], capture_output=True).returncode == 91
+    minimal = next(line for line in script.splitlines() if line.startswith("minimal_hardware_argv=("))
+    profile = next(line for line in script.splitlines() if line.lstrip().startswith("stage profile_hardware_capture "))
+    prefix = 'set -euo pipefail\nnode_launch=("${MPI}")\nstage() { shift 2; "$@" --help; }\n'
+    environment = {**os.environ, "MPI": str(mpi), "RANK_PYTHON": sys.executable, "CAPTURE_HARDWARE": str(probe), "RUN_ID": "test", "RUN_DIR": str(tmp_path), "RUN_MANIFEST": str(tmp_path / "manifest.json"), "SOURCE_DIR": str(tmp_path), "LOG_DIR": str(tmp_path), "global_rank_env": "PMI_RANK"}
+    for command in [minimal + '\n"${node_launch[@]}" "${minimal_hardware_argv[@]}" --help', profile]:
+        result = subprocess.run(["bash", "-c", prefix + command], env=environment, capture_output=True, text=True, check=True)
+        assert "usage: capture-hardware" in result.stdout
+        assert "old-system-python" not in result.stderr
+
+
+def test_hardware_capture_diagnostic_logs_are_archived() -> None:
+    for cluster in ("genkai", "gadi"):
+        workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text()
+        assert "logs/minimal-hardware-capture.log:postrun_source" in workflow
+        assert "logs/profile-hardware-capture.log:postrun_source" in workflow
 
 
 def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
