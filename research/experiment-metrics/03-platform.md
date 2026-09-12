@@ -2,105 +2,85 @@
 
 ## モジュール境界
 
-実装名は `platform` とする。計算開始前に、計算ノード上の同じPythonプロセスから
-OS、CPU、メモリ、全環境変数を取得し、1バッチで送る。
-現在の対象は玄界ノードグループAの1ノードCPU実行である。
+実装上の識別名は `platform` とする。本モジュールは、計算処理の開始前に計算ノード上の同一PythonプロセスからOS、CPU、メモリ、および全環境変数の情報を取得し、単一のバッチとしてBigQueryへ送信する。現行の対象は、九州大学「玄界」ノードグループAにおける1ノードCPU実行である。
 
-PJM変数の確定、`module load`、OpenFOAM bashrc、MPI設定、認証設定をすべて終えた後、
-meshingの前に取得する。それ以降は実行条件となる環境を変更しない。構成取得をsolverと
-同時に走らせず、送信完了後に前処理を開始する。
+情報の取得は、PJM環境変数の確定、環境モジュールのロード（`module load`）、OpenFOAMの`etc/bashrc`読み込み、MPI設定、および認証設定がすべて完了した後、メッシュ生成処理を開始する直前のタイミングで実施する。これ以降、実行条件となる環境構成を変更してはならない。また、構成情報の収集処理をソルバーと並行して実行させることはせず、送信完了を確認した後に前処理工程を開始する。
 
 ## 確定メトリクス
 
 | キー | 論理型 | 正となる取得元 | 取得方法 |
 |---|---|---|---|
-| `system.cluster` | string | collector定数 | cluster識別用環境変数がない場合だけ`"genkai"` |
+| `system.cluster` | string | コレクター定数 | クラスタ識別用の環境変数が存在しない場合のみ `"genkai"` |
 | `system.os.id` | string | `/etc/os-release` | `platform.freedesktop_os_release()["ID"]` |
-| `system.os.version_id` | string | `/etc/os-release` | 同APIの`VERSION_ID` |
-| `system.kernel.release` | string | kernel | `os.uname().release` |
-| `system.architecture` | string | kernel | architectureを表す環境変数がない場合だけ`os.uname().machine` |
-| `system.node.hostname` | string | kernel | hostnameを表す環境変数がない場合だけ`socket.gethostname()` |
-| `hardware.cpu.model` | string | `lscpu --json` | `Model name:`の`data` |
-| `hardware.cpu.socket_count` | int | `lscpu --json` | `Socket(s):` |
-| `hardware.cpu.cores_per_socket` | int | `lscpu --json` | `Core(s) per socket:` |
-| `hardware.cpu.threads_per_core` | int | `lscpu --json` | `Thread(s) per core:` |
-| `hardware.cpu.available_logical_count` | int | process affinity | `len(os.sched_getaffinity(0))` |
-| `hardware.memory.total_bytes` | int | `/proc/meminfo` | `MemTotal`のKiB値×1024 |
-| `env.<environment_name>` | string | process environment | 下記規則ですべて取得 |
+| `system.os.version_id` | string | `/etc/os-release` | 同APIの `VERSION_ID` |
+| `system.kernel.release` | string | カーネル | `os.uname().release` |
+| `system.architecture` | string | カーネル | アーキテクチャを示す環境変数が存在しない場合のみ `os.uname().machine` |
+| `system.node.hostname` | string | カーネル | ホスト名を示す環境変数が存在しない場合のみ `socket.gethostname()` |
+| `hardware.cpu.model` | string | `lscpu --json` | `Model name:` に対応する `data` フィールド |
+| `hardware.cpu.socket_count` | int | `lscpu --json` | `Socket(s):` フィールド |
+| `hardware.cpu.cores_per_socket` | int | `lscpu --json` | `Core(s) per socket:` フィールド |
+| `hardware.cpu.threads_per_core` | int | `lscpu --json` | `Thread(s) per core:` フィールド |
+| `hardware.cpu.available_logical_count` | int | プロセスアフィニティ | `len(os.sched_getaffinity(0))` |
+| `hardware.memory.total_bytes` | int | `/proc/meminfo` | `MemTotal` のKiB値 × 1024 |
+| `env.<environment_name>` | string | プロセス環境変数 | 後述の規則に従って全変数を収集 |
 
-`WM_PROJECT_VERSION`、`WM_OPTIONS`、`LOADEDMODULES`などもそれぞれ
-`env.WM_PROJECT_VERSION`、`env.WM_OPTIONS`、`env.LOADEDMODULES`として保存する。
-これらを`software.*`へ複製したり、`LOADEDMODULES`を分割した派生行を作ったりしない。
-`PXMYCLST`等が存在すればclusterを、`HOSTNAME`またはPJMの同等変数が存在すれば
-hostnameを、`HOSTTYPE`または`WM_ARCH`が存在すればarchitectureを`system.*`へ
-複製しない。該当する環境変数が実際にない場合だけ、上表のfallbackメトリクスを送る。
+`WM_PROJECT_VERSION`、`WM_OPTIONS`、`LOADEDMODULES` などの環境変数も、それぞれ `env.WM_PROJECT_VERSION`、`env.WM_OPTIONS`、`env.LOADEDMODULES` として保存する。これらを `software.*` として二重に複製したり、`LOADEDMODULES` を分解して派生行を作成したりはしない。また、`PXMYCLST` 等が存在する場合はクラスタ名を、`HOSTNAME` またはPJMの同等変数が存在する場合はホスト名を、`HOSTTYPE` または `WM_ARCH` が存在する場合はアーキテクチャを `system.*` へ重複して複製しない。該当する環境変数が実際に存在しない場合に限り、上表のフォールバックメトリクスを送信する。
 
-## `lscpu --json` の読み方
+## `lscpu --json` の解釈規則
 
-次を実行する。
+以下のコマンドを実行する。
 
 ```bash
 LC_ALL=C lscpu --json
 ```
 
-標準出力をJSON parserで読み、top-level `lscpu` 配列の各objectについて
-`field`末尾のコロンを1つ除いた文字列をキー、`data`を値とする。必要なfieldを
-名前で選ぶ。表示位置や空白へ依存しない。
+標準出力をJSONパーサーで解析し、最上位の `lscpu` 配列に含まれる各オブジェクトについて、`field` の末尾コロンを1つ除去した文字列をキーとし、`data` を値とする。必要なフィールドはキー名で直接抽出し、出力の表示位置や空白幅には依存しない。
 
-玄界ノードグループAの公称構成はIntel Xeon Platinum 8490H、60 cores×2 sockets、
-512 GiBであるが、公称値をメトリクスとして埋め込まず、実ノードの値を取得する。
+玄界ノードグループAの公称諸元は Intel Xeon Platinum 8490H、60コア × 2ソケット、主記憶 512 GiB であるが、公称値を静的に埋め込むのではなく、実ノードから動的に取得した値を記録する。
 
-## `/proc/meminfo` の読み方
+## `/proc/meminfo` の解釈規則
 
-`MemTotal:`で始まる行を探し、ASCII空白で3 tokenへ分ける。
+`MemTotal:` で始まる行を検索し、ASCII空白で3つのトークンに分割する。
 
 ```text
 MemTotal: <unsigned integer> kB
 ```
 
-Linuxのこのinterfaceにおける`kB`は1024 bytesとして扱う。`MemAvailable`や
-実行時free memoryは他ジョブ等の影響を受け、runの再現条件ではないため収集しない。
+Linuxのカーネルインターフェースにおいて、この `kB` 単位は 1024 バイトとして扱う。なお、`MemAvailable` や実行時の空きメモリ量（free memory）は他ジョブの影響等で変動し、実行の再現条件を示す静的構成値ではないため収集対象外とする。
 
-## 全環境変数の規則
+## 全環境変数の保存規則
 
-`os.environb`が利用できるLinuxでは、文字列へdecodeする前の名前と値を列挙する。
-許可リスト、拒否リスト、秘密情報フィルタを一切設けない。空の値、改行を含む値も
-省略しない。
+`os.environb` が利用可能なLinux環境では、文字列デコードを行う前のバイト列ベースで環境変数名と値を列挙する。許可リスト、拒否リスト、およびシークレット情報のフィルタリングは一切介在させない。空文字列の値や改行コードを含む値も欠落なく保持する。
 
-名前とキーの対応は次とする。
+環境変数名とメトリクスキーの対応関係は以下の通りとする。
 
-| 条件 | キー |
+| 条件 | メトリクスキー |
 |---|---|
-| 名前がASCII `[A-Za-z][A-Za-z0-9_]*` | 大小文字を保った `env.<name>` |
-| それ以外 | 名前のbyte列を小文字hex化した `env.encoded.<hex>` |
+| 名前がASCII `[A-Za-z][A-Za-z0-9_]*` に合致する場合 | 大小文字をそのまま保持した `env.<name>` |
+| それ以外（特殊文字等を含む場合） | 変数名のバイト列を小文字の16進数（hex）文字列化した `env.encoded.<hex>` |
 
-値が正しいUTF-8ならdecodeした文字列をそのまま`value`へ入れる。UTF-8でない場合は
-byte列をRFC 4648 standard Base64（改行なし、`=`paddingあり）でencodeし、
-キーを`env.bytes.<name-token>`とする。これによりBigQueryの
-`STRING`制約を守りながら、全変数を欠落なく可逆に保存できる。
+値が正常なUTF-8バイト列であれば、デコードした文字列をそのまま `value` に格納する。UTF-8として無効なバイト列が含まれる場合は、バイト列全体をRFC 4648標準のBase64（改行なし、`=`パディングあり）でエンコードし、キー名を `env.bytes.<name-token>` とする。これにより、BigQueryの `STRING` 型制約を厳密に遵守しながら、あらゆる環境変数を欠落なく可逆的に保存できる。
 
-## 取得できない場合
+## 取得失敗時の扱い
 
-- `lscpu --json`や`/proc/meminfo`から目的の値を読めなければ、そのキーを空文字で送る。
-- 公称構成を代入したり、人間向け`lscpu`出力へfallbackしたりしない。
-- 取得コマンドのstderrはメトリクスへ入れず、収集警告として扱う。
+- `lscpu --json` や `/proc/meminfo` から目的の値を読み取れない場合は、該当キーの値を空文字として送信する。
+- 静的な公称構成を代入したり、人間向けの標準 `lscpu` 出力の解析へフォールバックしたりはしない。
+- 取得コマンドの標準エラー出力はメトリクス値には含めず、コレクターの警告ログとして記録する。
 
 ## 採用しない値
 
-| 値 | 理由 |
+| 除外項目 | 除外理由 |
 |---|---|
-| OSの`PRETTY_NAME` | `ID`と`VERSION_ID`で比較可能 |
-| CPU周波数 | turboと負荷で変動し、今回のrun-level構成値にならない |
-| free/available memory | 実験外の瞬間的な負荷を表す |
-| GPU情報 | 現在の`a-batch`はCPU-onlyであり対象外 |
-| `software.openfoam.*`、`software.module.*` | 対応する環境変数が一次情報であり重複する |
-| hostname、architectureの無条件な複製 | 対応する環境変数があるrunでは重複する |
+| OSの `PRETTY_NAME` | `ID` と `VERSION_ID` の組み合わせで十分に比較可能であるため |
+| CPU動作周波数 | ターボブーストや動的負荷によって常時変動し、実行レベルの静的構成値にならないため |
+| 空きメモリ量（free/available memory） | 当該実験の外部要因による瞬間的な負荷を表すに過ぎないため |
+| GPU情報 | 現在の対象である `a-batch` はCPU専用キューであり対象外であるため |
+| `software.openfoam.*`、`software.module.*` | 一次情報である環境変数そのものが保存されるため重複を避けるため |
+| ホスト名・アーキテクチャの無条件な複製 | 同等の環境変数が存在する環境では二重記録となるため |
 
 ## 参照仕様
 
-- Python `platform.freedesktop_os_release`:
-  <https://docs.python.org/3/library/platform.html#platform.freedesktop_os_release>
+- Python `platform.freedesktop_os_release`: <https://docs.python.org/3/library/platform.html#platform.freedesktop_os_release>
 - util-linux `lscpu`: <https://man7.org/linux/man-pages/man1/lscpu.1.html>
 - Linux `/proc/meminfo`: <https://docs.kernel.org/filesystems/proc.html>
-- 玄界 hardware:
-  <https://www.cc.kyushu-u.ac.jp/scp/en/system/genkai/hardware/>
+- 玄界 ハードウェア諸元: <https://www.cc.kyushu-u.ac.jp/scp/en/system/genkai/hardware/>

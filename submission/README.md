@@ -1,40 +1,40 @@
-# Tokyo Rapids with RIKEN OpenFOAM SUBMISSION
+# Tokyo Rapids with RIKEN OpenFOAM 提出物ガイド
 
-このディレクトリは提出準備用です。空の結果・辞書プレースホルダーと、Actions経路に一致しない練習用スクリプトは削除しました。提出時は選択したrunの成果物と、そのcommitのスクリプトから下記の内容を揃えます。
+本ディレクトリは競技提出物の準備用ディレクトリです。内容が空の結果ファイルや辞書ファイルのプレースホルダー、およびGitHub Actionsの実行経路と一致しない過去の検証用スクリプトは削除して整理されています。実際の提出にあたっては、選定した実実行（run）の成果物、およびその実行コミットにおけるスクリプトから以下の内容を揃えます。
 
-公式性能指標は2ステップ目以降の`Average wall-clock time per time step`（秒、小さいほど高速）。採点対象はGadi `normalsr` またはASPIRE-2Aの4ノードで、玄界の結果は参考資料と明記します。1/2/4ノードで40/80/150ステップを実行し、同cluster・build・最適化条件の通常benchからscalingを示します。profileの時間をbenchへ混ぜません。
+公式の性能評価指標は、2ステップ目以降の`Average wall-clock time per time step`（秒単位、小さいほど高速）です。採点対象はGadi（`normalsr`）またはASPIRE-2Aの4ノード環境であり、玄界での計測結果は参考資料として明記します。1ノード、2ノード、4ノード環境においてそれぞれ40、80、150反復を実行し、同一クラスタ・同一ビルド・同一最適化条件による通常ベンチマークからスケーリング性能を示します。なお、プロファイル計測の所要時間はベンチマーク結果に混入させません。
 
-| 提出内容 | 実runの正本 |
+| 提出項目 | 実実行における正本データ |
 | --- | --- |
-| build手順・WM_*・compiler/MPI | runの`control/build-sidecar.json`、`control/build-raw/`、実行commitのbuildスクリプト |
-| 全準備工程とMPI設定 | 実行commitの共通`run-openfoam.sh`・`prepare-openfoam-case.sh`、クラスタ別PJM/PBS、`logs/`とstage argv |
-| 実使用入力 | `source/mesh/decomposeParDict`、`controlDict`、`caseDefinition`。公式固定入力は`source/workload/` |
-| solverログ・公式結果 | `logs/solver.log`、`results/result.txt` |
-| Cd | `results/coefficient.dat`、元pathは`results/coefficient-source.json`。Cdに独自の合否閾値を設定しない |
-| scaling | 選択した1/2/4ノードrunから再生成するテキスト表。commitとActions・raw成果物への参照を含める |
-| profile解析 | 選択したprofile runのhotspotsと収集状態。benchとは区別する |
+| ビルド手順・`WM_*`・コンパイラ/MPI構成 | 各実行の`control/build-sidecar.json`、`control/build-raw/`、および実行コミットのビルドスクリプト |
+| 全準備工程とMPI設定 | 実行コミットの共通`run-openfoam.sh`・`prepare-openfoam-case.sh`、クラスタ別バッチスクリプト（PJM/PBS）、`logs/`および各ステージの引数（argv） |
+| 実際に使用した入力ファイル群 | `source/mesh/decomposeParDict`、`controlDict`、`caseDefinition`（公式の固定入力は`source/workload/`） |
+| ソルバーログ・公式判定結果 | `logs/solver.log`、`results/result.txt` |
+| 抗力係数（$C_d$） | `results/coefficient.dat`（取得元パスは`results/coefficient-source.json`に記録。$C_d$に対する独自の合否判定基準は設けない） |
+| スケーリングデータ | 選定した1/2/4ノードの実行結果から再生成したテキスト表（コミットハッシュ、GitHub Actions実行、生成果物への参照を含む） |
+| プロファイル解析結果 | 選定したプロファイル実行におけるホットスポット一覧と収集ステータス（通常ベンチマークとは区別して提示） |
 
-保存先はhome-labの`/hdd_raid/samba/net_share/openfoam-artifacts/<Actions run id>/<cluster>/`です。固定artifactの`artifact-manifest.json`と`run-artifacts.tar.zst`から必要なテキストを取得します。メッシュ、`processor*`、実行バイナリ、完全install tree、VTuneバイナリ結果は提出物へ含めません。
+成果物の保存先は、自宅サーバー（home-lab）の`/hdd_raid/samba/net_share/openfoam-artifacts/<Actions run id>/<cluster>/`です。固定成果物である`artifact-manifest.json`および`run-artifacts.tar.zst`から必要なテキストデータを抽出します。なお、メッシュデータ本体、`processor*`ディレクトリ、実行バイナリ、完全なインストールツリー、VTuneのバイナリ結果は提出物に含めません。
 
-固定artifact directoryを3件指定して表を再生成し、未作成の出力先へテキストを保存します（URL・directoryは選択した実runに置き換えます）。
+選定した3つの固定成果物ディレクトリを指定してスケーリング表を再生成し、未作成の出力先ディレクトリへテキストを保存します（URLおよびディレクトリパスは、実際に選定した実行のものに置き換えてください）。
 
 ```bash
 uv run --project experiment-metrics python -m experiment_metrics.scaling --run URL1 ARTIFACT_DIR1 --run URL2 ARTIFACT_DIR2 --run URL4 ARTIFACT_DIR4 --output-dir submission/openfoam
 ```
 
-出力は`scaling.txt`と`{1,2,4}node/<run_id>/`です。各runのlogs、results、実使用入力、build/run provenanceを含みます。同commit・cluster・build・workloadの通常benchだけを受け付け、ノード依存の反復数・rank数・既定transport差は表で明示します。step間標準偏差をrun間の測定ばらつきとして解釈しないでください。実行スクリプトは表にあるcommitから取得し、`scripts/`、対象`platforms/<cluster>/`、`.github/workflows/`のテキストを添えます。
+スクリプトを実行すると、`scaling.txt`および`{1,2,4}node/<run_id>/`が出力されます。ここには各実行のログ、結果、実使用入力、ビルドおよび実行の来歴情報（provenance）が含まれます。このツールは、同一コミット・同一クラスタ・同一ビルド・同一ワークロードによる通常ベンチマークのみを受け付け、ノード数に依存する反復回数、ランク数、既定の輸送特性（transport）の差分を表中に明示します。なお、ステップ間の標準偏差を複数回実行間の測定ばらつきとして解釈しないよう注意してください。提出する実行スクリプトは表に記載されたコミットから取得し、`scripts/`、対象の`platforms/<cluster>/`、`.github/workflows/`のテキストを添付します。
 
-面接はQwenとOpenFOAMを合わせた1つの発表資料で、15〜20分の発表と10分の質疑です。OpenFOAMの評価は発表60%、性能40%。分割方法・rank数・係数、最適化の理由、同条件の複数runによる改善とばらつき、1/2/4ノードのscalingを説明します。公式ルールは[対応表](../research/official-rules.md)から辿れます。
+最終審査のプレゼンテーションはQwenとOpenFOAMを合わせた単一の発表スライドで構成し、発表15〜20分、質疑応答10分で実施されます。OpenFOAMタスクの配点はプレゼンテーションが60%、性能評価が40%です。メッシュ分割手法、ランク数、各種係数の選定理由、最適化の意図、同一条件における複数回実行の改善度合いと測定ばらつき、ならびに1/2/4ノードのスケーリング特性について説明します。公式ルールの詳細は[ルール対応表](../research/official-rules.md)を参照してください。
 
-以下は公式の推奨配置例です（scheduler拡張子は使用クラスタに合わせます）。
+以下に公式の推奨ディレクトリ配置例を示します（ジョブスケジューラのスクリプト拡張子は使用クラスタに合わせて調整します）。
 
 ```
 submission/
-  ├── README.txt                  # including loaded site modules, or how you rebuilt if you did
+  ├── README.txt                  # 使用した環境モジュール、および再ビルド手順の記録（再ビルドを実施した場合）
   ├── build/
-  │   └── build.sh                # only if you rebuilt
+  │   └── build.sh                # 再ビルド用スクリプト（再ビルドを実施した場合のみ）
   ├── run/
-  │   ├── 1node.sbatch            # full prep chain, not only simpleFoam
+  │   ├── 1node.sbatch            # simpleFoam単体ではなく全準備工程を含む実行スクリプト
   │   ├── 2node.sbatch
   │   └── 4node.sbatch
   ├── dicts/
@@ -42,11 +42,11 @@ submission/
   │   ├── decomposeParDict
   │   └── controlDict
   ├── results/
-  │   ├── 1node/                  # text logs, including decomposePar
+  │   ├── 1node/                  # decomposeParを含む各種テキストログ
   │   ├── 2node/
   │   └── 4node/
   │       ├── simpleFoam.log
-  │       └── coefficient.dat     # Cd; copy from postProcessing/forceCoeffsAll
+  │       └── coefficient.dat     # postProcessing/forceCoeffsAllから取得したCd
   ├── scaling/
-  └── analysis/                   # optional profiling write-up
+  └── analysis/                   # プロファイル解析の考察（任意）
 ```

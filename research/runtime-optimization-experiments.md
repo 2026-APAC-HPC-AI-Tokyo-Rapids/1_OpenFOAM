@@ -10,8 +10,8 @@
 - 現在のビルド：既存のOpenFOAM v2606 Icx/Intel MPIアーカイブを再利用予定。
 - 現在の本番プリセット：1ノード、総ランク数120、Scotch領域分割、`I_MPI_FABRICS=shm`。
 - 現在の仮説：120ランク固定のカナリア構成では2ノードおよび4ノードの割当資源を十分に活用できない。細かなMPIランタイム調整を行う前に、物理コアを使い切るフルコア配置が優位になるはずである。
-- コミット `948e11f` での最初のフルコアスクリーニングは完了した。2ノード/240ランクで 3.3997 M FVOPS、4ノード/480ランクで 6.8139 M を記録し、いずれもVALID判定であった。同時実行した1ノードでの再測定（repeat）では 1.6996 M であった。
-- コミット `a5390da` でフルコアワークフロー `31634782784`（2ノード/240ランク）と `31634785406`（4ノード/480ランク）を再測定中である。次の比較要因（controlled factor）は4ノード/448ランクで、各NUMAドメインにつき1 CPUコアを意図的に空けておく構成である。
+- コミット `948e11f` による初回のフルコアスクリーニングは完了した。2ノード/240ランクで 3.3997 M FVOPS、4ノード/480ランクで 6.8139 M FVOPSを記録し、いずれもVALID判定となった。同時実行した1ノードでの再測定（repeat）では 1.6996 M FVOPSであった。
+- コミット `a5390da` においてフルコアワークフロー `31634782784`（2ノード/240ランク）および `31634785406`（4ノード/480ランク）を再測定中である。次の比較要因（controlled factor）は4ノード/448ランクであり、各NUMAドメインにつき1 CPUコアを意図的に空けておく構成を検証する。
 
 ## 本検証で採用した測定結果・根拠（エビデンス）
 
@@ -43,7 +43,7 @@
 
 ## Phase 0結果：暫定ノイズ範囲（測定誤差）
 
-現在利用可能な比較可能かつVALIDな1ノード結果5件は、1.6270、1.6392、1.6398、1.6400、1.6996 M FVOPSである。中央値（median）は1.6398 M、最小〜最大の変動幅（span）は中央値の4.4%である。最新結果は中央値より3.6%高いため、明確な環境要因が特定されない限り無効な外れ値（outlier）として安易に除外することはできない。交互の再測定でこの変動幅が狭まるまでは、4.4%未満の改善候補は有意差なし（区別不能）として扱う。
+現在利用可能な、比較可能かつVALIDな1ノード結果5件は、1.6270、1.6392、1.6398、1.6400、1.6996 M FVOPSである。中央値（median）は1.6398 M、最小〜最大の変動幅（span）は中央値の4.4%である。最新結果は中央値より3.6%高いため、明確な環境要因が特定されない限り、無効な外れ値（outlier）として安易に除外することはできない。交互の再測定によってこの変動幅が狭まるまでは、4.4%未満の改善候補は統計的有意差なし（区別不能）として扱う。
 
 ## Phase 1 スクリーニング：物理コアの全数使用（フルコア配置）
 
@@ -92,7 +92,7 @@ Actions実行 286（`31635007954`）において、全4ノードで意図どお�
 
 Actions 295（`31643727848`）は組み合わせ候補のE2E検証を完了した。ケース準備PJMジョブ `6467911` はキャッシュ `7366e001...` を公開し、ソルバーPJMジョブ `6467970`（Run ID `r-6f3e551e3c054d9baa58425e2dd6d202`）を実行した。公式結果はVALID、8.0757 M FVOPS、7.925 秒/ステップ、ソルバー実時間 51.676秒、パイプライン実時間 53.262秒であった。配置記録は採用済みの 112ランク/ノード CPUセットと完全一致した。領域分割はインターフェース面数 3,226,624、ランクペア数 2,008、平均隣接数 8.96（最大12）、ランクあたりセル数 142,857〜142,858、ノード間境界対向面数 320,000、14ランクNUMAグループ間境界対向面数 1,600,000 であった。これは本検証における単一最高スコアであり、448分割Scotchと比較して総面数を28.9%、ノード間面数を54.6%削減した。ただし448分割Scotch中央値に対する0.9%の優位性は単一実行の判定閾値（1%）に近いため、Actions `31645708556`（マルチレベル）と `31645711266`（Scotch対照群）を交互のキャッシュヒット再測定ペアとして実行した。
 
-このペアも残留PJMジョブなくE2Eを完了した。Actions `31645708556` はマルチレベルキャッシュをソルバーPJMジョブ `6467998` で実行し（Run ID `r-2f7657cc91c87bdcda8e68451367701b`）、公式VALID、8.0655 M FVOPS、7.935 秒/ステップ、ソルバー/パイプライン実時間 50.694 / 52.372秒を記録した。Actions `31645711266` はScotch対照群をソルバーPJMジョブ `6467989` で実行し（Run ID `r-c3aa0970c4b8792f42f4ff5c02830886`）、公式VALID、8.0025 M FVOPS、7.997 秒/ステップ、ソルバー/パイプライン実時間 51.295 / 53.017秒であった。いずれも正確な $4 	imes 112$ ランク配置を使用し、必要なActions/アーカイブジョブはすべて成功し、固定アーティファクトは自宅サーバーへ安全に保存された。
+このペアも残留PJMジョブなくE2Eを完了した。Actions `31645708556` はマルチレベルキャッシュをソルバーPJMジョブ `6467998` で実行し（Run ID `r-2f7657cc91c87bdcda8e68451367701b`）、公式VALID、8.0655 M FVOPS、7.935 秒/ステップ、ソルバー/パイプライン実時間 50.694 / 52.372秒を記録した。Actions `31645711266` はScotch対照群をソルバーPJMジョブ `6467989` で実行し（Run ID `r-c3aa0970c4b8792f42f4ff5c02830886`）、公式VALID、8.0025 M FVOPS、7.997 秒/ステップ、ソルバー/パイプライン実時間 51.295 / 53.017秒であった。いずれも正確な $4 \times 112$ ランク配置を使用し、必要なActions/アーカイブジョブはすべて成功し、固定アーティファクトは自宅サーバーへ安全に保存された。
 
 2件のマルチレベル結果は 8.0757、8.0655 M（中央値 8.0706 M、変動幅 0.13%）であった。3件のScotch結果は 8.0025、7.9850、8.0025 M（中央値 8.0025 M、変動幅 0.22%）であった。マルチレベルは一貫して高速であるものの、中央値の優位性は0.85%に留まり、事前に設定した最低1%の採用基準を下回った。したがって領域分割手法による差は統計的に有意差なしと記録し、よりシンプルな 448ランクScotch設定を4ノード標準構成として採用する。ノード/NUMA認識領域分割は性能改善としては採用しないが、通信トポロジーの有用な知見として記録を保持する。
 
@@ -144,27 +144,27 @@ Actions `31646485229` は既存ビルドとキャッシュ済み448分割Scotch�
 
 ### 公式タスク `occDrivAerStaticMesh-65M` での再測定（2026-08-22）
 
-Issue #18とSlackの公式告知で確定した公式タスクに合わせ、OpenFOAM.com `v2512`、`simpleFoam`、65,334,765セル、`scotch-4n-448r`、150反復で取り直した。ソース、メッシュ、物理・数値モデルは公式入力を変更していない。プロファイルは通常ベンチマークと分離し、各実験条件は `benchmark/profile.json` だけを変更した個別コミットから起動した。
+Issue #18およびSlackの公式告知で確定した公式タスク仕様に合わせ、OpenFOAM.com `v2512`、`simpleFoam`、65,334,765セル、`scotch-4n-448r`、150反復で再測定を実施した。ソース、メッシュ、物理・数値モデルはいずれも公式入力のままで変更していない。プロファイル計測は通常ベンチマークから分離し、各実験条件は `benchmark/profile.json` のみを変更した個別コミットから起動した。
 
-448ランクの実配置と `decomposePar` のprocessor interfaceを照合した結果、ランク0は隣接数12、interface 19,117面、ノード間面数0の内部ランクである。ランク168は隣接数27、interface 27,178面、ノード間面数10,975で全448ランク中の最大である。この2点を内部ランクと最大ノード間境界ランクの代表とした。
+448ランクの実配置と `decomposePar` のプロセッサインターフェース情報を照合した結果、ランク0は隣接数12、インターフェース 19,117面、ノード間面数0の内部ランクである。ランク168は隣接数27、インターフェース 27,178面、ノード間面数10,975で全448ランク中最大であった。この2点を内部ランクと最大ノード間境界ランクの代表とした。
 
-Hotspotsはソフトウェアサンプリング、stackなし、60秒attachで収集した。
+Hotspotsプロファイルはソフトウェアサンプリング、スタック収集なし、60秒アタッチで取得した。
 
 | ランク / Actions | Gauss-Seidel smooth | `lduMatrix::residual` | `PMPI_Allreduce` | `lduMatrix::Amul` | MPI | transport | MPI busy wait |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 0 / `32557452891` | 15.34% | 10.98% | 8.95% | 5.80% | 15.83% | 4.24% | 5.62% |
 | 168 / `32557788753` | 16.21% | 11.05% | 5.70% | 5.54% | 11.37% | 2.87% | 2.71% |
 
-旧 `icoFoam` で主要だったDIC/PCGではなく、新タスクではGauss-Seidel平滑化と残差計算が上位を占めた。両ランクで上位関数は安定している一方、MPIとbusy waitの比率はランク間で動く。これは単一ランクのCPU samplingであり、448ランク全体のwall-clock imbalanceやcritical pathとはみなさない。
+旧 `icoFoam` で主要であったDIC/PCGとは異なり、新タスクではGauss-Seidel平滑化と残差計算が上位を占めた。両ランクとも上位関数は安定している一方、MPI通信とbusy waitの比率はランク間で変動する。これは特定単一ランクのCPUサンプリング結果であり、448ランク全体の経過時間不均衡（wall-clock imbalance）やクリティカルパスを表すものとはみなさない。
 
-HPC Performance Characterizationも同じ60秒区間で別runとして取得した。実行全体のノードワイド指標は次のとおりである。
+HPC Performance Characterizationも同一の60秒区間で別実行として取得した。実行全体のノードワイド指標は以下のとおりである。
 
 | ランク / Actions | Memory Bound | Cache Bound | DRAM平均 | 高帯域利用時間 | packed FP | CPI |
 |---:|---:|---:|---:|---:|---:|---:|
 | 0 / `32559332236` | 61.4% | 18.1% | 400.798 GB/s | 99.8% | 14.9% | 0.836 |
 | 168 / `32559614531` | 63.8% | 17.9% | 404.585 GB/s | 99.9% | 15.0% | 1.192 |
 
-関数内でVTuneが分離したCPU時間正値ループを同名関数ごとにCPU時間で加重すると次の値となる。Memory BoundとL3/DRAMはストール分類であり、単純に加算する指標ではない。
+関数内でVTuneが分離したCPU時間正値ループを同名関数ごとにCPU時間で加重平均すると、次の値となる。Memory BoundとL3/DRAM Boundはパイプラインストールの分類であり、単純加算する指標ではない。
 
 | ランク | 関数 | Memory Bound | L3 Bound | DRAM Bound | packed FP |
 |---:|---|---:|---:|---:|---:|
@@ -175,29 +175,29 @@ HPC Performance Characterizationも同じ60秒区間で別runとして取得し�
 | 168 | `lduMatrix::residual` | 69.0% | 15.2% | 50.7% | 31.3% |
 | 168 | `lduMatrix::Amul` | 70.0% | 18.0% | 41.7% | 37.4% |
 
-実行全体は両ランクと61%以上がMemory Boundで、DRAMはほぼ全収集時間に高帯域利用であった。主要関数のうち残差計算とAmulは特にメモリ制約が強い。Gauss-Seidelは関数内に異なる性質のループを含むが、最大CPU時間のループは両ランクとも約65% Memory Boundである。したがって新タスクでもメモリトラフィックと局所性を第一の最適化対象とする。全体のpacked FPは約15%と低く、ベクトル化は二次的候補として残る。
+実行全体では両ランクともに61%以上がMemory Boundであり、DRAM帯域は測定時間のほぼ全域で高利用率状態を示した。主要関数のうち残差計算とAmulは特にメモリ制約が強い。Gauss-Seidelは関数内に異なる性質のループ群を含むが、最大CPU時間を占めるループは両ランクとも約65%がMemory Boundである。したがって新タスクにおいてもメモリトラフィックの削減とアクセス局所性の向上が最優先の最適化対象となる。全体のpacked FP比率は約15%と低く、SIMDベクトル化は二次的候補に留まる。
 
-確定runはHotspotsのランク0/168がそれぞれRun ID `r-a1b63aaf1503a7e04418763ca1f802b6` / `r-8823f456ad868ffda582261ab06baf9d`、PJM `6561080` / `6561124`、HPCのランク0/168がRun ID `r-c017d8cec58d31f53a99b56242f91b10` / `r-4fe6195d21cb0e71825bf2043302c0c2`、PJM `6561850` / `6561860` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
+確定した実行は、Hotspotsのランク0/168がそれぞれRun ID `r-a1b63aaf1503a7e04418763ca1f802b6` / `r-8823f456ad868ffda582261ab06baf9d`（PJM `6561080` / `6561124`）、HPCのランク0/168がRun ID `r-c017d8cec58d31f53a99b56242f91b10` / `r-4fe6195d21cb0e71825bf2043302c0c2`（PJM `6561850` / `6561860`）である。全4本においてソルバーの `Time = 150` 到達、公式パーサーの `STATUS: VALID`（測定区間149 / 設定反復150）、VTuneおよび対象プロセスの終了コード0、Actionsワークフローの成功、自宅サーバーへのレポートと生データの退避、玄界側原本の削除まで確認した。
 
 ### NCI Gadiでの再検証（2026-08-23）
 
-同じ公式タスクをGadiの4ノード、416 MPIランク（104ランク/ノード）で再検証した。Gadi上の実際の領域分割ではランク0のノード間境界面数は0、ランク59は全ランク中最大の10,472面であったため、この2ランクを内部ランクと最大ノード間境界ランクの代表とした。玄界の448ランク結果とはハードウェア、MPI配置、領域分割が異なるため、秒/反復や各比率をクラスタ間の性能差として直接比較しない。
+同一の公式タスクをNCI Gadiの4ノード、416 MPIランク（104ランク/ノード）で再検証した。Gadi上の実際の領域分割ではランク0のノード間境界面数は0、ランク59は全ランク中最大の10,472面であったため、この2ランクを内部ランクと最大ノード間境界ランクの代表とした。玄界の448ランク結果とはハードウェア、MPI配置、領域分割が異なるため、秒/反復値や各指標比率をクラスタ間の直接的な性能差として単純比較してはならない。
 
 | ランク / Actions | PBS / Run ID | 秒/反復 | Gauss-Seidel smooth | `lduMatrix::residual` | `PMPI_Allreduce` | `lduMatrix::Amul` | 明示的MPI/transport | MPI busy wait |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
 | 0 / `32583868264` | `177070940.gadi-pbs` / `r-c535f88f2fc47b7f9253c731fd68c248` | 2.05453 | 18.36% | 11.63% | 8.75% | 6.20% | 13.89% | 3.74% |
 | 59 / `32588095802` | `177074652.gadi-pbs` / `r-1c71a7dcd0b8dcbcf79d37247c12cfe3` | 2.04385 | 16.33% | 11.52% | 6.83% | 6.22% | 15.50% | 2.61% |
 
-両ランクとも公式parserはVALIDで、VTune収集プロセスと対象プロセスの終了コードは0であった。上位の計算カーネルは一致した一方、MPI比率はランクごとに変動した。これはselected rankのCPU samplingであり、416ランク全体のwall-clock imbalanceやcritical pathを表すものではない。
+両ランクとも公式パーサー判定はVALIDで、VTune収集プロセスと対象プロセスの終了コードは0であった。上位の計算カーネルは一致した一方、MPI比率はランクごとに変動した。これは特定ランクのCPUサンプリング結果であり、416ランク全体の経過時間不均衡やクリティカルパスを表すものではない。
 
-HPC Performance Characterizationは、GadiにVTune sampling driverがないことを踏まえてメモリ帯域収集を無効化し、Linux Perf driverlessのコアイベントで再実行した。初回の標準設定（Actions `32589820812` / `32589831654`）はsolverと公式parserがVALIDだったものの、「memory bandwidth collection requires sampling driver」でVTuneが終了コード1となった。これは計算結果の不正ではなく、Gadiで利用できないnode-wide帯域収集を要求したことが原因である。修正後の確定結果は次のとおりである。
+HPC Performance Characterizationは、GadiにVTune sampling driverが存在しないことを踏まえてメモリ帯域収集を無効化し、Linux Perf driverlessのコアイベントで再実行した。初回の標準設定（Actions `32589820812` / `32589831654`）はソルバーと公式パーサーがVALIDであったものの、「memory bandwidth collection requires sampling driver」によりVTuneが終了コード1を返した。これは計算結果の不正ではなく、Gadiで利用できないノードワイド帯域収集を要求したことに起因する。修正後の確定結果は以下のとおりである。
 
 | ランク / Actions | PBS / Run ID | 秒/反復 | Memory Bound | Cache Bound | DRAM Bound | packed FP | CPI |
 |---:|---|---:|---:|---:|---:|---:|---:|
 | 0 / `32594112966` | `177080269.gadi-pbs` / `r-0fc82f723eab238359f88e5ce0443967` | 2.18463 | 48.6% | 23.6% | 28.4% | 17.4% | 0.609 |
 | 59 / `32594130332` | `177080345.gadi-pbs` / `r-828545427e553f20f25a1b113840493b` | 2.16387 | 63.1% | 19.3% | 37.5% | 16.9% | 1.049 |
 
-同名関数内のCPU時間が正値のループをCPU時間で加重平均した値は以下である。Memory BoundとL3/DRAM Boundはストール分類であり、単純に加算しない。
+同名関数内のCPU時間が正値のループをCPU時間で加重平均した値は以下のとおりである。Memory BoundとL3/DRAM Boundはストール分類であり、単純加算してはならない。
 
 | ランク | 関数 | ループCPU時間 | Memory Bound | L3 Bound | DRAM Bound | packed FP | CPI |
 |---:|---|---:|---:|---:|---:|---:|---:|
@@ -208,11 +208,11 @@ HPC Performance Characterizationは、GadiにVTune sampling driverがないこ�
 | 59 | `lduMatrix::residual` | 1.800秒 | 40.42% | 2.56% | 20.04% | 41.02% | 1.240 |
 | 59 | `lduMatrix::Amul` | 1.160秒 | 46.90% | 25.79% | 21.64% | 47.20% | 1.439 |
 
-run全体では最大ノード間境界のランク59がランク0よりMemory Boundであったが、関数別指標はランク間の変動も大きい。両ランクともrun全体のpacked FPは約17%と低く、Gadiでもメモリ側の改善を優先する根拠になった。ただし、driverless収集ではnode-wide DRAM帯域値を取得していないため、Gadiの帯域飽和をこの結果だけで断定しない。
+実行全体としては、最大ノード間境界のランク59がランク0よりもMemory Boundの傾向が強かったが、関数別指標はランク間での変動も大きい。両ランクとも実行全体のpacked FP比率は約17%と低く、Gadiにおいてもメモリ側の改善を優先すべき根拠となった。ただし、driverless収集ではノードワイドのDRAM帯域値を取得できないため、Gadiのメモリ帯域飽和を本結果のみから断定することは避ける。
 
 ### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
 
-DIC cell-gather と PCG loop fusion を統合した現行ソースコードにおいて、採択済みの `scotch-4n-448r` をVTune Hotspotsで測定した。当初のActions #332ではランク0のみを観測したが、過去のAPS解析でランク0のMPI通信比率が他ランクより低かったため、単独では通信負荷や負荷不均衡（load imbalance）を代表しない。コミット `53512405eeeae088cc14ae574aeb2ed10dca8cdd` でプロファイル対象ランクをワークフロー入力から選択可能にし、スケジューラ要求、PJM環境変数、マニフェストへ記録できるようにした。測定条件は比較軸を固定するため、`hotspots`、ソフトウェアサンプリング、スタック収集なし、60秒アタッチのままとした。この条件は低オーバーヘッドで関数別の排他CPU時間（Exclusive CPU Time）を得る目的には妥当であるが、全ランクの通信待機時間を直接測定するものではない。
+DIC cell-gather と PCG loop fusion を統合したソースコードにおいて、採択済みの `scotch-4n-448r` をVTune Hotspotsで測定した。当初のActions #332ではランク0のみを観測したが、過去のAPS解析でランク0のMPI通信比率が他ランクより低かったため、単独では通信負荷や負荷不均衡（load imbalance）を代表しない。コミット `53512405eeeae088cc14ae574aeb2ed10dca8cdd` でプロファイル対象ランクをワークフロー入力から選択可能にし、スケジューラ要求、PJM環境変数、マニフェストへ記録できるようにした。測定条件は比較軸を固定するため、`hotspots`、ソフトウェアサンプリング、スタック収集なし、60秒アタッチのままとした。この条件は低オーバーヘッドで関数別の排他CPU時間（Exclusive CPU Time）を得る目的には妥当であるが、全ランクの通信待機時間を直接測定するものではない。
 
 同コミットのActions #334でタスク最小限ビルドを新規作成し、通常の1ノードE2E検証を公式VALID、アーティファクト退避、PJMクリーンアップまで完走させた。続くランク0、3、365のプロファイル測定は同一のビルドアーカイブ #334（474,567,727バイト、SHA-256: `34260960b2e8a105bc0c73cdd655a2e08c60016c3d161b1de478a8e173410b99`）を再利用した。ランク3はノード間通信面数が0の内部ランク（interior rank）、ランク365は16,967面で最大のノード間境界ランク（cross-node boundary rank）、ランク0はその中間である。
 
@@ -251,16 +251,16 @@ DIC cell-gather と PCG loop fusion を統合した現行ソースコードに�
 
 ### 公式タスク `occDrivAerStaticMesh-65M` での再測定（2026-08-22）
 
-Issue #14の新タスクと同じOpenFOAM.com `v2512` / `simpleFoam` / 4ノード / 448ランク / 150反復、ランク0と最大ノード間境界のランク168で取り直した。標準 `memory-access` は同居ノードのアンコア帯域幅、補完の `memory-access-core` はselected rankのPerf driverless/PEBSイベントを収集する別runである。
+Issue #14の新タスクと同一の条件（OpenFOAM.com `v2512`、`simpleFoam`、4ノード、448ランク、150反復）を用い、ランク0および最大ノード間境界のランク168で再測定を実施した。標準の `memory-access` は同居ノード全体のアンコア帯域幅を、補完の `memory-access-core` は対象ランクのPerf driverless/PEBSイベントを収集する別実行である。
 
 | ランク / Actions | DRAM平均 | 観測最大 | 高利用率時間 | single-package平均 / 較正最大 | DRAM BW Bound | UPI平均 / 高利用率時間 |
 |---:|---:|---:|---:|---:|---:|---:|
 | 0 / `32559806220` | 422.944 GB/s | 494.500 GB/s | 99.7% | 215.842 / 247 GB/s | 86.4% | 9.326% / 0.0% |
 | 168 / `32560022792` | 426.630 GB/s | 494.700 GB/s | 100.0% | 218.415 / 247 GB/s | 87.9% | 9.405% / 0.0% |
 
-両ノードとも平均DRAM帯域は観測最大の85%以上、single-package平均はVTune較正最大の87%前後に達した。収集時間のほぼ全てがDRAM高利用率状態で、UPIの高利用率時間は0%である。ノード全体の第一制約はDRAM帯域幅である。標準Memory AccessはSEPのnode-wideアンコアを正常に取得したが、旧タスクと同様に `CPU Time=0` / 関数row 0であるため、関数別の判定には使わない。
+両ノードとも平均DRAM帯域は観測最大値の85%以上に達し、single-package平均はVTune較正最大値の87%前後に達した。収集時間のほぼ全域がDRAM高利用率状態であり、UPIリンクの高利用率時間は0%であった。したがってノード全体の第1の制約はDRAM帯域幅である。標準のMemory Access収集はSEPによりノード全体のアンコア情報を正常に取得できたが、旧タスクと同様に `CPU Time=0` かつ関数行が0件となるため、関数別の詳細判定には使用しない。
 
-selected-rankのPEBSイベントによる主要3関数の結果は次のとおりである。`LLC-to-memory`はlocal/remote DRAMとremote cache/fwdの合計をload数で割った値、`remote`はremote DRAM/fwd/HITMの関数帰属イベント数である。
+selected-rankのPEBSイベントによる主要3関数の解析結果は以下のとおりである。`LLC-to-memory`はlocal/remote DRAMとremote cache/fwdの合計をロード数で割った値、`remote`はremote DRAM/fwd/HITMの関数帰属イベント数である。
 
 | ランク | 関数 | load / store | 平均load latency | long-load latency | LLC-to-memory / load | STLB miss / load | DTLB walk / clocks | remote |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
@@ -271,13 +271,13 @@ selected-rankのPEBSイベントによる主要3関数の結果は次のとお�
 | 168 | `lduMatrix::residual` | 6.785 / 1.795 G | 24.43 cycle | 49.90 cycle | 0.485% | 0.00147% | 0.088% | 0 |
 | 168 | `lduMatrix::Amul` | 4.248 / 1.341 G | 19.81 cycle | 35.22 cycle | 0.434% | 0.00118% | 0.180% | 0 |
 
-Gauss-Seidelは両ランクで最大のload/storeトラフィックを持ち、残差計算とAmulはGauss-SeidelよりLLC-to-memory率とlong-load latencyが高い。したがって第一候補はGauss-Seidelのメモリトラフィック削減、次点は残差計算とAmulのキャッシュ局所性改善である。主要3関数のremoteイベントは0、STLB missは0.0015%未満、DTLB walkは最大0.202%である。NUMA再配置やHuge Pageは優先度の高い候補としない。
+Gauss-Seidelは両ランクで最大のload/storeトラフィックを占め、残差計算とAmulはGauss-SeidelよりもLLC-to-memory率およびlong-load latencyが高い。したがって第1候補はGauss-Seidelのメモリトラフィック削減であり、次点が残差計算およびAmulのキャッシュ局所性改善となる。主要3関数のremoteメモリアクセスイベントは0件、STLBミス率は0.0015%未満、DTLBウォーク比率は最大でも0.202%であった。したがってNUMA再配置やHuge Pageの適用は優先度の高い候補とはしない。
 
-標準Memory Accessのランク0/168はRun ID `r-238e8bbd894d0ee04528f02cb9573897` / `r-2d004aa368ff80dfcd1d062035cd9f53`、PJM `6561875` / `6561925`、core eventのランク0/168はRun ID `r-adc73c31121a2f7141e6c8dd22d41516` / `r-540a5633b9a9abc270a3ae46dc752562`、PJM `6561930` / `6561938` である。全4本でsolverの `Time = 150` 到達、公式parserの `STATUS: VALID`（測定区間149 / 設定反復150）、VTune/target exit code 0、Actions成功、自宅サーバーへのレポートとfull rawの保管、玄界原本の削除まで確認した。
+標準Memory Accessのランク0/168はRun ID `r-238e8bbd894d0ee04528f02cb9573897` / `r-2d004aa368ff80dfcd1d062035cd9f53`（PJM `6561875` / `6561925`）、core eventのランク0/168はRun ID `r-adc73c31121a2f7141e6c8dd22d41516` / `r-540a5633b9a9abc270a3ae46dc752562`（PJM `6561930` / `6561938`）である。全4本においてソルバーの `Time = 150` 到達、公式パーサー判定 `STATUS: VALID`（測定区間149 / 設定反復150）、VTuneおよび対象プロセスの終了コード0、Actionsワークフロー成功、自宅サーバーへのレポートと生データの退避、玄界側原本の削除まで確認した。
 
 ### NCI Gadiでの再検証（2026-08-23）
 
-Issue #14と同じ4ノード/416ランク、ランク0/59でMemory Accessを再検証した。標準 `memory-access` のActions `32589842414` / `32589851532` はsolverと公式parserがVALIDだったが、VTuneはGadiにsampling driverがないためnode-wideメモリ帯域を収集できず終了コード1となった。したがってGadiについては標準Memory AccessからDRAM帯域値を報告せず、Perf driverless/PEBSの `memory-access-core` を関数別分析の確定値とする。
+Issue #14と同一の4ノード/416ランクを用い、ランク0および59でMemory Accessを再検証した。標準 `memory-access` のActions `32589842414` / `32589851532` はソルバーおよび公式パーサー判定がVALIDであったが、VTuneはGadiにsampling driverが存在しないためノードワイドのメモリ帯域を収集できず、終了コード1となった。したがってGadiについては標準Memory AccessからDRAM帯域値を報告せず、Perf driverless/PEBSの `memory-access-core` を関数別分析の確定値として扱う。
 
 | ランク / Actions | PBS / Run ID | 公式結果 | VTune関数row |
 |---:|---|---|---:|
@@ -293,9 +293,9 @@ Issue #14と同じ4ノード/416ランク、ランク0/59でMemory Accessを再�
 | 59 | `lduMatrix::residual` | 8.274 / 2.111 G | 75.91 cycle | 50.55 cycle | 0.5241% | 0.01995% | 0.870% | 0 |
 | 59 | `lduMatrix::Amul` | 4.642 / 1.419 G | 107.20 cycle | 25.02 cycle | 0.5129% | 0.01401% | 0.722% | 0 |
 
-Gauss-Seidelは両ランクで最大のload/store量を持ち、残差計算とAmulはLLC-to-memory率やlong-load latencyが相対的に高いという玄界と同じ傾向であった。ランク59の総レイテンシから算出した平均load latencyはランク0より大幅に高い一方、long-load latency自体は同程度であり、単一runから416ランク全体へ一般化しない。remoteイベントは全6関数で0、STLB missは0.02%未満、DTLB walkは0.9%未満であるため、GadiでもNUMA再配置やHuge Pageを最優先候補とする根拠は得られなかった。
+Gauss-Seidelは両ランクで最大のload/store量を占め、残差計算とAmulはLLC-to-memory率やlong-load latencyが相対的に高いという玄界と同様の傾向を示した。ランク59の総レイテンシから算出した平均load latencyはランク0より大幅に高い一方、long-load latency自体は同程度であり、単一実行から416ランク全体へと一般化することは避ける。remoteイベントは全6関数で0件、STLBミス率は0.02%未満、DTLBウォーク比率は0.9%未満であったため、GadiにおいてもNUMA再配置やHuge Pageを最優先候補とする根拠は得られなかった。
 
-全Gadi runの固定ログと公式結果はActions run単位で自宅サーバーへ保存した。full VTune結果が生成されたrunでは `large-output/vtune/vtune-result.tar.zst`、ParaView用processor群は全runで単一の `large-output/paraview/paraview-case.tar.zst` とし、いずれも `/hdd_raid/samba/net_share/openfoam-artifacts/<actions-id>/gadi/<artifact>/` 配下に置いた。転送は `home-lab` ラベルのself-hosted runnerである `tomokazu-ubuntu-server` からGadiへ直接SSHしてpullし、検証後にGadi側原本を削除する。GitHub-hosted runnerやTailscaleを大容量データ経路に使用しない。初回にVTune結果が生成されなかった4 runについても、修正後の転送処理で `vtune_result_available=false` を明示し、ParaView archiveと固定エラーログを回収した。
+全Gadi実行の固定ログと公式結果は、Actions実行単位で自宅サーバーへ保存した。完全なVTune結果が生成された実行では `large-output/vtune/vtune-result.tar.zst`、ParaView用プロセッサ領域データ群は全実行で単一の `large-output/paraview/paraview-case.tar.zst` としてまとめ、いずれも `/hdd_raid/samba/net_share/openfoam-artifacts/<actions-id>/gadi/<artifact>/` 配下へと配置した。データ転送は `home-lab` ラベルのセルフホステッドランナー（`tomokazu-ubuntu-server`）からGadiへ直接SSH接続してプル（pull）し、転送検証後にGadi側の原本を削除した。GitHub-hosted runnerやTailscaleは大容量データ経路には使用しない。初回にVTune結果が生成されなかった4実行についても、修正後の転送処理で `vtune_result_available=false` を明示し、ParaViewアーカイブと固定エラーログを正常に回収した。
 
 ### 旧 `cavity3D-64M / icoFoam / v2606` 調査（historical）
 

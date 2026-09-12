@@ -1,59 +1,59 @@
-# 公式65Mケースの玄界E2Eとランク数比較
+# 公式65Mケースの玄界E2E検証およびランク数比較
 
-## 結論と範囲
+## 結論と本検証の範囲
 
-玄界4ノードは448ランクを維持する。480ランク候補は各2回の比較で平均step時間が6.95%増え、今回の条件では採用する根拠がなかった。OpenFOAMのsolverソース、公式物理条件、固定反復数は変更していない。
+九州大学「玄界」における4ノード実行では、448ランク（1ノードあたり112ランク）の構成を維持する。480ランク（1ノードあたり120ランク）の候補構成について各2回の比較検証を実施したところ、平均ステップ時間が6.95%増加し、現行の条件下で480ランクを採用する技術的根拠は見出せなかった。なお、OpenFOAMのソルバーソースコード、公式の物理条件設定、および規定の反復ステップ数は一切変更していない。
 
-これは玄界での参考検証であり、Gadi/ASPIRE-2Aの公式スコアではない。両採点環境は障害中とのユーザー連絡に基づき実行していない。公式要件との対応は[official-rules.md](official-rules.md)、進捗と障害の記録は[Issue #27](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/27)を参照。
+本検証は玄界における参考測定であり、GadiおよびASPIRE-2Aにおける公式スコアではない。両採点環境はシステム障害中との連絡に基づき、実行を見合わせている。公式ルールとの対応関係は[ルール対応表](official-rules.md)を、作業進捗および障害記録の詳細は[Issue #27](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/27)を参照のこと。
 
-## 来歴と正本
+## 来歴情報と正本データ
 
-- 基準ビルド: [Actions 34051411071](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34051411071)、build定義 `ad25caf3f16ee186d42497e098913495061453a2`。
-- OpenFOAM.com v2512、DP/label32、Intel compiler/MPI、公式65,334,765セル、Scotch、uncollated。実際のコンパイル設定、実行ファイル、MPIは各runのbuild sidecarとprovision validationが正本。
-- raw成果物: home-lab `/hdd_raid/samba/net_share/openfoam-artifacts/<Actions id>/genkai/`。固定bundleのmanifestを検証して以下の結果を再解析した。
-- 比較用メトリクス: BigQuery `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_metrics` の `result.official` / `result.aero_sanity`。実ログ・Cdとの一致を確認した。計算ノードへBigQuery資格情報は渡していない。
+- 基準ビルド: [Actions 34051411071](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34051411071)、ビルド定義コミット `ad25caf3f16ee186d42497e098913495061453a2`。
+- 実行構成: OpenFOAM.com v2512、倍精度（DP）/32ビットラベル（label32）、Intel oneAPIコンパイラ/Intel MPI、公式粗格子（65,334,765セル）、Scotch分割、uncollatedファイルハンドラ。実際のコンパイルオプション、実行バイナリ、およびMPI構成は、各実行のビルドサイドカーおよびプロビジョニング検証ログを正本とする。
+- 生成果物（raw artifacts）: 自宅サーバー（home-lab）の `/hdd_raid/samba/net_share/openfoam-artifacts/<Actions id>/genkai/`。固定バンドルのマニフェストを検証し、後述の結果を再解析した。
+- 比較用メトリクス: Google BigQuery `apac-hpc-ai-tokyo-rapids-26.openfoam_experiment_metrics.openfoam_metrics` 内の `result.official` および `result.aero_sanity`。実ログおよび抗力係数（$C_d$）との完全一致を確認済みである。なお、計算ノード環境に対してBigQueryの認証情報は渡していない。
 
-## 同一コミットの1/2/4ノード系列
+## 同一コミットにおける1/2/4ノードスケーリング系列
 
-基準commitは `e944313d62fd56744e7f36b34a0f490c071a07cb`。build/MPI/workload/mesh/準備スクリプト/計装と、ノード依存値を除く実使用入力の一致を正式scaling CLIで確認した。
+基準コミットは `e944313d62fd56744e7f36b34a0f490c071a07cb` である。ビルド、MPI、ワークロード、メッシュ、準備スクリプト、計測計装、およびノード依存パラメータを除く実使用入力の一致を、公式スケーリング集計CLIを用いて確認した。
 
-| ノード | ranks | steps | 平均秒/step | 最終Cd | Actions |
+| ノード数 | ランク数 | 反復数 | 平均秒/step | 最終 $C_d$ | GitHub Actions実行 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 120 | 40 | 8.159013426102565 | 0.43590741346883244 | [34052149354](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052149354) |
 | 2 | 240 | 80 | 4.129346024594936 | 0.33852274430525320 | [34052151091](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052151091) |
 | 4 | 448 | 150 | 1.985350879583894 | 0.28455000886604298 | [34052897447](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052897447) |
 
-全件公式`VALID`。平均は最初のstepを除いたwall-clock時間で、準備やprofileの時間ではない。1ノードはshm、複数ノードはshm:ofi。反復数とrank数が異なるため、同一の総仕事量を処理するstrong-scaling試験とは区別する。Cdに公式の合否閾値はなく、referenceとの比較はsanity確認に限る。
+全件について公式判定パーサーの出力は `VALID` である。平均ステップ時間は最初の1ステップ（初期化等を含む）を除外した経過時間（wall-clock time）であり、ケース準備やプロファイルの所要時間は含まない。MPI通信ファブリックは1ノード実行が `shm`、複数ノード実行が `shm:ofi` である。なお、ノード数ごとに反復数およびランク数が異なるため、同一の総計算量を評価する強スケーリング（strong scaling）試験とは性質が異なる点に留意する。$C_d$ については公式の合否閾値は定義されておらず、参考値との比較は健全性確認（sanity check）の目的に限定される。
 
-`uv run --project experiment-metrics python -m experiment_metrics.scaling` に3件のURLとartifact directory、`--output-dir`を指定し、172 UTF-8テキストファイルを生成した。必須ログ、結果、実入力、来歴とbinary非混入を確認。再生成方法は[submission/README.md](../submission/README.md)。表の標準偏差は測定対象step間のばらつきであり、run間のばらつきではない。
+`uv run --project experiment-metrics python -m experiment_metrics.scaling` に対し、上記3件のURL、成果物ディレクトリ、および `--output-dir` を指定して実行し、172件のUTF-8テキストファイルを生成した。必須ログ、公式結果、実入力ファイル、来歴情報が正しく含まれ、バイナリファイルが混入していないことを検証した。再生成の具体的な手順は[submission/README.md](../submission/README.md)を参照のこと。なお、表中の標準偏差は測定対象ステップ間のばらつきを示すものであり、複数回実行間のばらつきではない。
 
-## 448対480ランク
+## 448ランクと480ランクの比較
 
-候補commit `32ae88c01338e9f80ae0002157ea7aff1c7b1bba` は基準e944313の子で、4ノードの使用rank数を448から480へ変えた。build、MPI、メッシュ、150step、準備条件を固定し、既存のランク配置規則に従う112対120 ranks/nodeを比較した。
+候補コミット `32ae88c01338e9f80ae0002157ea7aff1c7b1bba` は基準コミット `e944313` の子コミットであり、4ノード環境での総ランク数を448から480へ変更したものである。ビルド、MPI設定、メッシュ、150反復、および準備条件を完全に固定し、既存のランク配置規則に従って1ノードあたり112ランク（計448ランク）と120ランク（計480ランク）の性能を比較した。
 
-| ranks | 1回目の平均秒/step | 2回目の平均秒/step | 2run平均 | Actions |
+| ランク数 | 1回目平均秒/step | 2回目平均秒/step | 2実行平均 | GitHub Actions実行 |
 | --- | --- | --- | --- | --- |
 | 448 | 1.985350879583894 | 1.978047149865772 | 1.981699014724833 | [34052897447](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052897447), [34052963885](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052963885) |
 | 480 | 2.103996287375839 | 2.134978052127516 | 2.1194871697516775 | [34052154891](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052154891), [34052965770](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052965770) |
 
-各条件の2回で最終Cdは一致した。480ではstep時間のばらつきも大きかった。ただし比較4runは下記の修正前hardware取得障害に該当し、ノードごとのhardware観測が欠けるため、ノード環境の同一性は未検証である。これは2回ずつの観測であり、全クラスタ・全配置で480が必ず不利という主張ではない。差の原因を単一ランクのprofileだけで断定しない。
+各条件の2回の実行において、最終ステップの $C_d$ 値は完全に一致した。480ランク構成ではステップ時間のばらつきも大きくなる傾向が確認された。ただし、比較に用いた4実行は後述するハードウェア情報取得障害の修正前の実行に該当し、ノードごとのハードウェア観測データが一部欠落しているため、ノード割り当て環境の完全な同一性までは検証できていない。本結果は各2回の観測に基づくものであり、あらゆるクラスタや配置条件において480ランクが常に不利であると一般化するものではない。また、性能差の要因を単一ランクのプロファイル情報のみから断定することは避けるべきである。
 
-候補はmainへ取り込まず、`archive/genkai-4n-480r-20260907`タグへ履歴を保存して一時ブランチを削除した。
+検証の結果、本候補コミットは `main` ブランチへマージせず、`archive/genkai-4n-480r-20260907` タグとして履歴を保存した上で作業ブランチを削除した。
 
-## 段階別時間とprofile
+## 各処理段階の所要時間とプロファイル分析
 
-新規ビルドを含む初回448run [34051411071](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34051411071)（ad25caf、`r-6b6de8ca2866ebd6b628e598652d2bbe`、上記e944313の比較系列とは別）では、PJM実行465秒のうちsolver stageが321.9秒、case配置が72.3秒、renumberが11.8秒、potentialFoamが12.7秒、applyBoundaryLayerが7.1秒だった。公式149step合計296.25秒とsolver stage全体は異なる指標。新規build、mesh準備、queueもworkflow全体の時間へ影響しており、全所要時間だけからsolverのボトルネックを推測しない。
+新規ビルドを含む初回の448ランク実行 [34051411071](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34051411071)（コミット `ad25caf`、Run `r-6b6de8ca2866ebd6b628e598652d2bbe`、上記 `e944313` の比較系列とは別系統）では、PJMジョブ全体の経過時間465秒のうち、ソルバーステージが321.9秒、ケース配置が72.3秒、`renumberMesh` が11.8秒、`potentialFoam` が12.7秒、`applyBoundaryLayer` が7.1秒を占めた。公式の採点対象である149ステップの合計時間（296.25秒）とソルバーステージ全体の所要時間は異なる指標である。新規ビルド、メッシュ準備、ジョブキュー待機時間もワークフロー全体の所要時間に大きく影響するため、全体の経過時間のみからソルバーのボトルネックを推測してはならない。
 
-4ノードprofile [34052899061](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052899061) はrank0へ60秒のVTune hotspots収集を接続し、221関数・報告CPU時間57.27秒を取得した。GaussSeidel平滑化17.60%、行列残差11.18%、Allreduce7.80%、行列積5.70%、Waitall3.11%。これは1ランクのサンプル内訳であり、全rank・全実行の割合ではない。profileのstep時間を上記bench比較には使用しない。
+4ノードのプロファイル実行 [34052899061](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34052899061) では、MPIランク0に対して60秒間Intel VTuneのHotspots収集をアタッチし、221関数・報告CPU時間57.27秒のプロファイルを取得した。内訳は、Gauss-Seidel平滑化が17.60%、行列残差計算が11.18%、`Allreduce` が7.80%、行列積が5.70%、`Waitall` が3.11%であった。これは単一ランク（ランク0）におけるサンプリング内訳であり、全ランク・全実行時間の割合を示すものではない。なお、プロファイル実行におけるステップ時間は上記の通常ベンチマーク比較には含めない。
 
-warmupの時刻0 coefficientは`profile/raw/warmup-postProcessing`へ退避し、正式150stepの`results/coefficient.dat`と分離した。ParaViewには448分割のmeshと保存済み時刻0のfieldがある。noWrite設定のため最終150stepのfieldではなく、最終値の検証はsolverログとCdによる。
+ウォームアップ段階（時刻0）の係数データは `profile/raw/warmup-postProcessing` へ退避し、正式な150反復の `results/coefficient.dat` と厳密に分離した。ParaView用アーカイブには448分割のメッシュと時刻0の保存フィールドが含まれる。`noWrite` 設定で実行しているため、これは最終150反復のフィールドデータではなく、最終反復の計算状態の検証にはソルバーログおよび $C_d$ データを用いる。
 
-## 実障害と修正後検証
+## 発生した実障害と修正後の検証結果
 
-- `b9960e5`: 利用可能なrank/toolchain/content別case cacheでも準備ジョブを投入していたため、login側の既存identity確認でhit時の投入を省略。[回帰34053564239](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34053564239)は成功。
-- `c62a364`: MPIへ固定済みのPATHが古いOS Python3.6を選び、複数ノードのhardware取得に失敗。配備済みinterpreterを明示し、失敗ログも固定bundleへ保存する。[2ノードprofile34054205977](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34054205977)でminimal/profileの両段階がexit0、両nodeのraw SHAとBigQuery一致を確認。34 raw memberと18 profile.hardware factsも照合した。solverは80step VALID、Cdは0.33852274430525320。修正前runのhardware記録欠落は遡って成功扱いにしない。
-- `c1017ca`: profile転送がrunner内にない旧設定ファイルを要求して失敗。既存のクラスタ接続ラッパーへ移行。取得済み出力は残り、一時回収Actionsで計算を再実行せず復旧する。
+- `b9960e5`: 同一のランク数・ツールチェーン・ケース内容に基づく利用可能なケースキャッシュが存在する場合でも準備ジョブを投入していた不具合を修正。ログインノード側の識別子照合により、キャッシュヒット時のジョブ投入を省略するように改善。[回帰検証 34053564239](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34053564239) の成功を確認した。
+- `c62a364`: MPI環境に固定設定されていた `PATH` により古いシステム既定のPython 3.6が呼び出され、複数ノードにおけるハードウェア情報の収集に失敗していた問題を修正。配備済みの適切なPythonインタープリタを明示的に指定し、収集失敗時のログも固定バンドルへ確実に保存するよう変更。[2ノードプロファイル 34054205977](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34054205977) において、通常段階およびプロファイル段階の双方が終了コード0で完走し、両ノードの生データSHA-256ハッシュとBigQueryレコードの一致を確認した。また、34件の生データメンバーおよび18件のハードウェアファクトの整合性を確認した。ソルバーは80反復で `VALID` 判定となり、$C_d$ は0.33852274430525320を記録した。なお、修正前の実行におけるハードウェア情報の欠落を遡って成功扱いに変更することはない。
+- `c1017ca`: プロファイル成果物の転送処理が、ランナー環境に存在しない旧形式の設定ファイルを要求して異常終了していた問題を修正。既存のクラスタ接続ラッパー経由の転送方式へと移行した。クラスタ上に残存していた取得済み出力データは保持されていたため、計算を再実行することなく一時的な回収用Actionsを用いて安全に復旧した。
 
-4ノードprofileの保存は[回収Actions34054785959](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34054785959)で成功。固定成果物、VTune、10,519,515,667 bytesのParaView archiveを検証し、元run directoryと転送stagingの削除を確認した。2ノードprofileの大容量回収も[34055572506](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34055572506)で成功。元の2件のActionsは転送失敗の履歴として残し、計算を再投入せず回収を別Actionsへ記録した。復旧専用の一時workflowは役割を終えたため削除した。
+4ノードプロファイル成果物の保存は、[回収用Actions 34054785959](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34054785959) により正常に完了した。固定成果物、VTuneデータ、および10,519,515,667バイトのParaViewアーカイブを検証し、元の実行ディレクトリおよび転送用ステージング領域が適切にクリーンアップされたことを確認した。2ノードプロファイルの大容量成果物の回収も [34055572506](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/34055572506) により成功した。元の2件のActions実行は転送失敗の履歴として保持しつつ、計算の無駄な再投入を避け、回収処理を別Actions実行として記録した。復旧専用の一時ワークフローは役割を終えたため削除済みである。
 
-通常bench8件はActions全体で成功し、profile2件も上記の復旧を含め保存まで完了した。#21/#23/#24/#25は完了。#22のGadi PBS実機確認のみ、障害復旧後の後続事項として残す。
+通常ベンチマーク8件はGitHub Actions上で完走し、プロファイル計測2件も上記の復旧を含め保存まで完了した。これにより、Issue #21、#23、#24、#25 は完了となった。Issue #22（GadiにおけるPBS実機検証）のみ、採点クラスタの障害復旧後の対応事項として残している。

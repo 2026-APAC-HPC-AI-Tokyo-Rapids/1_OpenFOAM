@@ -1,209 +1,121 @@
 # OpenFOAM v2 観測マップ（旧設計資料）
 
-> この文書はmerge/projection時代の設計記録であり、現行実装の正本ではない。
-> BigQueryへ送信するkeyと収集除外項目は
-> `research/experiment-metrics-v2-key-catalog.md` を参照する。
+> [!NOTE]
+> 本ドキュメントは旧merge/projectionアーキテクチャ検討時の設計記録であり、現行実装の正本ではない。BigQueryへ送信するメトリクスキーおよび収集対象外項目の最新仕様は、[キーカタログ](experiment-metrics-v2-key-catalog.md)を参照のこと。
 
-## この文書の役割
+## 本ドキュメントの役割
 
-この文書は、各factについて「どこにある値を、誰が、いつ取得するか」を固定する実装契約で
-ある。[概要計画](./experiment-metrics-v2-plan.md)が情報モデルと比較規則、
-[contract schema handoff](./experiment-metrics-v2-contract-schemas.md)がfield-level shapeを定め、本書が実コード・
-command・artifactへの配線を定める。
+本ドキュメントは、各ファクト（fact）について「どこに存在する値を、誰が、どの契機で取得するか」を規定する実装契約である。[概要計画](./experiment-metrics-v2-plan.md)が情報モデルおよび比較評価規則を定め、[コントラクトスキーマ仕様](./experiment-metrics-v2-contract-schemas.md)がフィールドレベルのデータ構造を定め、本書が実際のコード、コマンド、および成果物との配線関係を定義する。
 
-key registryへ入れるには、次の六項目を全て埋めなければならない。
+キーレジストリへ新規エントリを登録する際は、以下の6項目を網羅的に定義しなければならない。
 
-1. authoritative source: object、structured file、command、またはsource symbol
-2. producer: そのsourceを一度だけ読むowner
-3. capture moment: 値が確定し、まだ失われていない時点
-4. raw destination: `run/key/value`または耐久artifact
-5. validation: 誤読、scope混同、部分取得を検出する規則
-6. applicability: どのrun variantで取得するか
+1. 正となる取得元（authoritative source）: オブジェクト、構造化ファイル、コマンド、またはソースコード上のシンボル
+2. プロデューサー（producer）: 当該取得元を一度だけ読み取る責任コンポーネント
+3. 取得契機（capture moment）: 値が確定し、揮発・消失していない時点
+4. 生データの格納先（raw destination）: `run/key/value` テーブルまたは永続成果物
+5. 検証規則（validation）: 誤読、スコープの混同、部分的な不完全取得を検出するためのバリデーション
+6. 適用範囲（applicability）: どの実行バリアント（bench / profile）で取得するか
 
-sourceの優先順位は、native object/API、machine-readable command/file、専用structured marker、
-stable log parser、汎用text regexの順とする。選んだsourceをfixtureで確認する。通常runで同じ値を
-上位・下位sourceから二重取得する必要はない。設定fileに書いた値を、実効値として扱ってはならない。
+データ取得元の優先順位は、ネイティブオブジェクト/API、機械可読なコマンド/構造化ファイル、専用の構造化マーカー、安定したログパーサー、汎用正規表現テキスト解析の順とする。選定した取得元は単体テスト用フィクスチャにより動作を保証する。通常実行において、同一の値を上位・下位の複数取得元から二重取得する必要はない。また、静的な設定ファイルに記述された値を、実行時の実効値とみなしてはならない。
 
-## 値の段階とscope
+## 値のライフサイクル段階とスコープ
 
-同じ名前の値でも次の段階が違えば別factである。
+同一名称のパラメータであっても、以下のライフサイクル段階が異なれば独立した別個のファクトとして扱う。
 
-| 段階 | 意味 | 例 |
+| 段階 | 意味・定義 | 具体例 |
 |---|---|---|
-| requested | 人間またはschedulerへ要求した値 | PJM node/proc、decomposition method |
-| launch-effective | exec直前に構成された値 | 実argv、exec環境、CPU affinity |
-| runtime-observed | programが初期化後に使用した値 | OpenFOAM header、Pstream state |
-| result-observed | 実行により生じた値 | ExecutionTime、residual、exit code |
+| 要求値（requested） | 人間またはジョブスケジューラへ明示的に要求した設定値 | PJMノード数/プロセス数、領域分割手法 |
+| 実行実効値（launch-effective） | プロセス起動（exec）の直前に動的構成された実効値 | 実際の起動引数列（argv）、実行環境変数、CPUアフィニティ |
+| 実行時観測値（runtime-observed） | プログラムが初期化完了後に内部で使用した実測値 | OpenFOAM起動ヘッダー、Pstream内部通信状態 |
+| 計算結果観測値（result-observed） | 計算の進行・完了に伴って生成された結果データ | ExecutionTime、方程式残差、終了コード |
 
-requestedとruntime-observedが一致しても、一方は他方の完全な代替ではない。比較viewで照合し、
-rawで上書きしない。一方、同じsource recordから常に復元できるcount、first、last、average等は
-subsetなのでraw keyを作らない。
+要求値と実行時観測値が数値的に一致した場合であっても、一方が他方の完全な代替となるわけではない。両者の整合性は比較ビューにおいて照合されるべきであり、生データレベルで一方を上書き消去してはならない。一方で、同一のソースレコードから常に可逆復元可能な要素数（count）、先頭値（first）、末尾値（last）、平均値（average）等の派生値については、生メトリクスキーとしては作成しない。
 
-## producerと時系列
+## プロデューサーと処理時系列
 
 ```text
-Actions runner
-  create a bench or profile run manifest
-  verify clean/reachable Git state and build sidecar
-  record exact pjsub argv and run ID
-  submit PJM without BigQuery credentials
-  save stdout/stderr, outcome, and the job ID when returned
+GitHub Actions ランナー
+  通常ベンチマーク（bench）またはプロファイル（profile）の実行マニフェストを生成
+  Gitのクリーン状態、到達可能性、およびビルドサイドカーを検証
+  厳密な pjsub 引数列および run ID を記録
+  BigQuery認証情報を渡さずに PJM ジョブを投入
+  ジョブ投入コマンドの標準出力・標準エラー出力、成否、および返却されたジョブIDを保存
 
-PJM supervisor
-  snapshot job-entry environment and scheduler request
-  run preparation stages
-  launch same-rank wrapper -> OpenFOAM
+PJM ジョブ監視処理（supervisor）
+  ジョブ開始時の環境変数スナップショットおよびスケジューラ要求情報を記録
+  ケース準備等の前処理ステージを順次実行
+  ランク別ラッパーを介して OpenFOAM ソルバーを起動
 
-same-rank wrapper / OpenFOAM hooks
-  write rank-specific placement, environment, and runtime events
-  exec solver without an extra MPI launch
+ランク別ラッパー / OpenFOAM 内部フック
+  各ランク固有の配置情報、環境変数差分、および実行時イベントを記録
+  余分な MPI 起動オーバーヘッドを伴わずにソルバー本体を実行
 
-Actions runner
-  parse saved logs, reduce sources, validate expected files
-  merge -> GitHub Artifact upload -> publish
+GitHub Actions ランナー
+  保存ログの解析、データソースの縮約、期待される成果物ファイルの検証を実施
+  マージ処理 → GitHub Artifact へのアップロード → BigQuery への公開送信
 ```
 
-`run-manifest.json`で生成したrun IDを全producerが読む。各processで再計算しない。target hookは
-local file descriptorまたはnode-local fileへ一つのstructured eventを書くのみで、metrics key、
-BigQuery、retryを知らない。
+`run-manifest.json` において一度生成された `run` 識別子（run ID）を、すべてのプロデューサーが一貫して参照する。各プロセス内で再計算してはならない。ターゲットフックは、ローカルのファイル記述子またはノードローカルな一時ファイルへ単一の構造化イベントを出力するのみとし、メトリクスキーの展開、BigQueryの接続、再試行制御等のロジックは内包しない。
 
-## fact別の取得契約
+## ファクト種別ごとの取得契約
 
-表の「欠損」はraw valueへ空文字を入れる意味ではない。keyを出さず、consumerは`NULL`を返す。
-required sourceならrun-level `collection_complete=false`とするだけで、原因、family status、欠損用placeholderを
-作らない。非適用のprofile-only列も同じく`NULL`だけだが、`collection_complete`の判定対象にはしない。
+表中の「欠損時の扱い」における欠損とは、生データとして空文字を格納することを意味するものではない。該当キーのレコード自体を送信せず、コンシューマ側で `NULL` として評価させる。必須の取得元（required source）が欠落した場合は実行レベルで `collection_complete=false` と判定するのみとし、個別の原因コード、ファミリステータス、欠損プレースホルダー等は作成しない。非適用のプロファイル専用列についても同様に `NULL` を返すが、`collection_complete` の判定対象からは除外する。
 
-| fact family | authoritative source | producer / capture moment | raw keyまたはartifact | validation | 欠損時の扱い |
+| ファクトファミリ | 正となる取得元 | プロデューサー / 取得契機 | 格納先（キーまたは成果物） | 検証規則 | 欠損時の扱い |
 |---|---|---|---|---|---|
-| run identity | runnerが一度生成したrun manifest | `runner.manifest` / provision前 | raw tableの`run`列と`control/run-manifest.json` | run IDとpurposeを照合。反復・ペア管理情報、contract/protocol identity、PJM job IDを含めない | manifestなしでは投入しない |
-| source track / control plane | Gitのscore reference/profile base、実checkout head、purpose、protocol列挙control fileの実blob | `runner.manifest` / provision前、publisher / archive後 | compact source-track projection。実control-plane JCS hashはrun manifestが所有 | base/head規則とcontrol-plane filesをprotocolへ照合 | jobを投入しない |
-| instrumentation bundle | Git管理purpose-neutral semantic bundle、build sidecar | `runner.manifest` / submit前 | `control/instrumentation-bundle.json`とsubject manifestのbundle SHA-256。actual argv/sinkはstage/artifact source | hook/probe/sample設定、wrapper executable hash、contract version、env scope、source path、sinkを検証。開発時の非擾乱確認後、benchは通常contractからscore bundleを選ぶ | required source欠損なら`collection_complete=false`。profile-only bundleはbenchでproducerを持たない |
-| scheduler join | `pjsub` argv/stdout/stderr/responseとPJM側job-entry file | `runner.submission` / pjsub前後、および`pjm.supervisor` / entry直後、finalizer / terminal後 | `scheduler.submit_job_id`と`scheduler.job_entry_job_id`。binding file/booleanは作らない | 二scalarをquery時照合 | 欠損値はNULL。不一致はcomparison不適格 |
-| producer completion | producerのnormal closeとStageRunnerのchild outcome | `pjm.supervisor`または`StageRunner` / return後 | 完成producer fragment、stage termination | immutable contract/bundleからexpected fragment/fileを一回導出し`collection_complete`を決める。merge後fragmentは削除 | 欠損値はNULL。partial/tmpは手元に残り得るがartifact/mergeへ入れない |
-| repository/OpenFOAM/ThirdParty source | checkout直後、`.git`削除前の各repositoryで実行する`git rev-parse --show-object-format`と`git rev-parse HEAD` | `build.packager` / build開始前 | `control/build-sidecar.json`、比較用source commit索引 | repository ID、`sha1|sha256`、algorithmに対応する40/64-hex full OIDをrole別に保存。moving branch名を使わない | build artifactを公開しない |
-| toolchain/build | build時の`mpiicx --version`、`mpiicpx --version`、`mpirun --version`、`readelf --dynamic <icoFoam>`、完成binary/archive。provision時の`realpath`/hash/`ldd` | `build.packager` / archive完成時、`pjm.supervisor` / provision後、publisher / archive後 | `control/build-sidecar.json`、`control/build-provision-validation.json`、`openfoam_build_provenance_raw_v2`、`openfoam_build_provisions_raw_v2` | six ELF executableとarchive-owned closure、probe、実MPI launcher/libmpiを一度seal。run-time MPI semanticはmpirun hash+version output+libmpi hashで比較。profileはsystem `perf` hash/versionも同じprovision recordが一度所有 | build不完全ならreuseしない。run時欠損はNULL |
-| actual workload | setup後にsolverが読む実caseのworkload-defining member bytes | `pjm.supervisor` / case setup完了後、blockMesh前。publisher / archive後 | `source/workload-manifest.json`、exact `source/workload/<path>`、workload relations | exact 7-file allowlistとexpected identityを照合 | 欠損・member差・hash不一致はcomparison不適格 |
-| job-entry environment source | `env -0`相当のNUL区切りprocess environment | `pjm.supervisor` / script entry直後、module/unset前 | `source/env/job-entry.snapshot` | raw provenance artifactのみ。factへは投影しない | 欠損時はraw provenanceなし |
-| exec environment | MPI起動直前のsupervisor environment | bench/profileの`pjm.supervisor`、runner reducer | `env.*`と`source/env/host-exec.snapshot` | UTF-8値を平文投影。rank別environmentは収集しない | 非UTF-8値はprojection不適格、raw snapshotは保持 |
-| scheduler request | protocolの個別実行設定、PJM script identity、exact `pjsub` argv | `runner.submission` / submit直前 | `scheduler.request` | nodes/ranks/resource group/transportとscript/argv overrideを照合。各値を独立列へ投影 | 欠損値はNULL。invalidなら投入しない |
-| scheduler accounting | fixed `pjstat --history` query | `runner.postrun` / terminal state後 | `scheduler.accounting`とsource logs | field list/unit/job ID固定、requestedとの一致はview判定 | 取得できないfieldはNULL |
-| observed topology/placement | solverと同じMPI launch内のrank、hostname、affinity | bench/profileの`exec.wrapper`、runner reducer | placement sourceとrelation | rank/env/cardinalityを照合 | 欠損値はNULLまたはlong 0行 |
-| actual launch | stage wrapperが`subprocess`へ渡すargv/cwd/stderr mode | `StageRunner` / spawn直前 | `run.stage.<name>.launch` | shell再構成文字列ではなくclosed object。全OpenFOAM executable sub-argvに`-fileHandler uncollated`をexactly once要求し、solver専用subset keyは作らない | stage未開始ならNULL |
-| run timing/outcome | supervisorのUTC clock、monotonic clock、最終exit | `pjm.supervisor` / PJM entry→compute回収終了 | `run.started_at`、`run.finished_at`、`run.elapsed_sec`、`run.exit_code` | wall timestamp pairとmonotonic elapsedを別clockとして保持 | terminationで中断を表現 |
-| stage outcomes | supervisorの同じmonotonic clockとraw child wait status | `StageRunner` / spawn直前とwait直後 | stage wall/termination、bench/profileのpipeline wall | exit/signal/spawn_errorを区別 | termination objectで中断を表現 |
-| MPI network capture | solver成功後、同じallocation/transportで実行したIMB-MPI1のargv/stdout/stderr | `network.capture` / solver成功確認後。publisher / archive後 | `source/network/imb-mpi1/{argv.json,stdout.txt,stderr.txt}`、`network.imb_mpi1.*`、`software.imb_mpi1.version`、`mpi_network_results_v2` | argvは`-npmin=<solver rank数>`, `-msglog 0:22`, `-iter 1000`, `-time 1`, `-iter_policy dynamic`とexact 3 benchmarkを検査。pure parserはcomplete sectionだけをacceptし、source memberを各rowへ付ける | solver失敗時は非適用。stage失敗/timeout/parse不能/truncatedは結果0行、terminationを保持し`collection_complete=false`。retryなし |
-| minimal hardware/settings | allocated nodeごとのCPU/kernel/settings | internal probe / run前 | node sourceとraw relation | node ordinal順consensusはview派生 | 欠損値はNULL |
-| full hardware topology（profile only） | minimal hardwareに含まれない各NUMA nodeの`cpulist`/`meminfo`とpost-run `/proc/meminfo` | `postrun.auditor` / profile solver終了後に`mpirun -np <nodes> -ppn 1 <provision>/bin/capture-hardware --mode profile-postrun --subject-kind regular_run --subject-id <run> --output-root <run>/profile/raw/hardware --node-ordinal-from-env PMI_RANK`、publisher / archive後 | `profile/raw/hardware/node-<ordinal>/{proc-meminfo.txt,numa/...,capture.json}`と`openfoam_profile_hardware_raw_v2` | hostnameを含むcaptureをminimal hardwareの`(node_ordinal,hostname)`と照合。meminfo key/kB→bytes、cpulist canonicalization、exact file membershipをfixture化。publisherがsource member/hash付きrecordを転記 | 欠損値はNULL。bench consumerもNULL |
-| mesh topology | exact buildにlinkしたprobeと`checkMesh` raw log | `StageRunner` / solver後に一回 | mesh source/log/fact | build/provisionと照合 | 欠損値はNULL |
-| requested partition | 実際に使用したgenerated `decomposeParDict` | `pjm.supervisor` / decomposePar spawn直前 | `source/mesh/decomposeParDict`と`mesh.partition.requested={source_sha256,subdomains,method}` | 実argvが指すfile bytesをcopyして同じbytesからrecordを作る | 欠損値はNULL、stageは失敗 |
-| observed partition | serial/processor mesh bytesとaddressing | native `partition-audit` / solver後に一回 | partition source/log/fact | native utilityで検証 | 欠損値はNULL。fallbackなし |
-| runtime header | OpenFOAM startupが出すBuild/Arch/Exec/fileHandler/nProcs/Hosts | `runner.log_parser` / PJM terminal後、`logs/log.icoFoam`があれば | `logs/log.icoFoam`から`solver.runtime_header` | `argList.C` symbol/format golden、Hostsなしは`[]`、presentならhost sum=nProcs、複数blockはexact一致時だけreduce、actual fileHandler=uncollated。Exec stringをargvへ逆変換しない | 欠損値はNULL。requiredなら`collection_complete=false` |
-| Pstream startup/runtime/change | 実適用通信設定と変更 | bench/profileのrank別JSONL、terminal後reduce | Pstream rank facts | expected全rankとsequenceを検証 | 欠損値はNULL |
-| time-step timing | 保存済みsolver logの`Time =`と同一stepの`ExecutionTime = ... ClockTime = ...` | `runner.log_parser` / PJM terminal後 | `solver.step_timings` | 原lexemeとnullable numeric、全match順序。単調性/有限性はcomparison evaluator | 得られたcomplete recordだけ保存 |
-| pressure solves | 保存済みsolver logの各`Solving for p` record | `runner.log_parser` / PJM terminal後 | `solver.pressure_solves` | initial/final residual/iterationsの原lexemeとparsed valueを同じrecordに保持 | 得られたcomplete recordだけ保存 |
-| official markers | complete solver logとcanonical official evaluator | `runner.log_parser` / PJM terminal後 | `solver.log_markers`、official validityはview | shell validity semanticsのgolden parity後、固定locale/decimal evaluatorを共有 | source不足はNULL、公式規則不成立は`official_log_valid=false` |
-| primary score inputs | `solver.step_timings`の先頭/末尾ExecutionTimeと公式固定定数 | BigQuery view / query時 | rawへscoreを重複保存しない | fixed decimal/roundingのcanonical evaluatorと`64,000,000 * 4 / trim`をgolden照合 | source record不足ならNULL |
-| perf stat（profile only） | resolved/hash済み`perf`によるrank別`perf stat --no-big-num -x, -o <profile>/perf/rank-<rank>.csv -e cycles,instructions,branches,branch-misses,cache-misses`。versionはbuild-provision sourceが所有 | hash済みrank wrapper / 各solver rank process treeの開始から終了、`runner.perf_parser` / terminal後 | wrapperは`profile/raw/perf/rank-<rank>.csv`、parserは`profile.perf_stat.rank.<rank>` fragment、consumerは`openfoam_perf_counters_v2` | wrapperは`PMI_RANK`とexpected rank範囲を検査。各CSVは固定7列、exact five events/順序、filename/rank/run binding。viewはprofile run×rank×event skeletonへLEFT JOINし、running ns/percentからenabled nsだけを導出 | profileの欠損値は理由なしNULL。benchには非適用placeholder行を作らない。perfなしの再実行はしない |
-| artifact identity | run bundle、profile raw tar、build sidecar | `runner.packager` / upload前 | bundle/artifact manifests | 同じbyteを別tarへ重複しない | upload失敗はworkflow failure |
-| archive/publish result | GitHub Artifact upload結果、home-labでの固定成果物配置結果、VTune完全結果のhome-lab直接取得結果、BigQuery response | workflow archive job/`Publisher` / upload・転送・送信後 | workflow logとData Status | 固定成果物のhome RAID配置成功後だけGitHub Artifactを削除する。VTuneとParaViewは固定成果物と同じ`RUN_DIR/large-output`で管理し、自宅側archiveの可読性、サイズ、SHA-256と固定成果物の配置を確定した後だけクラスタ側`RUN_DIR`全体を削除する。失敗時は原本を残してjob failure | scientific familyへ理由を伝播せず、run-level状態だけにする |
+| 実行識別（run identity） | ランナーが一度だけ生成する実行マニフェスト | `runner.manifest` / プロビジョニング前 | 生データテーブルの `run` 列および `control/run-manifest.json` | run IDおよび目的（purpose）を照合。反復・ペア管理情報、コントラクト/プロトコルID、PJMジョブIDは含めない | マニフェスト不在時はジョブを投入しない |
+| ソース追跡 / 制御プレーン | Gitの基準コミット、実チェックアウトHEAD、目的、プロトコル列挙ファイルのblob | `runner.manifest` / プロビジョニング前、発行処理 / アーカイブ後 | ソース追跡プロジェクション。制御プレーンのJCSハッシュは実行マニフェストが保持 | 基準/HEADの親子関係および制御プレーンファイルをプロトコルと照合 | 不整合時はジョブを投入しない |
+| 計装バンドル | Git管理された計装バンドル定義、ビルドサイドカー | `runner.manifest` / ジョブ投入前 | `control/instrumentation-bundle.json` および実行マニフェスト内のバンドルSHA-256 | フック/プローブ/サンプリング設定、ラッパー実行ファイルハッシュ、環境変数スコープ、ソースパス、シンクパスを検証 | 必須取得元が欠落した場合は `collection_complete=false`。プロファイル専用バンドルは通常benchではプロデューサーを持たない |
+| スケジューラ結合 | `pjsub` 引数/標準出力/エラー出力およびPJM側のジョブ開始ファイル | `runner.submission` / pjsub実行前後、および `pjm.supervisor` / スクリプト開始直後 | `scheduler.submit_job_id` および `scheduler.job_entry_job_id` | クエリ実行時に2つのスカラー値を照合 | 欠損値はNULL。不一致時は比較不適格と判定 |
+| プロデューサー完了状態 | プロデューサーの正常クローズおよび `StageRunner` の終了ステータス | `pjm.supervisor` または `StageRunner` / プロセス終了直後 | 確定済みフラグメント、ステージ終了ステータス | 不変コントラクトから期待されるフラグメント/ファイルを導出し `collection_complete` を判定 | 欠損値はNULL。不完全な一時ファイルは成果物やマージ対象に含めない |
+| リポジトリ/ソースコミット | 各リポジトリのチェックアウト直後に実行する `git rev-parse HEAD` 等 | `build.packager` / ビルド開始前 | `control/build-sidecar.json`、比較用コミット索引 | リポジトリID、ハッシュアルゴリズム、完全なOIDをロール別に記録。動的ブランチ名は用いない | ビルド成果物を公開しない |
+| ツールチェーン/ビルド諸元 | ビルド時のコンパイラ/MPIバージョン、バイナリヘッダー。プロビジョニング時の実パス/ハッシュ/ldd | `build.packager` / アーカイブ完了時、`pjm.supervisor` / プロビジョニング後 | `control/build-sidecar.json`、`control/build-provision-validation.json` 等 | 実行バイナリと依存共有ライブラリの整合性を検証。実MPIランチャーおよびlibmpiのハッシュを照合 | ビルド不完全時は再利用しない。実行時欠損はNULL |
+| 実使用ワークロード | セットアップ完了後にソルバーが読み込む実ケースの入力ファイル群 | `pjm.supervisor` / ケース準備完了後・メッシュ前 | `source/workload-manifest.json`、実ファイル群 | 公式固定の7ファイル構成および期待されるコンテンツハッシュと完全照合 | 欠損・差分・ハッシュ不一致時は比較不適格と判定 |
+| ジョブ開始時環境変数 | スクリプト開始直後のプロセス環境（`env -0` 相当） | `pjm.supervisor` / スクリプト開始直後（モジュール読み込み前） | `source/env/job-entry.snapshot` | 生データ来歴成果物として保持（ファクトテーブルへは展開しない） | 欠損時は来歴なしとして扱う |
+| 実行時実効環境変数 | MPI起動直前の監視プロセス環境変数 | `pjm.supervisor` / MPI起動直前 | `env.*` および `source/env/host-exec.snapshot` | UTF-8値を平文で投影。ランク別の環境変数差分は通常収集しない | 非UTF-8値はBase64化して安全に保持 |
+| スケジューラ要求パラメータ | プロトコルの個別設定、PJMスクリプト識別子、厳密な `pjsub` 引数列 | `runner.submission` / ジョブ投入直前 | `scheduler.request` | 要求ノード数、ランク数、リソースグループ、通信ポリシー等を独立列として記録 | 欠損値はNULL。不正値時はジョブを投入しない |
+| スケジューラ会計情報 | `pjstat --history` による確定会計クエリ | `runner.postrun` / ジョブ終了検知後 | `scheduler.accounting` およびログ成果物 | フィールド一覧、単位、ジョブIDを固定して抽出。要求値との一致はビューで判定 | 取得不能フィールドはNULL |
+| プロセス配置・トポロジー | ソルバーと同一のMPI実行内におけるランク番号、ホスト名、CPUアフィニティ | `exec.wrapper`、ランナー側の集約処理 | `parallel.rank_placement` | ランク番号、環境変数、全ランクのカーディナリティを厳密に照合 | 欠損値はNULL |
+| 実際の起動パラメータ | ステージラッパーが `subprocess` に渡したargv、cwd、stderrモード | `StageRunner` / プロセス起動直前 | `run.stage.<name>.launch` | シェル再構成文字列ではなく構造化オブジェクトとして記録。全OpenFOAMバイナリ引数に `-fileHandler uncollated` を要求 | ステージ未開始時はNULL |
+| 実行ライフサイクル時間 | 監視プロセスのUTC実時刻、単調増加クロック、最終終了ステータス | `pjm.supervisor` / スクリプト開始から計算回収完了まで | `run.started_at`、`run.finished_at`、`run.elapsed_sec`、`run.exit_code` | 実時刻タイムスタンプと単調増加クロックによる経過時間を別々に保持 | 中断時は終了ステータスで表現 |
+| ステージ単位の実行時間・結果 | 各外部コマンド起動前後の単調増加クロックと終了コード | `StageRunner` / プロセス起動直前および終了直後 | 各ステージの経過時間および終了ステータス | 正常終了、シグナル停止、起動失敗を厳密に区別 | 中断時は終了ステータスで表現 |
+| MPIネットワーク性能 | ソルバー完了後、同一割当環境で実行したIMB-MPI1の測定結果 | `network.capture` / ソルバー成功後 | `source/network/imb-mpi1/`、`network.imb_mpi1.*` | PingPong、Sendrecv、Allreduceの各メッセージ長における測定結果を抽出 | ソルバー失敗時は非適用。計測失敗時は結果0行とし `collection_complete=false` |
+| 最小ハードウェア構成 | 割当ノードごとのCPU諸元、カーネル、システム設定 | 内部プローブ / ソルバー実行前 | `hardware.minimal.node.<ordinal>` | `lscpu --json` およびproc/sysfs設定を抽出。ノード間の合意判定はビューで行う | 欠損値はNULL |
+| 完全ハードウェアトポロジー（profile専用） | 各NUMAノードのCPUリスト、メモリ情報、計算終了後のメモリ状態 | `postrun.auditor` / プロファイルソルバー終了後 | `profile/raw/hardware/node-<ordinal>/` | ホスト名を含む情報を最小ハードウェア情報と相互照合 | 欠損値はNULL。通常bench実行時もNULL |
+| メッシュトポロジー | 正本ビルドにリンクしたツールおよび `checkMesh` ログ | `StageRunner` / ソルバー完了後 | `mesh.topology`、`logs/checkMesh.log` | ビルドおよびプロビジョニング情報と照合 | 欠損値はNULL |
+| 要求領域分割設定 | 実際に使用された `decomposeParDict` | `pjm.supervisor` / decomposePar起動直前 | `source/mesh/decomposeParDict`、`mesh.partition.requested` | 実argvが参照したファイルバイトを複製し、同一バイトからレコードを生成 | 欠損値はNULL、ステージは失敗扱い |
+| 観測領域分割情報 | シリアルおよびプロセッサメッシュの構成とアドレッシング | ネイティブツール `partition-audit` / ソルバー完了後 | `mesh.partition.observed` | ネイティブAPI経由で領域分割の整合性を検証 | 欠損値はNULL |
+| ソルバー起動ヘッダー | ソルバーログ冒頭のBuild, Arch, Exec, fileHandler, nProcs, Hosts | `runner.log_parser` / ジョブ終了後 | `solver.runtime_header` | ヘッダーブロックの構文解析。ホスト名別ランク数の総和がnProcsと一致することを確認 | 欠損値はNULL |
+| Pstream通信設定値 | 実際に適用されたMPI通信パラメータと動的変更イベント | ランク別イベントログ、終了後集約処理 | `solver.pstream.*` | 全ランクにおける設定値の一致を検証 | 欠損値はNULL |
+| 反復ステップ計時情報 | ソルバーログ内の各ステップの計算時刻、ExecutionTime、ClockTime | `runner.log_parser` / ジョブ終了後 | `solver.step_timings` | 原文文字列とパース済み数値を保持。単調増加性の検証は比較評価側で行う | 抽出できた完全レコードのみ保存 |
+| 圧力方程式の残差情報 | ソルバーログ内の各 `Solving for p` の反復数と残差推移 | `runner.log_parser` / ジョブ終了後 | `solver.pressure_solves` | 初期残差、最終残差、反復回数の原文文字列および数値を保持 | 抽出できた完全レコードのみ保存 |
+| 公式判定マーカー | ソルバーログ全文および公式判定ルール | `runner.log_parser` / ジョブ終了後 | `solver.log_markers`、公式判定結果 | 公式判定パーサーと同一のロジックにより健全性を評価 | ログ不完全時はNULL、公式失格時は `official_log_valid=false` |
+| 主評価スコア入力値 | 2ステップ目以降のExecutionTime差分および規定反復回数 | BigQueryビュー / クエリ時 | 生データへスコアを二重保存しない | 公式計算式との完全一致を検証 | 入力レコード不足時はNULL |
+| VTune Hotspots（profile専用） | 選択ランクにアタッチしたIntel VTuneの収集結果 | VTuneラッパー / ソルバー実行中、終了後パーサー | `profile.vtune_hotspots`、生プロファイル成果物 | 計測対象ランク番号、バージョン、関数別CPU時間を抽出 | 通常bench実行時はNULL |
+| 成果物識別情報 | 実行成果物バンドル、プロファイル生データ、ビルドサイドカー | `runner.packager` / アップロード直前 | `artifact-manifest.json`、各種バンドル | 同一バイト列を別アーカイブへ重複させない | アップロード失敗時はワークフローエラー |
+| アーカイブ・公開結果 | GitHub Artifactアップロード結果、自宅サーバーへの配置結果、BigQuery送信結果 | ワークフロー終了処理 / 各処理完了後 | ワークフローログ、データステータス | 自宅サーバーへの配置完了を確認した後にクラスタ側の一時領域を削除 | 実行レベルのステータスのみ記録 |
 
-## OpenFOAM内hookの位置
+## OpenFOAM内部フックの実装位置
 
-runtime headerの既存producerはOpenFOAMの共通startup pathであり、solver固有の`icoFoam.C`へ
-同じ値を再実装しない。Build/Arch/ExecとnProcs/Hostsは`argList.C`、pressure lineは
-`SolverPerformance.C`のsource symbolへ固定する。
+ソルバーの起動ヘッダー情報はOpenFOAM共通の起動パスで出力されるため、ソルバー固有の `simpleFoam.C` 等へ同一の取得処理を重複実装しない。Build、Arch、Exec、nProcs、およびHostsの出力は `argList.C`、方程式残差の出力は `SolverPerformance.C` のシンボルに固定する。
 
-Pstreamは一地点では不足する。`argList` constructor内の`runControl_.runPar()`で
-`UPstream::init()`が走った後も、`createTime.H`の`Time`構築がcaseの`OptimisationSwitches`を
-適用するためである。次の二境界と変更境界を使う。
+Pstream通信設定の取得は、単一のフックポイントでは不十分である。`argList` コンストラクタ内で `UPstream::init()` が実行された後も、`createTime.H` における `Time` インスタンス生成処理によってケース辞書の `OptimisationSwitches` が後から適用されるためである。したがって、以下のタイミングで状態を取得する。
 
-1. startup-applied: `UPstream::init()`の`attachOurBuffers()`完了後。`UPstream::nodeCommsControl_`、
-   `nodeCommsMin_`、`usingNodeComms(worldComm)`、`numNodes()`、`topologyControl_`、configured
-   `mpiBufferSize`のaccepted signed value、正整数として採用された`MPI_BUFFER_SIZE`、clamp後の実`attachedBufLen`を記録する。
-2. runtime-current: `Time` constructorの`setControls()`後、time loop前。`floatTransfer`、
-   `nProcsSimpleSum`、`nProcsNonblockingExchange`、`tuning_NBX_`、`PstreamBuffers::algorithm`、
-   `defaultCommsType`、`nPollProcInterfaces`、`maxCommsSize`、current `nodeCommsControl_`、
-   `nodeCommsMin_`、`topologyControl_`、`usingNodeComms(worldComm)`を記録する。
-3. runtime change: `Time::readModifiedObjects()`で上記値が実際に変わった時だけold/new eventを出す。
+1. 起動時適用（startup-applied）: `UPstream::init()` 内で `attachOurBuffers()` が完了した直後。ノード間通信制御フラグ、トポロジー制御設定、バッファサイズ設定値、実際に確保されたバッファ長等を記録する。
+2. 実行時カレント設定（runtime-current）: `Time` コンストラクタの `setControls()` 完了後、タイムループ開始直前の時点。浮動小数点転送フラグ、ノンブロッキング通信設定、ポーリング設定、通信バッファアルゴリズム等の確定値を記録する。
+3. 動的変更イベント（runtime change）: `Time::readModifiedObjects()` 等により実行中に設定値が実際に変更された場合に限り、変更前後の値をイベントとして記録する。
 
-hookは`bannerEnabled()`の外に置き、全rankがrank-scoped eventを出す。version、producer、scope、
-payloadを持つが、event write失敗でsolverの数値処理やexit codeを変えない。in-process hookには
-別のsupervisor eventを偽造せず、expected event欠損としてpost-run completenessに出す。対象versionごとに
-symbolとfull commitをregistry source欄へ固定し、line番号だけを契約にしない。
-唯一のsink bindingは`OPENFOAM_METRICS_PSTREAM_DIR`で、rank確定後に`rank-<rank>.jsonl`へline-buffered appendする。
+フック処理はバナー出力制御（`bannerEnabled()`）の外側に配置し、全ランクがランク固有のイベントを出力する。なお、フック処理のファイル書き込み失敗によってソルバー本体の数値計算や終了ステータスに影響を与えてはならない。イベント出力先シンクは `OPENFOAM_METRICS_PSTREAM_DIR` 環境変数で指定されたディレクトリ配下の `rank-<rank>.jsonl` とし、行バッファリングで追記する。
 
-## 現実装からの変更点
+## 現行実装からの改善点
 
-| 現在の箇所 | 問題 | v2での境界 |
+| 既存の課題箇所 | 従来の技術的課題 | 本アーキテクチャにおける境界設計 |
 |---|---|---|
-| `experiment-metrics/.../context.py` | 各呼出しでrun IDを再構成する | runnerがmanifestを一度作り全producerは読むだけ |
-| `experiment-metrics/.../cli.py`のcollectorとstage | collection直後に`send()`し、timed child完了後もnetworkへ接続する | pure fact -> Recorder。publishはrunnerだけ |
-| `experiment-metrics/.../sender.py` | BigQuery credential/retryがcompute側packageにある | `publish.py`へ隔離しPJM bundle/環境からcredentialを除去 |
-| `.github/workflows/genkai.yml`の`job_environment` | BigQuery credentialをPJMへ渡している | runnerに保持し、最初にcredential移動、その後に全env snapshotを有効化 |
-| `scripts/build-openfoam.sh` | moving branchをcheckoutしcommit記録前に`.git`を削除する | resolved commitsを先にbuild sidecarへ書き、完成archiveと対応付ける |
-| `scripts/run-openfoam.pjm`の`run-start` | 記録argvと実際のprofiler-wrapper付きargvが違う | `StageRunner`のspawn地点のargv配列を唯一のlaunch sourceにする |
-| 同PJM scriptのsolver non-zero分岐 | official parser前にexitし失敗runの原始結果を失う | `finally`相当でcomplete log parserを常に実行 |
-| 同PJM scriptのcleanup | Artifact upload前にcaseを削除し得る | variant別expected fileをGitHub Artifactへuploadできた後に削除 |
-| 現行case/result/mesh collector | motorBike前提や未呼出し経路が混在し、compute timeoutではparserが走らない | runnerのcavity3D pure log parserとrun-local mesh auditorへ分離 |
-| `tasks/parse_result.sh` | 現公式semanticsの正本だがshell parse/丸めが暗黙でcomplete recordではない | v2 canonical evaluatorとgolden parity後、その薄いCLIへ置換 |
-
-## 個別実行設定とsidecar契約
-
-D-003は初版からmulti-node対応とし、Genkai 1/2/4 nodeを実機conformance対象にすることで確定した。
-protocolはnode数、rank数、resource group、transport policyをそれぞれ独立fieldとして一度所有する。required logical producerは
-contractのvariant applicability、instrumentation modeはprotocol/bundle selectionだけが所有する。rank数をcore数から
-暗黙推定しない。runnerはこれらの個別実行設定、PJM script identity、
-exact `pjsub` argvを一つのrequest recordへsealする。初版canaryは総rank数120のbalanced配置
-`(nodes,ranks)=(1,120),(2,120),(4,120)`で、順に120、60、30 rank/node、
-resource groupは`a-batch`、decompositionはScotch 120、launcherは`mpirun -np 120 -ppn <120/nodes>`とする。
-1 nodeだけ`I_MPI_FABRICS=shm`、2/4 nodeは`I_MPI_FABRICS=shm:ofi`とする。1 nodeは現行64M workloadで実証済み、
-2 nodeは旧workloadで基盤だけ実証済み、4 nodeは未実証なので、後二者に性能期待値を置かず一回の通常canaryで
-取得成否を確認する。自動retry、代替設定、node数別collectorは作らない。実行設定を束ねるID/object/専用manifestは作らない。
-validationは次の独立sourceを照合する。
-
-```text
-protocol.nodes = request.nodes = accounting.nnumu
-               = distinct(runtime_header.hosts) = distinct(placement.hosts)
-protocol.ranks = request.ranks = decomposeParDict.numberOfSubdomains = runtime_header.nProcs
-               = runtime_header.host_rank_sum = placement record count
-```
-
-accounting commandが返さないhost/rank/resource-group fieldはaccounting factに含めない。multi-node設定で
-launch-effective environmentに`I_MPI_FABRICS=shm`があればlaunchを拒否する。
-
-各rank wrapperは衝突しない`source/placement/rank-<rank>.json`とrank environment sourceへ一度書いてsolverを
-execする。daemon、IPC、ACKは置かない。runner reducerはPJM supervisor baseline environmentと各rank deltaから
-full environmentを再構成し、placement canonical arrayとともに一つのlogical producer fragmentへ変換する。
-post-run validatorがexpected rank cardinalityを検査する。
-
-## validation fixture
-
-最低限、次のfixtureをGit管理する。
-
-- 公式valid log、step不足、solve不足、iteration不一致、NaN/Inf、truncated log
-- ExecutionTime非単調、ClockTime同値、scientific notation、`1.2.3`、trim zero、score算出不能
-- `bannerEnabled=false`、`writeHosts` 0/1/2、hostsum欠損、複数nProcs/Hosts block
-- 一行に複数NaN/Inf、`End`で始まる別行、official INVALIDだがprocess exit 0
-- 各in-scope設定のruntime headerとrank placement、host sum不一致
-- Pstreamのstartup/runtime override、false、0、default、明示値、runtime change、banner無効event
-- protocol workload fixtureと、setup後のcase member一つを変えた不一致fixture
-- variant applicability grid：profile-only collectorのprofile失敗とbench非適用はconsumer値がNULL。required source欠損時だけrun-level `collection_complete=false`
-- compact source trackのbench/profile、base非ancestor、control-plane blob差、checkout tree不一致、moving branch名が同じでもcommitが異なるfixture
-- instrumentation bundleのhook/sample interval一つだけを変えたhash差fixture
-- supervisor common environmentとrank追加/変更/削除deltaのfull byte snapshot復元
-- 同じlogical dictを異なる挿入順で作ったcanonical JSON
-- 正常close、program failure、完成fragment欠損、異値conflict。途中fileはmerge/artifactへ入れない
-- OpenFOAM artifact移管のhappy path、GitHub upload失敗、SCP失敗
-
-全fixtureで、raw row集合、`collection_complete`、comparison eligibility、公式parser parityを検査する。
-
-## 確定事項
-
-bench/profile分離と、取得できなかった値およびprofile-only metricは値をNULLにするだけで原因/status/欠損用recordを
-作らないこと、極稀な失敗を救う多段safeguardは作らないことはユーザー確定済みである。
-D-003は2026-08-09にユーザー回答「基本的にはマルチノード対応型の収集」で確定した。2026-08-10の追加回答により、
-実行設定を束ねる抽象は不採用とし、各値をprotocolの独立fieldおよびSheetsの独立列として扱う。OpenFOAMでは上記の
-1/2/4-node canaryを実機conformance対象とし、Qwenでも同じ個別field駆動のcardinality原則を使う。
-非擾乱確認は実装中にだけ行い、確認後は出力を破棄する。専用run、metric key、artifact、relation、
-decision recordをv2へ追加しない。profiler、polling、verbose MPI/Pstream trace、full placement診断はprofile-onlyとする。
-未実証2/4-node canaryは成功扱いせず、実観測が揃ったrunだけをscore eligibleにする。
+| `experiment-metrics/.../context.py` | 各処理の呼び出しごとにrun IDを再計算・再構成していた | ランナーが一意のマニフェストを生成し、全プロデューサーはそれを読み取るのみとする |
+| `experiment-metrics/.../cli.py` | データ収集の直後に直接 `send()` を呼び、外部ネットワークへ接続していた | 純粋なファクト生成と記録処理を分離。外部送信はログインノード側のランナーのみが担当 |
+| `experiment-metrics/.../sender.py` | BigQueryの認証情報およびリトライロジックが計算ノード側パッケージに含まれていた | 送信処理をランナー側に隔離し、計算ノード環境から認証情報を完全排除 |
+| `.github/workflows/genkai.yml` | BigQueryの認証情報を計算ジョブ環境へ渡していた | 認証情報はランナー側でのみ保持し、計算ノードへは一切渡さない |
+| `scripts/build-openfoam.sh` | 動的なブランチをチェックアウトし、コミットハッシュ記録前に `.git` を削除していた | チェックアウト直後にコミットOIDをビルドサイドカーへ確定記録してからアーカイブ化 |
+| `scripts/run-openfoam.pjm` | 記録された起動引数と、プロファイララッパー付きの実引数に乖離があった | `StageRunner` が実際にプロセス起動した引数配列（argv）を唯一の正本として記録 |
+| ソルバー異常終了時の分岐 | エラー発生時に公式パーサーを通さずにスクリプトが即時終了し、原始ログが失われていた | `finally` 相当の終了処理により、失敗時であっても完全なログ解析と成果物回収を実施 |
+| クリーンアップ処理 | 成果物のアップロード完了前に実行ディレクトリが削除されるリスクがあった | 自宅サーバーへの永続配置が完全に完了したことを確認した後に限りクラスタ側領域を削除 |
