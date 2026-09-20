@@ -412,6 +412,7 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
+    assert "module load git/2.39.2" in build
     assert "for aspire2a_toolchain in gnu aocc" in probe
     assert "module load openfoam/2512" not in probe
 

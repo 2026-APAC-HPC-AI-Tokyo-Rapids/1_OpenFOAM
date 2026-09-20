@@ -23,6 +23,7 @@ thirdparty_source_algorithm=sha1
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.conf"
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
+module load git/2.39.2
 build_cc=${aspire2a_cc}
 build_cxx=${aspire2a_cxx}
 build_mpi_launcher=${aspire2a_mpi_launcher}
