@@ -363,6 +363,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
 def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     workflow = (ROOT / ".github/workflows/aspire2a.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
+    runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
     assert "shell: aspire2a-shell --github-shell {0}" in workflow
@@ -378,6 +379,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
+    assert '"${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect' in runner
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow
     assert "scripts/export-vtune-hotspots.sh" not in workflow

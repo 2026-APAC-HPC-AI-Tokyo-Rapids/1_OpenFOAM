@@ -248,6 +248,12 @@ def parser() -> argparse.ArgumentParser:
     )
     profile_vtune.add_argument("--collection-duration-sec", type=int, required=True)
 
+    profile_uprof = commands.add_parser("record-profile-uprof")
+    _runtime_common(profile_uprof)
+    profile_uprof.add_argument("--report", type=Path, required=True)
+    profile_uprof.add_argument("--summary", type=Path, required=True)
+    profile_uprof.add_argument("--markdown", type=Path, required=True)
+
     workload = commands.add_parser("capture-workload")
     workload.add_argument("--manifest", type=Path, required=True)
     workload.add_argument("--case-root", type=Path, required=True)
@@ -731,6 +737,19 @@ def main(argv: list[str] | None = None) -> int:
                 profiled_rank=arguments.profiled_rank,
                 analysis_type=arguments.analysis_type,
                 collection_duration_sec=arguments.collection_duration_sec,
+            )
+        )
+        return 0
+    if arguments.command == "record-profile-uprof":
+        from .profile_uprof import record_uprof_hotspots
+
+        print(
+            record_uprof_hotspots(
+                manifest_path=arguments.manifest,
+                runtime_dir=arguments.runtime_dir,
+                report_path=arguments.report,
+                summary_path=arguments.summary,
+                markdown_path=arguments.markdown,
             )
         )
         return 0

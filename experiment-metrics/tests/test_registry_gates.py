@@ -75,9 +75,12 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
         registry.artifact_roles.run_bundle_source_roles
     )
     assert "profile.vtune_hotspots" not in registry.required_keys("profile")
-    assert {"openfoam.vtune-hotspots/v1", "openfoam.uprof-hotspots/v1"}.issubset(
-        {item.identifier for item in registry.producer_contracts}
-    )
+    assert "profile.uprof_hotspots" not in registry.required_keys("profile")
+    assert {
+        "openfoam.vtune-hotspots/v1",
+        "openfoam.uprof-hotspots/v1",
+        "runner.uprof_hotspots_parser",
+    }.issubset({item.identifier for item in registry.producer_contracts})
     assert {
         "artifact.subject_manifest",
         "artifact.build_sidecar",

@@ -50,7 +50,7 @@ walltimeは処理別に指定する。ケース準備は性能計測ではない
 
 ## Profile
 
-ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g --mpi`で全rankを収集する。計算ノード上で`report --host all --detail`を実行し、CSVとGUIへimportできる完全なsessionをprofile artifactとして回収する。
+ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g --mpi`で全rankを収集する。PALSがuProfのlauncher scriptだけをnode-local領域へstageしないよう、各rankでは`/usr/bin/bash`へ共有領域上のscriptを絶対パスで渡す。計算ノード上で`report --host all --detail --cutoff 30`を実行し、CSVとGUIへimportできる完全なsessionをprofile artifactとして回収する。
 
 uProfはsite moduleにない。AMDのdownload pageでEULAへ同意して`AMDuProf_Linux_x64_5.3.521.tar.bz2`を取得し、次へ配置する。
 
@@ -60,7 +60,7 @@ uProfはsite moduleにない。AMDのdownload pageでEULAへ同意して`AMDuPro
 
 profile workflowはAMD公表MD5 `45437d8bc0b4276a0b78e28d21de23cb`を検証し、初回だけ`tools/amduprof-5.3.521`へ展開する。EULA同意とdownloadはworkflowで自動化しない。Windows版uProf GUIの`Import Session`で回収したsessionを開ける。
 
-最初は権限依存の小さいtimer-based Hotspotsを使用する。IBS、PMC、system-wide、power、OS tracingは別条件のprofileとして、compute node上の権限と実測した問いに応じて追加する。一度のprofileで主要因を混ぜない。
+最初は権限依存の小さいtimer-based Hotspotsを使用する。login runnerは固定版のreport構造、収集引数、MPI rank/host集計および関数時間を検証し、`profile.uprof_hotspots`としてBigQueryへ送る。検証済みraw sessionと加工済みの要約は別に保存する。IBS、PMC、system-wide、power、OS tracingは別条件のprofileとして、compute node上の権限と実測した問いに応じて追加する。一度のprofileで主要因を混ぜない。
 
 ## 未確認事項
 

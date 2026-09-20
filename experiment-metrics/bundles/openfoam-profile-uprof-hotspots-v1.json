@@ -2,6 +2,7 @@
   "schema_version": "instrumentation-bundle/v1",
   "bundle_track": "profile",
   "source_paths": [
+    "experiment-metrics/src/experiment_metrics/profile_uprof.py",
     "platforms/aspire2a/export-uprof.sh",
     "platforms/aspire2a/provision-uprof.sh",
     "platforms/aspire2a/run-openfoam.pbs",

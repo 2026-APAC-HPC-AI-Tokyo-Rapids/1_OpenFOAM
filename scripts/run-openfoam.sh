@@ -250,7 +250,7 @@ fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
-    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${OPENFOAM_UPROF_PATH}" collect --config hotspots -g --mpi --output-dir "${uprof_root}/sessions" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect --config hotspots -g --mpi --output-dir "${uprof_root}/sessions" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   else
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi

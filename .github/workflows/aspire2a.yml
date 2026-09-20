@@ -315,7 +315,7 @@ jobs:
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
           control_plane_files=(.github/workflows/aspire2a.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/provision-openfoam-runtime.sh platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh platforms/aspire2a/wait-pbs-job.sh scripts/check-openfoam-case-cache.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
-          if [[ "${purpose}" == profile ]]; then control_plane_files+=(platforms/aspire2a/export-uprof.sh platforms/aspire2a/provision-uprof.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh); fi
+          if [[ "${purpose}" == profile ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_uprof.py platforms/aspire2a/export-uprof.sh platforms/aspire2a/provision-uprof.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
           for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
@@ -354,12 +354,15 @@ jobs:
           platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"
           test -e "${RUN_DIR}/run-success"
 
+      - name: AMD uProf結果を構造化
+        if: success() && inputs.profile
+        run: |
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report "${RUN_DIR}/profile/raw/uprof/report.csv" --summary "${RUN_DIR}/profile/uprof-summary.json" --markdown "${RUN_DIR}/profile/uprof-summary.md"
+
       - name: AMD uProf概要をActionsの概要へ掲載
         if: success() && inputs.profile
         run: |
-          printf '## AMD uProf Hotspots\n\n```text\n' >> "${GITHUB_STEP_SUMMARY}"
-          sed -n '1,200p' "${RUN_DIR}/profile/raw/uprof/report.csv" >> "${GITHUB_STEP_SUMMARY}"
-          printf '\n```\n\nThe profile artifact includes the complete uProf session for import into the Windows or Linux GUI.\n' >> "${GITHUB_STEP_SUMMARY}"
+          cat "${RUN_DIR}/profile/uprof-summary.md" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 計測記録を確定して成果物を梱包
         id: package_v2
@@ -378,6 +381,8 @@ jobs:
           args+=(--member 'source/workload-manifest.json:workload_manifest')
           while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:workload_member"); done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
           if [[ '${{ inputs.profile }}' == true ]]; then
+            [[ -f "${RUN_DIR}/profile/uprof-summary.json" ]] && args+=(--member 'profile/uprof-summary.json:postrun_source')
+            [[ -f "${RUN_DIR}/profile/uprof-summary.md" ]] && args+=(--member 'profile/uprof-summary.md:postrun_source')
             while IFS= read -r -d '' path; do args+=(--profile-member "${path#"${RUN_DIR}/"}"); done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
           fi
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"

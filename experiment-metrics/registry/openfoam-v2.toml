@@ -62,6 +62,10 @@ id = "compute.vtune_hotspots_parser"
 required_for = []
 
 [[producers]]
+id = "runner.uprof_hotspots_parser"
+required_for = []
+
+[[producers]]
 id = "openfoam.uprof-hotspots/v1"
 required_for = []
 
@@ -188,6 +192,12 @@ required_for = ["bench", "profile"]
 [[keys]]
 pattern = "profile.vtune_hotspots"
 owner = "compute.vtune_hotspots_parser"
+logical_type = "json"
+required_for = []
+
+[[keys]]
+pattern = "profile.uprof_hotspots"
+owner = "runner.uprof_hotspots_parser"
 logical_type = "json"
 required_for = []
 
@@ -441,6 +451,13 @@ activation = { kind = "bundle_component", component_id = "openfoam.vtune-hotspot
 instances = { kind = "singleton" }
 
 [[producer]]
+id = "runner.uprof_hotspots_parser"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.uprof-hotspots/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
 id = "openfoam.vtune-hotspots/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
@@ -604,6 +621,15 @@ storage = "fact_fragment"
 path_template = [{ literal = "domain/fragments/compute.vtune_hotspots_parser--vtune-hotspots.jsonl" }]
 schema_id = "fact-jsonl/v1"
 required_when_applicable = true
+
+[[source]]
+id = "facts.uprof_hotspots"
+producer_id = "runner.uprof_hotspots_parser"
+source_role = "uprof_hotspots_fact_fragment"
+storage = "fact_fragment"
+path_template = [{ literal = "domain/fragments/runner.uprof_hotspots_parser--uprof-hotspots.jsonl" }]
+schema_id = "fact-jsonl/v1"
+required_when_applicable = false
 
 [[source]]
 id = "facts.solver_log"
@@ -1143,6 +1169,18 @@ unit = "none"
 cardinality = "run_rank"
 capture_id = "vtune_hotspots_csv/v1"
 validator_id = "vtune_hotspots/v1"
+reducer_id = "identity/v1"
+
+[[fact]]
+id = "profile.uprof_hotspots"
+key_pattern = "profile.uprof_hotspots"
+source_id = "facts.uprof_hotspots"
+schema_id = "openfoam-uprof-profile/v1"
+logical_type = "json"
+unit = "none"
+cardinality = "run"
+capture_id = "uprof_hotspots_csv/v1"
+validator_id = "uprof_hotspots/v1"
 reducer_id = "identity/v1"
 
 [[fact]]
