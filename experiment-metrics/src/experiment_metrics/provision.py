@@ -298,11 +298,14 @@ def _ldd_paths(text: str) -> tuple[Path, ...]:
 
 
 def _is_canonical_libmpi(path: Path) -> bool:
-    return re.fullmatch(r"libmpi\.so(?:\.[0-9]+)*", path.name) is not None
+    if re.fullmatch(r"libmpi\.so(?:\.[0-9]+)*", path.name) is not None:
+        return True
+    generic_alias = path.parent / "libmpi.so"
+    return generic_alias.exists() and generic_alias.resolve() == path.resolve()
 
 
 def _is_mpi_companion(path: Path) -> bool:
-    return path.name.startswith(("libmpi_", "libmpifort.so"))
+    return path.name.startswith(("libmpi_", "libmpifort"))
 
 
 def _member(path: Path, run_dir: Path) -> dict[str, object]:

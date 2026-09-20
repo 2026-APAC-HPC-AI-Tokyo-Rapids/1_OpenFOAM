@@ -39,6 +39,19 @@ def test_intel_mpi_ldd_fixture_selects_only_libmpi_as_identity() -> None:
     assert provision_module._is_mpi_companion(paths[1])
 
 
+def test_cray_mpich_compiler_abi_library_resolves_through_generic_alias(
+    tmp_path: Path,
+) -> None:
+    real = tmp_path / "libmpi_gnu_91.so.12.0.0"
+    real.write_bytes(b"cray mpich fixture")
+    abi = tmp_path / "libmpi_gnu_91.so.12"
+    abi.symlink_to(real.name)
+    (tmp_path / "libmpi.so").symlink_to(abi.name)
+
+    assert provision_module._is_canonical_libmpi(abi)
+    assert provision_module._is_mpi_companion(tmp_path / "libmpifort_gnu_91.so.12")
+
+
 def _sidecar(path: Path, executables: dict[str, Path]) -> Path:
     empty_sha = hashlib.sha256(b"").hexdigest()
     document = {
