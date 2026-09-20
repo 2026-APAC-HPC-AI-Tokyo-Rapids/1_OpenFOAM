@@ -150,7 +150,9 @@ def test_pbs_submission_derives_profile_from_manifest(
 def test_aspire2a_submission_uses_exclusive_full_nodes(
     tmp_path: Path, identities: dict[str, object]
 ) -> None:
-    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    profile_identities = json.loads(json.dumps(identities))
+    profile_identities["source_track"]["base_role"] = "profile_base"
+    manifest = init_run(None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile")
     run_dir = manifest.parents[1]
     provision = tmp_path / "provision"
     (provision / "platforms/aspire2a").mkdir(parents=True)
@@ -167,6 +169,7 @@ def test_aspire2a_submission_uses_exclusive_full_nodes(
         pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs",
         execution_script=execution,
         provision_dir=provision,
+        profile_tool="uprof",
         qsub_path=launcher,
         execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"24499999.pbs\n", b""),
     )
@@ -177,3 +180,7 @@ def test_aspire2a_submission_uses_exclusive_full_nodes(
     assert argv[argv.index("-q") + 1] == "normal"
     assert "select=2:ncpus=128:mpiprocs=128:mem=400gb" in argv
     assert "place=excl" in argv
+    exported = argv[argv.index("-v") + 1]
+    assert "OPENFOAM_PROFILE_TOOL=uprof" in exported
+    assert "OPENFOAM_VTUNE" not in exported
+    assert request["profile_tool"] == "uprof"

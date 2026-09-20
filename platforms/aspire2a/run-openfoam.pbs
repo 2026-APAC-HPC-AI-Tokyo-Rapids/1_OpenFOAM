@@ -14,7 +14,7 @@ set -euo pipefail
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521; export OPENFOAM_PROFILE_TOOL=uprof; fi
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"; test "${OPENFOAM_PROFILE_TOOL}" = uprof; export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521; fi
 
 mpiexec_path=$(command -v mpiexec)
 runtime_root="${TMPDIR}/openfoam-runtime"

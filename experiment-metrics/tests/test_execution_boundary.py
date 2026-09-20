@@ -376,7 +376,11 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
     assert "provision-uprof.sh" in workflow
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
-    assert "OPENFOAM_PROFILE_TOOL=uprof" in wrapper
+    assert "--profile-tool uprof" in workflow
+    assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
+    assert "scripts/exec-profiler.sh" not in workflow
+    assert "scripts/allow-vtune-attach.py" not in workflow
+    assert "scripts/export-vtune-hotspots.sh" not in workflow
     assert 'source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"' in wrapper
     assert 'aspire2a_load_toolchain "${aspire2a_toolchain}"' in wrapper
     assert 'WM_COMPILER="${aspire2a_wm_compiler}"' in wrapper

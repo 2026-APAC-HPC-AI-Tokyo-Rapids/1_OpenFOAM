@@ -28,6 +28,7 @@ def submit_pbs_run(
     pbs_script_repository_path: str,
     execution_script: Path,
     provision_dir: Path,
+    profile_tool: str = "vtune",
     profile_rank: int = 0,
     profile_analysis: str = "hotspots",
     execute: Callable[[list[str]], subprocess.CompletedProcess[bytes]] | None = None,
@@ -38,6 +39,8 @@ def submit_pbs_run(
     if run_dir != manifest.path.parents[1]:
         raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
+    if profile_tool not in {"uprof", "vtune"}:
+        raise ValueError("unsupported profile tool")
     if profile_rank < 0 or profile_rank >= protocol.ranks:
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
@@ -73,13 +76,16 @@ def submit_pbs_run(
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,
-        "OPENFOAM_VTUNE_ANALYSIS": profile_analysis,
-        "OPENFOAM_VTUNE_RANK": str(profile_rank),
         "PROVISION_DIR": str(provision_dir.resolve(strict=True)),
         "RUN_DIR": str(run_dir),
         "RUN_ID": manifest.run_id,
         "RUN_MANIFEST": str(manifest.path),
     }
+    if manifest.purpose == "profile":
+        environment["OPENFOAM_PROFILE_TOOL"] = profile_tool
+        if profile_tool == "vtune":
+            environment["OPENFOAM_VTUNE_ANALYSIS"] = profile_analysis
+            environment["OPENFOAM_VTUNE_RANK"] = str(profile_rank)
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
@@ -114,6 +120,7 @@ def submit_pbs_run(
         "distribution": protocol.distribution,
         "release": protocol.release,
         "solver": protocol.solver,
+        "profile_tool": profile_tool if manifest.purpose == "profile" else None,
         "profile_rank": profile_rank,
         "profile_analysis": profile_analysis,
         "resource_group": protocol.resource_group,

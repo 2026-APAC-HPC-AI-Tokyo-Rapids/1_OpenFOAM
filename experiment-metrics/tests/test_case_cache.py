@@ -121,7 +121,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, ...]:
     return source, archive, definition, sidecar, check_mesh, decompose_par, counter
 
 
-@pytest.mark.parametrize("cluster", ["genkai", "gadi"])
+@pytest.mark.parametrize("cluster", ["genkai", "gadi", "aspire2a"])
 def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path: Path, cluster: str) -> None:
     source, archive, definition, sidecar, check_mesh, decompose_par, counter = _inputs(tmp_path)
     provision = tmp_path / "provision"
@@ -137,12 +137,12 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     assert subprocess.run(command, capture_output=True).returncode == 75
     assert not counter.exists()
 
-    expanded = tmp_path / "expanded" if cluster == "gadi" else cache_root
+    expanded = tmp_path / "expanded" if cluster in {"gadi", "aspire2a"} else cache_root
     prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, "4", expanded], check=True, capture_output=True, text=True)
     cache_dir = Path(next(line.removeprefix("cache_dir=") for line in prepared.stdout.splitlines() if line.startswith("cache_dir=")))
-    if cluster == "gadi":
+    if cluster in {"gadi", "aspire2a"}:
         archived = cache_root / cache_dir.name
-        subprocess.run([SCRIPT.parents[1] / "platforms/gadi/archive-openfoam-case.sh", "create", cache_dir, archived, cache_dir.name], check=True, capture_output=True)
+        subprocess.run([SCRIPT.parents[1] / f"platforms/{cluster}/archive-openfoam-case.sh", "create", cache_dir, archived, cache_dir.name], check=True, capture_output=True)
         cache_dir = archived
     hits_before = counter.read_text()
     hit = subprocess.run(command, check=True, capture_output=True, text=True)
@@ -159,7 +159,7 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     case_member.write_text("different input\n")
     assert subprocess.run(command, capture_output=True).returncode == 75
     case_member.write_text("U\n")
-    if cluster == "gadi":
+    if cluster in {"gadi", "aspire2a"}:
         (cache_dir / "case.tar.zst").write_bytes(b"damaged archive")
     else:
         (cache_dir / "READY").unlink()
@@ -169,7 +169,7 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     assert subprocess.run(command, capture_output=True).returncode == 2
 
 
-@pytest.mark.parametrize("cluster", ["genkai", "gadi"])
+@pytest.mark.parametrize("cluster", ["genkai", "gadi", "aspire2a"])
 def test_workflow_checks_cache_before_prepare_submission(cluster: str) -> None:
     workflow = (SCRIPT.parents[1] / f".github/workflows/{cluster}.yml").read_text()
     stage = workflow.split("  prepare-case:", 1)[1].split("\n  run:", 1)[0]

@@ -73,15 +73,17 @@ done
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 OPENFOAM_PROFILE_TOOL=${OPENFOAM_PROFILE_TOOL:-vtune}
-: "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
-: "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
 case "${OPENFOAM_PROFILE_TOOL}" in vtune|uprof) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
-if [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then case "${OPENFOAM_VTUNE_ANALYSIS}" in hotspots|hpc-performance|memory-access|memory-access-core) ;; *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;; esac; fi
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
   *) printf '未対応のOPENFOAM_RUN_PURPOSEです: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
 esac
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
+  : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
+  : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
+  case "${OPENFOAM_VTUNE_ANALYSIS}" in hotspots|hpc-performance|memory-access|memory-access-core) ;; *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;; esac
+fi
 (( OPENFOAM_NODES > 0 && OPENFOAM_MPI_PROCS > 0 ))
 (( OPENFOAM_MPI_PROCS % OPENFOAM_NODES == 0 ))
 
@@ -112,11 +114,13 @@ DECOMPOSE_PAR_DICT=system/decomposeParDict
 SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 profile_run_id="${RUN_ID}-${job_id}"
-vtune_root="${large_output_dir}/vtune"
-OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
-OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
-export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
 uprof_root="${RUN_DIR}/profile/raw/uprof"
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
+  vtune_root="${large_output_dir}/vtune"
+  OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
+  OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
+  export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
+fi
 export OPENFOAM_COMPUTE_TOOLS_ROOT="${compute_tools_root}"
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
 install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${RUN_DIR}/domain"

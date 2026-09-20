@@ -30,7 +30,8 @@ rm -rf -- "${target_root}"
 install -d -m 0750 "${target_root}"
 tar -I zstd -xf "${archive}" -C "${target_root}" --exclude='*.o' --exclude='./OpenFOAM/applications' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
 if [[ -n "${compute_tools_archive}" ]]; then tar -I zstd -xf "${compute_tools_archive}" -C "${target_root}"; fi
-test -x "${target_root}/OpenFOAM/platforms/linux64GccDPInt32Opt/bin/simpleFoam"
+simplefoam_relative=$(jq -er '.runtime_objects[] | select(.kind == "executable" and .role == "simpleFoam") | .path' "${sidecar}")
+[[ "${simplefoam_relative}" != /* && "${simplefoam_relative}" != *..* ]]
+test -x "${target_root}/${simplefoam_relative}"
 if [[ -n "${compute_tools_archive}" ]]; then test -x "${target_root}/experiment-metrics/.venv/bin/python"; fi
-if [[ -n "${compute_tools_archive}" ]]; then test -x "${target_root}/scripts/exec-profiler.sh"; fi
 printf 'runtime_root=%s\nruntime_archive=%s\n' "${target_root}" "${archive}"
