@@ -360,16 +360,21 @@ fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : > "${LOG_DIR}/profile-location.txt"
-  vtune_result_dirs=()
-  for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
-  do
-    [[ -d "${candidate}" ]] && vtune_result_dirs+=("${candidate}")
-  done
-  du -sh "${vtune_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
-  if [[ "${#vtune_result_dirs[@]}" -eq 1 ]]; then
-    printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" >> "${LOG_DIR}/profile-location.txt"
+  if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
+    du -sh "${uprof_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
+    sed -n 's/^session=/uprof_session=/p' "${uprof_root}/session.txt" >> "${LOG_DIR}/profile-location.txt"
   else
-    printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
+    vtune_result_dirs=()
+    for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
+    do
+      [[ -d "${candidate}" ]] && vtune_result_dirs+=("${candidate}")
+    done
+    du -sh "${vtune_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
+    if [[ "${#vtune_result_dirs[@]}" -eq 1 ]]; then
+      printf 'vtune_result_dir=%s\n' "${vtune_result_dirs[0]}" >> "${LOG_DIR}/profile-location.txt"
+    else
+      printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
+    fi
   fi
 fi
 # スケジューラジョブの成功印はソルバーの有効性だけで決める。

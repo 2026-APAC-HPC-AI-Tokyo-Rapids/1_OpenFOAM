@@ -41,7 +41,7 @@ def _imb_command() -> list[str]:
     ]
 
 
-def test_imb_argv_accepts_both_cluster_launcher_shapes() -> None:
+def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     genkai = [
         "/opt/intel/mpi/bin/mpirun",
         "-np",
@@ -63,9 +63,18 @@ def test_imb_argv_accepts_both_cluster_launcher_shapes() -> None:
         "120",
         *_imb_command(),
     ]
+    aspire2a = [
+        "/opt/cray/pe/pals/bin/mpiexec",
+        "-n",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
 
     _validate_imb_argv(genkai, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(gadi, _Protocol())  # type: ignore[arg-type]
+    _validate_imb_argv(aspire2a, _Protocol())  # type: ignore[arg-type]
 
 
 def test_imb_argv_rejects_unowned_launcher_options() -> None:

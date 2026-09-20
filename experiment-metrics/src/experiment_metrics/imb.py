@@ -73,7 +73,7 @@ def validate_imb_capture(
 
 
 def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
-    """Accept only the launch forms emitted by the Genkai and Gadi adapters."""
+    """Accept only the launch forms emitted by the cluster adapters."""
 
     expected_command = [
         "-npmin",
@@ -105,6 +105,14 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
         str(protocol.ranks_per_node),
     ]
     allowed_launcher = launcher == basic_launcher
+    aspire_launcher = [
+        launcher[0],
+        "-n",
+        str(protocol.ranks),
+        "-ppn",
+        str(protocol.ranks_per_node),
+    ]
+    allowed_launcher = allowed_launcher or launcher == aspire_launcher
     if len(launcher) == len(basic_launcher) + 3:
         allowed_launcher = (
             launcher[: len(basic_launcher)] == basic_launcher

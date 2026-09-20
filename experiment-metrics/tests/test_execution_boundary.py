@@ -384,6 +384,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
     assert '"${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect' in runner
+    assert 'if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then' in runner
+    assert 'sed -n \'s/^session=/uprof_session=/p\'' in runner
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow
     assert "scripts/export-vtune-hotspots.sh" not in workflow
