@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#PBS -P 59000014
+#PBS -q normal
+#PBS -l select=1:ncpus=1:mpiprocs=1:mem=1gb
+#PBS -l walltime=00:05:00
+#PBS -N openfoam_probe
+#PBS -j oe
+
+set -euo pipefail
+
+: "${PBS_JOBID:?PBS job ID is required}"
+: "${PBS_NODEFILE:?PBS node file is required}"
+: "${PBS_O_WORKDIR:?PBS submission directory is required}"
+
+cd "${PBS_O_WORKDIR}"
+module purge
+module load openfoam/2512
+
+printf 'job_id=%s\n' "${PBS_JOBID}"
+printf 'execution_host=%s\n' "$(hostname -f)"
+printf 'working_directory=%s\n' "${PWD}"
+printf 'nodefile=%s\n' "${PBS_NODEFILE}"
+printf '%s\n' '--- nodefile ---'
+cat "${PBS_NODEFILE}"
+printf '%s\n' '--- cpu ---'
+lscpu
+printf '%s\n' '--- memory ---'
+free -h
+printf '%s\n' '--- filesystems ---'
+df -h "${HOME}" /scratch "${TMPDIR:-/tmp}"
+printf '%s\n' '--- mounts ---'
+findmnt -T "${HOME}"
+findmnt -T /scratch
+findmnt -T "${TMPDIR:-/tmp}"
+printf '%s\n' '--- OpenFOAM and MPI ---'
+module -t list
+command -v simpleFoam
+command -v mpiexec
+mpiexec --version
+mpiexec -n 1 bash -lc 'printf "rank_host=%s\n" "$(hostname -f)"; env | LC_ALL=C sort | grep -E "^(PBS|PMI|PALS|MPICH|FI_|CRAY|TMPDIR)" || true'
