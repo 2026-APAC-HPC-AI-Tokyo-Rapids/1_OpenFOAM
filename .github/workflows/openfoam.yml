@@ -33,7 +33,7 @@ on:
           - "2"
           - "4"
       profile:
-        description: 通常計測の代わりにIntel VTuneでプロファイルを取得する
+        description: 通常計測の代わりに各クラスタの推奨profilerで計測する
         required: true
         default: false
         type: boolean
