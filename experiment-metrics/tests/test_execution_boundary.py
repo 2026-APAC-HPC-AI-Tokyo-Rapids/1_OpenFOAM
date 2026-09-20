@@ -122,8 +122,9 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert "decomposePar" in prepare_text
     assert 'WM_COMPILE_OPTION="${build_environment[0]}"' in prepare_text
     assert 'test "${WM_OPTIONS}" = "${build_environment[1]}"' in prepare_text
-    assert 'minimal_hardware_argv=("${RANK_PYTHON}" "${CAPTURE_HARDWARE}"' in text
-    assert '"${node_launch[@]}" "${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode profile-postrun' in text
+    assert 'RANK_PYTHON_LAUNCH=(/usr/bin/env "${RANK_PYTHON}")' in text
+    assert 'minimal_hardware_argv=("${RANK_PYTHON_LAUNCH[@]}" "${CAPTURE_HARDWARE}"' in text
+    assert '"${node_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" "${CAPTURE_HARDWARE}" --mode profile-postrun' in text
 
 
 def test_hardware_probe_uses_deployed_python_when_mpi_overrides_path(tmp_path: Path) -> None:
@@ -142,7 +143,7 @@ def test_hardware_probe_uses_deployed_python_when_mpi_overrides_path(tmp_path: P
     assert subprocess.run([mpi, probe, "--help"], capture_output=True).returncode == 91
     minimal = next(line for line in script.splitlines() if line.startswith("minimal_hardware_argv=("))
     profile = next(line for line in script.splitlines() if line.lstrip().startswith("stage profile_hardware_capture "))
-    prefix = 'set -euo pipefail\nnode_launch=("${MPI}")\nstage() { shift 2; "$@" --help; }\n'
+    prefix = 'set -euo pipefail\nnode_launch=("${MPI}")\nRANK_PYTHON_LAUNCH=(/usr/bin/env "${RANK_PYTHON}")\nstage() { shift 2; "$@" --help; }\n'
     environment = {**os.environ, "MPI": str(mpi), "RANK_PYTHON": sys.executable, "CAPTURE_HARDWARE": str(probe), "RUN_ID": "test", "RUN_DIR": str(tmp_path), "RUN_MANIFEST": str(tmp_path / "manifest.json"), "SOURCE_DIR": str(tmp_path), "LOG_DIR": str(tmp_path), "global_rank_env": "PMI_RANK"}
     for command in [minimal + '\n"${node_launch[@]}" "${minimal_hardware_argv[@]}" --help', profile]:
         result = subprocess.run(["bash", "-c", prefix + command], env=environment, capture_output=True, text=True, check=True)
@@ -155,6 +156,7 @@ def test_hardware_capture_diagnostic_logs_are_archived() -> None:
         workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text()
         assert "logs/minimal-hardware-capture.log:postrun_source" in workflow
         assert "logs/profile-hardware-capture.log:postrun_source" in workflow
+        assert "logs/rank-placement.log:postrun_source" in workflow
 
 
 def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:

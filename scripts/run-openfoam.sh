@@ -104,6 +104,7 @@ RESULTS_DIR="${RUN_DIR}/results"
 REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 RANK_PYTHON="${compute_tools_root}/experiment-metrics/.venv/bin/python"
+RANK_PYTHON_LAUNCH=(/usr/bin/env "${RANK_PYTHON}")
 rank_manifest=${rank_manifest:-${RUN_MANIFEST}}
 rank_placement_root=${rank_placement_root:-${SOURCE_DIR}/placement}
 [[ "${rank_manifest}" == /* && "${rank_placement_root}" == /* ]]
@@ -245,14 +246,14 @@ fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
-  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
+  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect --config hotspots -g --mpi --output-dir "${uprof_root}/sessions" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   else
-    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
@@ -296,7 +297,7 @@ grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
 "${METRICS_CLI}" record-mesh --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --decompose-dict "${SOURCE_DIR}/mesh/decomposeParDict" --check-mesh-log "${LOG_DIR}/checkMesh.log" --decompose-log "${LOG_DIR}/decomposePar.log" || printf '%s\n' 'メッシュの計測値を記録できませんでした。ソルバーの結果は有効です' >&2
 
 # MPIの-genv PATHは呼出元で固定済み。OS Pythonへ戻らないよう配備済みinterpreterを明示する。
-minimal_hardware_argv=("${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
+minimal_hardware_argv=("${RANK_PYTHON_LAUNCH[@]}" "${CAPTURE_HARDWARE}" --mode minimal --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${SOURCE_DIR}/hardware")
 if (( OPENFOAM_NODES == 1 )); then
   minimal_hardware_argv+=(--node-ordinal 0)
 else
@@ -318,7 +319,7 @@ fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   set +e
-  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${node_launch[@]}" "${RANK_PYTHON}" "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env "${global_rank_env}"
+  stage profile_hardware_capture "${LOG_DIR}/profile-hardware-capture.log" "${node_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" "${CAPTURE_HARDWARE}" --mode profile-postrun --subject-kind regular_run --subject-id "${RUN_ID}" --manifest "${RUN_MANIFEST}" --output-root "${RUN_DIR}/profile/raw/hardware" --node-ordinal-from-env "${global_rank_env}"
   profile_hardware_status=$?
   set -e
   if [[ "${profile_hardware_status}" -ne 0 ]]; then
