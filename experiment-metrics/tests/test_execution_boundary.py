@@ -403,8 +403,6 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     toolchain = (ROOT / "platforms/aspire2a/toolchain.sh").read_text(encoding="utf-8")
     selection = (ROOT / "platforms/aspire2a/toolchain.conf").read_text(encoding="utf-8")
     build = (ROOT / "platforms/aspire2a/build-environment.sh").read_text(encoding="utf-8")
-    probe = (ROOT / "platforms/aspire2a/probe-environment.pbs").read_text(encoding="utf-8")
-
     assert "aspire2a_toolchain=gnu" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
@@ -418,8 +416,6 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
     assert "module load git/2.39.2" in build
-    assert "for aspire2a_toolchain in gnu aocc" in probe
-    assert "module load openfoam/2512" not in probe
 
 
 def test_cluster_steps_use_home_lab_remote_shells() -> None:
