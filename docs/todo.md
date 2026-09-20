@@ -1,6 +1,7 @@
 # todo
 
 - オーバーエンジニアリングはしない
+- 実験内容と部分的な結果と考察を`docs/`に残す(bigqueryの内容をすべて出したりはしないが、参照できるようにしておく)
 - 現行課題は`tasks/`、旧課題は`old_tasks/`を正本とし、旧課題の性能結果を流用しない
 - 提出先はASPIRE-2A、玄界は練習用とする。Gadiは使用しない
 
@@ -40,3 +41,12 @@
 - [ ] 必須ログ、入力辞書、ビルド情報、`coefficient.dat`をテキストで揃える
 - [ ] 基準との差、run間分布、ボトルネック、採用・不採用の理由をスライドにまとめる
 - [ ] 不要なバイナリ、一時workflow、残留PBSジョブ、クラスタ上の一時データを確認する
+
+## リンク集
+
+- ISC26 OpenFOAM virtual: https://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/3700260877/Getting+Started+with+OpenFOAM+for+ISC26+SCC+Virtual+Part
+- ISC26 OpenFOAM in person:https://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/4314791937/Getting+Started+with+OpenFOAM+task+for+ISC26+SCC+In-Person+Part
+- コンテストサイト: https://www.hpcadvisorycouncil.com/events/2026/APAC-AI-HPC/
+- The first OpenFOAM HPC Challenge: https://arxiv.org/html/2603.27565v1
+- メッシュのリポジトリ: https://develop.openfoam.com/committees/hpc/-/tree/develop/incompressible/simpleFoam/occDrivAerStaticMesh
+- 65M mesh: https://zenodo.org/records/15012221/files/polyMesh_65M.tar.gz?download=1
