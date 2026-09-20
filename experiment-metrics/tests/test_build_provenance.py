@@ -75,6 +75,15 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
     capture.write_text("#!/usr/bin/env python3\n")
     capture.chmod(0o755)
     paths["capture-hardware"] = capture
+    compiler_redirect = tmp_path / "compiler-redirect"
+    compiler_redirect.write_text(
+        '#!/usr/bin/env bash\ncase "${0##*/}" in cc|cxx) exit 0 ;; *) exit 64 ;; esac\n'
+    )
+    compiler_redirect.chmod(0o755)
+    compiler_c = tmp_path / "cc"
+    compiler_cxx = tmp_path / "cxx"
+    compiler_c.symlink_to(compiler_redirect)
+    compiler_cxx.symlink_to(compiler_redirect)
     monkeypatch.setattr(provenance, "_which", lambda _name: Path("/bin/true"))
 
     state = capture_build_state(
@@ -87,8 +96,8 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
         thirdparty_algorithm="sha1",
         executable_paths=paths,
         compile_flags=["WM_PRECISION_OPTION=DP", "WM_LABEL_SIZE=64"],
-        compiler_c=Path("/bin/true"),
-        compiler_cxx=Path("/bin/true"),
+        compiler_c=compiler_c,
+        compiler_cxx=compiler_cxx,
         mpi_launcher=Path("/bin/true"),
         precision="DP",
         label_bits=64,
@@ -109,6 +118,8 @@ def test_build_sidecar_seals_source_toolchain_runtime_and_archive(
         if item["kind"] == "executable"
     } == set(EXECUTABLE_ROLES)
     assert document["build_archive"]["size_bytes"] == archive.stat().st_size
+    assert document["toolchain_commands"][0]["argv"][0] == str(compiler_c)
+    assert document["toolchain_commands"][1]["argv"][0] == str(compiler_cxx)
 
     manifest = init_run(
         None, tmp_path / "runtime", identities, registry_path=registry_path

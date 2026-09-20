@@ -93,10 +93,10 @@ def capture_build_state(
     }
     raw_root = root / "control/build-raw"
     raw_root.mkdir(parents=True, exist_ok=True)
-    compiler_c = compiler_c.resolve(strict=True)
-    compiler_cxx = compiler_cxx.resolve(strict=True)
-    launcher = mpi_launcher.resolve(strict=True)
-    if not all(os.access(path, os.X_OK) for path in (compiler_c, compiler_cxx, launcher)) or precision not in {"SP", "DP"} or label_bits not in {32, 64}:
+    compiler_c = compiler_c.absolute()
+    compiler_cxx = compiler_cxx.absolute()
+    launcher = mpi_launcher.absolute()
+    if not all(path.is_file() and os.access(path, os.X_OK) for path in (compiler_c, compiler_cxx, launcher)) or precision not in {"SP", "DP"} or label_bits not in {32, 64}:
         raise ValueError("build toolchain selection is invalid")
     readelf = _which("readelf")
     commands = (
