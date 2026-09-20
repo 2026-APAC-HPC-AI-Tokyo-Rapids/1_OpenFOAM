@@ -8,11 +8,15 @@ aspire2a_load_toolchain() {
     gnu)
       module load PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2
       aspire2a_wm_compiler=Gcc
+      aspire2a_cc=gcc
+      aspire2a_cxx=g++
       aspire2a_aocl_module=aocl/4.0.0-gcc11.2
       ;;
     aocc)
       module load aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0
       aspire2a_wm_compiler=Clang
+      aspire2a_cc=clang
+      aspire2a_cxx=clang++
       aspire2a_aocl_module=aocl/5.1.0-aocc5.0
       ;;
     *)
@@ -21,8 +25,6 @@ aspire2a_load_toolchain() {
       ;;
   esac
 
-  aspire2a_cc=cc
-  aspire2a_cxx=CC
   aspire2a_mpi_launcher=mpiexec
   aspire2a_wm_mplib=CRAY-MPICH
   command -v "${aspire2a_cc}" >/dev/null

@@ -44,7 +44,8 @@ do
   module -t list
   "${aspire2a_cc}" --version
   "${aspire2a_cxx}" --version
-  "${aspire2a_cxx}" -craype-verbose 2>&1 || true
+  CC --version
+  CC --cray-print-opts=all
   "${aspire2a_mpi_launcher}" --version
   printf 'wm_compiler=%s\nwm_mplib=%s\naocl_module=%s\naocl_root=%s\n' "${aspire2a_wm_compiler}" "${aspire2a_wm_mplib}" "${aspire2a_aocl_module}" "${AOCL_ROOT}"
   "${aspire2a_mpi_launcher}" -n 1 bash -lc 'printf "rank_host=%s\n" "$(hostname -f)"; env | LC_ALL=C sort | grep -E "^(PBS|PMI|PALS|MPICH|FI_|CRAY|TMPDIR)" || true'
