@@ -387,6 +387,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'aspire2a_load_toolchain "${aspire2a_toolchain}"' in wrapper
     assert 'WM_COMPILER="${aspire2a_wm_compiler}"' in wrapper
     assert 'WM_MPLIB="${aspire2a_wm_mplib}"' in wrapper
+    assert '/usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh"' in wrapper
+    assert '/usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-case.sh"' in wrapper
+    assert '/usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-rank-context.sh"' in wrapper
     assert "--global-rank-env PMI_RANK" in wrapper
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper

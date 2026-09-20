@@ -18,7 +18,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then : "${OPENFOAM_PROFILE_TOOL:?
 
 mpiexec_path=$(command -v mpiexec)
 runtime_root="${TMPDIR}/openfoam-runtime"
-"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json" "${PROVISION_DIR}/compute-tools.tar.zst" "${PROVISION_DIR}/control/compute-tools.json" "${runtime_root}"
+"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json" "${PROVISION_DIR}/compute-tools.tar.zst" "${PROVISION_DIR}/control/compute-tools.json" "${runtime_root}"
 
 set +eu
 source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER="${aspire2a_wm_compiler}" WM_MPLIB="${aspire2a_wm_mplib}" WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
@@ -31,9 +31,9 @@ identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISI
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 case_archive_dir="${case_archive_root}/${cache_identity}"
 case_dir="${TMPDIR}/openfoam-case/occDrivAerStaticMesh"
-"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${OPENFOAM_ITERATIONS}" "${case_dir}" "${runtime_root}"
+"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${OPENFOAM_ITERATIONS}" "${case_dir}" "${runtime_root}"
 rank_context_root="${TMPDIR}/openfoam-run"
-"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/aspire2a/stage-rank-context.sh" "${RUN_MANIFEST}" "${rank_context_root}"
+"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-rank-context.sh" "${RUN_MANIFEST}" "${rank_context_root}"
 host_roots="((\".*\" \"${TMPDIR}/openfoam-case\"))"
 distributed_root_args=()
 if (( OPENFOAM_NODES > 1 )); then
