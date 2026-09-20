@@ -151,7 +151,7 @@ def test_hardware_probe_uses_deployed_python_when_mpi_overrides_path(tmp_path: P
 
 
 def test_hardware_capture_diagnostic_logs_are_archived() -> None:
-    for cluster in ("genkai", "gadi"):
+    for cluster in ("genkai", "gadi", "aspire2a"):
         workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text()
         assert "logs/minimal-hardware-capture.log:postrun_source" in workflow
         assert "logs/profile-hardware-capture.log:postrun_source" in workflow
@@ -346,20 +346,44 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "uses: ./.github/workflows/gadi.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:gadi]')" in entry
+    assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
     assert "inputs.run_genkai" in entry
     assert "inputs.run_gadi" in entry
-    assert entry.count("contains(github.event.head_commit.message, '[nodes:4]')") == 2
-    assert entry.count("contains(github.event.head_commit.message, '[nodes:2]')") == 2
+    assert "inputs.run_aspire2a" in entry
+    assert entry.count("contains(github.event.head_commit.message, '[nodes:4]')") == 3
+    assert entry.count("contains(github.event.head_commit.message, '[nodes:2]')") == 3
     assert (
         entry.count("github.event_name == 'workflow_dispatch' && inputs.node_count")
-        == 2
+        == 3
     )
     assert "select-target" not in entry
     assert "select-actions-target.sh" not in entry
 
 
+def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
+    workflow = (ROOT / ".github/workflows/aspire2a.yml").read_text(encoding="utf-8")
+    wrapper = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
+    entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
+
+    assert "shell: aspire2a-shell --github-shell {0}" in workflow
+    assert "/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a" in workflow
+    assert 'scripts/build-openfoam.sh" aspire2a' in workflow
+    assert "submit-pbs-run" in workflow
+    assert "qsub -P 59000014 -q normal" in workflow
+    assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
+    assert "openfoam-profile-craypat-apa-v1.json" in workflow
+    assert "module load perftools" in wrapper
+    assert "OPENFOAM_PROFILE_TOOL=craypat" in wrapper
+    assert "WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH" in wrapper
+    assert "--global-rank-env PMI_RANK" in wrapper
+    assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
+    assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
+    assert "uses: ./.github/workflows/aspire2a.yml" in entry
+    assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
+
+
 def test_cluster_steps_use_home_lab_remote_shells() -> None:
-    for cluster in ("genkai", "gadi"):
+    for cluster in ("genkai", "gadi", "aspire2a"):
         workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text(
             encoding="utf-8"
         )
@@ -372,10 +396,12 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
     genkai = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
     gadi = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")
+    aspire2a = (ROOT / ".github/workflows/aspire2a.yml").read_text(encoding="utf-8")
 
     entry_inputs = entry.split("permissions:", 1)[0]
     assert "run_genkai:" in entry_inputs
     assert "run_gadi:" in entry_inputs
+    assert "run_aspire2a:" in entry_inputs
     assert "node_count:" in entry_inputs
     assert "require_build:" not in entry_inputs
     assert "reshare_ccache:" not in entry_inputs
@@ -384,7 +410,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     assert "profile_rank:" not in entry_inputs
     assert "profile_analysis:" not in entry_inputs
     profile_push_gate = "github.event_name == 'push' && contains(github.event.head_commit.message, '[profile]')"
-    assert entry.count(profile_push_gate) == 2
+    assert entry.count(profile_push_gate) == 3
     assert not (ROOT / ".github/workflows/genkai-profile.yml").exists()
 
     assert "require_build:" not in genkai
@@ -392,7 +418,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     assert "run_purpose:" not in genkai
     assert "require_build:" not in gadi
     assert "run_purpose:" not in gadi
-    for workflow in (genkai, gadi):
+    for workflow in (genkai, gadi, aspire2a):
         assert "profile:" in workflow
         assert "profile_rank:" not in workflow
         assert "profile_analysis:" not in workflow
@@ -416,6 +442,7 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
+    assert push_gate in aspire2a
 
 
 def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
@@ -501,7 +528,8 @@ def test_builder_uses_the_pinned_unmodified_v2512_sources() -> None:
     assert "-qopt-report-phase=loop,vec,cg" in script
     assert 'export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"' in script
     assert 'test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"' in script
-    assert "WM_COMPILE_CONTROL=+ccache" in script
+    assert "build_compile_control=+ccache" in script
+    assert 'WM_COMPILE_CONTROL="${build_compile_control}"' in script
     assert "CMAKE_CXX_COMPILER_LAUNCHER=ccache" in script
     assert "CCACHE_RECACHE" not in script
     assert "${GITHUB_RUN_ID}.tar.zst" in script

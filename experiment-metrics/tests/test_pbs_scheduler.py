@@ -17,6 +17,7 @@ REGISTRY = Path(__file__).parents[1] / "registry/openfoam-v2.toml"
 PROTOCOL = (
     Path(__file__).parents[1] / "registry/openfoam-v2-protocol-gadi-scotch-1n-104r.toml"
 )
+ASPIRE2A_PROTOCOL = Path(__file__).parents[1] / "registry/openfoam-v2-protocol-aspire2a-scotch-2n-256r.toml"
 
 
 def test_pbs_submission_and_terminal_are_bound(
@@ -144,3 +145,35 @@ def test_pbs_submission_derives_profile_from_manifest(
     assert "OPENFOAM_VTUNE_ANALYSIS=hpc-performance" in exported
     assert request["profile_rank"] == 37
     assert request["profile_analysis"] == "hpc-performance"
+
+
+def test_aspire2a_submission_uses_exclusive_full_nodes(
+    tmp_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    execution = provision / "platforms/aspire2a/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+
+    outcome = submit_pbs_run(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        protocol_path=ASPIRE2A_PROTOCOL,
+        pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs",
+        execution_script=execution,
+        provision_dir=provision,
+        qsub_path=launcher,
+        execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"24499999.pbs\n", b""),
+    )
+
+    request = json.loads(outcome.request_path.read_text())
+    argv = request["argv"]
+    assert argv[argv.index("-P") + 1] == "59000014"
+    assert argv[argv.index("-q") + 1] == "normal"
+    assert "select=2:ncpus=128:mpiprocs=128:mem=400gb" in argv
+    assert "place=excl" in argv

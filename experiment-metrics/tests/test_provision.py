@@ -227,3 +227,54 @@ def test_profile_provision_records_vtune_identity_and_version(
     assert document["profiler_version"]["stdout"]["path"].endswith(
         "vtune-version.stdout"
     )
+
+
+def test_profile_provision_records_craypat_identity_and_version(
+    tmp_path: Path,
+    registry_path: Path,
+    identities: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile_identities = json.loads(json.dumps(identities))
+    profile_identities["source_track"]["base_role"] = "profile_base"
+    manifest = init_run(
+        None,
+        tmp_path,
+        profile_identities,
+        purpose="profile",
+        registry_path=registry_path,
+    )
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    bin_dir = provision / "bin"
+    bin_dir.mkdir(parents=True)
+    executables = {}
+    for role in EXECUTABLE_ROLES:
+        target = bin_dir / role
+        shutil.copy2("/bin/true", target)
+        executables[role] = target
+    sidecar = _sidecar(run_dir / "control/build-sidecar.json", executables)
+    role_paths = {role: executables[role] for role in EXECUTABLE_ROLES}
+    role_paths["mpirun"] = Path("/bin/true")
+    role_paths["craypat"] = Path("/bin/true")
+    libmpi = tmp_path / "libmpi.so.12"
+    libmpi.write_bytes(b"fixture mpi")
+    monkeypatch.setattr(provision_module, "_ldd_paths", lambda _text: (libmpi,))
+
+    output = validate_provision(
+        manifest_path=manifest,
+        build_sidecar_path=sidecar,
+        provision_root=provision,
+        output=run_dir / "control/build-provision-validation.json",
+        executable_paths=role_paths,
+    )
+
+    document = json.loads(output.read_text())
+    assert [item["role"] for item in document["executables"]][-1] == "craypat"
+    assert document["profiler_version"]["argv"] == [
+        str(Path("/bin/true").resolve()),
+        "-V",
+    ]
+    assert document["profiler_version"]["stdout"]["path"].endswith(
+        "craypat-version.stdout"
+    )

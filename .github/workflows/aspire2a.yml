@@ -1,0 +1,458 @@
+name: ASPIRE-2AでOpenFOAMを実行
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        required: true
+        type: boolean
+      node_count:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  ASPIRE2A_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a
+  BUILD_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/builds
+  SOURCE_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/source-archives
+  OPENFOAM_SOURCE_OID: 5a55da3fb12800863bf76122c50bb0850222cab0
+  THIRDPARTY_SOURCE_OID: 1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0
+
+defaults:
+  run:
+    shell: aspire2a-shell --github-shell {0}
+
+jobs:
+  select-build:
+    name: OpenFOAMビルドを選択
+    runs-on: [self-hosted, home-lab]
+    outputs:
+      action: ${{ steps.select.outputs.action }}
+      source_archive_key: ${{ steps.select.outputs.source_archive_key }}
+      build_cache_key: ${{ steps.select.outputs.build_cache_key }}
+      experiment_preset: ${{ steps.protocol.outputs.experiment_preset }}
+      ranks: ${{ steps.protocol.outputs.ranks }}
+      prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
+    steps:
+      - name: リポジトリ履歴を取得
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: ケース準備処理を識別
+        id: prepare_identity
+        run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
+
+      - name: 実験条件を決定
+        id: protocol
+        run: |
+          case '${{ inputs.node_count }}' in
+            1) experiment_preset=aspire2a-scotch-1n-128r; ranks=128 ;;
+            2) experiment_preset=aspire2a-scotch-2n-256r; ranks=256 ;;
+            4) experiment_preset=aspire2a-scotch-4n-512r; ranks=512 ;;
+            *) echo 'ASPIRE-2Aのノード数には1、2、4のいずれかを指定してください' >&2; exit 64 ;;
+          esac
+          printf 'experiment_preset=%s\nranks=%s\n' "${experiment_preset}" "${ranks}" >> "${GITHUB_OUTPUT}"
+
+      - name: 既存成果物の再利用または新規ビルドを選択
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
+            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"
+            if [[ "${commit_message}" == '[require-build]'* ]]; then
+              echo 'コミットでASPIRE-2A向けOpenFOAMの新規ビルドが指定されました'
+              printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          fi
+          commit="${GITHUB_SHA}"
+          while [[ -n "${commit}" ]]
+          do
+            while IFS= read -r run_id
+            do
+              [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
+              archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
+              sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
+              scripts/build-inputs-match.sh aspire2a "${sidecar}" || continue
+              expected_size=$(jq -er 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst") | .build_archive.size_bytes' "${sidecar}") || continue
+              expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
+              [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
+              [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
+              echo "利用可能な最も近い親コミットのビルドを選択しました: ${archive}"
+              printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
+            commit=$(git rev-parse --verify "${commit}^" 2>/dev/null || true)
+          done
+          echo '再利用可能なASPIRE-2A向け成果物がないため、新しくビルドします'
+          printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+
+  reuse-build:
+    name: OpenFOAMビルドを再利用
+    needs: select-build
+    if: needs.select-build.outputs.action == 'reuse'
+    runs-on: [self-hosted, home-lab]
+    steps:
+      - name: 選択した成果物をハードリンク
+        run: |
+          source_key='${{ needs.select-build.outputs.source_archive_key }}'
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.tar.zst" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+          ln -f -- "${BUILD_ARCHIVE_DIR}/${source_key}.build-sidecar.json" "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
+
+  build-openfoam:
+    name: OpenFOAMをビルド
+    needs: select-build
+    if: needs.select-build.outputs.action == 'build'
+    runs-on: [self-hosted, home-lab]
+    concurrency:
+      group: aspire2a-openfoam-build
+    env:
+      BUILD_DIR: /tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: ビルド入力を取得
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: ソース圧縮ファイルを配置
+        id: stage
+        run: |
+          # GITHUB_TOKENでは同じ組織の非公開ソースリポジトリ2件を読めないため、ASPIRE-2A実行機に設定済みの読み取り専用gh認証でログインノード上のビルド前にソースを配置する。
+          install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
+          openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
+          thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
+          test "${openfoam_oid}" = "${OPENFOAM_SOURCE_OID}"
+          test "${thirdparty_oid}" = "${THIRDPARTY_SOURCE_OID}"
+          [[ "${openfoam_oid}" =~ ^[0-9a-f]{40}$ && "${thirdparty_oid}" =~ ^[0-9a-f]{40}$ ]]
+          openfoam_archive="${SOURCE_ARCHIVE_DIR}/${openfoam_oid}.openfoam.tar.gz"
+          thirdparty_archive="${SOURCE_ARCHIVE_DIR}/${thirdparty_oid}.thirdparty.tar.gz"
+          gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/tarball/${openfoam_oid}" > "${openfoam_archive}.tmp"
+          gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/tarball/${thirdparty_oid}" > "${thirdparty_archive}.tmp"
+          mv -f -- "${openfoam_archive}.tmp" "${openfoam_archive}"
+          mv -f -- "${thirdparty_archive}.tmp" "${thirdparty_archive}"
+          tar -tzf "${openfoam_archive}" >/dev/null
+          tar -tzf "${thirdparty_archive}" >/dev/null
+          printf 'openfoam_archive=%s\nopenfoam_archive_sha256=%s\nopenfoam_oid=%s\nthirdparty_archive=%s\nthirdparty_archive_sha256=%s\nthirdparty_oid=%s\n' "${openfoam_archive}" "$(sha256sum "${openfoam_archive}" | awk '{print $1}')" "${openfoam_oid}" "${thirdparty_archive}" "$(sha256sum "${thirdparty_archive}" | awk '{print $1}')" "${thirdparty_oid}" >> "${GITHUB_OUTPUT}"
+
+      - name: OpenFOAMをビルドして保存
+        env:
+          OPENFOAM_SOURCE_ARCHIVE: ${{ steps.stage.outputs.openfoam_archive }}
+          OPENFOAM_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.openfoam_archive_sha256 }}
+          OPENFOAM_SOURCE_OID: ${{ steps.stage.outputs.openfoam_oid }}
+          THIRDPARTY_SOURCE_ARCHIVE: ${{ steps.stage.outputs.thirdparty_archive }}
+          THIRDPARTY_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.thirdparty_archive_sha256 }}
+          THIRDPARTY_SOURCE_OID: ${{ steps.stage.outputs.thirdparty_oid }}
+        run: '"${GITHUB_WORKSPACE}/scripts/build-openfoam.sh" aspire2a'
+
+      - name: OpenFOAMビルドログをrunnerへ回収
+        if: always()
+        continue-on-error: true
+        shell: home-lab-shell {0}
+        run: aspire2a-shell --pull "${BUILD_DIR}/logs" "${RUNNER_TEMP}/openfoam-aspire2a-build"
+
+      - name: OpenFOAMビルドログを保存
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-aspire2a-build-log-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/openfoam-aspire2a-build/logs
+          if-no-files-found: warn
+          compression-level: 1
+
+      - name: OpenFOAMビルド領域を削除
+        if: always()
+        run: rm -rf -- "${BUILD_DIR:?}"
+
+  provision:
+    name: OpenFOAM実行環境を配備
+    needs: [select-build, reuse-build, build-openfoam]
+    if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
+    runs-on: [self-hosted, home-lab]
+    outputs:
+      provision_dir: ${{ steps.provision.outputs.provision_dir }}
+    steps:
+      - name: 実行用ファイルを取得
+        uses: actions/checkout@v7
+
+      - name: OpenFOAM実行環境を配備
+        id: provision
+        run: |
+          provision_root="${ASPIRE2A_ROOT}/provision"
+          install -d -m 0750 "${provision_root}"
+          provision_dir=$(mktemp -d "${provision_root}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXX")
+          printf 'provision_dir=%s\n' "${provision_dir}" >> "${GITHUB_OUTPUT}"
+          install -d "${provision_dir}/benchmark" "${provision_dir}/control" "${provision_dir}/scripts" "${provision_dir}/platforms/aspire2a"
+          archive="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+          sidecar="${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
+          platforms/aspire2a/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
+          install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
+          install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/check-openfoam-case-cache.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
+          install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/export-craypat.sh "${provision_dir}/platforms/aspire2a/"
+          install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
+          cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
+          install -m 0644 benchmark/profile.json "${provision_dir}/benchmark/profile.json"
+          install -m 0644 benchmark/workload.json "${provision_dir}/benchmark/workload.json"
+          cp -a experiment-metrics "${provision_dir}/experiment-metrics"
+          uv sync --project "${provision_dir}/experiment-metrics" --frozen --no-dev --no-editable
+          tar --use-compress-program='zstd -T0 -3' -cf "${provision_dir}/compute-tools.tar.zst" -C "${provision_dir}" experiment-metrics scripts platforms/aspire2a
+          jq -n -c --arg path compute-tools.tar.zst --argjson size_bytes "$(stat -c '%s' "${provision_dir}/compute-tools.tar.zst")" --arg sha256 "$(sha256sum "${provision_dir}/compute-tools.tar.zst" | awk '{print $1}')" '{schema_version:"openfoam-compute-tools-archive/v1",archive:{path:$path,size_bytes:$size_bytes,sha256:$sha256}}' > "${provision_dir}/control/compute-tools.json"
+
+      - name: 配備失敗時のOpenFOAM実行環境を削除
+        if: failure() && steps.provision.outputs.provision_dir != ''
+        env:
+          PROVISION_DIR: ${{ steps.provision.outputs.provision_dir }}
+        run: rm -rf -- "${PROVISION_DIR:?}"
+
+  prepare-case:
+    name: OpenFOAMケースのキャッシュを準備
+    needs: [select-build, provision]
+    if: always() && needs.provision.result == 'success'
+    runs-on: [self-hosted, home-lab]
+    concurrency:
+      group: aspire2a-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}
+    env:
+      PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
+    steps:
+      - name: 未作成のメッシュを配置・検証・領域分割
+        run: |
+          prepare_root="${ASPIRE2A_ROOT}/prepare/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          prepare_cache_root="${ASPIRE2A_ROOT}/case-archives"
+          workload_dir="${ASPIRE2A_ROOT}/workload"
+          workload_archive="${workload_dir}/polyMesh_65M.tar.gz"
+          workload_temporary="${workload_archive}.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.tmp"
+          install -d -m 0750 "${prepare_root}" "${prepare_cache_root}" "${workload_dir}"
+          trap 'rm -f -- "${workload_temporary}"' EXIT
+          if [[ ! -f "${workload_archive}" || "$(stat -c '%s' "${workload_archive}")" != "$(jq -r '.mesh.size_bytes' "${PROVISION_DIR}/benchmark/workload.json")" || "$(sha256sum "${workload_archive}" | awk '{print $1}')" != "$(jq -r '.mesh.sha256' "${PROVISION_DIR}/benchmark/workload.json")" ]]; then
+            curl --fail --location --retry 3 "$(jq -r '.mesh.url' "${PROVISION_DIR}/benchmark/workload.json")" --output "${workload_temporary}"
+            test "$(stat -c '%s' "${workload_temporary}")" = "$(jq -r '.mesh.size_bytes' "${PROVISION_DIR}/benchmark/workload.json")"
+            test "$(md5sum "${workload_temporary}" | awk '{print $1}')" = "$(jq -r '.mesh.md5' "${PROVISION_DIR}/benchmark/workload.json")"
+            test "$(sha256sum "${workload_temporary}" | awk '{print $1}')" = "$(jq -r '.mesh.sha256' "${PROVISION_DIR}/benchmark/workload.json")"
+            mv -- "${workload_temporary}" "${workload_archive}"
+          fi
+          trap - EXIT
+          cleanup() {
+            status=$?
+            trap - EXIT
+            if [[ "${status}" -ne 0 ]]; then qdel "${job_id:-}" 2>/dev/null || true; cat "${prepare_root}/pbs.log" 2>/dev/null || true; rm -rf -- "${PROVISION_DIR:?}"; fi
+            rm -rf -- "${prepare_root}"
+            exit "${status}"
+          }
+          trap cleanup EXIT
+          if "${PROVISION_DIR}/scripts/check-openfoam-case-cache.sh" aspire2a "${PROVISION_DIR}" "${{ needs.select-build.outputs.ranks }}" "${prepare_cache_root}" "${workload_archive}"; then
+            exit 0
+          else
+            test "$?" -eq 75
+          fi
+          exported="PREPARE_CACHE_ROOT=${prepare_cache_root},PREPARE_SUBDOMAINS=${{ needs.select-build.outputs.ranks }},PROVISION_DIR=${PROVISION_DIR},WORKLOAD_MESH_ARCHIVE=${workload_archive}"
+          job_id=$(qsub -P 59000014 -q normal -l select=1:ncpus=4:mpiprocs=1:mem=120gb -v "${exported}" -o "${prepare_root}/pbs.log" -j oe -N openfoam_prepare "${PROVISION_DIR}/platforms/aspire2a/prepare-openfoam-case.pbs")
+          [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+          "${PROVISION_DIR}/platforms/aspire2a/wait-pbs-job.sh" "${job_id}"
+          cache_dir=$(sed -n 's/^cache_dir=//p' "${prepare_root}/pbs.log" | tail -n 1)
+          [[ "${cache_dir}" == "${prepare_cache_root}/"* ]]
+
+  run:
+    name: OpenFOAMを実行
+    needs: [select-build, provision, prepare-case]
+    if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
+    runs-on: [self-hosted, home-lab]
+    outputs:
+      artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
+      profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}
+      run_dir: ${{ steps.v2_context.outputs.run_dir }}
+    env:
+      PROVISION_DIR: ${{ needs.provision.outputs.provision_dir }}
+      OPENFOAM_RUN_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/runs
+    steps:
+      - name: 制御処理の識別情報を取得
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 計測記録を初期化してOpenFOAMを投入
+        id: v2_context
+        env:
+          METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          install -d -m 0750 "${OPENFOAM_RUN_ROOT}"
+          test -n "${METRICS_CREDENTIAL_JSON}"
+          credential_staging="${OPENFOAM_RUN_ROOT}/.bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          install -m 0600 /dev/null "${credential_staging}"
+          printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_staging}"
+          trap 'rm -f -- "${credential_staging}"' EXIT
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_staging}"
+          export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
+          uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
+          protocol_relative="experiment-metrics/registry/openfoam-v2-protocol-${{ needs.select-build.outputs.experiment_preset }}.toml"
+          protocol_path="${PROVISION_DIR}/${protocol_relative}"
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            purpose=profile
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-craypat-apa-v1.json"
+          else
+            purpose=bench
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
+          fi
+          bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
+          head_commit=$(git rev-parse HEAD)
+          base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
+          control_plane_files=(.github/workflows/aspire2a.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/provision-openfoam-runtime.sh platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          if [[ "${purpose}" == profile ]]; then control_plane_files+=(platforms/aspire2a/build-environment.sh platforms/aspire2a/export-craypat.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh); fi
+          readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
+          control_plane_args=()
+          for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
+          identities=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" source-track-identities --repository "${GITHUB_WORKSPACE}" --purpose "${purpose}" --base-commit "${base_commit}" --instrumentation-bundle-sha256 "${bundle_sha256}" "${control_plane_args[@]}")
+          manifest=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" --identities-json "${identities}" --repository-id apac2026-openfoam --instrumentation-bundle "${bundle_path}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")
+          run_dir=$(dirname "$(dirname "${manifest}")")
+          run_id=$(basename "${run_dir}")
+          credential_file="${run_dir}/control/bigquery-credential.json"
+          mv -- "${credential_staging}" "${credential_file}"
+          trap - EXIT
+          trap 'rm -f -- "${credential_file}"' EXIT
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
+          install -m 0644 "${PROVISION_DIR}/control/build-sidecar.json" "${run_dir}/control/build-sidecar.json"
+          cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-artifact-index --manifest "${manifest}" --runtime-dir "${run_dir}" --build-sidecar "${run_dir}/control/build-sidecar.json"
+          printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
+          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nOPENFOAM_PROTOCOL_PATH=%s\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${protocol_path}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >> "${GITHUB_ENV}"
+          export RUN_ID="${run_id}"
+          export RUN_MANIFEST="${manifest}"
+          export RUN_DIR="${run_dir}"
+          export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
+          trap - EXIT
+          cd "${RUN_DIR}"
+          job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/aspire2a/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/aspire2a/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}" --profile-condition "${PROVISION_DIR}/benchmark/profile.json")
+          [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+          echo "PBS_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
+          echo "pbs_job_id=${job_id}" >> "${GITHUB_OUTPUT}"
+          echo "profile_run_id=${run_id}-${job_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: OpenFOAMジョブの終了を待機
+        run: |
+          tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/pbs.log" &
+          stream_pid=$!
+          trap 'kill "${stream_pid}" 2>/dev/null || true; wait "${stream_pid}" 2>/dev/null || true' EXIT
+          platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"
+          test -e "${RUN_DIR}/run-success"
+
+      - name: CrayPat概要をActionsの概要へ掲載
+        if: success() && inputs.profile
+        run: |
+          printf '## HPE CrayPat Automatic Profiling Analysis\n\n```text\n' >> "${GITHUB_STEP_SUMMARY}"
+          sed -n '1,200p' "${RUN_DIR}/profile/raw/craypat/summary.txt" >> "${GITHUB_STEP_SUMMARY}"
+          printf '\n```\n\nThe raw experiment includes Apprentice2 `.ap2` data and an HTML report.\n' >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 計測記録を確定して成果物を梱包
+        id: package_v2
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
+        run: |
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-pbs-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --job-id "${PBS_JOB_ID}" || true
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --log "${RUN_DIR}/logs/solver.log" --protocol "${OPENFOAM_PROTOCOL_PATH}" --coefficient "${RUN_DIR}/results/coefficient.dat" || true
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-execution-context --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --host-snapshot "${RUN_DIR}/source/env/host-exec.snapshot" --placement-root "${RUN_DIR}/source/placement" --scheduler-request "${RUN_DIR}/control/scheduler-request.json" --scheduler-accounting "${RUN_DIR}/control/scheduler-accounting.json" --decompose-dict "${RUN_DIR}/source/mesh/decomposeParDict" --solver-log "${RUN_DIR}/logs/solver.log" || true
+          args=(package --manifest "${RUN_MANIFEST}")
+          for pair in 'control/run-manifest.json:run_manifest' 'control/instrumentation-bundle.json:instrumentation_bundle' 'control/build-sidecar.json:build_sidecar' 'control/build-provision-validation.json:build_provision_validation' 'control/job-entry.json:job_entry' 'control/scheduler-accounting.json:scheduler_accounting' 'control/scheduler-request.json:scheduler_request' 'control/scheduler-terminal.json:scheduler_terminal' 'control/submission-result.json:scheduler_submission_result' 'logs/checkMesh.log:check_mesh_log' 'logs/minimal-hardware-capture.log:postrun_source' 'logs/profile-hardware-capture.log:postrun_source' 'logs/decomposePar.log:decompose_par_log' 'logs/renumberMesh.log:renumber_mesh_log' 'logs/potentialFoam.log:potential_foam_log' 'logs/applyBoundaryLayer.log:apply_boundary_layer_log' 'logs/profile-warmup.log:postrun_source' 'logs/pbs.log:pbs_log' 'logs/solver.log:solver_log' 'results/result.txt:official_result' 'results/coefficient.dat:force_coefficients' 'results/coefficient-source.json:postrun_source' 'source/env/host-exec.snapshot:host_exec_environment' 'source/env/job-entry.snapshot:job_entry_environment' 'source/network/imb-mpi1/argv.json:imb_mpi1_argv' 'source/network/imb-mpi1/stderr.txt:imb_mpi1_stderr' 'source/network/imb-mpi1/stdout.txt:imb_mpi1_stdout' 'source/scheduler/accounting.stderr:scheduler_accounting_stderr' 'source/scheduler/accounting.stdout:scheduler_accounting_stdout' 'source/scheduler/submission.stderr:scheduler_submission_stderr' 'source/scheduler/submission.stdout:scheduler_submission_stdout'; do relative=${pair%%:*}; [[ -f "${RUN_DIR}/${relative}" ]] && args+=(--member "${pair}"); done
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:rank_placement"); done < <(find "${RUN_DIR}/source/placement" -type f -name 'rank-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:minimal_hardware"); done < <(find "${RUN_DIR}/source/hardware" -type f -name 'node-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:postrun_source"); done < <(find "${RUN_DIR}/source/hardware" -type f ! -name 'node-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:postrun_source"); done < <(find "${RUN_DIR}/source/mesh" "${RUN_DIR}/source/build-provision" -type f -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:build_raw"); done < <(find "${RUN_DIR}/control/build-raw" -type f -print0 | sort -z)
+          args+=(--member 'source/workload-manifest.json:workload_manifest')
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:workload_member"); done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            while IFS= read -r -d '' path; do args+=(--profile-member "${path#"${RUN_DIR}/"}"); done < <(find "${RUN_DIR}/profile/raw" -type f -print0 | sort -z)
+          fi
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" "${args[@]}"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
+
+      - name: 固定構成のv2成果物をrunnerへ回収
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
+        shell: home-lab-shell {0}
+        env:
+          REMOTE_RUN_DIR: ${{ steps.v2_context.outputs.run_dir }}
+        run: |
+          destination="${RUNNER_TEMP}/openfoam-aspire2a-run"
+          aspire2a-shell --pull "${REMOTE_RUN_DIR}/artifact-manifest.json" "${destination}"
+          aspire2a-shell --pull "${REMOTE_RUN_DIR}/run-artifacts.tar.zst" "${destination}"
+          if [[ '${{ inputs.profile }}' == true ]]; then
+            aspire2a-shell --pull "${REMOTE_RUN_DIR}/profile-raw.tar.zst" "${destination}"
+          fi
+
+      - name: 固定構成のv2成果物を保存
+        id: upload_v2
+        if: always() && steps.v2_context.outputs.pbs_job_id != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-aspire2a-v2-${{ steps.v2_context.outputs.run_id }}
+          path: |
+            ${{ runner.temp }}/openfoam-aspire2a-run/artifact-manifest.json
+            ${{ runner.temp }}/openfoam-aspire2a-run/run-artifacts.tar.zst
+            ${{ runner.temp }}/openfoam-aspire2a-run/profile-raw.tar.zst
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: occDrivAerStaticMeshの結果をrunnerへ回収
+        if: success()
+        shell: home-lab-shell {0}
+        env:
+          REMOTE_RUN_DIR: ${{ steps.v2_context.outputs.run_dir }}
+        run: aspire2a-shell --pull "${REMOTE_RUN_DIR}/results" "${RUNNER_TEMP}/openfoam-aspire2a-run"
+
+      - name: occDrivAerStaticMeshの結果を保存
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: openfoam-aspire2a-occdrivaer-65m-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/openfoam-aspire2a-run/results
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: 配備した実行環境を削除
+        if: always()
+        run: |
+          rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}"
+          if [[ -n "${PBS_JOB_ID:-}" ]]; then qdel "${PBS_JOB_ID}" 2>/dev/null || true; fi
+          rm -rf -- "${PROVISION_DIR:?}"
+
+  archive-artifacts:
+    name: 成果物を自宅サーバーへ保管
+    needs: run
+    if: always() && needs.run.outputs.artifact_uploaded == 'true'
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    permissions:
+      actions: write
+      contents: read
+    env:
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+    steps:
+      - name: 成果物保管処理を取得
+        uses: actions/checkout@v7
+
+      - name: ワークフロー成果物を取得
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: "openfoam-aspire2a-*"
+      - name: 成果物を自宅サーバーへ配置
+        run: |
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/aspire2a"
+          install -d -m 0750 "${destination}"
+          cp -a artifacts/. "${destination}/"
+
+      - name: 保管済みのクラスタruntimeを削除
+        if: always()
+        env:
+          RUN_DIR: ${{ needs.run.outputs.run_dir }}
+        run: scripts/remove-openfoam-runtime.sh --cluster aspire2a --connection aspire2a-shell --run-dir "${RUN_DIR}"
+
+      - name: 転送済みのGitHub成果物を削除
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("openfoam-aspire2a-")) | .id' | while read -r artifact_id; do gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"; done

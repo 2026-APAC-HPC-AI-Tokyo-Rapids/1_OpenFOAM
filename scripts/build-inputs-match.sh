@@ -4,7 +4,7 @@ set -euo pipefail
 cluster="${1:?cluster is required}"
 sidecar="${2:?build sidecar is required}"
 case "${cluster}" in
-  genkai|gadi) ;;
+  genkai|gadi|aspire2a) ;;
   *) exit 64 ;;
 esac
 

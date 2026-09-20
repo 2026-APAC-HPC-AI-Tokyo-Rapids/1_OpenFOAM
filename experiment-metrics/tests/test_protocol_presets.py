@@ -13,6 +13,9 @@ def test_selected_scotch_presets_are_self_consistent() -> None:
         "gadi-scotch-1n-104r": (1, 104, "shm"),
         "gadi-scotch-2n-208r": (2, 208, "shm:ofi"),
         "gadi-scotch-4n-416r": (4, 416, "shm:ofi"),
+        "aspire2a-scotch-1n-128r": (1, 128, "cray-mpich"),
+        "aspire2a-scotch-2n-256r": (2, 256, "cray-mpich"),
+        "aspire2a-scotch-4n-512r": (4, 512, "cray-mpich"),
     }
 
     for preset, (nodes, ranks, transport) in expected.items():
@@ -21,9 +24,7 @@ def test_selected_scotch_presets_are_self_consistent() -> None:
             protocol = RunProtocol.load(path, purpose)
             assert protocol.nodes == nodes
             assert protocol.ranks == ranks
-            expected_ranks_per_node = (
-                104 if preset.startswith("gadi-") else (112 if ranks == 448 else 120)
-            )
+            expected_ranks_per_node = 128 if preset.startswith("aspire2a-") else (104 if preset.startswith("gadi-") else (112 if ranks == 448 else 120))
             assert protocol.ranks_per_node == expected_ranks_per_node
             assert protocol.transport_policy == transport
             assert protocol.workload_id == "occDrivAerStaticMesh-65M"

@@ -23,6 +23,7 @@ run_id=$(basename -- "${run_dir}")
 case "${cluster}" in
   genkai) expected_connection=genkai-shell ;;
   gadi) expected_connection=gadi-shell ;;
+  aspire2a) expected_connection=aspire2a-shell ;;
   *) printf '未対応のruntime削除クラスタです: %s\n' "${cluster}" >&2; exit 64 ;;
 esac
 

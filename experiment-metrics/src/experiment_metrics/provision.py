@@ -13,6 +13,7 @@ from .fact import canonical_json
 from .manifest import SHA256, RunManifest
 
 BASE_ROLES = (*EXECUTABLE_ROLES, "mpirun")
+PROFILE_ROLES = {"vtune": "--version", "craypat": "-V"}
 
 
 def validate_provision(
@@ -31,7 +32,15 @@ def validate_provision(
     sidecar_bytes = build_sidecar_path.read_bytes()
     sidecar = json.loads(sidecar_bytes)
     validate_build_sidecar(sidecar)
-    expected_roles = BASE_ROLES + (("vtune",) if manifest.purpose == "profile" else ())
+    if manifest.purpose == "profile":
+        selected = tuple(role for role in PROFILE_ROLES if role in executable_paths)
+        if len(selected) != 1:
+            raise ValueError("profile provision requires exactly one supported profiler")
+        profile_role = selected[0]
+        expected_roles = BASE_ROLES + (profile_role,)
+    else:
+        profile_role = None
+        expected_roles = BASE_ROLES
     if tuple(executable_paths) != expected_roles:
         raise ValueError("provision executable roles are incomplete or unordered")
 
@@ -126,10 +135,11 @@ def validate_provision(
     )
     profiler_version = None
     if manifest.purpose == "profile":
+        assert profile_role is not None
         profiler_version = _capture_version(
-            [str(resolved["vtune"]), "--version"],
-            source_root / "vtune-version.stdout",
-            source_root / "vtune-version.stderr",
+            [str(resolved[profile_role]), PROFILE_ROLES[profile_role]],
+            source_root / f"{profile_role}-version.stdout",
+            source_root / f"{profile_role}-version.stderr",
             run_dir,
         )
     document = {
@@ -168,11 +178,17 @@ def validate_provision_document(document: object, *, purpose: str) -> None:
         or SHA256.fullmatch(document["build_sidecar_sha256"]) is None
     ):
         raise ValueError("build provision validation is not a closed v1 object")
-    expected_roles = BASE_ROLES + (("vtune",) if purpose == "profile" else ())
     executables = document["executables"]
-    if not isinstance(executables, list) or [
+    actual_roles = [
         item.get("role") if isinstance(item, dict) else None for item in executables
-    ] != list(expected_roles):
+    ] if isinstance(executables, list) else []
+    expected_roles = BASE_ROLES
+    if purpose == "profile" and actual_roles:
+        profile_role = actual_roles[-1]
+        if profile_role not in PROFILE_ROLES:
+            raise ValueError("provision profiler role is unsupported")
+        expected_roles += (profile_role,)
+    if not isinstance(executables, list) or actual_roles != list(expected_roles):
         raise ValueError("provision executable roles are incomplete")
     for item in executables:
         if not isinstance(item, dict) or set(item) != {
@@ -224,7 +240,7 @@ def _validate_version(value: object) -> None:
     if (
         not isinstance(value["argv"], list)
         or len(value["argv"]) != 2
-        or value["argv"][1] != "--version"
+        or value["argv"][1] not in PROFILE_ROLES.values()
         or not isinstance(value["argv"][0], str)
         or not value["argv"][0]
         or value["outcome"] != {"kind": "exit", "code": 0}

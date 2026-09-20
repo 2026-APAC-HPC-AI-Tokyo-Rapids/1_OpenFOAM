@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      run_aspire2a:
+        description: ASPIRE-2A用ワークフローを実行する
+        required: true
+        default: false
+        type: boolean
       node_count:
         description: 公式実験のノード数（MPIランク数は各クラスタ用ワークフローで決定）
         required: true
@@ -40,7 +45,7 @@ permissions:
 jobs:
   validate:
     name: 制御処理を検証
-    if: ${{ (github.event_name == 'push' && (contains(github.event.head_commit.message, '[cluster:genkai]') || contains(github.event.head_commit.message, '[cluster:gadi]'))) || (github.event_name == 'workflow_dispatch' && (inputs.run_genkai || inputs.run_gadi)) }}
+    if: ${{ (github.event_name == 'push' && (contains(github.event.head_commit.message, '[cluster:genkai]') || contains(github.event.head_commit.message, '[cluster:gadi]') || contains(github.event.head_commit.message, '[cluster:aspire2a]'))) || (github.event_name == 'workflow_dispatch' && (inputs.run_genkai || inputs.run_gadi || inputs.run_aspire2a)) }}
     uses: ./.github/workflows/validate.yml
 
   genkai:
@@ -58,6 +63,16 @@ jobs:
     needs: validate
     if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[cluster:gadi]')) || (github.event_name == 'workflow_dispatch' && inputs.run_gadi) }}
     uses: ./.github/workflows/gadi.yml
+    with:
+      profile: ${{ (github.event_name == 'workflow_dispatch' && inputs.profile) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[profile]')) }}
+      node_count: ${{ github.event_name == 'workflow_dispatch' && inputs.node_count || contains(github.event.head_commit.message, '[nodes:4]') && '4' || contains(github.event.head_commit.message, '[nodes:2]') && '2' || '1' }}
+    secrets: inherit
+
+  aspire2a:
+    name: ASPIRE-2A
+    needs: validate
+    if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[cluster:aspire2a]')) || (github.event_name == 'workflow_dispatch' && inputs.run_aspire2a) }}
+    uses: ./.github/workflows/aspire2a.yml
     with:
       profile: ${{ (github.event_name == 'workflow_dispatch' && inputs.profile) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[profile]')) }}
       node_count: ${{ github.event_name == 'workflow_dispatch' && inputs.node_count || contains(github.event.head_commit.message, '[nodes:4]') && '4' || contains(github.event.head_commit.message, '[nodes:2]') && '2' || '1' }}

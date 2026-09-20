@@ -1,0 +1,44 @@
+{
+  "schema_version": "instrumentation-bundle/v1",
+  "bundle_track": "profile",
+  "source_paths": [
+    "platforms/aspire2a/build-environment.sh",
+    "platforms/aspire2a/export-craypat.sh",
+    "platforms/aspire2a/run-openfoam.pbs",
+    "scripts/run-openfoam.sh"
+  ],
+  "components": [
+    {
+      "component_id": "openfoam.craypat-apa/v1",
+      "sink_ids": [
+        "craypat-apa-result"
+      ],
+      "activation": {
+        "kind": "executable",
+        "artifact_relative_path": "scripts/run-openfoam.sh",
+        "argv_template": [
+          [
+            {
+              "token": "component_executable"
+            }
+          ],
+          [
+            {
+              "token": "stage_executable",
+              "role": "simpleFoam"
+            }
+          ]
+        ]
+      }
+    }
+  ],
+  "environment_capture_scopes": [],
+  "sink_bindings": [
+    {
+      "sink_id": "craypat-apa-result",
+      "source_id": "openfoam.craypat-apa/v1",
+      "buffering_mode": "stage_buffered"
+    }
+  ],
+  "environment_bindings": []
+}

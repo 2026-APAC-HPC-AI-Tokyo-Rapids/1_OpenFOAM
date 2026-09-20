@@ -83,24 +83,27 @@ def submit_pbs_run(
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))
-    argv = [
-        str(qsub),
-        "-P",
-        "hb15",
-        "-q",
-        protocol.resource_group,
-        "-l",
-        f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs={protocol.nodes * 100}GB,storage=scratch/hb15",
-        "-v",
-        exported,
-        "-o",
-        str(run_dir / "logs/pbs.log"),
-        "-j",
-        "oe",
-        "-N",
-        "openfoam_run",
-        str(execution),
-    ]
+    if relative.parts[:2] == ("platforms", "aspire2a"):
+        resource_arguments = [
+            "-P",
+            "59000014",
+            "-q",
+            protocol.resource_group,
+            "-l",
+            f"select={protocol.nodes}:ncpus=128:mpiprocs=128:mem=400gb",
+            "-l",
+            "place=excl",
+        ]
+    else:
+        resource_arguments = [
+            "-P",
+            "hb15",
+            "-q",
+            protocol.resource_group,
+            "-l",
+            f"ncpus={protocol.ranks},mem={protocol.nodes * 400}GB,jobfs={protocol.nodes * 100}GB,storage=scratch/hb15",
+        ]
+    argv = [str(qsub), *resource_arguments, "-v", exported, "-o", str(run_dir / "logs/pbs.log"), "-j", "oe", "-N", "openfoam_run", str(execution)]
     request = {
         "schema_version": "scheduler-request/v1",
         "subject_manifest_sha256": _sha256(manifest.path),

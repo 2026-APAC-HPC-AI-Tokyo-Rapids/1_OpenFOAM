@@ -59,7 +59,11 @@ required_for = ["bench", "profile"]
 
 [[producers]]
 id = "compute.vtune_hotspots_parser"
-required_for = ["profile"]
+required_for = []
+
+[[producers]]
+id = "openfoam.craypat-apa/v1"
+required_for = []
 
 [[keys]]
 pattern = "run.identity.run_id"
@@ -185,7 +189,7 @@ required_for = ["bench", "profile"]
 pattern = "profile.vtune_hotspots"
 owner = "compute.vtune_hotspots_parser"
 logical_type = "json"
-required_for = ["profile"]
+required_for = []
 
 [[keys]]
 pattern = "run.stage.*.launch"
@@ -441,6 +445,13 @@ id = "openfoam.vtune-hotspots/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
 activation = { kind = "bundle_component", component_id = "openfoam.vtune-hotspots/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "openfoam.craypat-apa/v1"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.craypat-apa/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
@@ -844,7 +855,16 @@ source_role = "vtune_hotspots_report"
 storage = "profile_raw"
 path_template = [{ literal = "profile/raw/vtune-summary/hotspots.csv" }]
 schema_id = "vtune-hotspots-csv/v2"
-required_when_applicable = true
+required_when_applicable = false
+
+[[source]]
+id = "openfoam.craypat-apa/v1"
+producer_id = "openfoam.craypat-apa/v1"
+source_role = "craypat_apa_report"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/craypat/experiment/index.ap2" }]
+schema_id = "craypat-ap2/v1"
+required_when_applicable = false
 
 [[source]]
 id = "artifact.network_stdout"

@@ -50,7 +50,19 @@ walltimeは処理別に指定する。ケース準備は性能計測ではない
 
 ## Profile
 
-Intel VTuneは利用できない。Cray Performance Analysis Tools 22.04.0の`perftools`、`perftools-lite`、`pat_build`、`pat_report`が利用できる。通常計測へinstrumentationを混入させず、profile入口からのみ有効化する。具体的なinstrumentation方法と成果物形式は、安価なPBSジョブでsite module版`simpleFoam`に対して動作確認してから確定する。
+Intel VTuneのmoduleはなく、Intel CPU用PMUを必要とするEBS、Memory Access、Platform ProfilerをAMD EPYCで統一的に利用することもできない。このためASPIRE-2AへVTuneを追加せず、site提供のHPE Cray Performance Analysis Tools 22.04.0をprofile経路の正本とする。
+
+`perftools-base`と、その配下の`perftools` moduleには`pat_build`、`pat_report`、`app2`が含まれる。ASPIRE-2Aのbuildでは通常計測用`simpleFoam`を保持したまま、profile専用の`simpleFoam+pat`を`pat_build -O apa`で別に生成する。profile runではこのbinaryからAutomatic Profiling Analysisを収集し、`pat_report`から次を生成する。
+
+- terminalとActions summaryで確認するtext report
+- browserで確認できるHTML report
+- HPE Cray Apprentice2で開く自己完結した`.ap2`データ
+
+Apprentice2のWindows installerはASPIRE-2Aの`$CRAYPAT_ROOT/share/desktop_installers/Apprentice2Installer-22.04.0-2.exe`にある。profile artifactの`.ap2`をWindowsへ回収して開けば、call tree、load balance、MPI、hardware counterをGUIで確認できる。
+
+AMD uProfはmoduleにない。uProfはAMD固有のIBS、IPC、memory bandwidthを調べる追加候補だが、利用にはcompute node上のPMU権限とsite policyの確認が必要である。まずCrayPatで全体とMPIを特定し、CrayPatで不足するAMD固有の問いが生じた場合だけ導入を検討する。
+
+通常計測へinstrumentationを混入させず、CrayPatは共通`OpenFOAM` workflowの`profile`入口からのみ有効化する。
 
 ## 未確認事項
 
@@ -59,7 +71,7 @@ Intel VTuneは利用できない。Cray Performance Analysis Tools 22.04.0の`pe
 - `select`、`mem=400gb`、`place=excl`、project指定を組み合わせたPBS投入とrouting先
 - PALSによる1/2/4ノードのrank配置
 - compute nodeからscratch、home、外部networkへの到達性
-- Cray Performance Analysis Toolsによるprofile取得
+- Cray Performance Analysis Toolsによるcompute node上のprofile取得と`.ap2`生成
 
 これらはジョブ投入前の静的検証後、まず短時間のPBS疎通ジョブで確認する。公式ケースや高価なprofileを先に投入しない。
 

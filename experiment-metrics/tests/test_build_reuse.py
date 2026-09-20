@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
         ("platforms/genkai/build-environment.sh", "genkai", False, False),
         ("platforms/gadi/build-environment.sh", "genkai", False, True),
         ("platforms/gadi/build-environment.sh", "gadi", False, False),
+        ("platforms/aspire2a/build-environment.sh", "aspire2a", False, False),
+        ("platforms/gadi/build-environment.sh", "aspire2a", False, True),
         ("README.md", "genkai", True, False),
     ],
 )

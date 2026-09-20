@@ -72,12 +72,11 @@ done
 [[ "${OPENFOAM_SOLVER}" == simpleFoam && "${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com && "${OPENFOAM_RELEASE}" == v2512 && "${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M ]]
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
+OPENFOAM_PROFILE_TOOL=${OPENFOAM_PROFILE_TOOL:-vtune}
 : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
 : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
-case "${OPENFOAM_VTUNE_ANALYSIS}" in
-  hotspots|hpc-performance|memory-access|memory-access-core) ;;
-  *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;;
-esac
+case "${OPENFOAM_PROFILE_TOOL}" in vtune|craypat) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
+if [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then case "${OPENFOAM_VTUNE_ANALYSIS}" in hotspots|hpc-performance|memory-access|memory-access-core) ;; *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;; esac; fi
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
@@ -117,6 +116,9 @@ vtune_root="${large_output_dir}/vtune"
 OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
 OPENFOAM_VTUNE_STATUS_PATH="${RUN_DIR}/profile/raw/vtune-summary/collection-status.json"
 export OPENFOAM_VTUNE_RESULT_DIR OPENFOAM_VTUNE_STATUS_PATH
+craypat_root="${RUN_DIR}/profile/raw/craypat"
+OPENFOAM_CRAYPAT_RESULT_DIR="${craypat_root}/experiment"
+export OPENFOAM_CRAYPAT_RESULT_DIR
 export OPENFOAM_COMPUTE_TOOLS_ROOT="${compute_tools_root}"
 test "$(basename -- "${RUN_DIR}")" = "${RUN_ID}"
 install -d -m 0755 "${CASE_DIR%/*}" "${LOG_DIR}" "${SOURCE_DIR}" "${RESULTS_DIR}" "${RUN_DIR}/domain"
@@ -172,11 +174,19 @@ ENV=$(command -v env)
 
 provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${runtime_root}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
-  (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
-  OPENFOAM_VTUNE_PATH=$(command -v vtune)
-  export OPENFOAM_VTUNE_PATH
-  provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
+  if [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
+    [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
+    (( OPENFOAM_VTUNE_RANK < OPENFOAM_MPI_PROCS ))
+    OPENFOAM_VTUNE_PATH=$(command -v vtune)
+    export OPENFOAM_VTUNE_PATH
+    provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
+  else
+    OPENFOAM_CRAYPAT_PATH=$(command -v pat_report)
+    CRAYPAT_SIMPLE_FOAM="${SIMPLE_FOAM}+pat"
+    test -x "${CRAYPAT_SIMPLE_FOAM}"
+    export OPENFOAM_CRAYPAT_PATH
+    provision_args+=(--executable "craypat=${OPENFOAM_CRAYPAT_PATH}")
+  fi
 fi
 "${METRICS_CLI}" "${provision_args[@]}"
 "${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'ビルド配備の計測値を記録できませんでした' >&2
@@ -220,28 +230,32 @@ stage potential_foam "${LOG_DIR}/potentialFoam.log" "${solver_launch[@]}" "${POT
 stage apply_boundary_layer "${LOG_DIR}/applyBoundaryLayer.log" "${solver_launch[@]}" "${APPLY_BOUNDARY_LAYER}" -ybl 0.0450244 -parallel -fileHandler uncollated "${openfoam_args[@]}"
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  # coded function objectの初回コンパイルをVTuneの60秒収集区間へ混ぜない。
+  # coded function objectの初回コンパイルをprofile収集区間へ混ぜない。
   # -postProcessはsolver反復を行わずfunction objectだけを初期化・実行し、生成した
   # 共有libraryを後続の正式solver実行が再利用する。公式function objectは0反復の終了時に0/0を
   # 計算するため、warmupだけFPE trapを無効化する。solverの実行環境は変更しない。
   stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
-  install -d -m 2770 "${vtune_root}"
-  install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"
+  if [[ "${OPENFOAM_PROFILE_TOOL:-vtune}" == vtune ]]; then install -d -m 2770 "${vtune_root}"; install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"; fi
   # v2512は既存coefficient.datがあると正式出力をcoefficient_0.datへ改名する。
   # warmupのrawを退避し、正式solverが規定名へ出力できるようにする。
   mv -T "${CASE_DIR}/postProcessing" "${RUN_DIR}/profile/raw/warmup-postProcessing"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
-if [[ "${OPENFOAM_RUN_PURPOSE}" == bench ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
   stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  # まず全ランクが配置を記録する。その後、選択したランクがプロファイラへ置き換わる。
-  # プロファイラからsimpleFoamを直接起動し、VTuneがPythonの配置記録処理ではなく
-  # ソルバーを追跡するようにする。
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  if [[ "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
+    install -d -m 0750 "${craypat_root}"
+    export PAT_RT_EXPDIR_BASE="${craypat_root}"
+    export PAT_RT_EXPDIR_NAME=experiment
+    export PAT_RT_EXPDIR_REPLACE=1
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${CRAYPAT_SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  else
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  fi
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 fi
@@ -258,12 +272,14 @@ fi
 if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  set +e
-  "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
-  vtune_export_status=$?
-  set -e
-  if [[ "${vtune_export_status}" -ne 0 ]]; then
-    printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2
+  if [[ "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
+    "${compute_tools_root}/platforms/aspire2a/export-craypat.sh" "${OPENFOAM_CRAYPAT_RESULT_DIR}" "${craypat_root}"
+  else
+    set +e
+    "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
+    vtune_export_status=$?
+    set -e
+    if [[ "${vtune_export_status}" -ne 0 ]]; then printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2; fi
   fi
 fi
 

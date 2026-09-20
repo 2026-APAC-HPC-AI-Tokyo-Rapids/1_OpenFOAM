@@ -74,7 +74,10 @@ def test_default_registry_exposes_closed_machine_contract_graph() -> None:
     assert {"pbs_log", "pjm_log", "workload_member"}.issubset(
         registry.artifact_roles.run_bundle_source_roles
     )
-    assert "profile.vtune_hotspots" in registry.required_keys("profile")
+    assert "profile.vtune_hotspots" not in registry.required_keys("profile")
+    assert {"openfoam.vtune-hotspots/v1", "openfoam.craypat-apa/v1"}.issubset(
+        {item.identifier for item in registry.producer_contracts}
+    )
     assert {
         "artifact.subject_manifest",
         "artifact.build_sidecar",
