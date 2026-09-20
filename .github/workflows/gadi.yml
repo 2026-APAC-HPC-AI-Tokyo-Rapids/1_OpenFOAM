@@ -280,11 +280,10 @@ jobs:
         run: |
           install -d -m 0750 "${OPENFOAM_RUN_ROOT}"
           test -n "${METRICS_CREDENTIAL_JSON}"
-          credential_staging="${OPENFOAM_RUN_ROOT}/.bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
-          install -m 0600 /dev/null "${credential_staging}"
-          printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_staging}"
-          trap 'rm -f -- "${credential_staging}"' EXIT
-          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_staging}"
+          credential_file=$(mktemp "/tmp/openfoam-bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXX.json")
+          printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_file}"
+          trap 'rm -f -- "${credential_file}"' EXIT
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
           export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${PROVISION_DIR}/experiment-metrics/pyproject.toml"
           uv sync --project "${PROVISION_DIR}/experiment-metrics" --frozen --no-dev --extra publish
           protocol_relative="experiment-metrics/registry/openfoam-v2-protocol-${{ needs.select-build.outputs.experiment_preset }}.toml"
@@ -308,22 +307,16 @@ jobs:
           manifest=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" init-run --runtime-root "${OPENFOAM_RUN_ROOT}" --purpose "${purpose}" --identities-json "${identities}" --repository-id apac2026-openfoam --instrumentation-bundle "${bundle_path}" --registry "${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml")
           run_dir=$(dirname "$(dirname "${manifest}")")
           run_id=$(basename "${run_dir}")
-          credential_file="${run_dir}/control/bigquery-credential.json"
-          mv -- "${credential_staging}" "${credential_file}"
-          trap - EXIT
-          trap 'rm -f -- "${credential_file}"' EXIT
-          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
           install -m 0644 "${PROVISION_DIR}/control/build-sidecar.json" "${run_dir}/control/build-sidecar.json"
           cp -a "${PROVISION_DIR}/control/build-raw" "${run_dir}/control/build-raw"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-artifact-index --manifest "${manifest}" --runtime-dir "${run_dir}" --build-sidecar "${run_dir}/control/build-sidecar.json"
           printf 'run_id=%s\nmanifest=%s\nrun_dir=%s\n' "${run_id}" "${manifest}" "${run_dir}" >> "${GITHUB_OUTPUT}"
-          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nOPENFOAM_PROTOCOL_PATH=%s\nEXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${protocol_path}" "${credential_file}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >> "${GITHUB_ENV}"
+          printf 'RUN_ID=%s\nRUN_MANIFEST=%s\nRUN_DIR=%s\nOPENFOAM_PROTOCOL_PATH=%s\nEXPERIMENT_METRICS_BIGQUERY_CONFIG=%s\n' "${run_id}" "${manifest}" "${run_dir}" "${protocol_path}" "${PROVISION_DIR}/experiment-metrics/pyproject.toml" >> "${GITHUB_ENV}"
           export RUN_ID="${run_id}"
           export RUN_MANIFEST="${manifest}"
           export RUN_DIR="${run_dir}"
           export OPENFOAM_PROTOCOL_PATH="${protocol_path}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" smoke-send --run "${RUN_ID}" --source runner
-          trap - EXIT
           cd "${RUN_DIR}"
           job_id=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" submit-pbs-run --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --pbs-script-repository-path platforms/gadi/run-openfoam.pbs --execution-script "${PROVISION_DIR}/platforms/gadi/run-openfoam.pbs" --provision-dir "${PROVISION_DIR}" --profile-condition "${PROVISION_DIR}/benchmark/profile.json")
           [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
@@ -352,7 +345,14 @@ jobs:
       - name: 計測記録を確定して成果物を梱包
         id: package_v2
         if: always() && steps.v2_context.outputs.pbs_job_id != ''
+        env:
+          METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
         run: |
+          test -n "${METRICS_CREDENTIAL_JSON}"
+          credential_file=$(mktemp "/tmp/openfoam-bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXX.json")
+          printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_file}"
+          trap 'rm -f -- "${credential_file}"' EXIT
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-pbs-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --job-id "${PBS_JOB_ID}" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --log "${RUN_DIR}/logs/solver.log" --protocol "${OPENFOAM_PROTOCOL_PATH}" --coefficient "${RUN_DIR}/results/coefficient.dat" || true
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-execution-context --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --host-snapshot "${RUN_DIR}/source/env/host-exec.snapshot" --placement-root "${RUN_DIR}/source/placement" --scheduler-request "${RUN_DIR}/control/scheduler-request.json" --scheduler-accounting "${RUN_DIR}/control/scheduler-accounting.json" --decompose-dict "${RUN_DIR}/source/mesh/decomposeParDict" --solver-log "${RUN_DIR}/logs/solver.log" || true
@@ -416,7 +416,6 @@ jobs:
       - name: 配備した実行環境を削除
         if: always()
         run: |
-          rm -f -- "${EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE:-}"
           if [[ -n "${PBS_JOB_ID:-}" ]]; then qdel "${PBS_JOB_ID}" 2>/dev/null || true; fi
           rm -rf -- "${PROVISION_DIR:?}"
 

@@ -191,7 +191,7 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_BASE64" not in workflow
     assert "record-pstream --manifest" not in workflow
     assert "Publish v2 raw facts to BigQuery" not in workflow
-    assert "install -m 0600" in workflow
+    assert "/tmp/openfoam-bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in workflow
     assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE" in workflow
     assert 'smoke-send --run "${RUN_ID}" --source runner' in workflow
     assert "OpenFOAMケースのキャッシュを準備" in workflow
@@ -375,6 +375,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'scripts/build-openfoam.sh" aspire2a' not in workflow
     assert "submit-pbs-run" in workflow
     assert "qsub -P 59000014 -q normal" in workflow
+    assert 'platforms/aspire2a/wait-pbs-job.sh" "${job_id}"' in workflow
+    assert 'platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"' in workflow
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
     assert "provision-uprof.sh" in workflow
@@ -426,6 +428,21 @@ def test_cluster_steps_use_home_lab_remote_shells() -> None:
         assert f"shell: {cluster}-shell --github-shell {{0}}" in workflow
         assert f"runs-on: [self-hosted, {cluster}]" not in workflow
         assert "runs-on: [self-hosted, home-lab]" in workflow
+
+
+def test_bigquery_credentials_stay_in_login_runner_steps() -> None:
+    for cluster in ("genkai", "gadi", "aspire2a"):
+        workflow = (ROOT / f".github/workflows/{cluster}.yml").read_text(
+            encoding="utf-8"
+        )
+        temporary = (
+            'mktemp "/tmp/openfoam-bigquery-${GITHUB_RUN_ID}-'
+            '${GITHUB_RUN_ATTEMPT}.XXXXXXXX.json"'
+        )
+        assert workflow.count(temporary) == 2
+        assert workflow.count("METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}") == 2
+        assert "bigquery-credential.json" not in workflow
+        assert "EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE=%s" not in workflow
 
 
 def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() -> None:
