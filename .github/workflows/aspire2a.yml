@@ -18,6 +18,7 @@ env:
   ASPIRE2A_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a
   BUILD_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/builds
   SOURCE_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/source-archives
+  BUILD_LOG_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-logs
   AMDUPROF_ARCHIVE: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/AMDuProf_Linux_x64_5.3.521.tar.bz2
   AMDUPROF_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521
   OPENFOAM_SOURCE_OID: 5a55da3fb12800863bf76122c50bb0850222cab0
@@ -113,8 +114,6 @@ jobs:
     runs-on: [self-hosted, home-lab]
     concurrency:
       group: aspire2a-openfoam-build
-    env:
-      BUILD_DIR: /tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: ビルド入力を取得
         uses: actions/checkout@v7
@@ -124,7 +123,7 @@ jobs:
       - name: ソース圧縮ファイルを配置
         id: stage
         run: |
-          # GITHUB_TOKENでは同じ組織の非公開ソースリポジトリ2件を読めないため、ASPIRE-2A実行機に設定済みの読み取り専用gh認証でログインノード上のビルド前にソースを配置する。
+          # 非公開source repositoryは、意図的にASPIRE-2A login runnerへ設定したgh認証で取得する。
           install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
           openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
@@ -149,26 +148,38 @@ jobs:
           THIRDPARTY_SOURCE_ARCHIVE: ${{ steps.stage.outputs.thirdparty_archive }}
           THIRDPARTY_SOURCE_ARCHIVE_SHA256: ${{ steps.stage.outputs.thirdparty_archive_sha256 }}
           THIRDPARTY_SOURCE_OID: ${{ steps.stage.outputs.thirdparty_oid }}
-        run: '"${GITHUB_WORKSPACE}/scripts/build-openfoam.sh" aspire2a'
+        run: |
+          build_log_dir="${BUILD_LOG_ROOT}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          install -d -m 0750 "${build_log_dir}"
+          exported="ASPIRE2A_BUILD_LOG_DIR=${build_log_dir},BUILD_ARCHIVE_DIR=${BUILD_ARCHIVE_DIR},GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT},GITHUB_RUN_ID=${GITHUB_RUN_ID},GITHUB_WORKSPACE=${GITHUB_WORKSPACE},OPENFOAM_SOURCE_ARCHIVE=${OPENFOAM_SOURCE_ARCHIVE},OPENFOAM_SOURCE_ARCHIVE_SHA256=${OPENFOAM_SOURCE_ARCHIVE_SHA256},OPENFOAM_SOURCE_OID=${OPENFOAM_SOURCE_OID},THIRDPARTY_SOURCE_ARCHIVE=${THIRDPARTY_SOURCE_ARCHIVE},THIRDPARTY_SOURCE_ARCHIVE_SHA256=${THIRDPARTY_SOURCE_ARCHIVE_SHA256},THIRDPARTY_SOURCE_OID=${THIRDPARTY_SOURCE_OID}"
+          job_id=$(qsub -v "${exported}" -o "${build_log_dir}/pbs.log" -j oe "${GITHUB_WORKSPACE}/platforms/aspire2a/build-openfoam.pbs")
+          [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
+          echo "ASPIRE2A_BUILD_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
+          echo "ASPIRE2A_BUILD_LOG_DIR=${build_log_dir}" >> "${GITHUB_ENV}"
+          "${GITHUB_WORKSPACE}/platforms/aspire2a/wait-pbs-job.sh" "${job_id}"
+          test -f "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.tar.zst"
+          test -f "${BUILD_ARCHIVE_DIR}/${GITHUB_RUN_ID}.build-sidecar.json"
 
       - name: OpenFOAMビルドログをrunnerへ回収
         if: always()
         continue-on-error: true
         shell: home-lab-shell {0}
-        run: aspire2a-shell --pull "${BUILD_DIR}/logs" "${RUNNER_TEMP}/openfoam-aspire2a-build"
+        run: aspire2a-shell --pull "${ASPIRE2A_BUILD_LOG_DIR}" "${RUNNER_TEMP}/openfoam-aspire2a-build"
 
       - name: OpenFOAMビルドログを保存
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: openfoam-aspire2a-build-log-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/openfoam-aspire2a-build/logs
+          path: ${{ runner.temp }}/openfoam-aspire2a-build
           if-no-files-found: warn
           compression-level: 1
 
       - name: OpenFOAMビルド領域を削除
         if: always()
-        run: rm -rf -- "${BUILD_DIR:?}"
+        run: |
+          if [[ -n "${ASPIRE2A_BUILD_JOB_ID:-}" ]]; then qdel "${ASPIRE2A_BUILD_JOB_ID}" 2>/dev/null || true; fi
+          if [[ -n "${ASPIRE2A_BUILD_LOG_DIR:-}" ]]; then rm -rf -- "${ASPIRE2A_BUILD_LOG_DIR:?}"; fi
 
   provision:
     name: OpenFOAM実行環境を配備
@@ -196,6 +207,7 @@ jobs:
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/check-openfoam-case-cache.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
           install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/export-uprof.sh "${provision_dir}/platforms/aspire2a/"
+          install -m 0644 platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh "${provision_dir}/platforms/aspire2a/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
           install -m 0644 benchmark/profile.json "${provision_dir}/benchmark/profile.json"

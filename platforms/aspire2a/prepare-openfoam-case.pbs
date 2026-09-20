@@ -10,14 +10,15 @@ set -euo pipefail
 : "${WORKLOAD_MESH_ARCHIVE:?mesh archive is required}"
 [[ "${PREPARE_SUBDOMAINS}" =~ ^[1-9][0-9]*$ ]]
 
-module purge
-module load PrgEnv-gnu craype-x86-milan mkl
+source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
+source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
+aspire2a_load_toolchain "${aspire2a_toolchain}"
 
 runtime_root="${TMPDIR}/openfoam-runtime"
 "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json" "${runtime_root}"
 
 set +eu
-source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER="${aspire2a_wm_compiler}" WM_MPLIB="${aspire2a_wm_mplib}" WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
 set -eu
 
 decompose_par=$(command -v decomposePar)

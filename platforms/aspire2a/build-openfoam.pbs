@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#PBS -P 59000014
+#PBS -q normal
+#PBS -l select=1:ncpus=16:mpiprocs=1:mem=120gb
+#PBS -l walltime=02:00:00
+#PBS -N openfoam_build
+#PBS -j oe
+
+set -euo pipefail
+
+: "${ASPIRE2A_BUILD_LOG_DIR:?shared build log directory is required}"
+: "${BUILD_ARCHIVE_DIR:?build archive directory is required}"
+: "${GITHUB_RUN_ATTEMPT:?GitHub run attempt is required}"
+: "${GITHUB_RUN_ID:?GitHub run ID is required}"
+: "${GITHUB_WORKSPACE:?GitHub workspace is required}"
+: "${OPENFOAM_SOURCE_ARCHIVE:?OpenFOAM source archive is required}"
+: "${OPENFOAM_SOURCE_ARCHIVE_SHA256:?OpenFOAM source archive digest is required}"
+: "${OPENFOAM_SOURCE_OID:?OpenFOAM source commit is required}"
+: "${PBS_JOBID:?PBS job ID is required}"
+: "${THIRDPARTY_SOURCE_ARCHIVE:?ThirdParty source archive is required}"
+: "${THIRDPARTY_SOURCE_ARCHIVE_SHA256:?ThirdParty source archive digest is required}"
+: "${THIRDPARTY_SOURCE_OID:?ThirdParty source commit is required}"
+: "${TMPDIR:?PBS node-local temporary directory is required}"
+
+BUILD_DIR="${TMPDIR}/openfoam-build"
+export BUILD_DIR
+
+collect_logs() {
+  status=$?
+  trap - EXIT
+  install -d -m 0750 "${ASPIRE2A_BUILD_LOG_DIR}"
+  if [[ -d "${BUILD_DIR}/logs" ]]; then cp -a "${BUILD_DIR}/logs/." "${ASPIRE2A_BUILD_LOG_DIR}/"; fi
+  printf 'pbs_job_id=%s\nexit_status=%d\nbuild_node=%s\nbuild_tmpdir=%s\n' "${PBS_JOBID}" "${status}" "$(hostname -f)" "${TMPDIR}" > "${ASPIRE2A_BUILD_LOG_DIR}/pbs-build-status.txt"
+  rm -rf -- "${BUILD_DIR:?}"
+  exit "${status}"
+}
+trap collect_logs EXIT
+
+"${GITHUB_WORKSPACE}/scripts/build-openfoam.sh" aspire2a

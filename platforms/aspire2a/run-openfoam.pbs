@@ -11,8 +11,9 @@ set -euo pipefail
 : "${OPENFOAM_RUN_PURPOSE:?run purpose is required}"
 : "${PROVISION_DIR:?provision directory is required}"
 
-module purge
-module load PrgEnv-gnu craype-x86-milan mkl
+source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
+source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
+aspire2a_load_toolchain "${aspire2a_toolchain}"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521; export OPENFOAM_PROFILE_TOOL=uprof; fi
 
 mpiexec_path=$(command -v mpiexec)
@@ -20,7 +21,7 @@ runtime_root="${TMPDIR}/openfoam-runtime"
 "${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json" "${PROVISION_DIR}/compute-tools.tar.zst" "${PROVISION_DIR}/control/compute-tools.json" "${runtime_root}"
 
 set +eu
-source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER="${aspire2a_wm_compiler}" WM_MPLIB="${aspire2a_wm_mplib}" WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
 set -eu
 
 export WORKLOAD_MESH_ARCHIVE="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/workload/polyMesh_65M.tar.gz"

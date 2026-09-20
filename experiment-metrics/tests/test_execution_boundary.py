@@ -367,7 +367,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
 
     assert "shell: aspire2a-shell --github-shell {0}" in workflow
     assert "/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a" in workflow
-    assert 'scripts/build-openfoam.sh" aspire2a' in workflow
+    assert "platforms/aspire2a/build-openfoam.pbs" in workflow
+    assert 'qsub -v "${exported}"' in workflow
+    assert 'scripts/build-openfoam.sh" aspire2a' not in workflow
     assert "submit-pbs-run" in workflow
     assert "qsub -P 59000014 -q normal" in workflow
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
@@ -375,12 +377,33 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "provision-uprof.sh" in workflow
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "OPENFOAM_PROFILE_TOOL=uprof" in wrapper
-    assert "WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH" in wrapper
+    assert 'source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"' in wrapper
+    assert 'aspire2a_load_toolchain "${aspire2a_toolchain}"' in wrapper
+    assert 'WM_COMPILER="${aspire2a_wm_compiler}"' in wrapper
+    assert 'WM_MPLIB="${aspire2a_wm_mplib}"' in wrapper
     assert "--global-rank-env PMI_RANK" in wrapper
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
+
+
+def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
+    toolchain = (ROOT / "platforms/aspire2a/toolchain.sh").read_text(encoding="utf-8")
+    selection = (ROOT / "platforms/aspire2a/toolchain.conf").read_text(encoding="utf-8")
+    build = (ROOT / "platforms/aspire2a/build-environment.sh").read_text(encoding="utf-8")
+    probe = (ROOT / "platforms/aspire2a/probe-environment.pbs").read_text(encoding="utf-8")
+
+    assert "aspire2a_toolchain=gnu" in selection
+    assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
+    assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
+    assert "aspire2a_wm_mplib=CRAY-MPICH" in toolchain
+    assert "aspire2a_mpi_launcher=mpiexec" in toolchain
+    assert "intel" not in toolchain.lower()
+    assert "mkl" not in toolchain.lower()
+    assert "AOCL_MODULE=" in build
+    assert "for aspire2a_toolchain in gnu aocc" in probe
+    assert "module load openfoam/2512" not in probe
 
 
 def test_cluster_steps_use_home_lab_remote_shells() -> None:
@@ -426,20 +449,15 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "--profile-rank" not in workflow
         assert "--profile-analysis" not in workflow
         assert '--profile-condition "${PROVISION_DIR}/benchmark/profile.json"' in workflow
-        assert (
-            'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000'
-            in workflow
-        )
-        assert (
-            'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")'
-            in workflow
-        )
+        assert 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")' in workflow
         assert 'commit="${GITHUB_SHA}"' in workflow
         assert 'git rev-parse --verify "${commit}^"' in workflow
         assert "git diff --quiet" not in workflow
         assert "git cat-file" not in workflow
         assert "commit_role" not in workflow
         assert "scripts/build-inputs-match.sh" in workflow
+    for workflow in (genkai, gadi, aspire2a):
+        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000' in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
