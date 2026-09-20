@@ -2,16 +2,16 @@
   "schema_version": "instrumentation-bundle/v1",
   "bundle_track": "profile",
   "source_paths": [
-    "platforms/aspire2a/build-environment.sh",
-    "platforms/aspire2a/export-craypat.sh",
+    "platforms/aspire2a/export-uprof.sh",
+    "platforms/aspire2a/provision-uprof.sh",
     "platforms/aspire2a/run-openfoam.pbs",
     "scripts/run-openfoam.sh"
   ],
   "components": [
     {
-      "component_id": "openfoam.craypat-apa/v1",
+      "component_id": "openfoam.uprof-hotspots/v1",
       "sink_ids": [
-        "craypat-apa-result"
+        "uprof-hotspots-report"
       ],
       "activation": {
         "kind": "executable",
@@ -35,8 +35,8 @@
   "environment_capture_scopes": [],
   "sink_bindings": [
     {
-      "sink_id": "craypat-apa-result",
-      "source_id": "openfoam.craypat-apa/v1",
+      "sink_id": "uprof-hotspots-report",
+      "source_id": "openfoam.uprof-hotspots-report/v1",
       "buffering_mode": "stage_buffered"
     }
   ],

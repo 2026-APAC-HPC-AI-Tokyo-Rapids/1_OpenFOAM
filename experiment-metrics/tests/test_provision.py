@@ -229,7 +229,7 @@ def test_profile_provision_records_vtune_identity_and_version(
     )
 
 
-def test_profile_provision_records_craypat_identity_and_version(
+def test_profile_provision_records_uprof_identity_and_version(
     tmp_path: Path,
     registry_path: Path,
     identities: dict[str, object],
@@ -256,7 +256,7 @@ def test_profile_provision_records_craypat_identity_and_version(
     sidecar = _sidecar(run_dir / "control/build-sidecar.json", executables)
     role_paths = {role: executables[role] for role in EXECUTABLE_ROLES}
     role_paths["mpirun"] = Path("/bin/true")
-    role_paths["craypat"] = Path("/bin/true")
+    role_paths["uprof"] = Path("/bin/true")
     libmpi = tmp_path / "libmpi.so.12"
     libmpi.write_bytes(b"fixture mpi")
     monkeypatch.setattr(provision_module, "_ldd_paths", lambda _text: (libmpi,))
@@ -270,11 +270,11 @@ def test_profile_provision_records_craypat_identity_and_version(
     )
 
     document = json.loads(output.read_text())
-    assert [item["role"] for item in document["executables"]][-1] == "craypat"
+    assert [item["role"] for item in document["executables"]][-1] == "uprof"
     assert document["profiler_version"]["argv"] == [
         str(Path("/bin/true").resolve()),
-        "-V",
+        "--version",
     ]
     assert document["profiler_version"]["stdout"]["path"].endswith(
-        "craypat-version.stdout"
+        "uprof-version.stdout"
     )

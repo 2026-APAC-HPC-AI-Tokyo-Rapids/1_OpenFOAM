@@ -62,7 +62,7 @@ id = "compute.vtune_hotspots_parser"
 required_for = []
 
 [[producers]]
-id = "openfoam.craypat-apa/v1"
+id = "openfoam.uprof-hotspots/v1"
 required_for = []
 
 [[keys]]
@@ -448,10 +448,10 @@ activation = { kind = "bundle_component", component_id = "openfoam.vtune-hotspot
 instances = { kind = "singleton" }
 
 [[producer]]
-id = "openfoam.craypat-apa/v1"
+id = "openfoam.uprof-hotspots/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
-activation = { kind = "bundle_component", component_id = "openfoam.craypat-apa/v1" }
+activation = { kind = "bundle_component", component_id = "openfoam.uprof-hotspots/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
@@ -858,12 +858,12 @@ schema_id = "vtune-hotspots-csv/v2"
 required_when_applicable = false
 
 [[source]]
-id = "openfoam.craypat-apa/v1"
-producer_id = "openfoam.craypat-apa/v1"
-source_role = "craypat_apa_report"
+id = "openfoam.uprof-hotspots-report/v1"
+producer_id = "openfoam.uprof-hotspots/v1"
+source_role = "uprof_hotspots_report"
 storage = "profile_raw"
-path_template = [{ literal = "profile/raw/craypat/experiment/index.ap2" }]
-schema_id = "craypat-ap2/v1"
+path_template = [{ literal = "profile/raw/uprof/report.csv" }]
+schema_id = "uprof-hotspots-csv/v1"
 required_when_applicable = false
 
 [[source]]

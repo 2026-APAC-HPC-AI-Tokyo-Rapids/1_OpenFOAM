@@ -371,9 +371,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "submit-pbs-run" in workflow
     assert "qsub -P 59000014 -q normal" in workflow
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
-    assert "openfoam-profile-craypat-apa-v1.json" in workflow
-    assert "module load perftools" in wrapper
-    assert "OPENFOAM_PROFILE_TOOL=craypat" in wrapper
+    assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
+    assert "provision-uprof.sh" in workflow
+    assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
+    assert "OPENFOAM_PROFILE_TOOL=uprof" in wrapper
     assert "WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH" in wrapper
     assert "--global-rank-env PMI_RANK" in wrapper
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper

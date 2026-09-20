@@ -18,6 +18,8 @@ env:
   ASPIRE2A_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a
   BUILD_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/builds
   SOURCE_ARCHIVE_DIR: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/source-archives
+  AMDUPROF_ARCHIVE: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/AMDuProf_Linux_x64_5.3.521.tar.bz2
+  AMDUPROF_ROOT: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521
   OPENFOAM_SOURCE_OID: 5a55da3fb12800863bf76122c50bb0850222cab0
   THIRDPARTY_SOURCE_OID: 1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0
 
@@ -182,6 +184,7 @@ jobs:
       - name: OpenFOAM実行環境を配備
         id: provision
         run: |
+          if [[ '${{ inputs.profile }}' == true ]]; then platforms/aspire2a/provision-uprof.sh "${AMDUPROF_ARCHIVE}" "${AMDUPROF_ROOT}"; fi
           provision_root="${ASPIRE2A_ROOT}/provision"
           install -d -m 0750 "${provision_root}"
           provision_dir=$(mktemp -d "${provision_root}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXX")
@@ -192,7 +195,7 @@ jobs:
           platforms/aspire2a/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/check-openfoam-case-cache.sh scripts/exec-profiler.sh scripts/allow-vtune-attach.py scripts/export-vtune-hotspots.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
-          install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/export-craypat.sh "${provision_dir}/platforms/aspire2a/"
+          install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/export-uprof.sh "${provision_dir}/platforms/aspire2a/"
           install -m 0755 benchmark/parse_result.sh "${provision_dir}/benchmark/"
           cp -a benchmark/occDrivAerStaticMesh "${provision_dir}/benchmark/"
           install -m 0644 benchmark/profile.json "${provision_dir}/benchmark/profile.json"
@@ -291,7 +294,7 @@ jobs:
           protocol_path="${PROVISION_DIR}/${protocol_relative}"
           if [[ '${{ inputs.profile }}' == true ]]; then
             purpose=profile
-            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-craypat-apa-v1.json"
+            bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-profile-uprof-hotspots-v1.json"
           else
             purpose=bench
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
@@ -300,7 +303,7 @@ jobs:
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
           control_plane_files=(.github/workflows/aspire2a.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/provision-openfoam-runtime.sh platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/wait-pbs-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
-          if [[ "${purpose}" == profile ]]; then control_plane_files+=(platforms/aspire2a/build-environment.sh platforms/aspire2a/export-craypat.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh); fi
+          if [[ "${purpose}" == profile ]]; then control_plane_files+=(platforms/aspire2a/export-uprof.sh platforms/aspire2a/provision-uprof.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh); fi
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
           for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
@@ -339,12 +342,12 @@ jobs:
           platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"
           test -e "${RUN_DIR}/run-success"
 
-      - name: CrayPat概要をActionsの概要へ掲載
+      - name: AMD uProf概要をActionsの概要へ掲載
         if: success() && inputs.profile
         run: |
-          printf '## HPE CrayPat Automatic Profiling Analysis\n\n```text\n' >> "${GITHUB_STEP_SUMMARY}"
-          sed -n '1,200p' "${RUN_DIR}/profile/raw/craypat/summary.txt" >> "${GITHUB_STEP_SUMMARY}"
-          printf '\n```\n\nThe raw experiment includes Apprentice2 `.ap2` data and an HTML report.\n' >> "${GITHUB_STEP_SUMMARY}"
+          printf '## AMD uProf Hotspots\n\n```text\n' >> "${GITHUB_STEP_SUMMARY}"
+          sed -n '1,200p' "${RUN_DIR}/profile/raw/uprof/report.csv" >> "${GITHUB_STEP_SUMMARY}"
+          printf '\n```\n\nThe profile artifact includes the complete uProf session for import into the Windows or Linux GUI.\n' >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 計測記録を確定して成果物を梱包
         id: package_v2

@@ -13,7 +13,7 @@ set -euo pipefail
 
 module purge
 module load PrgEnv-gnu craype-x86-milan mkl
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then module load perftools-base perftools; export OPENFOAM_PROFILE_TOOL=craypat; fi
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521; export OPENFOAM_PROFILE_TOOL=uprof; fi
 
 mpiexec_path=$(command -v mpiexec)
 runtime_root="${TMPDIR}/openfoam-runtime"

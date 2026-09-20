@@ -25,7 +25,7 @@ thirdparty_source_oid="${THIRDPARTY_SOURCE_OID}"
 openfoam_source_algorithm=sha1
 thirdparty_source_algorithm=sha1
 module purge
-module load PrgEnv-gnu craype-x86-milan mkl perftools-base perftools
+module load PrgEnv-gnu craype-x86-milan mkl
 
 prepare_build_sources() {
   install -d -m 0750 "${build_tree}/OpenFOAM" "${build_tree}/ThirdParty"
@@ -38,6 +38,5 @@ prepare_build_sources() {
 }
 
 finish_cluster_build() {
-  pat_build -O apa -o "${FOAM_APPBIN}/simpleFoam+pat" "${FOAM_APPBIN}/simpleFoam"
-  test -x "${FOAM_APPBIN}/simpleFoam+pat"
+  :
 }

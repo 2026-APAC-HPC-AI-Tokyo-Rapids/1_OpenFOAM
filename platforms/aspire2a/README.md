@@ -50,19 +50,17 @@ walltimeは処理別に指定する。ケース準備は性能計測ではない
 
 ## Profile
 
-Intel VTuneのmoduleはなく、Intel CPU用PMUを必要とするEBS、Memory Access、Platform ProfilerをAMD EPYCで統一的に利用することもできない。このためASPIRE-2AへVTuneを追加せず、site提供のHPE Cray Performance Analysis Tools 22.04.0をprofile経路の正本とする。
+ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g --mpi`で全rankを収集する。計算ノード上で`report --host all --detail`を実行し、CSVとGUIへimportできる完全なsessionをprofile artifactとして回収する。
 
-`perftools-base`と、その配下の`perftools` moduleには`pat_build`、`pat_report`、`app2`が含まれる。ASPIRE-2Aのbuildでは通常計測用`simpleFoam`を保持したまま、profile専用の`simpleFoam+pat`を`pat_build -O apa`で別に生成する。profile runではこのbinaryからAutomatic Profiling Analysisを収集し、`pat_report`から次を生成する。
+uProfはsite moduleにない。AMDのdownload pageでEULAへ同意して`AMDuProf_Linux_x64_5.3.521.tar.bz2`を取得し、次へ配置する。
 
-- terminalとActions summaryで確認するtext report
-- browserで確認できるHTML report
-- HPE Cray Apprentice2で開く自己完結した`.ap2`データ
+```text
+/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/AMDuProf_Linux_x64_5.3.521.tar.bz2
+```
 
-Apprentice2のWindows installerはASPIRE-2Aの`$CRAYPAT_ROOT/share/desktop_installers/Apprentice2Installer-22.04.0-2.exe`にある。profile artifactの`.ap2`をWindowsへ回収して開けば、call tree、load balance、MPI、hardware counterをGUIで確認できる。
+profile workflowはAMD公表MD5 `45437d8bc0b4276a0b78e28d21de23cb`を検証し、初回だけ`tools/amduprof-5.3.521`へ展開する。EULA同意とdownloadはworkflowで自動化しない。Windows版uProf GUIの`Import Session`で回収したsessionを開ける。
 
-AMD uProfはmoduleにない。uProfはAMD固有のIBS、IPC、memory bandwidthを調べる追加候補だが、利用にはcompute node上のPMU権限とsite policyの確認が必要である。まずCrayPatで全体とMPIを特定し、CrayPatで不足するAMD固有の問いが生じた場合だけ導入を検討する。
-
-通常計測へinstrumentationを混入させず、CrayPatは共通`OpenFOAM` workflowの`profile`入口からのみ有効化する。
+最初は権限依存の小さいtimer-based Hotspotsを使用する。IBS、PMC、system-wide、power、OS tracingは別条件のprofileとして、compute node上の権限と実測した問いに応じて追加する。一度のprofileで主要因を混ぜない。
 
 ## 未確認事項
 
@@ -71,7 +69,7 @@ AMD uProfはmoduleにない。uProfはAMD固有のIBS、IPC、memory bandwidth�
 - `select`、`mem=400gb`、`place=excl`、project指定を組み合わせたPBS投入とrouting先
 - PALSによる1/2/4ノードのrank配置
 - compute nodeからscratch、home、外部networkへの到達性
-- Cray Performance Analysis Toolsによるcompute node上のprofile取得と`.ap2`生成
+- AMD uProfによるcompute node上のMPI Hotspots取得、CSV生成、GUI session import
 
 これらはジョブ投入前の静的検証後、まず短時間のPBS疎通ジョブで確認する。公式ケースや高価なprofileを先に投入しない。
 
