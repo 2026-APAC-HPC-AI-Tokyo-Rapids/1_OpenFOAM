@@ -15,16 +15,24 @@ ASPIRE 2Aは復旧しています。Gadiはダウンが継続しているため�
 最適化においては、闇雲にコードを書き換えて当たりはずれを見るのではなく、プロファイリングに基づき、遅い個所を、演算量が大きいのか、メモリ帯域がボトルネックなのか、同期待ちが生じているのかなど、原因の根本を明確にする姿勢を忘れないでください。
 このマシン上で追加したいパッケージ等ある場合は、tmux session:rootを用いてください。また、Pythonならuv,TS/JSならbunが使えます。
 
-## 作業チェックリスト
+## 作業チェックリスト（2026-09-21）
 
-- [ ] 未検証のASPIRE 2A変更を監査し、リポジトリの慣行に沿わないコードを整理する。
-- [ ] ASPIRE 2A推奨環境に沿ってビルド、実行、cache、成果物およびidentityの境界を完成させる。
-- [ ] GNU版とAOCC版のビルド、数値正当性および性能を比較し、採用するtoolchainを決定する。
-- [ ] AOCLをASPIRE 2Aの構成へ導入し、link、ライブラリ競合、数値差および性能差を検証する。
-- [ ] AMD uProfの収集、解析、構造化メトリクスおよびraw artifactの保存経路を完成させる。
-- [ ] ASPIRE 2Aの1/2/4ノードでベンチマークとprofileを実行し、ボトルネックに基づくコードおよび実行構成の改善を比較・採用する。
-- [ ] BigQueryの計測スキーマとConnected SheetsをASPIRE 2A対応に更新し、既存クラスタとの比較表示を確認する。
-- [ ] コードをYAGNI原則に沿って整理し、workflow、shell、parser、計測スキーマ、成果物およびConnected Sheetsの変更を検証して、Genkai/Gadiに退行がないことを確認する。
-- [ ] 実装、実測結果、採用判断、残る制約および外部成果物の所在をリポジトリ内に記録する。
+- [x] ASPIRE 2Aの実機構成、PBS/PALS、利用可能なGNU・AOCC・AOCL・Cray MPICH moduleとCPU targetを確認する。
+- [x] agy / Gemini 3.8 Flashで日本語の親Issue #28とSub Issue #29〜#31を作成し、調査・検証結果を記録する。
+- [x] 未署名のASPIRE 2A追加commitと実行境界を監査し、compiler provenance、Cray MPICH判定、PALS配下のshell/Python起動、login runner上のBigQuery資格情報境界を修正する。
+- [x] ASPIRE 2AのGNU版をAMD EPYC Milan向けにビルドし、1ノードの公式結果、Cd、BigQuery送信およびhome serverへの成果物保存をE2Eで確認する。
+- [ ] GNU 1ノードの複数runで観測した性能差を、node、rank affinity、周波数および実行条件から説明し、比較可能なbaselineを確定する。
+- [ ] GNU 2/4ノードの`renumberMesh`終了時に再現したSIGBUSを最小条件へ縮約し、Cray MPICH/OpenFOAMのどの終了処理が原因かを確定して修正する。
+- [ ] AMD uProf 5.3.521の収集、MPI実行、構造化メトリクスおよび検証済みraw artifactの保存を1ノードE2Eで確認する。
+- [ ] GNU版の1/2/4ノード通常benchとprofileを複数run取得し、公式結果、数値正当性およびscalingの基準系列を確定する。
+- [ ] AOCC版を独立した追跡可能commitからビルドし、GNU版とのビルド互換性、実link、数値正当性および1/2/4ノード性能を比較して採否を決める。
+- [ ] AOCLをASPIRE 2A構成へ導入し、実際のlink、Cray側ライブラリとの競合、数値差および性能差を証拠として記録する。
+- [ ] uProfと段階別メトリクスから計算量、メモリ帯域、通信・同期待ちを切り分け、OpenFOAM設定・ビルド設定・実行方法・source改善を独立commitで比較する。
+- [ ] OpenFOAM source改善は専用branchでGNU/AOCC baselineに対する優位性と数値正当性を複数run確認し、採用する変更だけをmainへ統合する。
+- [ ] BigQueryへASPIRE 2Aのtoolchain/compiler/MPI/AOCL/profile条件を保持し、Connected Sheetsのdata source query、抽出範囲、表示表、式および書式を既存行を失わず整合させる。
+- [ ] workflow、shell、parser、計測schema、成果物を静的・fixture・E2Eで検証し、Genkai/Gadi経路に退行がないことを確認する。
+- [ ] 一時的な診断コード、診断成果物、重複ジョブおよび残留PBSジョブを棚卸しし、実装、実測結果、採用判断、制約、外部成果物の所在をリポジトリ内に記録する。
+
+進捗の正本: https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/28
 
 完了時には、ASPIRE 2AでOpenFOAMのビルド、実行、計測、成果物回収が再現可能に完走し、Cray MPICH/PALS/Slingshotの使用、採用toolchainとAOCLの検証結果、AMD uProfの結果、改善前後のベンチマーク、採用したコード改善、BigQuery Connected Sheetsへの反映を証拠から確認できる状態にしてください。
