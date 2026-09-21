@@ -31,10 +31,10 @@ cat "${RUN_DIR}/logs/imb-mpi1-ldd.log"
 grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/imb-mpi1-ldd.log"
 if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'UCX版IMB-MPI1がlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'ASPIRE-2A用IMB-MPI1がIntel oneAPIにlinkしています' >&2; exit 1; fi
-LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)" > "${RUN_DIR}/logs/aocl-runtime-link.log"
+ldd "$(command -v simpleFoam)" > "${RUN_DIR}/logs/aocl-runtime-link.log"
 cat "${RUN_DIR}/logs/aocl-runtime-link.log"
 grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"
-grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"
+if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX実行へAOCL LibMemがpreloadされています' >&2; exit 1; fi
 grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/aocl-runtime-link.log"
 if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
@@ -55,4 +55,4 @@ if (( OPENFOAM_NODES > 1 )); then
   io_ranks="${io_ranks% })"
   distributed_root_args=(--openfoam-arg -hostRoots --openfoam-arg "${host_roots}" --openfoam-arg -ioRanks --openfoam-arg "${io_ranks}")
 fi
-exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --paraview-collector "${runtime_root}/scripts/archive-paraview-case.sh" --large-output-dir "${RUN_DIR}/large-output" --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${aspire2a_aocl_libmem}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1
+exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --paraview-collector "${runtime_root}/scripts/archive-paraview-case.sh" --large-output-dir "${RUN_DIR}/large-output" --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1

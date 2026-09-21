@@ -436,10 +436,11 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"' in build
     assert '-lalm -Wl,--as-needed' not in build
     assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
-    assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' in runtime
-    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${aspire2a_aocl_libmem}"' in runtime
+    assert 'LD_PRELOAD="${aspire2a_aocl_libmem}"' not in runtime
+    assert '--solver-launch-arg --env' not in runtime
     assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
-    assert 'grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
+    assert 'if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
+    assert "UCX実行へAOCL LibMemがpreloadされています" in runtime
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
     assert "CRAY_MPICH_MODULE=${aspire2a_mpi_module}" in build
     assert "MPI_TRANSPORT=${aspire2a_mpi_transport}" in build
