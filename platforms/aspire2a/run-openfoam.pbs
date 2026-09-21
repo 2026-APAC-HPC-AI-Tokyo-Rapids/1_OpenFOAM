@@ -28,12 +28,15 @@ export WORKLOAD_MESH_ARCHIVE="/scratch/users/industry/ai-hpc/${USER}/openfoam/as
 imb_bin="${FOAM_APPBIN}/IMB-MPI1"
 ldd "${imb_bin}" > "${RUN_DIR}/logs/imb-mpi1-ldd.log"
 cat "${RUN_DIR}/logs/imb-mpi1-ldd.log"
-grep -q '/opt/cray/pe/mpich/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"
+grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/imb-mpi1-ldd.log"
+if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'UCX版IMB-MPI1がlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'ASPIRE-2A用IMB-MPI1がIntel oneAPIにlinkしています' >&2; exit 1; fi
 LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)" > "${RUN_DIR}/logs/aocl-runtime-link.log"
 cat "${RUN_DIR}/logs/aocl-runtime-link.log"
 grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"
 grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"
+grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/aocl-runtime-link.log"
+if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"

@@ -403,7 +403,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
     assert '--imb-bin "${imb_bin}"' in wrapper
-    assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
+    assert 'grep -Fq "${aspire2a_mpi_library_root}/libmpi_"' in wrapper
+    assert "UCX版IMB-MPI1がlibfabricにlinkしています" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
@@ -416,6 +417,7 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     shared_build = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
     runtime = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
     assert "aspire2a_toolchain=gnu" in selection
+    assert "aspire2a_mpi_module=cray-mpich-ucx/8.1.15" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
     assert "aspire2a_cc=gcc" in toolchain
@@ -424,6 +426,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "aspire2a_cxx=clang++" in toolchain
     assert "aspire2a_wm_mplib=CRAY-MPICH" in toolchain
     assert "aspire2a_mpi_launcher=mpiexec" in toolchain
+    assert 'module swap cray-mpich "${aspire2a_mpi_module:' in toolchain
+    assert "aspire2a_mpi_transport=ucx" in toolchain
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
@@ -436,6 +440,10 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert 'grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
+    assert "CRAY_MPICH_MODULE=${aspire2a_mpi_module}" in build
+    assert "MPI_TRANSPORT=${aspire2a_mpi_transport}" in build
+    assert "UCX_VERSION=${aspire2a_ucx_version}" in build
+    assert "UCX版simpleFoamがlibfabricにlinkしています" in build
     assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
     assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build

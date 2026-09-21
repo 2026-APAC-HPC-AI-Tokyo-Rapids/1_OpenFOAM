@@ -25,10 +25,15 @@ aspire2a_load_toolchain() {
       ;;
   esac
 
+  module swap cray-mpich "${aspire2a_mpi_module:?ASPIRE-2A Cray MPICH module is required}"
   aspire2a_mpi_launcher=mpiexec
   aspire2a_wm_mplib=CRAY-MPICH
+  aspire2a_mpi_transport=ucx
+  aspire2a_mpi_library_root="${CRAY_MPICH_DIR}/lib"
   aspire2a_fi_info=$(command -v fi_info)
   aspire2a_libfabric_version=$("${aspire2a_fi_info}" --version | sed -n 's/^libfabric: //p')
+  aspire2a_ucx_info=$(command -v ucx_info)
+  aspire2a_ucx_version=$("${aspire2a_ucx_info}" -v | sed -n 's/^# Library version: //p')
   aspire2a_aocl_libm="${AOCL_ROOT}/lib/libalm.so"
   aspire2a_aocl_libmem="${AOCL_ROOT}/lib/libaocl-libmem.so"
   command -v "${aspire2a_cc}" >/dev/null
@@ -39,4 +44,6 @@ aspire2a_load_toolchain() {
   test -r "${aspire2a_aocl_libmem}"
   test -n "${CRAY_MPICH_VERSION:?PrgEnv did not load Cray MPICH}"
   test -n "${aspire2a_libfabric_version}"
+  test -n "${aspire2a_ucx_version}"
+  module -t list 2>&1 | grep -Fxq "${aspire2a_mpi_module}"
 }
