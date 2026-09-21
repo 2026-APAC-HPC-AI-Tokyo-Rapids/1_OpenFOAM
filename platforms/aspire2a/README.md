@@ -61,6 +61,20 @@ profile workflowはAMD公表MD5 `45437d8bc0b4276a0b78e28d21de23cb`を検証し�
 
 最初は権限依存の小さいtimer-based Hotspotsを使用する。login runnerは固定版のreport構造、収集引数、MPI rank/host集計および関数時間を検証し、`profile.uprof_hotspots`としてBigQueryへ送る。検証済みraw sessionと加工済みの要約は別に保存する。IBS、PMC、system-wide、power、OS tracingは別条件のprofileとして、compute node上の権限と実測した問いに応じて追加する。一度のprofileで主要因を混ぜない。
 
+## Cray MPICH transport
+
+NSCCのFAQとworkshop資料が推奨する標準構成は`cray-mpich/8.1.15`とOFIである。ログインノードでは同じ`PrgEnv-gnu/8.3.3`からlibfabric 1.22.0が読み込まれる一方、PBS計算ノードではlibfabric 1.11.0.4.125が読み込まれ、計算ノードに`/opt/cray/libfabric/1.22.0`は存在しない。ビルドと実行のlink判定には計算ノード側の実体を用いる。
+
+2ノードと4ノードの標準構成では、`renumberMesh`が`End`を出力した後の`MPI_Finalize`でSIGBUSが再現する。PBS job `24754364.pbs101`で採取したスタックは`/usr/lib64/libibverbs/libmlx5-rdmav34.so`、libfabric 1.11.0.4.125、Cray MPICH 8.1.15の`MPI_Finalize`を通り、直接の故障箇所はOFI/Mellanox verbs providerの終了処理である。64 ranks/nodeへの削減、`MPICH_SMP_SINGLE_COPY_MODE=NONE`、NSCCの2026年5月告知にある2つのsingle-copy無効化変数の同時指定でも解消しなかった。`FI_PROVIDER=sockets`は`free(): invalid pointer`となり、ログインノードのlibfabric 1.22.0を計算ノードへ持ち込む診断は終了時に停止したため、いずれも採用しない。
+
+現在のログインノードと計算ノードでは、告知上の`MPICH_CH4_XPMEM_LMT_MSG_SIZE=NONE`と`MPICH_SMP_SINGLE_COPY_MODE=NONE`はmodule読み込み後も既定設定されない。後続のkernel更新で意図的に解除されたかは公開情報から確定できないため、リポジトリ側で推測して復元しない。サポート対象となるCray MPICH、libfabric、rdma-coreの組合せと現行の既定値はNSCCサービスデスクへ確認する。
+
+`cray-mpich-ucx/8.1.15`は、2ノードの最小`MPI_Init`、`MPI_Barrier`、`MPI_Finalize`診断を正常終了した。ただしNSCCの公開資料から本番サポートを確認できないため、標準構成へ変更せず、追跡可能な専用commitによる公式workload診断として扱う。
+
 ## 検証状況
 
-GNU基準構成の1ノードE2E経路はActions run `35540131525`、PBS job `24720304.pbs101`で完走した。公式parserは65,334,765 cells、128 ranks、39 measured iterationsを`VALID`と判定し、平均13.36250805274359秒/iterationを報告した。1/2/4ノードの反復計測、uProf、AOCCの採否および改善前後の比較は、各runのActions、PBS、公式結果およびartifactを根拠に別途記録する。
+GNU 1ノードの比較可能な基準系列は、同一build-sidecarを用いたActions run `35554412747`、`35554424689`、`35556950125`である。全runが65,334,765 cells、128 ranks、39 measured iterationsを`VALID`と判定し、Cdは0.43598848994661482で一致した。平均時間は14.91809156317949〜15.171288442秒/iteration、中央値15.01955532864103秒/iteration、変動係数0.85%、max/min差1.70%である。異なるbuild-sidecarを用いた過去runの値は、この系列へ混ぜない。
+
+AMD uProf 5.3.521の1ノードE2EはActions run `35547509496`、PBS job `24786344.pbs101`で完走した。公式結果は`VALID`で、構造化したHotspots要約、完全なraw session、BigQueryメトリクスおよびhome server上のartifactを保持している。通常計測とprofileの性能値は直接比較しない。
+
+2/4ノードの標準構成は上記OFI障害のため未完了である。UCX診断、AOCL導入、AOCCの採否および改善前後の比較は、各条件を分離したcommit、Actions、PBS、公式結果およびartifactを根拠に記録する。
