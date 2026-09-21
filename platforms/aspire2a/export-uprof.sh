@@ -10,6 +10,8 @@ uprof_cli=$1
 output_root=$2
 [[ "${uprof_cli}" == /* && "${output_root}" == /* ]]
 test -x "${uprof_cli}"
+uprof_bin_dir=$(dirname -- "${uprof_cli}")
+export LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 mapfile -t sessions < <(find "${output_root}/sessions" -mindepth 1 -maxdepth 1 -type d -name 'AMDuProf-*' -print)
 [[ "${#sessions[@]}" -eq 1 ]]
 session=${sessions[0]}

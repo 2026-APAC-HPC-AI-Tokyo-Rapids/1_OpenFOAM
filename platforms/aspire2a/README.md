@@ -61,7 +61,7 @@ walltimeは処理別に指定する。ケース準備は性能計測ではない
 
 ## Profile
 
-ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g --mpi`で全rankを収集する。配布scriptの`AMDuProfCLI`は引数列を`eval`で再解釈し、複数ノードOpenFOAMの`-hostRoots`と`-ioRanks`に含まれる括弧をshell構文として誤認するため、scriptと同じ`LD_LIBRARY_PATH`を設定して`AMDuProfCLI-bin`をargv配列で直接起動する。計算ノード上で`report --host all --detail --cutoff 30`を実行し、全hostのCSVと同じ固定版CLIで再解析できる完全なsessionをprofile artifactとして回収する。GUIでのImport Sessionは任意の閲覧手段であり、headlessな実験経路の受入条件にはしない。
+ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g --mpi`で全rankを収集する。配布scriptの`AMDuProfCLI`は引数列を`eval`で再解釈し、複数ノードOpenFOAMの`-hostRoots`と`-ioRanks`に含まれる括弧をshell構文として誤認するため使用しない。一方、PALSへ`AMDuProfCLI-bin`を直接指定すると実行ファイルがnode-localへstageされ、uProfのData/config探索が壊れる。PALSには`/usr/bin/bash`を指定し、node-localへ配備した`exec-uprof.sh`から共有領域上の`AMDuProfCLI-bin`をargv配列のまま起動する。計算ノード上で`report --host all --detail --cutoff 30`を実行し、全hostのCSVと同じ固定版CLIで再解析できる完全なsessionをprofile artifactとして回収する。GUIでのImport Sessionは任意の閲覧手段であり、headlessな実験経路の受入条件にはしない。
 
 uProfはsite moduleにない。AMDのdownload pageでEULAへ同意して`AMDuProf_Linux_x64_5.3.521.tar.bz2`を取得し、次へ配置する。
 

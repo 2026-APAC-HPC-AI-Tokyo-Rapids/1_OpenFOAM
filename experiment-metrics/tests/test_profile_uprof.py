@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from experiment_metrics.manifest import init_run
 from experiment_metrics.profile_uprof import parse_uprof_hotspots, record_uprof_hotspots
+
+ROOT = Path(__file__).parents[2]
 
 
 def _report(*, collect: str | None = None, ranks: str = "2", hosts: str = "1") -> str:
@@ -58,6 +61,30 @@ def _profile_run(
         purpose="profile",
         registry_path=registry_path,
     )
+
+
+def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> None:
+    cli = tmp_path / "AMDuProfCLI-bin"
+    cli.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
+    cli.chmod(0o755)
+    arguments = [
+        "collect",
+        "--config",
+        "hotspots",
+        "/opt/OpenFOAM/bin/simpleFoam",
+        "-hostRoots",
+        '((".*" "/var/tmp/openfoam case"))',
+        "-ioRanks",
+        "(0 128 256 384)",
+    ]
+
+    completed = subprocess.run(
+        ["bash", str(ROOT / "platforms/aspire2a/exec-uprof.sh"), str(cli), *arguments],
+        check=True,
+        capture_output=True,
+    )
+
+    assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in arguments]
 
 
 def test_parser_validates_mpi_protocol_and_preserves_lexemes() -> None:

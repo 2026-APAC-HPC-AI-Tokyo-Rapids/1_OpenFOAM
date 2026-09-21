@@ -390,12 +390,16 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
     assert "provision-uprof.sh" in workflow
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
+    assert "platforms/aspire2a/exec-uprof.sh" in workflow
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
     assert 'OPENFOAM_UPROF_PATH="${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin"' in runner
-    assert 'export LD_LIBRARY_PATH="${AMDUPROF_ROOT}/bin${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"' in runner
-    assert '"${solver_launch[@]}" "${OPENFOAM_UPROF_PATH}" collect' in runner
-    assert '/usr/bin/bash "${OPENFOAM_UPROF_PATH}"' not in runner
+    assert '"${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" collect' in runner
+    uprof_launcher = (ROOT / "platforms/aspire2a/exec-uprof.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'exec "${uprof_cli}" "$@"' in uprof_launcher
+    assert "eval" not in uprof_launcher
     assert 'if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then' in runner
     assert 'sed -n \'s/^session=/uprof_session=/p\'' in runner
     assert 'results/uprof-summary.json' in workflow
