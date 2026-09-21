@@ -479,6 +479,9 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "build_use_ccache=true" in build
     assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}"' in build
     assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}"' in build
+    assert '--compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}"' in build
+    assert '--compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}"' in build
+    assert '--compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}"' in build
     assert 'ccache-${USER:?}-${build_ccache_namespace}' in shared_build
 
 
