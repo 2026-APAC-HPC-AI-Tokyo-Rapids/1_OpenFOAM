@@ -29,10 +29,14 @@ aspire2a_load_toolchain() {
   aspire2a_wm_mplib=CRAY-MPICH
   aspire2a_fi_info=$(command -v fi_info)
   aspire2a_libfabric_version=$("${aspire2a_fi_info}" --version | sed -n 's/^libfabric: //p')
+  aspire2a_aocl_libm="${AOCL_ROOT}/lib/libalm.so"
+  aspire2a_aocl_libmem="${AOCL_ROOT}/lib/libaocl-libmem.so"
   command -v "${aspire2a_cc}" >/dev/null
   command -v "${aspire2a_cxx}" >/dev/null
   command -v "${aspire2a_mpi_launcher}" >/dev/null
   test -n "${AOCL_ROOT:?AOCL module did not set AOCL_ROOT}"
+  test -r "${aspire2a_aocl_libm}"
+  test -r "${aspire2a_aocl_libmem}"
   test -n "${CRAY_MPICH_VERSION:?PrgEnv did not load Cray MPICH}"
   test -n "${aspire2a_libfabric_version}"
 }

@@ -29,6 +29,7 @@ source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.conf"
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 module load git/2.39.2
+build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm -Wl,--as-needed"
 build_cc=${aspire2a_cc}
 build_cxx=${aspire2a_cxx}
 build_mpi_launcher=${aspire2a_mpi_launcher}
@@ -43,12 +44,14 @@ prepare_build_sources() {
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
   scotch_source_identity=$(find "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
-  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}")
+  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}")
 }
 
 finish_cluster_build() {
   make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1 > "${BUILD_DIR}/logs/imb-mpi1-build.log" 2>&1
   install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"
+  ldd "${FOAM_APPBIN}/simpleFoam" > "${BUILD_DIR}/logs/simplefoam-ldd.log"
+  grep -Fq "${aspire2a_aocl_libm}" "${BUILD_DIR}/logs/simplefoam-ldd.log"
   ldd "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
   readelf --dynamic "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-dynamic.log"
   rm -rf -- "${build_tree}/IMB"

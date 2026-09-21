@@ -413,6 +413,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     toolchain = (ROOT / "platforms/aspire2a/toolchain.sh").read_text(encoding="utf-8")
     selection = (ROOT / "platforms/aspire2a/toolchain.conf").read_text(encoding="utf-8")
     build = (ROOT / "platforms/aspire2a/build-environment.sh").read_text(encoding="utf-8")
+    shared_build = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
+    runtime = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
     assert "aspire2a_toolchain=gnu" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
@@ -425,6 +427,14 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
+    assert "AOCL_LIBM=${aspire2a_aocl_libm}" in build
+    assert "AOCL_LIBMEM=${aspire2a_aocl_libmem}" in build
+    assert 'build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm -Wl,--as-needed"' in build
+    assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
+    assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' in runtime
+    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${aspire2a_aocl_libmem}"' in runtime
+    assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
+    assert 'grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
     assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
     assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build

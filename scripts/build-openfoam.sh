@@ -13,6 +13,7 @@ cluster="${1:?cluster (genkai, gadi, or aspire2a) is required}"
 build_condition=baseline
 build_compile_option=Opt
 build_tuning_flags=
+build_extra_ldflags=
 build_cc=mpiicx
 build_cxx=mpiicpx
 build_mpi_launcher=mpirun
@@ -93,7 +94,9 @@ set +eu
 source "${build_tree}/OpenFOAM/etc/bashrc" WM_COMPILER="${build_wm_compiler}" WM_MPLIB="${build_wm_mplib}" WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION="${build_compile_option}" WM_COMPILE_CONTROL="${build_compile_control}"
 set -eu
 export FOAM_EXTRA_CXXFLAGS="${build_extra_cxxflags}"
+export FOAM_EXTRA_LDFLAGS="${build_extra_ldflags}"
 test "${FOAM_EXTRA_CXXFLAGS}" = "${build_extra_cxxflags}"
+test "${FOAM_EXTRA_LDFLAGS}" = "${build_extra_ldflags}"
 
 # タスク専用ビルドスクリプトが参照するプロジェクトへ移動する。
 cd "${WM_PROJECT_DIR}"
@@ -117,7 +120,7 @@ install -m 0755 "${GITHUB_WORKSPACE}/experiment-metrics/src/experiment_metrics/p
 uv sync --project "${GITHUB_WORKSPACE}/experiment-metrics" --frozen --no-dev
 metrics_cli="${GITHUB_WORKSPACE}/experiment-metrics/.venv/bin/experiment-metrics"
 build_state="${BUILD_DIR}/build-state.json"
-"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v "${CC}")" --compiler-cxx "$(command -v "${CXX}")" --mpi-launcher "$(command -v "${build_mpi_launcher}")" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" "${cluster_compile_flags[@]}" --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
+"${metrics_cli}" capture-build-state --output "${build_state}" --build-tree "${build_tree}" --build-definition-repo "${GITHUB_WORKSPACE}" --openfoam-oid "${openfoam_source_oid}" --openfoam-algorithm "${openfoam_source_algorithm}" --thirdparty-oid "${thirdparty_source_oid}" --thirdparty-algorithm "${thirdparty_source_algorithm}" --compiler-c "$(command -v "${CC}")" --compiler-cxx "$(command -v "${CXX}")" --mpi-launcher "$(command -v "${build_mpi_launcher}")" --precision DP --label-bits 32 --compile-flag "BUILD_CONDITION=${build_condition}" --compile-flag "WM_OPTIONS=${WM_OPTIONS:-}" --compile-flag "WM_COMPILER=${WM_COMPILER:-}" --compile-flag "WM_COMPILE_OPTION=${WM_COMPILE_OPTION:-}" --compile-flag "WM_PRECISION_OPTION=${WM_PRECISION_OPTION:-}" --compile-flag "WM_LABEL_SIZE=${WM_LABEL_SIZE:-}" --compile-flag "FOAM_EXTRA_CXXFLAGS=${FOAM_EXTRA_CXXFLAGS}" --compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}" "${cluster_compile_flags[@]}" --executable "simpleFoam=${FOAM_APPBIN}/simpleFoam" --executable "decomposePar=${FOAM_APPBIN}/decomposePar" --executable "checkMesh=${FOAM_APPBIN}/checkMesh" --executable "renumberMesh=${FOAM_APPBIN}/renumberMesh" --executable "potentialFoam=${FOAM_APPBIN}/potentialFoam" --executable "applyBoundaryLayer=${FOAM_APPBIN}/applyBoundaryLayer" --executable "mesh-facts=${FOAM_APPBIN}/mesh-facts" --executable "partition-audit=${FOAM_APPBIN}/partition-audit" --executable "capture-hardware=${FOAM_APPBIN}/capture-hardware"
 
 # ビルド済みツリーを圧縮し、後続ジョブが再利用できる archive として公開する。
 tar -I zstd -cf "${publish_tmp}" -C "${build_tree}" .
