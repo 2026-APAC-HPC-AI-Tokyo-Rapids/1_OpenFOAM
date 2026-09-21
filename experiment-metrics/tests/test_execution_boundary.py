@@ -403,8 +403,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     uprof_launcher = (ROOT / "platforms/aspire2a/exec-uprof.sh").read_text(
         encoding="utf-8"
     )
-    assert 'exec "${uprof_cli}" collect --config hotspots -g --mpi' in uprof_launcher
-    assert '--output-dir "${host_session_root}"' in uprof_launcher
+    assert 'exec "${uprof_cli}" collect --config hotspots -g --output-dir' in uprof_launcher
+    assert '--output-dir "${rank_session_root}"' in uprof_launcher
     assert "eval" not in uprof_launcher
     uprof_target_launcher = (ROOT / "platforms/aspire2a/exec-uprof-target.c").read_text(encoding="utf-8")
     assert "getdelim(&argument, &argument_capacity, '\\0', input)" in uprof_target_launcher

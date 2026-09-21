@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from experiment_metrics.cli import main
 from experiment_metrics.manifest import init_run
 from experiment_metrics.profile_uprof import parse_uprof_hotspots, record_uprof_hotspots
 
@@ -71,6 +73,19 @@ def _profile_run(
     )
 
 
+def _rank_report(*, host: str, rank: int) -> str:
+    report = _report(ranks="1", host=host, report_scope=host, cutoff="0")
+    report = report.replace(" -g --mpi --output-dir", " -g --output-dir")
+    report = report.replace(
+        f'Number Of MPI ranks,"1"\nNumber Of MPI hosts,"1"\n\nMPI Ranks Per Node\n{host},1\n\n',
+        "",
+    )
+    return report.replace(
+        "/run/profile/raw/uprof/sessions/AMDuProf-simpleFoam-Hotspots_MPI",
+        f"/run/profile/raw/uprof/sessions/{host}/rank-{rank}/AMDuProf-simpleFoam-Hotspots",
+    )
+
+
 def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> None:
     cli = tmp_path / "AMDuProfCLI-bin"
     cli.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
@@ -94,6 +109,7 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
         ],
         check=True,
         capture_output=True,
+        env={**os.environ, "PMI_RANK": "17"},
     )
 
     host = subprocess.check_output(["hostname"], text=True).strip()
@@ -102,12 +118,52 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
         "--config",
         "hotspots",
         "-g",
-        "--mpi",
         "--output-dir",
-        str(session_root / host),
+        str(session_root / host / "rank-17"),
         *arguments,
     ]
     assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in expected]
+
+
+def test_exporter_reports_every_global_rank(tmp_path: Path) -> None:
+    cli = tmp_path / "AMDuProfCLI-bin"
+    cli.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "while [[ $# -gt 0 ]]; do\n"
+        "  if [[ $1 == --input-dir ]]; then input_dir=$2; shift 2; else shift; fi\n"
+        "done\n"
+        "printf 'rank report\\n' > \"${input_dir}/report.csv\"\n",
+        encoding="utf-8",
+    )
+    cli.chmod(0o755)
+    output_root = tmp_path / "uprof"
+    for rank, host in enumerate(("node-a", "node-a", "node-b", "node-b")):
+        (output_root / "sessions" / host / f"rank-{rank}" / "AMDuProf-test").mkdir(
+            parents=True
+        )
+
+    subprocess.run(
+        [
+            "bash",
+            str(ROOT / "platforms/aspire2a/export-uprof.sh"),
+            str(cli),
+            str(output_root),
+        ],
+        check=True,
+        env={**os.environ, "OPENFOAM_NODES": "2", "OPENFOAM_MPI_PROCS": "4"},
+    )
+
+    assert sorted(
+        path.relative_to(output_root / "reports").as_posix()
+        for path in (output_root / "reports").glob("*/rank-*.csv")
+    ) == [
+        "node-a/rank-0.csv",
+        "node-a/rank-1.csv",
+        "node-b/rank-2.csv",
+        "node-b/rank-3.csv",
+    ]
+    assert len((output_root / "session.txt").read_text().splitlines()) == 4
 
 
 def test_target_launcher_restores_nul_delimited_openfoam_arguments(
@@ -192,9 +248,11 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     manifest = _profile_run(tmp_path, registry_path, identities)
     run_dir = manifest.parents[1]
     report_root = run_dir / "profile/raw/uprof/reports"
-    report_root.mkdir(parents=True)
-    report = report_root / "node-a.csv"
-    report.write_text(_report(report_scope="node-a", cutoff="0"))
+    (report_root / "node-a").mkdir(parents=True)
+    for rank in range(2):
+        (report_root / "node-a" / f"rank-{rank}.csv").write_text(
+            _rank_report(host="node-a", rank=rank)
+        )
     summary = run_dir / "results/uprof-summary.json"
     markdown = run_dir / "results/uprof-summary.md"
 
@@ -214,32 +272,36 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     assert value["tool_version"] == "5.3.521.0"
     assert value["collection"] == {
         "analysis_type": "hotspots",
-        "aggregation": "sum function/module CPU times across complete host reports",
+        "aggregation": "sum function/module CPU times across complete rank reports",
+        "application_mpi": True,
         "call_stack_sampling": True,
-        "mpi": True,
         "report_cutoff": 0,
-        "report_host_scope": "per-host",
+        "report_scope": "per-rank",
+        "uprof_mpi_session": False,
     }
-    assert value["source"]["reports"][0]["member"] == "profile/raw/uprof/reports/node-a.csv"
+    assert value["source"]["reports"][0]["member"] == (
+        "profile/raw/uprof/reports/node-a/rank-0.csv"
+    )
     assert value["ranks_per_node"] == [{"host": "node-a", "ranks": 2}]
     document = json.loads(summary.read_text())
     assert document["profile_duration_sec"] == "12.340"
     assert document["source_hotspots"] == 2
     rendered = markdown.read_text()
     assert "slow\\|function" in rendered
-    assert "complete reports from every host" in rendered
+    assert "complete reports from every MPI rank" in rendered
 
 
-def test_recording_aggregates_complete_host_reports(
+def test_recording_aggregates_complete_rank_reports(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
     manifest = _profile_run(tmp_path, registry_path, identities)
     run_dir = manifest.parents[1]
     report_root = run_dir / "profile/raw/uprof/reports"
     report_root.mkdir(parents=True)
-    for host in ("node-a", "node-b"):
-        (report_root / f"{host}.csv").write_text(
-            _report(host=host, report_scope=host, cutoff="0")
+    for rank, host in enumerate(("node-a", "node-a", "node-b", "node-b")):
+        (report_root / host).mkdir(exist_ok=True)
+        (report_root / host / f"rank-{rank}.csv").write_text(
+            _rank_report(host=host, rank=rank)
         )
 
     fragment = record_uprof_hotspots(
@@ -260,5 +322,37 @@ def test_recording_aggregates_complete_host_reports(
         {"host": "node-b", "ranks": 2},
     ]
     assert value["hotspots"][0]["function"] == "fast"
-    assert value["hotspots"][0]["cpu_time_sec"] == "3.0000"
-    assert len(value["source"]["reports"]) == 2
+    assert value["hotspots"][0]["cpu_time_sec"] == "6.0000"
+    assert len(value["source"]["reports"]) == 4
+
+
+def test_cli_records_per_rank_reports(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    report_root = run_dir / "profile/raw/uprof/reports"
+    (report_root / "node-a").mkdir(parents=True)
+    (report_root / "node-a/rank-0.csv").write_text(
+        _rank_report(host="node-a", rank=0)
+    )
+
+    assert main(
+        [
+            "record-profile-uprof",
+            "--manifest",
+            str(manifest),
+            "--runtime-dir",
+            str(run_dir),
+            "--report-root",
+            str(report_root),
+            "--expected-hosts",
+            "1",
+            "--expected-ranks",
+            "1",
+            "--summary",
+            str(run_dir / "results/uprof-summary.json"),
+            "--markdown",
+            str(run_dir / "results/uprof-summary.md"),
+        ]
+    ) == 0

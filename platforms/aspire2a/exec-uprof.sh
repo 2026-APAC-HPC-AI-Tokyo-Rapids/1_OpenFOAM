@@ -16,6 +16,8 @@ uprof_bin_dir=$(dirname -- "${uprof_cli}")
 export LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 host=$(/bin/hostname)
 [[ "${host}" =~ ^[A-Za-z0-9._-]+$ ]]
-host_session_root="${session_root}/${host}"
-install -d -m 0750 "${host_session_root}"
-exec "${uprof_cli}" collect --config hotspots -g --mpi --output-dir "${host_session_root}" "$@"
+: "${PMI_RANK:?global MPI rank is required}"
+[[ "${PMI_RANK}" =~ ^[0-9]+$ ]]
+rank_session_root="${session_root}/${host}/rank-${PMI_RANK}"
+install -d -m 0750 "${rank_session_root}"
+exec "${uprof_cli}" collect --config hotspots -g --output-dir "${rank_session_root}" "$@"

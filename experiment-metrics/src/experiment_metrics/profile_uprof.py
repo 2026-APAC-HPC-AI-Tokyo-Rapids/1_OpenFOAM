@@ -18,7 +18,9 @@ from .recording import Recorder
 
 _VERSION = "5.3.521.0"
 _NUMBER = re.compile(r"^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$")
-_FUNCTION_SECTION = re.compile(r"^[0-9]+ HOTTEST FUNCTIONS \(Sort Event - CPU_TIME\)$")
+_FUNCTION_SECTION = re.compile(
+    r"^(?:[0-9]+ )?HOTTEST FUNCTIONS \(Sort Event - CPU_TIME\)$"
+)
 _FUNCTION_HEADER = ["FUNCTION", "CPU_TIME (seconds)", "TOTAL_CPU_TIME (s)", "Module"]
 
 
@@ -57,7 +59,11 @@ class UProfReport:
 
 
 def parse_uprof_hotspots(
-    text: str, *, expected_host_scope: str = "all", expected_cutoff: int = 30
+    text: str,
+    *,
+    expected_host_scope: str = "all",
+    expected_cutoff: int = 30,
+    expect_mpi_session: bool = True,
 ) -> UProfReport:
     """Parse the sectioned report emitted by the pinned uProf 5.3 CLI."""
 
@@ -78,13 +84,11 @@ def parse_uprof_hotspots(
         raise ValueError("AMD uProf report did not collect call stacks")
     collect = shlex.split(_required(metadata, "Collect Command:"))
     report = shlex.split(_required(metadata, "Report Command:"))
-    if (
-        not _contains_sequence(collect, ("--config", "hotspots"))
-        or "-g" not in collect
-        or "--mpi" not in collect
-    ):
+    if not _contains_sequence(collect, ("--config", "hotspots")) or "-g" not in collect:
+        raise ValueError("AMD uProf collect command differs from the Hotspots protocol")
+    if ("--mpi" in collect) != expect_mpi_session:
         raise ValueError(
-            "AMD uProf collect command differs from the MPI Hotspots protocol"
+            "AMD uProf collect command has an unexpected MPI session mode"
         )
     if (
         not _contains_sequence(report, ("--host", expected_host_scope))
@@ -100,28 +104,24 @@ def parse_uprof_hotspots(
         raise ValueError("AMD uProf profile duration unit is invalid")
     duration_sec = _decimal(duration_lexeme.removesuffix(" seconds"))
     thread_count = _integer(_required(metadata, "Thread Count"), "thread count")
-    mpi_ranks = _integer(_required(metadata, "Number Of MPI ranks"), "MPI rank count")
-    mpi_hosts = _integer(_required(metadata, "Number Of MPI hosts"), "MPI host count")
-
-    ranks_per_node_header = [
-        index for index, row in enumerate(records) if row == ["MPI Ranks Per Node"]
-    ]
-    if len(ranks_per_node_header) != 1:
-        raise ValueError("AMD uProf report must contain one MPI Ranks Per Node section")
-    ranks_per_node: list[tuple[str, int]] = []
-    for row in records[ranks_per_node_header[0] + 1 :]:
-        if not row:
-            break
-        if len(row) != 2 or not row[0].strip():
-            raise ValueError("AMD uProf MPI ranks-per-node row is invalid")
-        ranks_per_node.append(
-            (row[0].strip(), _integer(row[1].strip(), "ranks per node"))
+    if expect_mpi_session:
+        mpi_ranks = _integer(
+            _required(metadata, "Number Of MPI ranks"), "MPI rank count"
         )
-    if (
-        len(ranks_per_node) != mpi_hosts
-        or sum(value for _, value in ranks_per_node) != mpi_ranks
-    ):
-        raise ValueError("AMD uProf MPI topology totals are inconsistent")
+        mpi_hosts = _integer(
+            _required(metadata, "Number Of MPI hosts"), "MPI host count"
+        )
+        ranks_per_node = _parse_mpi_topology(records, mpi_ranks, mpi_hosts)
+    else:
+        if any(
+            key in metadata for key in ("Number Of MPI ranks", "Number Of MPI hosts")
+        ) or ["MPI Ranks Per Node"] in records:
+            raise ValueError("AMD uProf per-rank report unexpectedly contains MPI topology")
+        if expected_host_scope == "all":
+            raise ValueError("AMD uProf per-rank report requires an exact host scope")
+        mpi_ranks = 1
+        mpi_hosts = 1
+        ranks_per_node = [(expected_host_scope, 1)]
 
     section = [
         index
@@ -208,26 +208,41 @@ def record_uprof_hotspots(
             raise ValueError(
                 "AMD uProf source or output path is outside its fixed run path"
             )
-    reports = sorted(report_root.glob("*.csv"), key=lambda path: path.name.encode())
-    if len(reports) != expected_hosts:
-        raise ValueError("AMD uProf host report count differs from the scheduler request")
-    parsed_by_host: list[tuple[str, UProfReport, Path]] = []
+    reports = sorted(
+        report_root.glob("*/rank-*.csv"), key=lambda path: path.as_posix().encode()
+    )
+    if len(reports) != expected_ranks:
+        raise ValueError("AMD uProf rank report count differs from the scheduler request")
+    parsed_by_rank: list[tuple[str, int, UProfReport, Path]] = []
+    seen_ranks: set[int] = set()
     for report_path in reports:
-        host = report_path.stem
+        host = report_path.parent.name
         if re.fullmatch(r"[A-Za-z0-9._-]+", host) is None:
             raise ValueError("AMD uProf host report has an invalid host name")
-        parsed_host = parse_uprof_hotspots(
+        match = re.fullmatch(r"rank-([0-9]+)[.]csv", report_path.name)
+        if match is None:
+            raise ValueError("AMD uProf rank report has an invalid file name")
+        rank = int(match.group(1))
+        if rank in seen_ranks:
+            raise ValueError("AMD uProf rank report repeats a global rank")
+        seen_ranks.add(rank)
+        parsed_rank = parse_uprof_hotspots(
             report_path.read_text(encoding="utf-8-sig"),
             expected_host_scope=host,
             expected_cutoff=0,
+            expect_mpi_session=False,
         )
-        if parsed_host.mpi_hosts != 1 or parsed_host.ranks_per_node != (
-            (host, parsed_host.mpi_ranks),
-        ):
-            raise ValueError("AMD uProf host report topology is inconsistent")
-        parsed_by_host.append((host, parsed_host, report_path))
-    parsed = _aggregate_host_reports(parsed_by_host)
-    if parsed.mpi_hosts != expected_hosts or parsed.mpi_ranks != expected_ranks:
+        parsed_by_rank.append((host, rank, parsed_rank, report_path))
+    if seen_ranks != set(range(expected_ranks)):
+        raise ValueError("AMD uProf rank reports are not the complete global rank set")
+    parsed = _aggregate_rank_reports(parsed_by_rank)
+    ranks_per_host = expected_ranks // expected_hosts
+    if (
+        expected_ranks % expected_hosts != 0
+        or parsed.mpi_hosts != expected_hosts
+        or parsed.mpi_ranks != expected_ranks
+        or any(ranks != ranks_per_host for _, ranks in parsed.ranks_per_node)
+    ):
         raise ValueError("AMD uProf aggregate topology differs from the protocol")
     value = {
         "schema_version": "openfoam-uprof-profile/v1",
@@ -236,10 +251,11 @@ def record_uprof_hotspots(
         "collection": {
             "analysis_type": "hotspots",
             "call_stack_sampling": True,
-            "mpi": True,
-            "report_host_scope": "per-host",
+            "application_mpi": True,
+            "uprof_mpi_session": False,
+            "report_scope": "per-rank",
             "report_cutoff": 0,
-            "aggregation": "sum function/module CPU times across complete host reports",
+            "aggregation": "sum function/module CPU times across complete rank reports",
         },
         "profile_duration_lexeme": parsed.duration_lexeme,
         "profile_duration_sec": _decimal_text(parsed.duration_sec),
@@ -251,8 +267,8 @@ def record_uprof_hotspots(
         ],
         "source": {
             "reports": [
-                {"host": host, **_source(report_path, run_dir)}
-                for host, _, report_path in parsed_by_host
+                {"host": host, "rank": rank, **_source(report_path, run_dir)}
+                for host, rank, _, report_path in parsed_by_rank
             ]
         },
         "hotspots": [item.fact_value() for item in parsed.hotspots],
@@ -271,14 +287,14 @@ def record_uprof_hotspots(
     return recorder.fragment_path
 
 
-def _aggregate_host_reports(
-    reports: list[tuple[str, UProfReport, Path]],
+def _aggregate_rank_reports(
+    reports: list[tuple[str, int, UProfReport, Path]],
 ) -> UProfReport:
-    targets = {report.target_path for _, report, _ in reports}
+    targets = {report.target_path for _, _, report, _ in reports}
     if len(targets) != 1:
-        raise ValueError("AMD uProf host reports disagree on the target path")
+        raise ValueError("AMD uProf rank reports disagree on the target path")
     totals: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
-    for _, report, _ in reports:
+    for _, _, report, _ in reports:
         for hotspot in report.hotspots:
             key = (hotspot.function, hotspot.module)
             cpu_time, total_cpu_time = totals.get(key, (Decimal(0), Decimal(0)))
@@ -304,17 +320,43 @@ def _aggregate_host_reports(
             ordered_totals, 1
         )
     )
-    duration = max(report.duration_sec for _, report, _ in reports)
+    duration = max(report.duration_sec for _, _, report, _ in reports)
+    host_ranks: dict[str, int] = {}
+    for host, _, _, _ in reports:
+        host_ranks[host] = host_ranks.get(host, 0) + 1
     return UProfReport(
         targets.pop(),
         f"{_decimal_text(duration)} seconds",
         duration,
-        sum(report.thread_count for _, report, _ in reports),
-        sum(report.mpi_ranks for _, report, _ in reports),
+        sum(report.thread_count for _, _, report, _ in reports),
         len(reports),
-        tuple((host, report.mpi_ranks) for host, report, _ in reports),
+        len(host_ranks),
+        tuple(sorted(host_ranks.items())),
         hotspots,
     )
+
+
+def _parse_mpi_topology(
+    records: list[list[str]], mpi_ranks: int, mpi_hosts: int
+) -> list[tuple[str, int]]:
+    sections = [index for index, row in enumerate(records) if row == ["MPI Ranks Per Node"]]
+    if len(sections) != 1:
+        raise ValueError("AMD uProf report must contain one MPI Ranks Per Node section")
+    ranks_per_node: list[tuple[str, int]] = []
+    for row in records[sections[0] + 1 :]:
+        if not row:
+            break
+        if len(row) != 2 or not row[0].strip():
+            raise ValueError("AMD uProf MPI ranks-per-node row is invalid")
+        ranks_per_node.append(
+            (row[0].strip(), _integer(row[1].strip(), "ranks per node"))
+        )
+    if (
+        len(ranks_per_node) != mpi_hosts
+        or sum(value for _, value in ranks_per_node) != mpi_ranks
+    ):
+        raise ValueError("AMD uProf MPI topology totals are inconsistent")
+    return ranks_per_node
 
 
 def _unique_metadata(records: list[list[str]]) -> dict[str, str]:
@@ -419,7 +461,7 @@ def _markdown(summary: dict[str, object]) -> str:
     lines.extend(
         [
             "",
-            "The table aggregates validated complete reports from every host. The complete sessions are retained in the profile artifact.",
+            "The table aggregates validated complete reports from every MPI rank. The complete sessions are retained in the profile artifact.",
             "",
         ]
     )

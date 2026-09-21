@@ -751,7 +751,9 @@ def main(argv: list[str] | None = None) -> int:
             record_uprof_hotspots(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                report_path=arguments.report,
+                report_root=arguments.report_root,
+                expected_hosts=arguments.expected_hosts,
+                expected_ranks=arguments.expected_ranks,
                 summary_path=arguments.summary,
                 markdown_path=arguments.markdown,
             )
