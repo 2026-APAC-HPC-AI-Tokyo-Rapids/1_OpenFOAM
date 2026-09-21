@@ -403,8 +403,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
     assert '--imb-bin "${imb_bin}"' in wrapper
-    assert "--solver-launch-arg --depth --solver-launch-arg 1" in wrapper
-    assert "--solver-launch-arg --cpu-bind --solver-launch-arg depth" in wrapper
+    assert "cpu_bind_list=$(seq -s : 0 $(( ranks_per_node - 1 )))" in wrapper
+    assert '--solver-launch-arg --cpu-bind --solver-launch-arg "list:${cpu_bind_list}"' in wrapper
+    assert "--solver-launch-arg --depth" not in wrapper
     assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
