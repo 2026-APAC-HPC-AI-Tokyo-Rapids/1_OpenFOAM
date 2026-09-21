@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 /* PALS can overwrite a prior affinity mask while UCX initializes MPI. */
-static void bind_local_rank(int required)
+static void bind_local_rank(void)
 {
     const char *value = getenv("PMI_LOCAL_RANK");
     char *end = NULL;
@@ -17,12 +17,8 @@ static void bind_local_rank(int required)
 
     if (value == NULL)
     {
-        if (required)
-        {
-            fputs("PMI_LOCAL_RANK is required after MPI initialization\n", stderr);
-            _exit(126);
-        }
-        return;
+        fputs("PMI_LOCAL_RANK is required after MPI initialization\n", stderr);
+        _exit(126);
     }
 
     errno = 0;
@@ -42,21 +38,16 @@ static void bind_local_rank(int required)
     }
 }
 
-__attribute__((constructor)) static void bind_at_load(void)
-{
-    bind_local_rank(0);
-}
-
 int MPI_Init(int *argc, char ***argv)
 {
     int status = PMPI_Init(argc, argv);
-    if (status == MPI_SUCCESS) bind_local_rank(1);
+    if (status == MPI_SUCCESS) bind_local_rank();
     return status;
 }
 
 int MPI_Init_thread(int *argc, char ***argv, int required, int *provided)
 {
     int status = PMPI_Init_thread(argc, argv, required, provided);
-    if (status == MPI_SUCCESS) bind_local_rank(1);
+    if (status == MPI_SUCCESS) bind_local_rank();
     return status;
 }

@@ -21,7 +21,7 @@ GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定�
 - compute nodeは既定で共有されるため、性能計測では`place=excl`を要求する。
 - `openfoam/2512`が利用でき、`simpleFoam`は`linux64GccDPInt32Opt`で構築されている。
 - site moduleは`PrgEnv-gnu/8.3.3`、GCC 11.2.0、Cray MPICH 8.1.15、PALS 1.1.6をロードする。
-- MPI launcherは`/opt/cray/pe/pals/1.1.6/bin/mpiexec`である。OpenMPI固有の起動optionを持ち込まない。PALSのCPU bindingはUCXでMPI初期化を伴う反復起動の2回目以降に失効し、事前の`taskset`も`MPI_Init`内で上書きされた。solver、rank配置記録、IMBにはASPIRE 2A専用interposerをpreloadし、load時と`MPI_Init`/`MPI_Init_thread`の正常終了直後に`PMI_LOCAL_RANK`と同じCPUへ固定して1 physical CPU/rankを保証する。
+- MPI launcherは`/opt/cray/pe/pals/1.1.6/bin/mpiexec`である。OpenMPI固有の起動optionを持ち込まない。PALSのCPU bindingはUCXでMPI初期化を伴う反復起動の2回目以降に失効し、事前の`taskset`も`MPI_Init`内で上書きされた。全rankを薄いwrapperで`PMI_LOCAL_RANK`と同じCPUへ事前固定し、MPI processはASPIRE 2A専用interposerで`MPI_Init`/`MPI_Init_thread`の正常終了直後にも再固定する。非MPIの配置記録とMPI実行の両方で1 physical CPU/rankを保証する。
 - PBSの`ncpus`は1ノード128であり、基準rank数は1/2/4ノードで128/256/512とする。基準構成では1 physical coreあたり1 rankを配置する。
 - 1ノード128 coreは`qdev`または`q4`、2・4ノードは`q5`へroutingされる。`q4`はwalltimeが`02:00:01`以上、`qdev`は`02:00:00`以下である。
 - PBSの既定メモリは実行に不足するため、各chunkに`mem=`を必ず指定する。計測ジョブは、完走済みの基準runと同じく1ノードあたり400 GBを要求する。

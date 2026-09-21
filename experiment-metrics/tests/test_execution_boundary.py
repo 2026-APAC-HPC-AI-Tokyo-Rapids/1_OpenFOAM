@@ -368,6 +368,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     rank_affinity = (ROOT / "platforms/aspire2a/mpi-rank-affinity.c").read_text(
         encoding="utf-8"
     )
+    rank_binder = (ROOT / "platforms/aspire2a/bind-local-rank.sh").read_text(
+        encoding="utf-8"
+    )
     runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
@@ -409,10 +412,15 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "cpu_bind_list=" not in wrapper
     assert "--solver-launch-arg --cpu-bind" not in wrapper
     assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' in wrapper
+    assert '--solver-launch-arg "${rank_binder}"' in wrapper
     assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
+    assert "platforms/aspire2a/bind-local-rank.sh" in workflow
     assert "int MPI_Init(int *argc, char ***argv)" in rank_affinity
     assert "int MPI_Init_thread(" in rank_affinity
-    assert "if (status == MPI_SUCCESS) bind_local_rank(1);" in rank_affinity
+    assert "if (status == MPI_SUCCESS) bind_local_rank();" in rank_affinity
+    assert "__attribute__((constructor))" not in rank_affinity
+    assert ': "${PMI_LOCAL_RANK:?PALS local rank is required}"' in rank_binder
+    assert 'exec /usr/bin/taskset --cpu-list "${PMI_LOCAL_RANK}" "$@"' in rank_binder
     assert "--solver-launch-arg --depth" not in wrapper
     assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
