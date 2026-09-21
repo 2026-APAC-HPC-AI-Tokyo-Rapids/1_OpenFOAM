@@ -419,7 +419,9 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
+    assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
     assert "module load git/2.39.2" in build
+    assert "aspire2a_libfabric_version=" in toolchain
 
 
 def test_cluster_steps_use_home_lab_remote_shells() -> None:
