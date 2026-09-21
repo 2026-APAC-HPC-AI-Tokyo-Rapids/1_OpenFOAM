@@ -183,6 +183,7 @@ JQ=$(command -v jq)
 ENV=$(command -v env)
 
 provision_args=(validate-provision --manifest "${RUN_MANIFEST}" --build-sidecar "${RUN_DIR}/control/build-sidecar.json" --provision-root "${runtime_root}" --output "${RUN_DIR}/control/build-provision-validation.json" --executable "simpleFoam=${SIMPLE_FOAM}" --executable "decomposePar=${DECOMPOSE_PAR}" --executable "checkMesh=${CHECK_MESH}" --executable "renumberMesh=${RENUMBER_MESH}" --executable "potentialFoam=${POTENTIAL_FOAM}" --executable "applyBoundaryLayer=${APPLY_BOUNDARY_LAYER}" --executable "mesh-facts=${MESH_FACTS}" --executable "partition-audit=${PARTITION_AUDIT}" --executable "capture-hardware=${CAPTURE_HARDWARE}" --executable "mpirun=${MPIEXEC}")
+uprof_bin_dir=
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     [[ "${OPENFOAM_VTUNE_RANK}" =~ ^[0-9]+$ ]]
@@ -192,13 +193,14 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
   else
     : "${AMDUPROF_ROOT:?AMD uProf installation root is required}"
-    OPENFOAM_UPROF_PATH="${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin"
+    uprof_bin_dir="${AMDUPROF_ROOT}/bin"
+    OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"
     test -x "${OPENFOAM_UPROF_PATH}"
     export OPENFOAM_UPROF_PATH
     provision_args+=(--executable "uprof=${OPENFOAM_UPROF_PATH}")
   fi
 fi
-"${METRICS_CLI}" "${provision_args[@]}"
+if [[ -n "${uprof_bin_dir}" ]]; then LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"; else "${METRICS_CLI}" "${provision_args[@]}"; fi
 "${METRICS_CLI}" record-build-provision --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --build-provision "${RUN_DIR}/control/build-provision-validation.json" || printf '%s\n' 'ビルド配備の計測値を記録できませんでした' >&2
 
 install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"

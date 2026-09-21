@@ -393,7 +393,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "platforms/aspire2a/exec-uprof.sh" in workflow
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
-    assert 'OPENFOAM_UPROF_PATH="${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin"' in runner
+    assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
+    assert 'OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"' in runner
+    assert 'LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"' in runner
     assert '"${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" collect' in runner
     uprof_launcher = (ROOT / "platforms/aspire2a/exec-uprof.sh").read_text(
         encoding="utf-8"
