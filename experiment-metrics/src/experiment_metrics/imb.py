@@ -105,14 +105,32 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
         str(protocol.ranks_per_node),
     ]
     allowed_launcher = launcher == basic_launcher
-    aspire_launcher = [
-        launcher[0],
+    aspire_tail = [
         "-n",
         str(protocol.ranks),
         "-ppn",
         str(protocol.ranks_per_node),
     ]
-    allowed_launcher = allowed_launcher or launcher == aspire_launcher
+    aspire_binding_prefixes = [
+        [],
+        ["--depth", "1", "--cpu-bind", "depth"],
+        [
+            "--cpu-bind",
+            "list:" + ":".join(str(cpu) for cpu in range(protocol.ranks_per_node)),
+        ],
+    ]
+    for binding_prefix in aspire_binding_prefixes:
+        aspire_prefix = [launcher[0], *binding_prefix]
+        if launcher == [*aspire_prefix, *aspire_tail]:
+            allowed_launcher = True
+        if (
+            len(launcher) == len(aspire_prefix) + len(aspire_tail) + 2
+            and launcher[: len(aspire_prefix)] == aspire_prefix
+            and launcher[len(aspire_prefix)] == "--env"
+            and _is_owned_aspire_preload(launcher[len(aspire_prefix) + 1])
+            and launcher[-len(aspire_tail) :] == aspire_tail
+        ):
+            allowed_launcher = True
     if len(launcher) == len(basic_launcher) + 3:
         allowed_launcher = (
             launcher[: len(basic_launcher)] == basic_launcher
@@ -130,6 +148,18 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
         raise ValueError("IMB argv does not have the closed launcher shape")
     if imb_command[1:] != expected_command:
         raise ValueError("IMB argv differs from the protocol command")
+
+
+def _is_owned_aspire_preload(value: str) -> bool:
+    """Recognize the single LibMem preload emitted by the ASPIRE adapter."""
+
+    name, separator, path = value.partition("=")
+    return (
+        name == "LD_PRELOAD"
+        and separator == "="
+        and Path(path).is_absolute()
+        and Path(path).name == "libaocl-libmem.so"
+    )
 
 
 def validate_imb_results(results: tuple[IMBResult, ...], process_count: int) -> None:

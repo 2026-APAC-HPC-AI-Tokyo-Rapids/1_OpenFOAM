@@ -65,6 +65,10 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     ]
     aspire2a = [
         "/opt/cray/pe/pals/bin/mpiexec",
+        "--cpu-bind",
+        "list:" + ":".join(str(cpu) for cpu in range(120)),
+        "--env",
+        "LD_PRELOAD=/opt/aocl/lib/libaocl-libmem.so",
         "-n",
         "120",
         "-ppn",
@@ -75,6 +79,49 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     _validate_imb_argv(genkai, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(gadi, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(aspire2a, _Protocol())  # type: ignore[arg-type]
+
+
+def test_imb_argv_accepts_previous_aspire_binding_shape() -> None:
+    argv = [
+        "/opt/cray/pe/pals/bin/mpiexec",
+        "--depth",
+        "1",
+        "--cpu-bind",
+        "depth",
+        "-n",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
+
+    _validate_imb_argv(argv, _Protocol())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "launcher_prefix",
+    [
+        ["--cpu-bind", "list:0:1:2"],
+        ["--depth", "2", "--cpu-bind", "depth"],
+        ["--env", "LD_PRELOAD=/tmp/libsomething-else.so"],
+        ["--env", "LD_LIBRARY_PATH=/opt/aocl/lib"],
+    ],
+)
+def test_imb_argv_rejects_unowned_aspire_options(
+    launcher_prefix: list[str],
+) -> None:
+    argv = [
+        "/opt/cray/pe/pals/bin/mpiexec",
+        *launcher_prefix,
+        "-n",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
+
+    with pytest.raises(ValueError, match="launcher shape"):
+        _validate_imb_argv(argv, _Protocol())  # type: ignore[arg-type]
 
 
 def test_imb_argv_rejects_unowned_launcher_options() -> None:
