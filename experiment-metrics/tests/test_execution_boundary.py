@@ -403,6 +403,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
     assert '--imb-bin "${imb_bin}"' in wrapper
+    assert "--solver-launch-arg --depth --solver-launch-arg 1" in wrapper
+    assert "--solver-launch-arg --cpu-bind --solver-launch-arg depth" in wrapper
     assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
