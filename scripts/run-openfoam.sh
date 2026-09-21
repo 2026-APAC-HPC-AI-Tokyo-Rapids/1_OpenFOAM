@@ -21,6 +21,7 @@ local_size_env=
 large_output_dir=
 runtime_root=
 compute_tools_root=
+imb_bin=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
@@ -40,6 +41,7 @@ do
     --large-output-dir) [[ $# -ge 2 ]]; large_output_dir=$2; shift 2 ;;
     --runtime-root) [[ $# -ge 2 ]]; runtime_root=$2; shift 2 ;;
     --compute-tools-root) [[ $# -ge 2 ]]; compute_tools_root=$2; shift 2 ;;
+    --imb-bin) [[ $# -ge 2 ]]; imb_bin=$2; shift 2 ;;
     --openfoam-arg) [[ $# -ge 2 ]]; openfoam_args+=("$2"); shift 2 ;;
     *) printf 'run-openfoamの未知の引数です: %s\n' "$1" >&2; exit 64 ;;
   esac
@@ -48,6 +50,7 @@ done
 [[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
 [[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
 [[ "${large_output_dir}" == /* ]]
+if [[ -n "${imb_bin}" ]]; then [[ "${imb_bin}" == /* && -x "${imb_bin}" ]]; fi
 for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
 do
   [[ "${rank_env}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
@@ -336,7 +339,7 @@ IMB_STDOUT="${SOURCE_DIR}/network/imb-mpi1/stdout.txt"
 IMB_STDERR="${SOURCE_DIR}/network/imb-mpi1/stderr.txt"
 IMB_ARGV="${SOURCE_DIR}/network/imb-mpi1/argv.json"
 install -d -m 0755 "${IMB_STDOUT%/*}"
-imb_bin=$(command -v IMB-MPI1 || true)
+imb_bin=${imb_bin:-$(command -v IMB-MPI1 || true)}
 if [[ -n "${imb_bin}" ]]; then
   imb_argv=(
     "${solver_launch[@]}"

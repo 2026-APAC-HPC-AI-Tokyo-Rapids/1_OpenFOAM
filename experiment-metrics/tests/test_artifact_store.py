@@ -50,9 +50,15 @@ def test_profile_artifacts_retain_raw_profile_archive(
     raw = manifest.parents[1] / "profile/raw/vtune-summary/hotspots.csv"
     raw.parent.mkdir(parents=True)
     raw.write_text("counter\n", encoding="utf-8")
+    summary = manifest.parents[1] / "results/uprof-summary.json"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text("{}\n", encoding="utf-8")
     result = RunPackager().package(
         manifest,
-        run_members=(("logs/solver.log", "solver_log"),),
+        run_members=(
+            ("logs/solver.log", "solver_log"),
+            ("results/uprof-summary.json", "postrun_source"),
+        ),
         profile_members=("profile/raw/vtune-summary/hotspots.csv",),
     )
     assert [path.name for path in result.files] == [

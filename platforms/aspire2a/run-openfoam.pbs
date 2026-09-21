@@ -25,6 +25,11 @@ source "${runtime_root}/OpenFOAM/etc/bashrc" WM_COMPILER="${aspire2a_wm_compiler
 set -eu
 
 export WORKLOAD_MESH_ARCHIVE="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/workload/polyMesh_65M.tar.gz"
+imb_bin="${FOAM_APPBIN}/IMB-MPI1"
+ldd "${imb_bin}" > "${RUN_DIR}/logs/imb-mpi1-ldd.log"
+cat "${RUN_DIR}/logs/imb-mpi1-ldd.log"
+grep -q '/opt/cray/pe/mpich/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"
+if grep -q '/oneapi/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'ASPIRE-2A用IMB-MPI1がIntel oneAPIにlinkしています' >&2; exit 1; fi
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
 identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "$(command -v decomposePar)" "$(command -v checkMesh)" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_archive_root}" --identity-only)
@@ -42,4 +47,4 @@ if (( OPENFOAM_NODES > 1 )); then
   io_ranks="${io_ranks% })"
   distributed_root_args=(--openfoam-arg -hostRoots --openfoam-arg "${host_roots}" --openfoam-arg -ioRanks --openfoam-arg "${io_ranks}")
 fi
-exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --paraview-collector "${runtime_root}/scripts/archive-paraview-case.sh" --large-output-dir "${RUN_DIR}/large-output" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1
+exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --paraview-collector "${runtime_root}/scripts/archive-paraview-case.sh" --large-output-dir "${RUN_DIR}/large-output" --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1

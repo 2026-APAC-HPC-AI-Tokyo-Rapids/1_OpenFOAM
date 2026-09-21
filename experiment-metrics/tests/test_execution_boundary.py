@@ -386,6 +386,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '"${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect' in runner
     assert 'if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then' in runner
     assert 'sed -n \'s/^session=/uprof_session=/p\'' in runner
+    assert 'results/uprof-summary.json' in workflow
+    assert 'results/uprof-summary.md' in workflow
+    assert 'profile/uprof-summary' not in workflow
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow
     assert "scripts/export-vtune-hotspots.sh" not in workflow
@@ -399,6 +402,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--global-rank-env PMI_RANK" in wrapper
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
+    assert '--imb-bin "${imb_bin}"' in wrapper
+    assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
+    assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
 
@@ -420,6 +426,9 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
+    assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
+    assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build
+    assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
     assert "aspire2a_libfabric_version=" in toolchain
 

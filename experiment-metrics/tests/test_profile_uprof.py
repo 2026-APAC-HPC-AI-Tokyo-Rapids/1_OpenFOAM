@@ -99,8 +99,8 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     report = run_dir / "profile/raw/uprof/report.csv"
     report.parent.mkdir(parents=True)
     report.write_text(_report())
-    summary = run_dir / "profile/uprof-summary.json"
-    markdown = run_dir / "profile/uprof-summary.md"
+    summary = run_dir / "results/uprof-summary.json"
+    markdown = run_dir / "results/uprof-summary.md"
 
     fragment = record_uprof_hotspots(
         manifest_path=manifest,

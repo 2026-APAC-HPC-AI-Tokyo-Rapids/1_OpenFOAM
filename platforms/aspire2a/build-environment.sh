@@ -7,10 +7,15 @@
 : "${THIRDPARTY_SOURCE_ARCHIVE:?ThirdParty source archive is required}"
 : "${THIRDPARTY_SOURCE_ARCHIVE_SHA256:?ThirdParty source archive digest is required}"
 : "${THIRDPARTY_SOURCE_OID:?ThirdParty source commit is required}"
+: "${IMB_SOURCE_ARCHIVE:?IMB source archive is required}"
+: "${IMB_SOURCE_ARCHIVE_SHA256:?IMB source archive digest is required}"
+: "${IMB_SOURCE_OID:?IMB source commit is required}"
 
 [[ "${OPENFOAM_SOURCE_OID}" =~ ^[0-9a-f]{40,64}$ && "${THIRDPARTY_SOURCE_OID}" =~ ^[0-9a-f]{40,64}$ ]]
+[[ "${IMB_SOURCE_OID}" =~ ^[0-9a-f]{40,64}$ ]]
 test "$(sha256sum "${OPENFOAM_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${OPENFOAM_SOURCE_ARCHIVE_SHA256}"
 test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRDPARTY_SOURCE_ARCHIVE_SHA256}"
+test "$(sha256sum "${IMB_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${IMB_SOURCE_ARCHIVE_SHA256}"
 build_parallelism=16
 build_directory_mode=0750
 build_extra_cxxflags="${build_tuning_flags}"
@@ -31,15 +36,20 @@ build_wm_compiler=${aspire2a_wm_compiler}
 build_wm_mplib=${aspire2a_wm_mplib}
 
 prepare_build_sources() {
-  install -d -m 0750 "${build_tree}/OpenFOAM" "${build_tree}/ThirdParty"
+  install -d -m 0750 "${build_tree}/OpenFOAM" "${build_tree}/ThirdParty" "${build_tree}/IMB"
   tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}" -C "${build_tree}/OpenFOAM" --strip-components=1
   tar -xzf "${THIRDPARTY_SOURCE_ARCHIVE}" -C "${build_tree}/ThirdParty" --strip-components=1
+  tar -xzf "${IMB_SOURCE_ARCHIVE}" -C "${build_tree}/IMB" --strip-components=1
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
   scotch_source_identity=$(find "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
-  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}")
+  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}")
 }
 
 finish_cluster_build() {
-  :
+  make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1 > "${BUILD_DIR}/logs/imb-mpi1-build.log" 2>&1
+  install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"
+  ldd "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
+  readelf --dynamic "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-dynamic.log"
+  rm -rf -- "${build_tree}/IMB"
 }

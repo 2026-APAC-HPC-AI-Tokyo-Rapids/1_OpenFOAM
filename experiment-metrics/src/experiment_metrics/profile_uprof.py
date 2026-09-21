@@ -196,8 +196,8 @@ def record_uprof_hotspots(
         raise ValueError("AMD uProf summary limit is invalid")
     expected = {
         report_path: run_dir / "profile/raw/uprof/report.csv",
-        summary_path: run_dir / "profile/uprof-summary.json",
-        markdown_path: run_dir / "profile/uprof-summary.md",
+        summary_path: run_dir / "results/uprof-summary.json",
+        markdown_path: run_dir / "results/uprof-summary.md",
     }
     for supplied, required in expected.items():
         if supplied.resolve() != required.resolve():
