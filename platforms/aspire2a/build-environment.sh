@@ -51,7 +51,7 @@ prepare_build_sources() {
   tar -xzf "${IMB_SOURCE_ARCHIVE}" -C "${build_tree}/IMB" --strip-components=1
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
-  scotch_source_identity=$(find "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
+  scotch_source_identity=$("${GITHUB_WORKSPACE}/scripts/source-tree-identity.sh" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0")
   cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}")
 }
 

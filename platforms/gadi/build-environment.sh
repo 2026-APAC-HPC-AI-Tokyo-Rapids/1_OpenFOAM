@@ -31,7 +31,7 @@ prepare_build_sources() {
   tar -xzf "${THIRDPARTY_SOURCE_ARCHIVE}" -C "${build_tree}/ThirdParty" --strip-components=1
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /apps/OpenFOAM/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
-  scotch_source_identity=$(find "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
+  scotch_source_identity=$("${GITHUB_WORKSPACE}/scripts/source-tree-identity.sh" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0")
   cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}")
 }
 
