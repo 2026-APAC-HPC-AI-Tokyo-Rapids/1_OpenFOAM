@@ -13,6 +13,7 @@ static void bind_local_rank(void)
     const char *value = getenv("PMI_LOCAL_RANK");
     char *end = NULL;
     cpu_set_t mask;
+    cpu_set_t observed;
     long cpu;
 
     if (value == NULL)
@@ -34,6 +35,16 @@ static void bind_local_rank(void)
     if (sched_setaffinity(0, sizeof(mask), &mask) != 0)
     {
         perror("sched_setaffinity");
+        _exit(126);
+    }
+    if (sched_getaffinity(0, sizeof(observed), &observed) != 0)
+    {
+        perror("sched_getaffinity");
+        _exit(126);
+    }
+    if (CPU_COUNT(&observed) != 1 || !CPU_ISSET((int)cpu, &observed))
+    {
+        fputs("MPI rank affinity verification failed\n", stderr);
         _exit(126);
     }
 }

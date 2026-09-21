@@ -111,6 +111,7 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
         "-ppn",
         str(protocol.ranks_per_node),
     ]
+    aspire_manual_binding = ["--cpu-bind", "depth", "-d", "1"]
     aspire_binding_prefixes = [
         [],
         ["--depth", "1", "--cpu-bind", "depth"],
@@ -119,19 +120,26 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
             "list:" + ":".join(str(cpu) for cpu in range(protocol.ranks_per_node)),
         ],
     ]
-    aspire_launcher = launcher[:-1] if _is_aspire_rank_binder(launcher[-1]) else launcher
     for binding_prefix in aspire_binding_prefixes:
-        aspire_prefix = [aspire_launcher[0], *binding_prefix]
-        if aspire_launcher == [*aspire_prefix, *aspire_tail]:
+        aspire_prefix = [launcher[0], *binding_prefix]
+        if launcher == [*aspire_prefix, *aspire_tail]:
             allowed_launcher = True
         if (
-            len(aspire_launcher) == len(aspire_prefix) + len(aspire_tail) + 2
-            and aspire_launcher[: len(aspire_prefix)] == aspire_prefix
-            and aspire_launcher[len(aspire_prefix)] == "--env"
-            and _is_owned_aspire_preload(aspire_launcher[len(aspire_prefix) + 1])
-            and aspire_launcher[-len(aspire_tail) :] == aspire_tail
+            len(launcher) == len(aspire_prefix) + len(aspire_tail) + 2
+            and launcher[: len(aspire_prefix)] == aspire_prefix
+            and launcher[len(aspire_prefix)] == "--env"
+            and _is_owned_aspire_preload(launcher[len(aspire_prefix) + 1])
+            and launcher[-len(aspire_tail) :] == aspire_tail
         ):
             allowed_launcher = True
+    if (
+        len(launcher) == len(aspire_tail) + len(aspire_manual_binding) + 3
+        and launcher[1] == "--env"
+        and _is_owned_aspire_preload(launcher[2])
+        and launcher[3 : 3 + len(aspire_tail)] == aspire_tail
+        and launcher[-len(aspire_manual_binding) :] == aspire_manual_binding
+    ):
+        allowed_launcher = True
     if not allowed_launcher and len(launcher) == len(basic_launcher) + 3:
         allowed_launcher = (
             launcher[: len(basic_launcher)] == basic_launcher
@@ -166,16 +174,6 @@ def _is_owned_aspire_preload(value: str) -> bool:
         ["libaocl-libmem.so"],
         ["libmpi-rank-affinity.so", "libaocl-libmem.so"],
     )
-
-
-def _is_aspire_rank_binder(value: str) -> bool:
-    path = Path(value)
-    return path.is_absolute() and path.parts[-3:] == (
-        "platforms",
-        "aspire2a",
-        "bind-local-rank.sh",
-    )
-
 
 def validate_imb_results(results: tuple[IMBResult, ...], process_count: int) -> None:
     """Validate benchmark-specific axes from one complete IMB invocation."""

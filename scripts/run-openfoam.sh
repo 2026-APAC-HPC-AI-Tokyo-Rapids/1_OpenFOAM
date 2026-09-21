@@ -14,6 +14,7 @@ prepared_case_manifest=
 rank_manifest=
 rank_placement_root=
 placement_collector=
+bind_rank_placement=false
 paraview_collector=
 global_rank_env=
 local_rank_env=
@@ -34,6 +35,7 @@ do
     --rank-manifest) [[ $# -ge 2 ]]; rank_manifest=$2; shift 2 ;;
     --rank-placement-root) [[ $# -ge 2 ]]; rank_placement_root=$2; shift 2 ;;
     --placement-collector) [[ $# -ge 2 ]]; placement_collector=$2; shift 2 ;;
+    --bind-rank-placement) bind_rank_placement=true; shift ;;
     --paraview-collector) [[ $# -ge 2 ]]; paraview_collector=$2; shift 2 ;;
     --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
     --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
@@ -108,6 +110,8 @@ REGISTRY="${PROVISION_DIR}/experiment-metrics/registry/openfoam-v2.toml"
 METRICS_CLI="${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics"
 RANK_PYTHON="${compute_tools_root}/experiment-metrics/.venv/bin/python"
 RANK_PYTHON_LAUNCH=(/usr/bin/env "${RANK_PYTHON}")
+RANK_PLACEMENT_ARGS=()
+if [[ "${bind_rank_placement}" == true ]]; then RANK_PLACEMENT_ARGS+=(--bind-local-rank); fi
 rank_manifest=${rank_manifest:-${RUN_MANIFEST}}
 rank_placement_root=${rank_placement_root:-${SOURCE_DIR}/placement}
 [[ "${rank_manifest}" == /* && "${rank_placement_root}" == /* ]]
@@ -249,7 +253,7 @@ fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
-  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --capture-only
+  stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" "${RANK_PLACEMENT_ARGS[@]}" --capture-only
 fi
 set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then

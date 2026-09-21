@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--global-rank-env", required=True)
     parser.add_argument("--local-rank-env", required=True)
     parser.add_argument("--local-size-env", required=True)
+    parser.add_argument("--bind-local-rank", action="store_true")
     parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--profile-rank", type=int)
     parser.add_argument("--profile-wrapper", type=Path)
@@ -58,6 +59,10 @@ def main(argv: list[str] | None = None) -> int:
     ranks_per_node = arguments.expected_ranks // arguments.expected_nodes
     if local_size != ranks_per_node:
         raise ValueError("rank wrapper local size differs from expected axes")
+    if arguments.bind_local_rank:
+        os.sched_setaffinity(0, {local_rank})
+        if os.sched_getaffinity(0) != {local_rank}:
+            raise RuntimeError("rank wrapper could not bind the local rank")
     capture_rank_placement(
         placement_root / f"rank-{rank}.json",
         run_id=manifest.run_id,

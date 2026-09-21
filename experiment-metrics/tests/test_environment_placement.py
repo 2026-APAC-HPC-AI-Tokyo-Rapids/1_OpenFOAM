@@ -101,6 +101,14 @@ def test_rank_wrapper_can_capture_placement_without_launching_solver(
     monkeypatch.setenv("TEST_GLOBAL_RANK", "0")
     monkeypatch.setenv("TEST_LOCAL_RANK", "0")
     monkeypatch.setenv("TEST_LOCAL_SIZE", "1")
+    affinity_calls: list[tuple[int, set[int]]] = []
+    monkeypatch.setattr(
+        "experiment_metrics.rank_wrapper.os.sched_setaffinity",
+        lambda pid, cpus: affinity_calls.append((pid, cpus)),
+    )
+    monkeypatch.setattr(
+        "experiment_metrics.rank_wrapper.os.sched_getaffinity", lambda pid: {0}
+    )
 
     result = rank_wrapper_main([
         "--manifest", str(manifest),
@@ -110,6 +118,7 @@ def test_rank_wrapper_can_capture_placement_without_launching_solver(
         "--global-rank-env", "TEST_GLOBAL_RANK",
         "--local-rank-env", "TEST_LOCAL_RANK",
         "--local-size-env", "TEST_LOCAL_SIZE",
+        "--bind-local-rank",
         "--capture-only",
     ])
 
@@ -117,3 +126,4 @@ def test_rank_wrapper_can_capture_placement_without_launching_solver(
     document = json.loads((placement_root / "rank-0.json").read_text())
     assert document["run_id"] == manifest.parents[1].name
     assert document["global_rank"] == 0
+    assert affinity_calls == [(0, {0})]

@@ -71,7 +71,10 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
         "120",
         "-ppn",
         "120",
-        "/var/tmp/openfoam/platforms/aspire2a/bind-local-rank.sh",
+        "--cpu-bind",
+        "depth",
+        "-d",
+        "1",
         *_imb_command(),
     ]
     aspire2a_without_libmem = [
@@ -82,7 +85,10 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
         "120",
         "-ppn",
         "120",
-        "/var/tmp/openfoam/platforms/aspire2a/bind-local-rank.sh",
+        "--cpu-bind",
+        "depth",
+        "-d",
+        "1",
         *_imb_command(),
     ]
 
@@ -132,23 +138,6 @@ def test_imb_argv_rejects_unowned_aspire_options(
         "120",
         "-ppn",
         "120",
-        *_imb_command(),
-    ]
-
-    with pytest.raises(ValueError, match="launcher shape"):
-        _validate_imb_argv(argv, _Protocol())  # type: ignore[arg-type]
-
-
-def test_imb_argv_rejects_unowned_aspire_rank_binder() -> None:
-    argv = [
-        "/opt/cray/pe/pals/bin/mpiexec",
-        "--env",
-        "LD_PRELOAD=/var/tmp/openfoam/platforms/aspire2a/libmpi-rank-affinity.so",
-        "-n",
-        "120",
-        "-ppn",
-        "120",
-        "/tmp/bind-local-rank.sh",
         *_imb_command(),
     ]
 
