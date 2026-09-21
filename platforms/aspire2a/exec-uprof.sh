@@ -2,15 +2,20 @@
 
 set -euo pipefail
 
-if [[ $# -lt 2 ]]; then
-  echo "使用方法: $0 AMDUPROF_CLI COMMAND [ARGUMENT ...]" >&2
+if [[ $# -lt 4 ]]; then
+  echo "使用方法: $0 AMDUPROF_CLI SESSION_ROOT TARGET [ARGUMENT ...]" >&2
   exit 64
 fi
 
 uprof_cli=$1
-shift
-[[ "${uprof_cli}" == /* ]]
+session_root=$2
+shift 2
+[[ "${uprof_cli}" == /* && "${session_root}" == /* ]]
 test -x "${uprof_cli}"
 uprof_bin_dir=$(dirname -- "${uprof_cli}")
 export LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-exec "${uprof_cli}" "$@"
+host=$(/bin/hostname)
+[[ "${host}" =~ ^[A-Za-z0-9._-]+$ ]]
+host_session_root="${session_root}/${host}"
+install -d -m 0750 "${host_session_root}"
+exec "${uprof_cli}" collect --config hotspots -g --mpi --output-dir "${host_session_root}" "$@"

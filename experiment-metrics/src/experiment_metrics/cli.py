@@ -250,7 +250,9 @@ def parser() -> argparse.ArgumentParser:
 
     profile_uprof = commands.add_parser("record-profile-uprof")
     _runtime_common(profile_uprof)
-    profile_uprof.add_argument("--report", type=Path, required=True)
+    profile_uprof.add_argument("--report-root", type=Path, required=True)
+    profile_uprof.add_argument("--expected-hosts", type=int, required=True)
+    profile_uprof.add_argument("--expected-ranks", type=int, required=True)
     profile_uprof.add_argument("--summary", type=Path, required=True)
     profile_uprof.add_argument("--markdown", type=Path, required=True)
 
@@ -730,7 +732,9 @@ def main(argv: list[str] | None = None) -> int:
             record_vtune_hotspots(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
-                report_path=arguments.report,
+                report_root=arguments.report_root,
+                expected_hosts=arguments.expected_hosts,
+                expected_ranks=arguments.expected_ranks,
                 status_path=arguments.status,
                 summary_path=arguments.summary,
                 markdown_path=arguments.markdown,

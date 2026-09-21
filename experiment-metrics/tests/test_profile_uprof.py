@@ -12,7 +12,15 @@ from experiment_metrics.profile_uprof import parse_uprof_hotspots, record_uprof_
 ROOT = Path(__file__).parents[2]
 
 
-def _report(*, collect: str | None = None, ranks: str = "2", hosts: str = "1") -> str:
+def _report(
+    *,
+    collect: str | None = None,
+    ranks: str = "2",
+    hosts: str = "1",
+    host: str = "node-a",
+    report_scope: str = "all",
+    cutoff: str = "30",
+) -> str:
     collect = (
         collect
         or "./AMDuProfCLI collect --config hotspots -g --mpi --output-dir /run/profile/raw/uprof/sessions /opt/OpenFOAM/bin/simpleFoam -parallel"
@@ -24,7 +32,7 @@ PERFORMANCE ANALYSIS REPORT
 EXECUTION
 Target Path:,"/opt/OpenFOAM/bin/simpleFoam"
 Collect Command:,"{collect}"
-Report Command:,"./AMDuProfCLI report --input-dir /run/profile/raw/uprof/sessions/AMDuProf-simpleFoam-Hotspots_MPI --host all --detail --cutoff 30"
+Report Command:,"./AMDuProfCLI report --input-dir /run/profile/raw/uprof/sessions/AMDuProf-simpleFoam-Hotspots_MPI --host {report_scope} --detail --cutoff {cutoff}"
 
 PROFILE DETAILS
 Profile Session Type:,"Hotspots"
@@ -37,7 +45,7 @@ Number Of MPI ranks,"{ranks}"
 Number Of MPI hosts,"{hosts}"
 
 MPI Ranks Per Node
-node-a,{ranks}
+{host},{ranks}
 
 "30 HOTTEST FUNCTIONS (Sort Event - CPU_TIME)"
 FUNCTION,"CPU_TIME" (seconds),"TOTAL_CPU_TIME (s)",Module
@@ -68,23 +76,38 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
     cli.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
     cli.chmod(0o755)
     arguments = [
-        "collect",
-        "--config",
-        "hotspots",
         "/opt/OpenFOAM/bin/simpleFoam",
         "-hostRoots",
         '((".*" "/var/tmp/openfoam case"))',
         "-ioRanks",
         "(0 128 256 384)",
     ]
+    session_root = tmp_path / "sessions"
 
     completed = subprocess.run(
-        ["bash", str(ROOT / "platforms/aspire2a/exec-uprof.sh"), str(cli), *arguments],
+        [
+            "bash",
+            str(ROOT / "platforms/aspire2a/exec-uprof.sh"),
+            str(cli),
+            str(session_root),
+            *arguments,
+        ],
         check=True,
         capture_output=True,
     )
 
-    assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in arguments]
+    host = subprocess.check_output(["hostname"], text=True).strip()
+    expected = [
+        "collect",
+        "--config",
+        "hotspots",
+        "-g",
+        "--mpi",
+        "--output-dir",
+        str(session_root / host),
+        *arguments,
+    ]
+    assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in expected]
 
 
 def test_target_launcher_restores_nul_delimited_openfoam_arguments(
@@ -168,16 +191,19 @@ def test_recording_writes_structured_fact_and_bounded_summary(
 ) -> None:
     manifest = _profile_run(tmp_path, registry_path, identities)
     run_dir = manifest.parents[1]
-    report = run_dir / "profile/raw/uprof/report.csv"
-    report.parent.mkdir(parents=True)
-    report.write_text(_report())
+    report_root = run_dir / "profile/raw/uprof/reports"
+    report_root.mkdir(parents=True)
+    report = report_root / "node-a.csv"
+    report.write_text(_report(report_scope="node-a", cutoff="0"))
     summary = run_dir / "results/uprof-summary.json"
     markdown = run_dir / "results/uprof-summary.md"
 
     fragment = record_uprof_hotspots(
         manifest_path=manifest,
         runtime_dir=run_dir,
-        report_path=report,
+        report_root=report_root,
+        expected_hosts=1,
+        expected_ranks=2,
         summary_path=summary,
         markdown_path=markdown,
     )
@@ -188,16 +214,51 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     assert value["tool_version"] == "5.3.521.0"
     assert value["collection"] == {
         "analysis_type": "hotspots",
+        "aggregation": "sum function/module CPU times across complete host reports",
         "call_stack_sampling": True,
         "mpi": True,
-        "report_cutoff": 30,
-        "report_host_scope": "all",
+        "report_cutoff": 0,
+        "report_host_scope": "per-host",
     }
-    assert value["source"]["member"] == "profile/raw/uprof/report.csv"
+    assert value["source"]["reports"][0]["member"] == "profile/raw/uprof/reports/node-a.csv"
     assert value["ranks_per_node"] == [{"host": "node-a", "ranks": 2}]
     document = json.loads(summary.read_text())
     assert document["profile_duration_sec"] == "12.340"
     assert document["source_hotspots"] == 2
     rendered = markdown.read_text()
     assert "slow\\|function" in rendered
-    assert "complete session is retained" in rendered
+    assert "complete reports from every host" in rendered
+
+
+def test_recording_aggregates_complete_host_reports(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    report_root = run_dir / "profile/raw/uprof/reports"
+    report_root.mkdir(parents=True)
+    for host in ("node-a", "node-b"):
+        (report_root / f"{host}.csv").write_text(
+            _report(host=host, report_scope=host, cutoff="0")
+        )
+
+    fragment = record_uprof_hotspots(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        report_root=report_root,
+        expected_hosts=2,
+        expected_ranks=4,
+        summary_path=run_dir / "results/uprof-summary.json",
+        markdown_path=run_dir / "results/uprof-summary.md",
+    )
+
+    value = json.loads(json.loads(fragment.read_text())["value"])
+    assert value["mpi_ranks"] == 4
+    assert value["mpi_hosts"] == 2
+    assert value["ranks_per_node"] == [
+        {"host": "node-a", "ranks": 2},
+        {"host": "node-b", "ranks": 2},
+    ]
+    assert value["hotspots"][0]["function"] == "fast"
+    assert value["hotspots"][0]["cpu_time_sec"] == "3.0000"
+    assert len(value["source"]["reports"]) == 2

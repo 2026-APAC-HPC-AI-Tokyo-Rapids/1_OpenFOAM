@@ -367,7 +367,7 @@ jobs:
       - name: AMD uProf結果を構造化
         if: success() && inputs.profile
         run: |
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report "${RUN_DIR}/profile/raw/uprof/report.csv" --summary "${RUN_DIR}/results/uprof-summary.json" --markdown "${RUN_DIR}/results/uprof-summary.md"
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report-root "${RUN_DIR}/profile/raw/uprof/reports" --expected-hosts '${{ inputs.node_count }}' --expected-ranks '${{ needs.select-build.outputs.ranks }}' --summary "${RUN_DIR}/results/uprof-summary.json" --markdown "${RUN_DIR}/results/uprof-summary.md"
 
       - name: AMD uProf概要をActionsの概要へ掲載
         if: success() && inputs.profile

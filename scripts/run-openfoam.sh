@@ -263,7 +263,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     uprof_target_argv_file="${RUN_DIR}/control/uprof-target.argv"
     printf '%s\0' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}" > "${uprof_target_argv_file}"
     chmod 0600 "${uprof_target_argv_file}"
-    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" collect --config hotspots -g --mpi --output-dir "${uprof_root}/sessions" "${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions" "${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"
   else
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi
@@ -374,7 +374,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : > "${LOG_DIR}/profile-location.txt"
   if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
     du -sh "${uprof_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
-    sed -n 's/^session=/uprof_session=/p' "${uprof_root}/session.txt" >> "${LOG_DIR}/profile-location.txt"
+    sed 's/^/uprof_/' "${uprof_root}/session.txt" >> "${LOG_DIR}/profile-location.txt"
   else
     vtune_result_dirs=()
     for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*

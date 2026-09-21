@@ -56,7 +56,9 @@ class UProfReport:
     hotspots: tuple[UProfHotspot, ...]
 
 
-def parse_uprof_hotspots(text: str) -> UProfReport:
+def parse_uprof_hotspots(
+    text: str, *, expected_host_scope: str = "all", expected_cutoff: int = 30
+) -> UProfReport:
     """Parse the sectioned report emitted by the pinned uProf 5.3 CLI."""
 
     # uProf 5.3 writes headers such as `"CPU_TIME" (seconds)`, which are not
@@ -85,12 +87,12 @@ def parse_uprof_hotspots(text: str) -> UProfReport:
             "AMD uProf collect command differs from the MPI Hotspots protocol"
         )
     if (
-        not _contains_sequence(report, ("--host", "all"))
+        not _contains_sequence(report, ("--host", expected_host_scope))
         or "--detail" not in report
-        or not _contains_sequence(report, ("--cutoff", "30"))
+        or not _contains_sequence(report, ("--cutoff", str(expected_cutoff)))
     ):
         raise ValueError(
-            "AMD uProf report command differs from the all-host detail protocol"
+            "AMD uProf report command differs from the expected detail protocol"
         )
 
     duration_lexeme = _required(metadata, "Profile Duration:")
@@ -183,7 +185,9 @@ def record_uprof_hotspots(
     *,
     manifest_path: Path,
     runtime_dir: Path,
-    report_path: Path,
+    report_root: Path,
+    expected_hosts: int,
+    expected_ranks: int,
     summary_path: Path,
     markdown_path: Path,
     limit: int = 30,
@@ -192,10 +196,10 @@ def record_uprof_hotspots(
     run_dir = runtime_dir.resolve(strict=True)
     if run_dir != manifest.path.parents[1] or manifest.purpose != "profile":
         raise ValueError("AMD uProf facts require the bound profile run")
-    if limit <= 0:
+    if limit <= 0 or expected_hosts <= 0 or expected_ranks <= 0:
         raise ValueError("AMD uProf summary limit is invalid")
     expected = {
-        report_path: run_dir / "profile/raw/uprof/report.csv",
+        report_root: run_dir / "profile/raw/uprof/reports",
         summary_path: run_dir / "results/uprof-summary.json",
         markdown_path: run_dir / "results/uprof-summary.md",
     }
@@ -204,7 +208,27 @@ def record_uprof_hotspots(
             raise ValueError(
                 "AMD uProf source or output path is outside its fixed run path"
             )
-    parsed = parse_uprof_hotspots(report_path.read_text(encoding="utf-8-sig"))
+    reports = sorted(report_root.glob("*.csv"), key=lambda path: path.name.encode())
+    if len(reports) != expected_hosts:
+        raise ValueError("AMD uProf host report count differs from the scheduler request")
+    parsed_by_host: list[tuple[str, UProfReport, Path]] = []
+    for report_path in reports:
+        host = report_path.stem
+        if re.fullmatch(r"[A-Za-z0-9._-]+", host) is None:
+            raise ValueError("AMD uProf host report has an invalid host name")
+        parsed_host = parse_uprof_hotspots(
+            report_path.read_text(encoding="utf-8-sig"),
+            expected_host_scope=host,
+            expected_cutoff=0,
+        )
+        if parsed_host.mpi_hosts != 1 or parsed_host.ranks_per_node != (
+            (host, parsed_host.mpi_ranks),
+        ):
+            raise ValueError("AMD uProf host report topology is inconsistent")
+        parsed_by_host.append((host, parsed_host, report_path))
+    parsed = _aggregate_host_reports(parsed_by_host)
+    if parsed.mpi_hosts != expected_hosts or parsed.mpi_ranks != expected_ranks:
+        raise ValueError("AMD uProf aggregate topology differs from the protocol")
     value = {
         "schema_version": "openfoam-uprof-profile/v1",
         "tool_version": _VERSION,
@@ -213,8 +237,9 @@ def record_uprof_hotspots(
             "analysis_type": "hotspots",
             "call_stack_sampling": True,
             "mpi": True,
-            "report_host_scope": "all",
-            "report_cutoff": 30,
+            "report_host_scope": "per-host",
+            "report_cutoff": 0,
+            "aggregation": "sum function/module CPU times across complete host reports",
         },
         "profile_duration_lexeme": parsed.duration_lexeme,
         "profile_duration_sec": _decimal_text(parsed.duration_sec),
@@ -224,7 +249,12 @@ def record_uprof_hotspots(
         "ranks_per_node": [
             {"host": host, "ranks": ranks} for host, ranks in parsed.ranks_per_node
         ],
-        "source": _source(report_path, run_dir),
+        "source": {
+            "reports": [
+                {"host": host, **_source(report_path, run_dir)}
+                for host, _, report_path in parsed_by_host
+            ]
+        },
         "hotspots": [item.fact_value() for item in parsed.hotspots],
     }
     summary = _summary(value, parsed.hotspots, limit=limit)
@@ -239,6 +269,52 @@ def record_uprof_hotspots(
     ) as recorder:
         recorder.record(Fact("profile.uprof_hotspots", value))
     return recorder.fragment_path
+
+
+def _aggregate_host_reports(
+    reports: list[tuple[str, UProfReport, Path]],
+) -> UProfReport:
+    targets = {report.target_path for _, report, _ in reports}
+    if len(targets) != 1:
+        raise ValueError("AMD uProf host reports disagree on the target path")
+    totals: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
+    for _, report, _ in reports:
+        for hotspot in report.hotspots:
+            key = (hotspot.function, hotspot.module)
+            cpu_time, total_cpu_time = totals.get(key, (Decimal(0), Decimal(0)))
+            totals[key] = (
+                cpu_time + hotspot.cpu_time_sec,
+                total_cpu_time + hotspot.total_cpu_time_sec,
+            )
+    ordered_totals = sorted(
+        totals.items(),
+        key=lambda item: (-item[1][0], item[0][0].encode(), item[0][1].encode()),
+    )
+    hotspots = tuple(
+        UProfHotspot(
+            report_row,
+            function,
+            module,
+            _decimal_text(cpu_time),
+            _decimal_text(total_cpu_time),
+            cpu_time,
+            total_cpu_time,
+        )
+        for report_row, ((function, module), (cpu_time, total_cpu_time)) in enumerate(
+            ordered_totals, 1
+        )
+    )
+    duration = max(report.duration_sec for _, report, _ in reports)
+    return UProfReport(
+        targets.pop(),
+        f"{_decimal_text(duration)} seconds",
+        duration,
+        sum(report.thread_count for _, report, _ in reports),
+        sum(report.mpi_ranks for _, report, _ in reports),
+        len(reports),
+        tuple((host, report.mpi_ranks) for host, report, _ in reports),
+        hotspots,
+    )
 
 
 def _unique_metadata(records: list[list[str]]) -> dict[str, str]:
@@ -343,7 +419,7 @@ def _markdown(summary: dict[str, object]) -> str:
     lines.extend(
         [
             "",
-            "The table is derived from the validated all-host uProf report. The complete session is retained in the profile artifact.",
+            "The table aggregates validated complete reports from every host. The complete sessions are retained in the profile artifact.",
             "",
         ]
     )

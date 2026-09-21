@@ -398,19 +398,20 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"' in runner
     assert 'LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"' in runner
     assert 'printf \'%s\\0\' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}" > "${uprof_target_argv_file}"' in runner
-    assert '"${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" collect' in runner
+    assert '"${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions"' in runner
     assert '"${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"' in runner
     uprof_launcher = (ROOT / "platforms/aspire2a/exec-uprof.sh").read_text(
         encoding="utf-8"
     )
-    assert 'exec "${uprof_cli}" "$@"' in uprof_launcher
+    assert 'exec "${uprof_cli}" collect --config hotspots -g --mpi' in uprof_launcher
+    assert '--output-dir "${host_session_root}"' in uprof_launcher
     assert "eval" not in uprof_launcher
     uprof_target_launcher = (ROOT / "platforms/aspire2a/exec-uprof-target.c").read_text(encoding="utf-8")
     assert "getdelim(&argument, &argument_capacity, '\\0', input)" in uprof_target_launcher
     assert "execv(target_argv[0], target_argv)" in uprof_target_launcher
     assert "eval" not in uprof_target_launcher
     assert 'if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then' in runner
-    assert 'sed -n \'s/^session=/uprof_session=/p\'' in runner
+    assert 'sed \'s/^/uprof_/\' "${uprof_root}/session.txt"' in runner
     assert 'results/uprof-summary.json' in workflow
     assert 'results/uprof-summary.md' in workflow
     assert 'profile/uprof-summary' not in workflow
