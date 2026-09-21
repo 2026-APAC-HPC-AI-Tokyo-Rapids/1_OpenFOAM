@@ -75,10 +75,21 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
         "120",
         *_imb_command(),
     ]
+    aspire2a_without_preload = [
+        "/opt/cray/pe/pals/bin/mpiexec",
+        "--cpu-bind",
+        "list:" + ":".join(str(cpu) for cpu in range(120)),
+        "-n",
+        "120",
+        "-ppn",
+        "120",
+        *_imb_command(),
+    ]
 
     _validate_imb_argv(genkai, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(gadi, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(aspire2a, _Protocol())  # type: ignore[arg-type]
+    _validate_imb_argv(aspire2a_without_preload, _Protocol())  # type: ignore[arg-type]
 
 
 def test_imb_argv_accepts_previous_aspire_binding_shape() -> None:

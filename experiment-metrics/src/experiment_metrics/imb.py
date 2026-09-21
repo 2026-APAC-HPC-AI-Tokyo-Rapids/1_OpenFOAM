@@ -131,13 +131,13 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
             and launcher[-len(aspire_tail) :] == aspire_tail
         ):
             allowed_launcher = True
-    if len(launcher) == len(basic_launcher) + 3:
+    if not allowed_launcher and len(launcher) == len(basic_launcher) + 3:
         allowed_launcher = (
             launcher[: len(basic_launcher)] == basic_launcher
             and launcher[-3:-1] == ["-genv", "PATH"]
             and bool(launcher[-1])
         )
-    if len(launcher) == len(basic_launcher) + 2:
+    if not allowed_launcher and len(launcher) == len(basic_launcher) + 2:
         allowed_launcher = (
             launcher[1] == "-hosts"
             and bool(launcher[2])
