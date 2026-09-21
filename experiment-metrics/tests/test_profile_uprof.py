@@ -105,13 +105,24 @@ def test_target_launcher_restores_nul_delimited_openfoam_arguments(
     ]
     argv_file = tmp_path / "uprof-target.argv"
     argv_file.write_bytes(b"\0".join(item.encode() for item in arguments) + b"\0")
+    launcher = tmp_path / "exec-uprof-target"
+    subprocess.run(
+        [
+            "cc",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-std=c11",
+            "-o",
+            str(launcher),
+            str(ROOT / "platforms/aspire2a/exec-uprof-target.c"),
+        ],
+        check=True,
+    )
 
     completed = subprocess.run(
-        [
-            "bash",
-            str(ROOT / "platforms/aspire2a/exec-uprof-target.sh"),
-            str(argv_file),
-        ],
+        [str(launcher), str(argv_file)],
         check=True,
         capture_output=True,
     )
