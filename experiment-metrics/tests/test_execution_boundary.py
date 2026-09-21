@@ -415,7 +415,7 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     build = (ROOT / "platforms/aspire2a/build-environment.sh").read_text(encoding="utf-8")
     shared_build = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
     runtime = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
-    assert "aspire2a_toolchain=gnu" in selection
+    assert "aspire2a_toolchain=aocc" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
     assert "aspire2a_cc=gcc" in toolchain
