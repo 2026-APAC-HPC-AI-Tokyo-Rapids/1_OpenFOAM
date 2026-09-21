@@ -113,9 +113,6 @@ jobs:
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, home-lab]
 
-    concurrency:
-      group: genkai-openfoam-build
-
     env:
       BUILD_DIR: /dev/shm/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_ARCHIVE_CACHE_DIR: /home/pj26000080/share/openfoam-build/source-cache

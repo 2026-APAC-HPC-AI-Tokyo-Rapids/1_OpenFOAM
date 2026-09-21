@@ -113,8 +113,6 @@ jobs:
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, home-lab]
-    concurrency:
-      group: aspire2a-openfoam-build
     steps:
       - name: ビルド入力を取得
         uses: actions/checkout@v7
@@ -125,15 +123,17 @@ jobs:
         id: stage
         run: |
           # 非公開source repositoryは、意図的にASPIRE-2A login runnerへ設定したgh認証で取得する。
-          install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
+          source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          install -d -m 0750 "${source_archive_run_dir}"
+          echo "SOURCE_ARCHIVE_RUN_DIR=${source_archive_run_dir}" >> "${GITHUB_ENV}"
           openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
           test "${openfoam_oid}" = "${OPENFOAM_SOURCE_OID}"
           test "${thirdparty_oid}" = "${THIRDPARTY_SOURCE_OID}"
           [[ "${openfoam_oid}" =~ ^[0-9a-f]{40}$ && "${thirdparty_oid}" =~ ^[0-9a-f]{40}$ ]]
-          openfoam_archive="${SOURCE_ARCHIVE_DIR}/${openfoam_oid}.openfoam.tar.gz"
-          thirdparty_archive="${SOURCE_ARCHIVE_DIR}/${thirdparty_oid}.thirdparty.tar.gz"
-          imb_archive="${SOURCE_ARCHIVE_DIR}/${IMB_SOURCE_OID}.imb.tar.gz"
+          openfoam_archive="${source_archive_run_dir}/${openfoam_oid}.openfoam.tar.gz"
+          thirdparty_archive="${source_archive_run_dir}/${thirdparty_oid}.thirdparty.tar.gz"
+          imb_archive="${source_archive_run_dir}/${IMB_SOURCE_OID}.imb.tar.gz"
           gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/tarball/${openfoam_oid}" > "${openfoam_archive}.tmp"
           gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/tarball/${thirdparty_oid}" > "${thirdparty_archive}.tmp"
           gh api "repos/intel/mpi-benchmarks/tarball/${IMB_SOURCE_OID}" > "${imb_archive}.tmp"
@@ -188,6 +188,7 @@ jobs:
         run: |
           if [[ -n "${ASPIRE2A_BUILD_JOB_ID:-}" ]]; then qdel "${ASPIRE2A_BUILD_JOB_ID}" 2>/dev/null || true; fi
           if [[ -n "${ASPIRE2A_BUILD_LOG_DIR:-}" ]]; then rm -rf -- "${ASPIRE2A_BUILD_LOG_DIR:?}"; fi
+          if [[ -n "${SOURCE_ARCHIVE_RUN_DIR:-}" ]]; then rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"; fi
 
   provision:
     name: OpenFOAM実行環境を配備

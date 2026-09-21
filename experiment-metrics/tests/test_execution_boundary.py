@@ -197,6 +197,8 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "OpenFOAMケースのキャッシュを準備" in workflow
     prepare_concurrency = "genkai-openfoam-case-${{ needs.select-build.outputs.experiment_preset }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
     assert prepare_concurrency in workflow
+    assert "group: genkai-openfoam-build\n" not in workflow
+    assert workflow.count("concurrency:") == 1
     assert "build_cache_key: ${{ steps.select.outputs.build_cache_key }}" in workflow
     assert "queue: max" not in workflow
     assert "queue: single" not in workflow
@@ -277,6 +279,10 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
         "gadi-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}"
         in workflow
     )
+    assert "group: gadi-openfoam-build\n" not in workflow
+    assert workflow.count("concurrency:") == 1
+    assert 'source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' in workflow
+    assert 'rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"' in workflow
     assert "openfoam_build" not in workflow
     assert workflow.count("- name: 計測記録を初期化してOpenFOAMを投入") == 1
     assert workflow.count("- name: 計測記録を確定して成果物を梱包") == 1
@@ -349,6 +355,10 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:gadi]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
+    assert "group: aspire2a-openfoam-build\n" not in workflow
+    assert workflow.count("concurrency:") == 1
+    assert 'source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' in workflow
+    assert 'rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"' in workflow
     assert "inputs.run_genkai" in entry
     assert "inputs.run_gadi" in entry
     assert "inputs.run_aspire2a" in entry

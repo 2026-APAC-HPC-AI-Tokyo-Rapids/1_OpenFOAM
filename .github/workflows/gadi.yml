@@ -109,8 +109,6 @@ jobs:
     needs: select-build
     if: needs.select-build.outputs.action == 'build'
     runs-on: [self-hosted, home-lab]
-    concurrency:
-      group: gadi-openfoam-build
     env:
       BUILD_DIR: /tmp/openfoam-build/run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -123,14 +121,16 @@ jobs:
         id: stage
         run: |
           # GITHUB_TOKENでは同じ組織の非公開ソースリポジトリ2件を読めないため、Gadi実行機に設定済みの読み取り専用gh認証でログインノード上のビルド前にソースを配置する。
-          install -d -m 0750 "${SOURCE_ARCHIVE_DIR}"
+          source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          install -d -m 0750 "${source_archive_run_dir}"
+          echo "SOURCE_ARCHIVE_RUN_DIR=${source_archive_run_dir}" >> "${GITHUB_ENV}"
           openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
           test "${openfoam_oid}" = "${OPENFOAM_SOURCE_OID}"
           test "${thirdparty_oid}" = "${THIRDPARTY_SOURCE_OID}"
           [[ "${openfoam_oid}" =~ ^[0-9a-f]{40}$ && "${thirdparty_oid}" =~ ^[0-9a-f]{40}$ ]]
-          openfoam_archive="${SOURCE_ARCHIVE_DIR}/${openfoam_oid}.openfoam.tar.gz"
-          thirdparty_archive="${SOURCE_ARCHIVE_DIR}/${thirdparty_oid}.thirdparty.tar.gz"
+          openfoam_archive="${source_archive_run_dir}/${openfoam_oid}.openfoam.tar.gz"
+          thirdparty_archive="${source_archive_run_dir}/${thirdparty_oid}.thirdparty.tar.gz"
           gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/tarball/${openfoam_oid}" > "${openfoam_archive}.tmp"
           gh api "repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/tarball/${thirdparty_oid}" > "${thirdparty_archive}.tmp"
           mv -f -- "${openfoam_archive}.tmp" "${openfoam_archive}"
@@ -166,7 +166,9 @@ jobs:
 
       - name: OpenFOAMビルド領域を削除
         if: always()
-        run: rm -rf -- "${BUILD_DIR:?}"
+        run: |
+          rm -rf -- "${BUILD_DIR:?}"
+          if [[ -n "${SOURCE_ARCHIVE_RUN_DIR:-}" ]]; then rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"; fi
 
   provision:
     name: OpenFOAM実行環境を配備
