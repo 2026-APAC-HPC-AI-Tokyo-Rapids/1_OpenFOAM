@@ -429,7 +429,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "AOCL_MODULE=" in build
     assert "AOCL_LIBM=${aspire2a_aocl_libm}" in build
     assert "AOCL_LIBMEM=${aspire2a_aocl_libmem}" in build
-    assert 'build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm -Wl,--as-needed"' in build
+    assert 'build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"' in build
+    assert '-lalm -Wl,--as-needed' not in build
     assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
     assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' in runtime
     assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${aspire2a_aocl_libmem}"' in runtime
@@ -438,6 +439,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
     assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
     assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build
+    assert 'grep -Fq "${FOAM_LIBBIN}/libscotchDecomp.so"' in build
+    assert 'ldd -r "${FOAM_LIBBIN}/libfieldFunctionObjects.so"' in build
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
     assert "aspire2a_libfabric_version=" in toolchain
