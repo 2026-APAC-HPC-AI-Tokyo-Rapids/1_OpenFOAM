@@ -151,14 +151,19 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
 
 
 def _is_owned_aspire_preload(value: str) -> bool:
-    """Recognize the single LibMem preload emitted by the ASPIRE adapter."""
+    """Recognize affinity and historical LibMem preloads owned by ASPIRE."""
 
-    name, separator, path = value.partition("=")
-    return (
-        name == "LD_PRELOAD"
-        and separator == "="
-        and Path(path).is_absolute()
-        and Path(path).name == "libaocl-libmem.so"
+    name, separator, paths_value = value.partition("=")
+    if name != "LD_PRELOAD" or separator != "=":
+        return False
+    paths = [Path(item) for item in paths_value.split(":")]
+    if not paths or any(not path.is_absolute() for path in paths):
+        return False
+    kinds = [path.name for path in paths]
+    return kinds in (
+        ["libmpi-rank-affinity.so"],
+        ["libaocl-libmem.so"],
+        ["libmpi-rank-affinity.so", "libaocl-libmem.so"],
     )
 
 

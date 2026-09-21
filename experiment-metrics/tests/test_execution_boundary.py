@@ -365,6 +365,9 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
 def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     workflow = (ROOT / ".github/workflows/aspire2a.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
+    rank_affinity = (ROOT / "platforms/aspire2a/mpi-rank-affinity.c").read_text(
+        encoding="utf-8"
+    )
     runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
@@ -403,8 +406,13 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--local-rank-env PMI_LOCAL_RANK" in wrapper
     assert "--local-size-env PMI_LOCAL_SIZE" in wrapper
     assert '--imb-bin "${imb_bin}"' in wrapper
-    assert "cpu_bind_list=$(seq -s : 0 $(( ranks_per_node - 1 )))" in wrapper
-    assert '--solver-launch-arg --cpu-bind --solver-launch-arg "list:${cpu_bind_list}"' in wrapper
+    assert "cpu_bind_list=" not in wrapper
+    assert "--solver-launch-arg --cpu-bind" not in wrapper
+    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' in wrapper
+    assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
+    assert "int MPI_Init(int *argc, char ***argv)" in rank_affinity
+    assert "int MPI_Init_thread(" in rank_affinity
+    assert "if (status == MPI_SUCCESS) bind_local_rank(1);" in rank_affinity
     assert "--solver-launch-arg --depth" not in wrapper
     assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
@@ -436,7 +444,7 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert '-lalm -Wl,--as-needed' not in build
     assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
     assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' in runtime
-    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${aspire2a_aocl_libmem}"' in runtime
+    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}"' in runtime
     assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert 'grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build

@@ -65,20 +65,18 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     ]
     aspire2a = [
         "/opt/cray/pe/pals/bin/mpiexec",
-        "--cpu-bind",
-        "list:" + ":".join(str(cpu) for cpu in range(120)),
         "--env",
-        "LD_PRELOAD=/opt/aocl/lib/libaocl-libmem.so",
+        "LD_PRELOAD=/var/tmp/openfoam/platforms/aspire2a/libmpi-rank-affinity.so:/opt/aocl/lib/libaocl-libmem.so",
         "-n",
         "120",
         "-ppn",
         "120",
         *_imb_command(),
     ]
-    aspire2a_without_preload = [
+    aspire2a_without_libmem = [
         "/opt/cray/pe/pals/bin/mpiexec",
-        "--cpu-bind",
-        "list:" + ":".join(str(cpu) for cpu in range(120)),
+        "--env",
+        "LD_PRELOAD=/var/tmp/openfoam/platforms/aspire2a/libmpi-rank-affinity.so",
         "-n",
         "120",
         "-ppn",
@@ -89,7 +87,7 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     _validate_imb_argv(genkai, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(gadi, _Protocol())  # type: ignore[arg-type]
     _validate_imb_argv(aspire2a, _Protocol())  # type: ignore[arg-type]
-    _validate_imb_argv(aspire2a_without_preload, _Protocol())  # type: ignore[arg-type]
+    _validate_imb_argv(aspire2a_without_libmem, _Protocol())  # type: ignore[arg-type]
 
 
 def test_imb_argv_accepts_previous_aspire_binding_shape() -> None:
@@ -115,6 +113,10 @@ def test_imb_argv_accepts_previous_aspire_binding_shape() -> None:
         ["--cpu-bind", "list:0:1:2"],
         ["--depth", "2", "--cpu-bind", "depth"],
         ["--env", "LD_PRELOAD=/tmp/libsomething-else.so"],
+        [
+            "--env",
+            "LD_PRELOAD=/tmp/libaocl-libmem.so:/tmp/libmpi-rank-affinity.so",
+        ],
         ["--env", "LD_LIBRARY_PATH=/opt/aocl/lib"],
     ],
 )
