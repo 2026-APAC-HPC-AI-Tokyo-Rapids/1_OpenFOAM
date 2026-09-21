@@ -420,6 +420,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
     assert "aspire2a_cc=gcc" in toolchain
     assert "aspire2a_cxx=g++" in toolchain
+    assert "aspire2a_wm_compiler=Amd" in toolchain
+    assert "aspire2a_wm_compiler=Clang" not in toolchain
     assert "aspire2a_cc=clang" in toolchain
     assert "aspire2a_cxx=clang++" in toolchain
     assert "aspire2a_wm_mplib=CRAY-MPICH" in toolchain
