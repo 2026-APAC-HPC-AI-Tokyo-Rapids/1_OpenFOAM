@@ -52,7 +52,14 @@ if ! cache_valid; then
   fi
   cache_hit=false
   temporary="${cache_dir}.tmp.$$"
-  trap 'rm -rf -- "${temporary:-}"' EXIT
+  cleanup_temporary() {
+    status=$?
+    trap - EXIT
+    if [[ "${status}" -ne 0 && -d "${temporary}/case/logs" ]]; then find "${temporary}/case/logs" -type f -print -exec tail -n 200 {} \; >&2; fi
+    rm -rf -- "${temporary:-}"
+    exit "${status}"
+  }
+  trap cleanup_temporary EXIT
   chmod -R u+w "${cache_dir}" 2>/dev/null || true
   rm -rf -- "${cache_dir}" "${temporary}"
   install -d "${temporary}/case/logs"
