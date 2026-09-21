@@ -355,10 +355,6 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "contains(github.event.head_commit.message, '[cluster:genkai]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:gadi]')" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
-    assert "group: aspire2a-openfoam-build\n" not in workflow
-    assert workflow.count("concurrency:") == 1
-    assert 'source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' in workflow
-    assert 'rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"' in workflow
     assert "inputs.run_genkai" in entry
     assert "inputs.run_gadi" in entry
     assert "inputs.run_aspire2a" in entry
@@ -439,6 +435,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
+    assert "group: aspire2a-openfoam-build\n" not in workflow
+    assert workflow.count("concurrency:") == 1
+    assert 'source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' in workflow
+    assert 'rm -rf -- "${SOURCE_ARCHIVE_RUN_DIR:?}"' in workflow
 
 
 def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
