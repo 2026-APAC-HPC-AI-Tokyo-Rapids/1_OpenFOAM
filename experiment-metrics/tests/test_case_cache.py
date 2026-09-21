@@ -223,6 +223,38 @@ def test_prepare_case_uses_content_and_rank_specific_cache(tmp_path: Path) -> No
     assert "cache_hit=true" in required.stdout
 
 
+def test_prepare_case_reports_tool_log_before_failed_temporary_is_removed(
+    tmp_path: Path,
+) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
+        tmp_path
+    )
+    _executable(check_mesh, "printf '%s\\n' 'decisive checkMesh failure' >&2\nexit 23\n")
+    cache_root = tmp_path / "cache"
+
+    failed = subprocess.run(
+        [
+            SCRIPT,
+            source,
+            tmp_path / "case",
+            decompose_par,
+            check_mesh,
+            archive,
+            definition,
+            sidecar,
+            "4",
+            cache_root,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert failed.returncode == 23
+    assert "checkMesh.log" in failed.stderr
+    assert "decisive checkMesh failure" in failed.stderr
+    assert list(cache_root.glob("*.tmp.*")) == []
+
+
 def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> None:
     source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
         tmp_path
