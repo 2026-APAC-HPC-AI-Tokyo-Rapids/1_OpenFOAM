@@ -29,10 +29,10 @@ source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.conf"
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 module load git/2.39.2
-build_ccache_namespace="aspire2a-${aspire2a_toolchain}"
+build_ccache_namespace="aspire2a-${aspire2a_toolchain}-${aspire2a_mpi_transport}"
 aspire2a_ccache=$(command -v ccache)
 aspire2a_ccache_version=$(ccache --version | sed -n '1s/^ccache version //p')
-export CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}"
+export CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}/${aspire2a_mpi_transport}"
 test -x "${aspire2a_ccache}"
 test -n "${aspire2a_ccache_version}"
 # OpenFOAMは登録処理だけを持つライブラリも--no-as-neededで保持する。
@@ -52,7 +52,7 @@ prepare_build_sources() {
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
   scotch_source_identity=$("${GITHUB_WORKSPACE}/scripts/source-tree-identity.sh" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0")
-  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}")
+  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" --compile-flag "CRAYPE_NETWORK_TARGET=${CRAYPE_NETWORK_TARGET}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "CRAY_MPICH_MODULE=${aspire2a_mpi_module}" --compile-flag "MPI_TRANSPORT=${aspire2a_mpi_transport}" --compile-flag "UCX_VERSION=${aspire2a_ucx_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}")
 }
 
 finish_cluster_build() {
@@ -60,10 +60,16 @@ finish_cluster_build() {
   install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"
   ldd "${FOAM_APPBIN}/simpleFoam" > "${BUILD_DIR}/logs/simplefoam-ldd.log"
   grep -Fq "${aspire2a_aocl_libm}" "${BUILD_DIR}/logs/simplefoam-ldd.log"
+  grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${BUILD_DIR}/logs/simplefoam-ldd.log"
+  for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "${BUILD_DIR}/logs/simplefoam-ldd.log"; done
+  if grep -q 'libfabric[.]so' "${BUILD_DIR}/logs/simplefoam-ldd.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; return 1; fi
   ldd "${FOAM_APPBIN}/decomposePar" > "${BUILD_DIR}/logs/decomposepar-ldd.log"
   if ! grep -Fq "${FOAM_LIBBIN}/libscotchDecomp.so" "${BUILD_DIR}/logs/decomposepar-ldd.log"; then cat "${BUILD_DIR}/logs/decomposepar-ldd.log" >&2; exit 1; fi
   if ldd -r "${FOAM_LIBBIN}/libfieldFunctionObjects.so" > "${BUILD_DIR}/logs/field-function-objects-ldd-r.log" 2>&1 && ! grep -q 'undefined symbol:' "${BUILD_DIR}/logs/field-function-objects-ldd-r.log"; then :; else cat "${BUILD_DIR}/logs/field-function-objects-ldd-r.log" >&2; exit 1; fi
   ldd "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
+  grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
+  for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "${BUILD_DIR}/logs/imb-mpi1-ldd.log"; done
+  if grep -q 'libfabric[.]so' "${BUILD_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'UCX版IMB-MPI1がlibfabricにlinkしています' >&2; return 1; fi
   readelf --dynamic "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-dynamic.log"
   rm -rf -- "${build_tree}/IMB"
 }

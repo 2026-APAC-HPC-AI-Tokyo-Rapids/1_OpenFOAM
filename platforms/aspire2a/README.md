@@ -40,11 +40,11 @@ GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定�
 
 ### Build treeとccache
 
-計算ノードの`/dev/shm`は252 GiBのtmpfsだが`noexec`である。一方、PBSが割り当てる`${TMPDIR}`は実行可能なnode-local overlayであるため、OpenFOAMのbuild treeは`${TMPDIR}/openfoam-build`に置く。`/dev/shm`は実行ファイルを含まないccacheの一次cacheだけに使い、`/dev/shm/ccache-${USER}-aspire2a-gnu`と`/dev/shm/ccache-${USER}-aspire2a-aocc`へtoolchain別に分離する。永続file backendも`scratch`上の`build-cache/ccache/gnu`と`build-cache/ccache/aocc`へ分離し、他クラスタとは共有しない。
+計算ノードの`/dev/shm`は252 GiBのtmpfsだが`noexec`である。一方、PBSが割り当てる`${TMPDIR}`は実行可能なnode-local overlayであるため、OpenFOAMのbuild treeは`${TMPDIR}/openfoam-build`に置く。`/dev/shm`は実行ファイルを含まないccacheの一次cacheだけに使う。cache namespaceは`aspire2a-<toolchain>-<transport>`、永続file backendは`scratch`上の`build-cache/ccache/<toolchain>/<transport>`とし、compilerだけでなくMPI/ABI境界でも分離する。現行GNU/UCX構成ではそれぞれ`/dev/shm/ccache-${USER}-aspire2a-gnu-ucx`と`build-cache/ccache/gnu/ucx`であり、OFI、AOCC、他クラスタのcacheを共有しない。
 
 site moduleにccacheがないため、公式ccache 4.13.6を`~/.local/bin/ccache`へ導入している。公式source archiveのSHA-256は`a7de667ca08cf67c3c8af9f213f6aa701a1188a2b3163fb74483858ce5e79fbb`であり、不足するxxHash 0.8.3はSHA-256 `aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80`へ固定した。計算ノード上のPBS `24959663.pbs101`でRelease buildし、HTTP/Redis backend、test、文書を無効にしたfile-storage対応の最小構成である。source archive、導入script、build logおよびprovenanceは`scratch`の`tools/ccache-4.13.6`と`tools/sources`に保持する。
 
-`~/.config/ccache/ccache.conf`は50 GB上限、圧縮、`reshare = true`だけを共通設定する。永続backendのpathはrepository側がtoolchainに応じて`CCACHE_REMOTE_STORAGE`へ設定する。PBS `24960926.pbs101`では、最初のcompile、node-local hit、一次cacheを空にした後のremote hitを順に検証している。
+`~/.config/ccache/ccache.conf`は50 GB上限、圧縮、`reshare = true`だけを共通設定する。永続backendのpathはrepository側がtoolchainとtransportに応じて`CCACHE_REMOTE_STORAGE`へ設定する。PBS `24960926.pbs101`では、最初のcompile、node-local hit、一次cacheを空にした後のremote hitを順に検証している。OFI時代のGNU cacheを用いたActions `35610069144` / `35619104037`では、cold buildの1:00:11に対してwarm buildは5:27となり、異なる計算ノードから3463 remote hitsを得た。この結果は仕組みの有効性を示すが、UCX標準化後のcacheへ内容をコピーせず、UCX固有namespaceをcold状態から構築する。
 
 ## Projectと資源指定
 
@@ -81,7 +81,11 @@ NSCCのFAQとworkshop資料が推奨する標準構成は`cray-mpich/8.1.15`とO
 
 現在のログインノードと計算ノードでは、告知上の`MPICH_CH4_XPMEM_LMT_MSG_SIZE=NONE`と`MPICH_SMP_SINGLE_COPY_MODE=NONE`はmodule読み込み後も既定設定されない。後続のkernel更新で意図的に解除されたかは公開情報から確定できないため、リポジトリ側で推測して復元しない。サポート対象となるCray MPICH、libfabric、rdma-coreの組合せと現行の既定値はNSCCサービスデスクへ確認する。
 
-`cray-mpich-ucx/8.1.15`は、2ノードの最小`MPI_Init`、`MPI_Barrier`、`MPI_Finalize`診断を正常終了した。ただしNSCCの公開資料から本番サポートを確認できず、PBS `24936979.pbs101`では全rankに`gdr_copy`のbuild時v2.3とload時v2.5の不一致警告が出たため、標準構成へ変更せず、追跡可能な専用commitによる公式workload診断として扱う。
+transportはベンダーやコミュニティの所属、NICのブランドだけでは決めず、公式workloadの数値正当性と安定完走、実際のlinkとrank配置、同一条件の複数runによる性能の順で判断する。OFIは上記SIGBUSによりmulti-nodeの受入条件を満たさない一方、`craype-network-ucx`と`cray-mpich-ucx/8.1.15`を揃えたUCX構成は2/4ノードの公式workloadを完走したため、現環境の標準構成にはUCXを採用する。OFIが将来正常化した場合だけ、同一source、toolchain、rank配置、node数、workloadで複数回比較し、双方が成立すれば高速な方、一方だけ成立すれば成立する方を選ぶ。
+
+UCX実行ではAOCL LibMをlinkするが、AOCL LibMemはpreloadしない。2ノード診断PBS `24882460.pbs101`でLibMemなしのMPI初期化・通信・終了はexit 0、LibMemありではUCX endpoint作成中に`amd_memset`からexit 139となったためである。buildと実行時にはCray MPICH UCX、`libucp`、`libucs`、`libuct`の実linkとlibfabric不在を検査する。
+
+受入証拠はActions `35604759236` / PBS `24972410.pbs101`の2ノード256 ranksと、Actions `35617874675` / PBS `24980854.pbs101`の4ノード512 ranksである。後者は公式parserで149/150 measured iterationsを`VALID`、平均2.909178287342284秒/iteration、標準偏差0.01537712155181442、Cd 0.28404934573921931となり、全4ノードで各128 ranksがlocal rankと同じ一意なCPUへ固定された。IMB 3種は4 MiBまで完走し、4 MiB PingPongは9920.53 MB/s、Allreduceは9.23234 msだった。`gdr_copy`のbuild時v2.3とload時v2.5の不一致、および未使用の`UCX_IB_REG_METHODS`警告は残るが、正当性や完走を損なう事象としては観測されていないためsite stackの警告として追跡する。
 
 ## 検証状況
 
@@ -91,4 +95,4 @@ AMD uProf 5.3.521の1ノードE2EはActions run `35547509496`、PBS job `2478634
 
 同runのall-host reportでは、128 rankのmodule別CPU sampleの合計は142,964.48秒である。OpenFOAMとfiniteVolume、simpleFoamなどsolver側が65,949.49秒（46.13%）、Cray MPICH、libfabric、mlx5、Pstreamなど通信側が52,512.86秒（36.73%）、vDSO、glibcおよびtoolchain runtimeが24,502.13秒（17.14%）であった。個別関数では`GaussSeidelSmoother::smooth`、`lduMatrix::residual`、`lduMatrix::Amul`に加え、Cray MPICHのshared-memory broadcast、`MPIR_Waitall_impl`、`memcpy`および`memset`が上位である。これはsolver内演算・memory accessと通信・同期の両方を改善対象にすべき証拠だが、timer-based Hotspotsだけでmemory bandwidth律速を断定しない。AOCL LibMemの効果は通常benchの同一条件で測定し、必要なら別条件のhardware counter profileで原因を絞る。
 
-2/4ノードの標準構成は上記OFI障害のため未完了である。UCX診断、AOCL導入、AOCCの採否および改善前後の比較は、各条件を分離したcommit、Actions、PBS、公式結果およびartifactを根拠に記録する。
+GNU/UCX基準構成の2/4ノード受入は上記Actionsで完了した。反復計測、2/4ノードuProf、UCX上のAOCC採否および改善前後の比較は、各条件を分離したcommit、Actions、PBS、公式結果およびartifactを根拠に記録する。

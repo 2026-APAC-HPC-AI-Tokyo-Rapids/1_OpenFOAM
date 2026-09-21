@@ -416,7 +416,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--solver-launch-arg --cpu-bind" in wrapper
     assert "--solver-launch-arg depth" in wrapper
     assert "--solver-launch-arg -d" in wrapper
-    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' in wrapper
+    assert 'LD_PRELOAD=${rank_affinity}"' in wrapper
+    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in wrapper
     assert "--bind-rank-placement" in wrapper
     assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
     assert "experiment-metrics/src/experiment_metrics/rank_wrapper.py" in workflow
@@ -431,7 +432,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "__attribute__((constructor))" not in rank_affinity
     assert "--bind-local-rank" in runner
     assert "--solver-launch-arg --depth" not in wrapper
-    assert "grep -q '/opt/cray/pe/mpich/'" in wrapper
+    assert 'grep -Fq "${aspire2a_mpi_library_root}/libmpi_"' in wrapper
+    assert "libucp.so libucs.so libuct.so" in wrapper
+    assert "if grep -q 'libfabric[.]so'" in wrapper
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
@@ -448,6 +451,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     shared_build = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
     runtime = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
     assert "aspire2a_toolchain=gnu" in selection
+    assert "aspire2a_network_module=craype-network-ucx" in selection
+    assert "aspire2a_mpi_module=cray-mpich-ucx/8.1.15" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
     assert "aspire2a_cc=gcc" in toolchain
@@ -456,6 +461,10 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "aspire2a_cxx=clang++" in toolchain
     assert "aspire2a_wm_mplib=CRAY-MPICH" in toolchain
     assert "aspire2a_mpi_launcher=mpiexec" in toolchain
+    assert 'module swap craype-network-ofi "${aspire2a_network_module' in toolchain
+    assert 'module swap cray-mpich "${aspire2a_mpi_module' in toolchain
+    assert "aspire2a_mpi_transport=ucx" in toolchain
+    assert 'test "${CRAYPE_NETWORK_TARGET:' in toolchain
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
@@ -464,21 +473,25 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"' in build
     assert '-lalm -Wl,--as-needed' not in build
     assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
-    assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' in runtime
-    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}"' in runtime
+    assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' not in runtime
+    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${rank_affinity}"' in runtime
+    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in runtime
     assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
-    assert 'grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
-    assert "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" in build
+    assert 'if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
+    assert "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" in build
+    assert "MPI_TRANSPORT=${aspire2a_mpi_transport}" in build
+    assert "UCX_VERSION=${aspire2a_ucx_version}" in build
+    assert "LIBFABRIC_VERSION=" not in build
     assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
     assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build
     assert 'grep -Fq "${FOAM_LIBBIN}/libscotchDecomp.so"' in build
     assert 'ldd -r "${FOAM_LIBBIN}/libfieldFunctionObjects.so"' in build
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
-    assert "aspire2a_libfabric_version=" in toolchain
+    assert "aspire2a_ucx_version=" in toolchain
     assert "build_use_ccache=true" in build
-    assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}"' in build
-    assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}"' in build
+    assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}-${aspire2a_mpi_transport}"' in build
+    assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}/${aspire2a_mpi_transport}"' in build
     assert '--compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}"' in build
     assert '--compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}"' in build
     assert '--compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}"' in build
