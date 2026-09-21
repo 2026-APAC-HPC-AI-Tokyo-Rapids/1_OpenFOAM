@@ -26,6 +26,10 @@ GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定�
 - 1ノード128 coreは`qdev`または`q4`、2・4ノードは`q5`へroutingされる。`q4`はwalltimeが`02:00:01`以上、`qdev`は`02:00:00`以下である。
 - PBSの既定メモリは実行に不足するため、各chunkに`mem=`を必ず指定する。計測ジョブは、完走済みの基準runと同じく1ノードあたり400 GBを要求する。
 
+## 理論上限と実測の境界
+
+[NSCC公式FAQ](https://help.nscc.sg/aspire2a/faqs/)によると、標準計算ノードはEPYC 7713を2 socket、128 physical core搭載する。[AMD公式EPYC 7003 data sheet](https://www.amd.com/content/dam/amd/en/documents/epyc-business-docs/datasheets/amd-epyc-7003-series-product-datasheet.pdf)の7713は、1 socketあたり64 core、base 2.00 GHz、最大boost 3.675 GHz、256 MB L3、8 channel DDR4-3200、理論memory bandwidth 204.8 GB/sである。したがってASPIRE-2A標準ノードのカタログ上限は512 MB L3と409.6 GB/sである。これは全memory channelが定格で動く場合の理論値であり、OpenFOAMの到達可能な帯域や期待性能ではない。現在のHotspotsは時間sampleでありbyte数やfloating-point operation数を計測していないため、理論帯域・理論FLOPSに対する効率はまだ算出しない。その差は、公式workload上で必要なhardware counterを別条件で収集した後に評価する。
+
 ## 記憶領域
 
 - homeは`/home/users/industry/ai-hpc/apacsc14`にあり、共有home filesystem上にある。
