@@ -77,4 +77,6 @@ GNU 1ノードの比較可能な基準系列は、同一build-sidecarを用い�
 
 AMD uProf 5.3.521の1ノードE2EはActions run `35547509496`、PBS job `24786344.pbs101`で完走した。公式結果は`VALID`で、構造化したHotspots要約、完全なraw session、BigQueryメトリクスおよびhome server上のartifactを保持している。通常計測とprofileの性能値は直接比較しない。
 
+同runのall-host reportでは、128 rankのmodule別CPU sampleの合計は142,964.48秒である。OpenFOAMとfiniteVolume、simpleFoamなどsolver側が65,949.49秒（46.13%）、Cray MPICH、libfabric、mlx5、Pstreamなど通信側が52,512.86秒（36.73%）、vDSO、glibcおよびtoolchain runtimeが24,502.13秒（17.14%）であった。個別関数では`GaussSeidelSmoother::smooth`、`lduMatrix::residual`、`lduMatrix::Amul`に加え、Cray MPICHのshared-memory broadcast、`MPIR_Waitall_impl`、`memcpy`および`memset`が上位である。これはsolver内演算・memory accessと通信・同期の両方を改善対象にすべき証拠だが、timer-based Hotspotsだけでmemory bandwidth律速を断定しない。AOCL LibMemの効果は通常benchの同一条件で測定し、必要なら別条件のhardware counter profileで原因を絞る。
+
 2/4ノードの標準構成は上記OFI障害のため未完了である。UCX診断、AOCL導入、AOCCの採否および改善前後の比較は、各条件を分離したcommit、Actions、PBS、公式結果およびartifactを根拠に記録する。
