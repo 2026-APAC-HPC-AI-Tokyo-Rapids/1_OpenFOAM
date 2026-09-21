@@ -466,6 +466,10 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
     assert "aspire2a_libfabric_version=" in toolchain
+    assert "build_use_ccache=true" in build
+    assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}"' in build
+    assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}"' in build
+    assert 'ccache-${USER:?}-${build_ccache_namespace}' in shared_build
 
 
 def test_cluster_steps_use_home_lab_remote_shells() -> None:

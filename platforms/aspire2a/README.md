@@ -38,6 +38,14 @@ GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定�
 - ASPIRE-2A用の正本は`/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a`以下に置き、GenkaiやGadiのbuild、case archive、cache、run directoryと共有しない。
 - login runnerとcompute nodeの間では共有scratch上のrun directoryを境界とする。計算ノードはメトリクス断片だけを書き、終了後にlogin runnerがBigQuery送信とartifact回収を行う。ASPIRE-2A経路は`PBS_JOBFS`を前提にしない。
 
+### Build treeとccache
+
+計算ノードの`/dev/shm`は252 GiBのtmpfsだが`noexec`である。一方、PBSが割り当てる`${TMPDIR}`は実行可能なnode-local overlayであるため、OpenFOAMのbuild treeは`${TMPDIR}/openfoam-build`に置く。`/dev/shm`は実行ファイルを含まないccacheの一次cacheだけに使い、`/dev/shm/ccache-${USER}-aspire2a-gnu`と`/dev/shm/ccache-${USER}-aspire2a-aocc`へtoolchain別に分離する。永続file backendも`scratch`上の`build-cache/ccache/gnu`と`build-cache/ccache/aocc`へ分離し、他クラスタとは共有しない。
+
+site moduleにccacheがないため、公式ccache 4.13.6を`~/.local/bin/ccache`へ導入している。公式source archiveのSHA-256は`a7de667ca08cf67c3c8af9f213f6aa701a1188a2b3163fb74483858ce5e79fbb`であり、不足するxxHash 0.8.3はSHA-256 `aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80`へ固定した。計算ノード上のPBS `24959663.pbs101`でRelease buildし、HTTP/Redis backend、test、文書を無効にしたfile-storage対応の最小構成である。source archive、導入script、build logおよびprovenanceは`scratch`の`tools/ccache-4.13.6`と`tools/sources`に保持する。
+
+`~/.config/ccache/ccache.conf`は50 GB上限、圧縮、`reshare = true`だけを共通設定する。永続backendのpathはrepository側がtoolchainに応じて`CCACHE_REMOTE_STORAGE`へ設定する。PBS `24960926.pbs101`では、最初のcompile、node-local hit、一次cacheを空にした後のremote hitを順に検証している。
+
 ## Projectと資源指定
 
 PBS projectは`59000014`である。通常の計測ジョブは次の資源指定を基準とする。

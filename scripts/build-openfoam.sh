@@ -21,6 +21,7 @@ build_wm_compiler=Icx
 build_wm_mplib=INTELMPI
 build_compile_control=+ccache
 build_use_ccache=true
+build_ccache_namespace="${cluster}"
 # クラスタ別設定は並列数、追加flags、source展開とmodule/記憶領域の差だけを所有する。
 case "${cluster}" in
   genkai)
@@ -54,7 +55,8 @@ export CCACHE_BASEDIR="${build_tree}"
 export CCACHE_CONFIGPATH="${HOME}/.config/ccache/ccache.conf"
 export CCACHE_TEMPDIR="${BUILD_DIR}/ccache-tmp"
 if [[ "${build_use_ccache}" == true ]]; then
-  ccache_local_dir="/dev/shm/ccache-${USER:?}"
+  [[ "${build_ccache_namespace}" =~ ^[A-Za-z0-9._-]+$ ]]
+  ccache_local_dir="/dev/shm/ccache-${USER:?}-${build_ccache_namespace}"
   export CCACHE_DIR="${ccache_local_dir}"
 fi
 

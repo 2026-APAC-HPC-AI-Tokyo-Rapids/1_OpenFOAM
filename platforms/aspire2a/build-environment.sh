@@ -19,8 +19,8 @@ test "$(sha256sum "${IMB_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${IMB_SOURCE_A
 build_parallelism=16
 build_directory_mode=0750
 build_extra_cxxflags="${build_tuning_flags}"
-build_compile_control=
-build_use_ccache=false
+build_compile_control=+ccache
+build_use_ccache=true
 openfoam_source_oid="${OPENFOAM_SOURCE_OID}"
 thirdparty_source_oid="${THIRDPARTY_SOURCE_OID}"
 openfoam_source_algorithm=sha1
@@ -29,6 +29,12 @@ source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.conf"
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 module load git/2.39.2
+build_ccache_namespace="aspire2a-${aspire2a_toolchain}"
+aspire2a_ccache=$(command -v ccache)
+aspire2a_ccache_version=$(ccache --version | sed -n '1s/^ccache version //p')
+export CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}"
+test -x "${aspire2a_ccache}"
+test -n "${aspire2a_ccache_version}"
 # OpenFOAMは登録処理だけを持つライブラリも--no-as-neededで保持する。
 # FOAM_EXTRA_LDFLAGSは本体のライブラリより前に入るため、ここでas-neededへ戻さない。
 build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"
@@ -46,7 +52,7 @@ prepare_build_sources() {
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
   scotch_source_identity=$(find "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
-  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}")
+  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "LIBFABRIC_VERSION=${aspire2a_libfabric_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}")
 }
 
 finish_cluster_build() {
