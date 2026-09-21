@@ -29,7 +29,9 @@ source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.conf"
 source "${GITHUB_WORKSPACE}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 module load git/2.39.2
-build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm -Wl,--as-needed"
+# OpenFOAMは登録処理だけを持つライブラリも--no-as-neededで保持する。
+# FOAM_EXTRA_LDFLAGSは本体のライブラリより前に入るため、ここでas-neededへ戻さない。
+build_extra_ldflags="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"
 build_cc=${aspire2a_cc}
 build_cxx=${aspire2a_cxx}
 build_mpi_launcher=${aspire2a_mpi_launcher}
@@ -54,6 +56,9 @@ finish_cluster_build() {
   grep -Fq "${aspire2a_aocl_libm}" "${BUILD_DIR}/logs/simplefoam-ldd.log"
   grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${BUILD_DIR}/logs/simplefoam-ldd.log"
   if grep -q 'libfabric[.]so' "${BUILD_DIR}/logs/simplefoam-ldd.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; return 1; fi
+  ldd "${FOAM_APPBIN}/decomposePar" > "${BUILD_DIR}/logs/decomposepar-ldd.log"
+  if ! grep -Fq "${FOAM_LIBBIN}/libscotchDecomp.so" "${BUILD_DIR}/logs/decomposepar-ldd.log"; then cat "${BUILD_DIR}/logs/decomposepar-ldd.log" >&2; return 1; fi
+  if ldd -r "${FOAM_LIBBIN}/libfieldFunctionObjects.so" > "${BUILD_DIR}/logs/field-function-objects-ldd-r.log" 2>&1 && ! grep -q 'undefined symbol:' "${BUILD_DIR}/logs/field-function-objects-ldd-r.log"; then :; else cat "${BUILD_DIR}/logs/field-function-objects-ldd-r.log" >&2; return 1; fi
   ldd "${FOAM_APPBIN}/IMB-MPI1" > "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
   grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${BUILD_DIR}/logs/imb-mpi1-ldd.log"
   if grep -q 'libfabric[.]so' "${BUILD_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'UCX版IMB-MPI1がlibfabricにlinkしています' >&2; return 1; fi
