@@ -39,6 +39,23 @@ FVOPS = cells / average_seconds_per_iteration
 
 ステップ間標準偏差と、同一条件を複数回実行したときのrun間ばらつきは別物である。run間の分布は、同じ条件の複数runをBigQueryで集計して求める。
 
+## Connected Sheetsの比較ビュー
+
+BigQueryの比較用正本は、HPC-OpenFOAM BigQuery Connected Sheetである。BigQuery接続のdata sourceを持つ`openfoam_metrics`（sheet ID `679850649`）、その抽出結果を保持する`extraction`（sheet ID `302801506`）、比較表の`table_view`（sheet ID `0`）の3タブで構成する。
+
+data source queryは、既存のrun/key/value契約を保ったまま、ASPIRE-2Aのツールチェーン表示に必要な`build.provenance`を抽出対象に含める。`table_view`は次の27列をこの順序で表示する。
+
+```text
+Run, Started (UTC), Mode, Profile, Cluster, Toolchain, Compiler, MPI, AOCL,
+Profile Tool, Nodes, Ranks, PPN, Transport, Config, Source, Workload,
+Solver (s), Official sec/step, FVOPS trim (M), Pipeline (s), Run elapsed (s),
+Max RSS (GiB), PingPong 4MiB (MB/s), Allreduce 4MiB (ms), Result, Job ID
+```
+
+`Toolchain`、`Compiler`、`MPI`、`AOCL`は`build.provenance`から取得し、profile条件は`env.OPENFOAM_PROFILE_MODE`または`scheduler.request`から取得する。`Official sec/step`は現行schemaの`average_wall_clock_seconds_per_iteration`を優先し、旧runの`seconds_per_step`へフォールバックする。既存のGenkai/Gadi行、数式、列順、書式を維持し、シート固有の派生値をBigQueryへ重複保存しない。
+
+Connected Sheetsの更新に用いるOAuth client、ADCおよびaccess tokenはリポジトリ外で管理し、計算ノードやartifactへ渡さない。更新後はdata source refreshの成功、27列の数式と書式、既存クラスタの行、および代表的なASPIRE-2A runからartifactまでの追跡可能性を再確認する。
+
 ## 追加する情報
 
 ### 空力係数の時系列
