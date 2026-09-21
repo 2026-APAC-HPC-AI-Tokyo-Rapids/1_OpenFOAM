@@ -392,7 +392,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
-    assert '"${solver_launch[@]}" /usr/bin/bash "${OPENFOAM_UPROF_PATH}" collect' in runner
+    assert 'OPENFOAM_UPROF_PATH="${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin"' in runner
+    assert 'export LD_LIBRARY_PATH="${AMDUPROF_ROOT}/bin${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"' in runner
+    assert '"${solver_launch[@]}" "${OPENFOAM_UPROF_PATH}" collect' in runner
+    assert '/usr/bin/bash "${OPENFOAM_UPROF_PATH}"' not in runner
     assert 'if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then' in runner
     assert 'sed -n \'s/^session=/uprof_session=/p\'' in runner
     assert 'results/uprof-summary.json' in workflow
