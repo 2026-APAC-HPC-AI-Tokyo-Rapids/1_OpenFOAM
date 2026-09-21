@@ -215,7 +215,7 @@ jobs:
           platforms/aspire2a/provision-openfoam-runtime.sh "${archive}" "${sidecar}" "${provision_dir}"
           install -m 0644 "${sidecar}" "${provision_dir}/control/build-sidecar.json"
           install -m 0755 scripts/run-openfoam.sh scripts/prepare-openfoam-case.sh scripts/check-openfoam-case-cache.sh scripts/archive-paraview-case.sh scripts/finalize-paraview-case.sh "${provision_dir}/scripts/"
-          install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/exec-uprof.sh platforms/aspire2a/export-uprof.sh "${provision_dir}/platforms/aspire2a/"
+          install -m 0755 platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/wait-pbs-job.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-rank-context.sh platforms/aspire2a/collect-rank-placement.sh platforms/aspire2a/exec-uprof.sh platforms/aspire2a/exec-uprof-target.sh platforms/aspire2a/export-uprof.sh "${provision_dir}/platforms/aspire2a/"
           install -m 0644 platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh "${provision_dir}/platforms/aspire2a/"
           source platforms/aspire2a/toolchain.conf
           source platforms/aspire2a/toolchain.sh

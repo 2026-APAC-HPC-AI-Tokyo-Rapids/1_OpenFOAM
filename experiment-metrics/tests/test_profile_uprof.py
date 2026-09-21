@@ -87,6 +87,40 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
     assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in arguments]
 
 
+def test_target_launcher_restores_nul_delimited_openfoam_arguments(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "simpleFoam"
+    target.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
+    target.chmod(0o755)
+    arguments = [
+        str(target),
+        "-parallel",
+        "-fileHandler",
+        "uncollated",
+        "-hostRoots",
+        '((".*" "/var/tmp/openfoam case"))',
+        "-ioRanks",
+        "(0 128 256 384)",
+    ]
+    argv_file = tmp_path / "uprof-target.argv"
+    argv_file.write_bytes(b"\0".join(item.encode() for item in arguments) + b"\0")
+
+    completed = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "platforms/aspire2a/exec-uprof-target.sh"),
+            str(argv_file),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    assert completed.stdout.split(b"\0")[:-1] == [
+        item.encode() for item in arguments[1:]
+    ]
+
+
 def test_parser_validates_mpi_protocol_and_preserves_lexemes() -> None:
     report = parse_uprof_hotspots(_report())
 
