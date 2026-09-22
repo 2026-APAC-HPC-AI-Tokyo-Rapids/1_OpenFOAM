@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "使用方法: $0 AMDUPROF_CLI OUTPUT_ROOT" >&2
+if [[ $# -ne 3 ]]; then
+  echo "使用方法: $0 AMDUPROF_CLI OUTPUT_ROOT ANALYSIS" >&2
   exit 64
 fi
 
 uprof_cli=$1
 output_root=$2
+analysis=$3
 [[ "${uprof_cli}" == /* && "${output_root}" == /* ]]
+case "${analysis}" in assess|data_access|hotspots) ;; *) printf '未対応のAMD uProf解析です: %s\n' "${analysis}" >&2; exit 2 ;; esac
 test -x "${uprof_cli}"
 uprof_bin_dir=$(dirname -- "${uprof_cli}")
 export LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
@@ -70,7 +72,9 @@ do
   rank=${report_ranks[${index}]}
   session=${report_sessions[${index}]}
   (
-    "${uprof_cli}" report --input-dir "${session}" --host "${host}" --detail --cutoff 30 > "${output_root}/reports/${host}/rank-${rank}.stdout" 2> "${output_root}/reports/${host}/rank-${rank}.stderr"
+    report_args=(report --input-dir "${session}" --host "${host}" --detail --cutoff 30)
+    if [[ "${analysis}" != hotspots ]]; then report_args+=(--show-event-count); fi
+    "${uprof_cli}" "${report_args[@]}" > "${output_root}/reports/${host}/rank-${rank}.stdout" 2> "${output_root}/reports/${host}/rank-${rank}.stderr"
     test -s "${session}/report.csv"
     install -m 0640 "${session}/report.csv" "${output_root}/reports/${host}/rank-${rank}.csv"
   ) &

@@ -58,6 +58,388 @@ class UProfReport:
     hotspots: tuple[UProfHotspot, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class UProfCounterReport:
+    target_path: str
+    duration_sec: Decimal
+    events: tuple[str, ...]
+    counts: tuple[tuple[str, Decimal], ...]
+    functions: tuple[tuple[str, str, tuple[tuple[str, Decimal], ...]], ...]
+
+
+_COUNTER_EVENTS = {
+    "assess": (
+        "CYCLES_NOT_IN_HALT.USER",
+        "RETIRED_INST.USER",
+        "RETIRED_BR_INST.USER",
+        "RETIRED_BR_INST_MISP.USER",
+        "MISALIGNED_LOADS.USER",
+        "L1_DC_ACCESSES_ALL.USER",
+        "L1_DEMAND_DC_REFILLS_LOCAL.USER",
+        "L1_DEMAND_DC_REFILLS_REMOTE.USER",
+        "L2_CACHE_ACCESS_FROM_L1_DC_MISS.USER",
+    ),
+    "data_access": (
+        "CYCLES_NOT_IN_HALT.USER",
+        "RETIRED_INST.USER",
+        "L1_DEMAND_DC_REFILLS_LOCAL_L2.USER",
+        "L1_DEMAND_DC_REFILLS_LOCAL_CACHE.USER",
+        "MISALIGNED_LOADS.USER",
+        "L1_DEMAND_DC_REFILLS_EXTERNAL_CACHE_LOCAL.USER",
+        "L1_DC_ACCESSES_ALL.USER",
+        "L1_DEMAND_DC_REFILLS_LOCAL_DRAM.USER",
+        "L1_DEMAND_DC_REFILLS_EXTERNAL_CACHE_REMOTE.USER",
+        "L1_DEMAND_DC_REFILLS_REMOTE_DRAM.USER",
+        "L2_CACHE_ACCESS_FROM_L1_DC_MISS.USER",
+        "L2_DTLB_MISSES.USER",
+        "L1_DTLB_MISSES.USER",
+    ),
+}
+
+
+def record_uprof(*, analysis_type: str, **arguments: object) -> Path:
+    if analysis_type == "hotspots":
+        return record_uprof_hotspots(**arguments)
+    return record_uprof_counters(analysis_type=analysis_type, **arguments)
+
+
+def parse_uprof_counters(
+    text: str,
+    *,
+    analysis_type: str,
+    expected_host_scope: str,
+    expected_cutoff: int = 30,
+) -> UProfCounterReport:
+    expected_events = _COUNTER_EVENTS.get(analysis_type)
+    if expected_events is None:
+        raise ValueError("AMD uProf counter analysis type is invalid")
+    try:
+        records = list(csv.reader(text.splitlines()))
+    except csv.Error as error:
+        raise ValueError("AMD uProf counter report is malformed") from error
+    if not records or [f"AMD uProf (Version:{_VERSION})"] not in records:
+        raise ValueError("AMD uProf report version is not the pinned 5.3.521.0")
+    metadata = _unique_metadata(records)
+    expected_session = (
+        "Assess Performance" if analysis_type == "assess" else "Investigate Data Access"
+    )
+    if metadata.get("Profile Session Type:") != expected_session:
+        raise ValueError("AMD uProf counter session type differs")
+    if metadata.get("Call Stack Sampling:") != "False":
+        raise ValueError("AMD uProf counter session unexpectedly collected call stacks")
+    collect = shlex.split(_required(metadata, "Collect Command:"))
+    report = shlex.split(_required(metadata, "Report Command:"))
+    if not _contains_sequence(collect, ("--config", analysis_type)):
+        raise ValueError("AMD uProf collect command differs from the counter protocol")
+    if (
+        not _contains_sequence(report, ("--host", expected_host_scope))
+        or "--show-event-count" not in report
+        or "--detail" not in report
+        or not _contains_sequence(report, ("--cutoff", str(expected_cutoff)))
+    ):
+        raise ValueError("AMD uProf report command differs from the counter protocol")
+    monitored = tuple(
+        row[1].split(" (PMC", 1)[0]
+        for row in records
+        if len(row) >= 2 and row[0] == "" and " (PMCx" in row[1]
+    )
+    if monitored != expected_events:
+        raise ValueError("AMD uProf monitored events differ from the pinned protocol")
+    duration = _required(metadata, "Profile Duration:")
+    if not duration.endswith(" seconds"):
+        raise ValueError("AMD uProf profile duration unit is invalid")
+    counts = _counter_section(records, "PROCESS", expected_events)
+    functions = _counter_functions(records, expected_events)
+    return UProfCounterReport(
+        _required(metadata, "Target Path:"),
+        _decimal(duration.removesuffix(" seconds")),
+        expected_events,
+        tuple(counts.items()),
+        functions,
+    )
+
+
+def record_uprof_counters(
+    *,
+    manifest_path: Path,
+    runtime_dir: Path,
+    report_root: Path,
+    expected_hosts: int,
+    expected_ranks: int,
+    profile_rank_stride: int,
+    analysis_type: str,
+    summary_path: Path,
+    markdown_path: Path,
+    limit: int = 30,
+) -> Path:
+    manifest = RunManifest.load(manifest_path)
+    run_dir = runtime_dir.resolve(strict=True)
+    if run_dir != manifest.path.parents[1] or manifest.purpose != "profile":
+        raise ValueError("AMD uProf facts require the bound profile run")
+    expected_paths = {
+        report_root: run_dir / "profile/raw/uprof/reports",
+        summary_path: run_dir / "results/uprof-summary.json",
+        markdown_path: run_dir / "results/uprof-summary.md",
+    }
+    for supplied, required in expected_paths.items():
+        if supplied.resolve() != required.resolve():
+            raise ValueError(
+                "AMD uProf source or output path is outside its fixed run path"
+            )
+    reports = sorted(
+        report_root.glob("*/rank-*.csv"), key=lambda path: path.as_posix().encode()
+    )
+    if (
+        expected_hosts <= 0
+        or expected_ranks <= 0
+        or expected_ranks % expected_hosts != 0
+        or profile_rank_stride <= 0
+    ):
+        raise ValueError("AMD uProf application topology is invalid")
+    ranks_per_host = expected_ranks // expected_hosts
+    if ranks_per_host % profile_rank_stride != 0:
+        raise ValueError("AMD uProf profile rank stride differs from the protocol")
+    expected_rank_set = {
+        host_rank + local_rank
+        for host_rank in range(0, expected_ranks, ranks_per_host)
+        for local_rank in range(0, ranks_per_host, profile_rank_stride)
+    }
+    if len(reports) != len(expected_rank_set):
+        raise ValueError(
+            "AMD uProf rank report count differs from the scheduler request"
+        )
+    parsed: list[tuple[str, int, UProfCounterReport, Path]] = []
+    seen: set[int] = set()
+    for path in reports:
+        host = path.parent.name
+        match = re.fullmatch(r"rank-([0-9]+)[.]csv", path.name)
+        if re.fullmatch(r"[A-Za-z0-9._-]+", host) is None or match is None:
+            raise ValueError("AMD uProf counter report path is invalid")
+        rank = int(match.group(1))
+        if rank in seen:
+            raise ValueError("AMD uProf counter report repeats a global rank")
+        seen.add(rank)
+        parsed.append(
+            (
+                host,
+                rank,
+                parse_uprof_counters(
+                    path.read_text(encoding="utf-8-sig"),
+                    analysis_type=analysis_type,
+                    expected_host_scope=host,
+                ),
+                path,
+            )
+        )
+    if seen != expected_rank_set:
+        raise ValueError(
+            "AMD uProf rank reports differ from the NUMA sampling protocol"
+        )
+    targets = {item.target_path for _, _, item, _ in parsed}
+    events = {item.events for _, _, item, _ in parsed}
+    if len(targets) != 1 or len(events) != 1:
+        raise ValueError("AMD uProf rank counter reports disagree")
+    totals = {event: Decimal(0) for event in next(iter(events))}
+    function_totals: dict[tuple[str, str], dict[str, Decimal]] = {}
+    for _, _, item, _ in parsed:
+        for event, count in item.counts:
+            totals[event] += count
+        for function, module, event_counts in item.functions:
+            aggregate = function_totals.setdefault(
+                (function, module), {event: Decimal(0) for event in totals}
+            )
+            for event, count in event_counts:
+                aggregate[event] += count
+    cycles = totals["CYCLES_NOT_IN_HALT.USER"]
+    instructions = totals["RETIRED_INST.USER"]
+    l1_accesses = totals["L1_DC_ACCESSES_ALL.USER"]
+    derived = {
+        "ipc": _ratio(instructions, cycles),
+        "l2_accesses_per_l1_data_access": _ratio(
+            totals["L2_CACHE_ACCESS_FROM_L1_DC_MISS.USER"], l1_accesses
+        ),
+        "misaligned_loads_per_l1_data_access": _ratio(
+            totals["MISALIGNED_LOADS.USER"], l1_accesses
+        ),
+    }
+    if analysis_type == "assess":
+        refills = (
+            totals["L1_DEMAND_DC_REFILLS_LOCAL.USER"]
+            + totals["L1_DEMAND_DC_REFILLS_REMOTE.USER"]
+        )
+        derived.update(
+            {
+                "branch_mispredict_rate": _ratio(
+                    totals["RETIRED_BR_INST_MISP.USER"], totals["RETIRED_BR_INST.USER"]
+                ),
+                "remote_refill_share": _ratio(
+                    totals["L1_DEMAND_DC_REFILLS_REMOTE.USER"], refills
+                ),
+                "l1_refills_per_l1_data_access": _ratio(refills, l1_accesses),
+            }
+        )
+    else:
+        refill_events = [
+            event for event in totals if event.startswith("L1_DEMAND_DC_REFILLS_")
+        ]
+        refills = sum((totals[event] for event in refill_events), Decimal(0))
+        remote = (
+            totals["L1_DEMAND_DC_REFILLS_EXTERNAL_CACHE_REMOTE.USER"]
+            + totals["L1_DEMAND_DC_REFILLS_REMOTE_DRAM.USER"]
+        )
+        derived.update(
+            {
+                "remote_refill_share": _ratio(remote, refills),
+                "local_dram_refill_share": _ratio(
+                    totals["L1_DEMAND_DC_REFILLS_LOCAL_DRAM.USER"], refills
+                ),
+                "remote_dram_refill_share": _ratio(
+                    totals["L1_DEMAND_DC_REFILLS_REMOTE_DRAM.USER"], refills
+                ),
+                "l1_dtlb_misses_per_l1_data_access": _ratio(
+                    totals["L1_DTLB_MISSES.USER"], l1_accesses
+                ),
+                "l2_dtlb_misses_per_l1_data_access": _ratio(
+                    totals["L2_DTLB_MISSES.USER"], l1_accesses
+                ),
+            }
+        )
+        for event in refill_events:
+            derived[f"{event.lower()}_share"] = _ratio(totals[event], refills)
+    ordered_functions = sorted(
+        function_totals.items(),
+        key=lambda item: (
+            -item[1]["CYCLES_NOT_IN_HALT.USER"],
+            item[0][0].encode(),
+            item[0][1].encode(),
+        ),
+    )
+    summary = {
+        "schema_version": "openfoam-uprof-counters-summary/v1",
+        "tool_version": _VERSION,
+        "analysis_type": analysis_type,
+        "count_semantics": "estimated event counts reconstructed from event-based sampling intervals",
+        "profiled_mpi_ranks": len(parsed),
+        "mpi_ranks": expected_ranks,
+        "mpi_hosts": expected_hosts,
+        "profile_rank_stride": profile_rank_stride,
+        "aggregate_event_counts": {
+            event: _decimal_text(value) for event, value in totals.items()
+        },
+        "derived_metrics": derived,
+        "top_functions_by_cycles": [
+            {
+                "function": function,
+                "module": module,
+                "event_counts": {
+                    event: _decimal_text(value) for event, value in counts.items()
+                },
+            }
+            for (function, module), counts in ordered_functions[:limit]
+        ],
+        "source_reports": [
+            {"host": host, "rank": rank, **_source(path, run_dir)}
+            for host, rank, _, path in parsed
+        ],
+    }
+    summary_path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    _atomic_text(summary_path, canonical_json(summary) + "\n")
+    _atomic_text(markdown_path, _counter_markdown(summary))
+    return summary_path
+
+
+def _counter_section(
+    records: list[list[str]], label: str, events: tuple[str, ...]
+) -> dict[str, Decimal]:
+    sections = [
+        index
+        for index, row in enumerate(records)
+        if len(row) == 1 and row[0].startswith("ALL PROCESSES (")
+    ]
+    if len(sections) != 1:
+        raise ValueError("AMD uProf counter report lacks one all-processes section")
+    start = sections[0]
+    if start + 2 >= len(records) or records[start + 1] != [label, *events]:
+        raise ValueError("AMD uProf counter report header differs")
+    totals = {event: Decimal(0) for event in events}
+    rows = 0
+    for row in records[start + 2 :]:
+        if not row:
+            break
+        if len(row) != len(events) + 1:
+            raise ValueError("AMD uProf counter process row differs")
+        rows += 1
+        for event, value in zip(events, row[1:], strict=True):
+            totals[event] += _decimal(value)
+    if rows == 0:
+        raise ValueError("AMD uProf counter report contains no process counts")
+    return totals
+
+
+def _counter_functions(
+    records: list[list[str]], events: tuple[str, ...]
+) -> tuple[tuple[str, str, tuple[tuple[str, Decimal], ...]], ...]:
+    sections = [
+        index
+        for index, row in enumerate(records)
+        if len(row) == 1
+        and re.fullmatch(
+            r"[0-9]+ HOTTEST FUNCTIONS \(Sort Event - CYCLES_NOT_IN_HALT[.]USER\)",
+            row[0],
+        )
+    ]
+    if len(sections) != 1:
+        raise ValueError("AMD uProf counter report lacks one hottest-functions section")
+    start = sections[0]
+    if start + 1 >= len(records) or records[start + 1] != [
+        "FUNCTION",
+        *events,
+        "Module",
+    ]:
+        raise ValueError("AMD uProf counter function header differs")
+    functions = []
+    for row in records[start + 2 :]:
+        if not row:
+            break
+        if len(row) != len(events) + 2:
+            raise ValueError("AMD uProf counter function row differs")
+        functions.append(
+            (
+                row[0].strip(),
+                row[-1].strip(),
+                tuple(
+                    (event, _decimal(value))
+                    for event, value in zip(events, row[1:-1], strict=True)
+                ),
+            )
+        )
+    return tuple(functions)
+
+
+def _ratio(numerator: Decimal, denominator: Decimal) -> str | None:
+    return None if denominator == 0 else _decimal_text(numerator / denominator)
+
+
+def _counter_markdown(summary: dict[str, object]) -> str:
+    derived = summary["derived_metrics"]
+    assert isinstance(derived, dict)
+    lines = [
+        f"## AMD uProf {summary['analysis_type']} counters",
+        "",
+        f"- Profiled ranks: {summary['profiled_mpi_ranks']} / {summary['mpi_ranks']} across {summary['mpi_hosts']} hosts",
+        "- Counts: estimated from event-based sampling intervals; sampled ranks are summed without extrapolation",
+        "",
+        "| Derived metric | Value |",
+        "| --- | ---: |",
+    ]
+    lines.extend(
+        f"| {_escape(key)} | {value if value is not None else 'unavailable'} |"
+        for key, value in sorted(derived.items())
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def parse_uprof_hotspots(
     text: str,
     *,
@@ -87,9 +469,7 @@ def parse_uprof_hotspots(
     if not _contains_sequence(collect, ("--config", "hotspots")) or "-g" not in collect:
         raise ValueError("AMD uProf collect command differs from the Hotspots protocol")
     if ("--mpi" in collect) != expect_mpi_session:
-        raise ValueError(
-            "AMD uProf collect command has an unexpected MPI session mode"
-        )
+        raise ValueError("AMD uProf collect command has an unexpected MPI session mode")
     if (
         not _contains_sequence(report, ("--host", expected_host_scope))
         or "--detail" not in report
@@ -113,10 +493,16 @@ def parse_uprof_hotspots(
         )
         ranks_per_node = _parse_mpi_topology(records, mpi_ranks, mpi_hosts)
     else:
-        if any(
-            key in metadata for key in ("Number Of MPI ranks", "Number Of MPI hosts")
-        ) or ["MPI Ranks Per Node"] in records:
-            raise ValueError("AMD uProf per-rank report unexpectedly contains MPI topology")
+        if (
+            any(
+                key in metadata
+                for key in ("Number Of MPI ranks", "Number Of MPI hosts")
+            )
+            or ["MPI Ranks Per Node"] in records
+        ):
+            raise ValueError(
+                "AMD uProf per-rank report unexpectedly contains MPI topology"
+            )
         if expected_host_scope == "all":
             raise ValueError("AMD uProf per-rank report requires an exact host scope")
         mpi_ranks = 1
@@ -225,7 +611,9 @@ def record_uprof_hotspots(
     profiled_ranks_per_host = ranks_per_host // profile_rank_stride
     expected_profiled_ranks = expected_hosts * profiled_ranks_per_host
     if len(reports) != expected_profiled_ranks:
-        raise ValueError("AMD uProf rank report count differs from the scheduler request")
+        raise ValueError(
+            "AMD uProf rank report count differs from the scheduler request"
+        )
     parsed_by_rank: list[tuple[str, int, UProfReport, Path]] = []
     seen_ranks: set[int] = set()
     for report_path in reports:
@@ -252,7 +640,9 @@ def record_uprof_hotspots(
         for local_rank in range(0, ranks_per_host, profile_rank_stride)
     }
     if seen_ranks != expected_rank_set:
-        raise ValueError("AMD uProf rank reports differ from the NUMA sampling protocol")
+        raise ValueError(
+            "AMD uProf rank reports differ from the NUMA sampling protocol"
+        )
     parsed = _aggregate_rank_reports(parsed_by_rank)
     if (
         parsed.mpi_hosts != expected_hosts
@@ -361,7 +751,9 @@ def _aggregate_rank_reports(
 def _parse_mpi_topology(
     records: list[list[str]], mpi_ranks: int, mpi_hosts: int
 ) -> list[tuple[str, int]]:
-    sections = [index for index, row in enumerate(records) if row == ["MPI Ranks Per Node"]]
+    sections = [
+        index for index, row in enumerate(records) if row == ["MPI Ranks Per Node"]
+    ]
     if len(sections) != 1:
         raise ValueError("AMD uProf report must contain one MPI Ranks Per Node section")
     ranks_per_node: list[tuple[str, int]] = []

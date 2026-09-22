@@ -37,6 +37,13 @@ def test_profile_condition_accepts_selected_rank_memory_events(tmp_path) -> None
     ) == (365, "memory-access-core")
 
 
+def test_profile_condition_accepts_uprof_assess(tmp_path) -> None:
+    condition = tmp_path / "profile.json"
+    condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"assess","rank":0}\n', encoding="utf-8")
+
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "assess")
+
+
 @pytest.mark.parametrize(
     "body",
     [

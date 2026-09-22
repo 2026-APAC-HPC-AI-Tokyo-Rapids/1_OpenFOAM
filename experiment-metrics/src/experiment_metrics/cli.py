@@ -28,6 +28,8 @@ def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str]:
     if not isinstance(rank, int) or isinstance(rank, bool) or rank < 0:
         raise ValueError("profile condition rank must be a non-negative integer")
     if analysis not in {
+        "assess",
+        "data_access",
         "hotspots",
         "hpc-performance",
         "memory-access",
@@ -127,7 +129,7 @@ def parser() -> argparse.ArgumentParser:
     submit_pbs.add_argument("--profile-rank", type=int, default=0)
     submit_pbs.add_argument(
         "--profile-analysis",
-        choices=["hotspots", "hpc-performance", "memory-access", "memory-access-core"],
+        choices=["assess", "data_access", "hotspots", "hpc-performance", "memory-access", "memory-access-core"],
         default="hotspots",
     )
 
@@ -254,6 +256,7 @@ def parser() -> argparse.ArgumentParser:
     profile_uprof.add_argument("--expected-hosts", type=int, required=True)
     profile_uprof.add_argument("--expected-ranks", type=int, required=True)
     profile_uprof.add_argument("--uprof-rank-stride", type=int, default=1)
+    profile_uprof.add_argument("--analysis-type", choices=["assess", "data_access", "hotspots"], default="hotspots")
     profile_uprof.add_argument("--summary", type=Path, required=True)
     profile_uprof.add_argument("--markdown", type=Path, required=True)
 
@@ -746,16 +749,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if arguments.command == "record-profile-uprof":
-        from .profile_uprof import record_uprof_hotspots
+        from .profile_uprof import record_uprof
 
         print(
-            record_uprof_hotspots(
+            record_uprof(
                 manifest_path=arguments.manifest,
                 runtime_dir=arguments.runtime_dir,
                 report_root=arguments.report_root,
                 expected_hosts=arguments.expected_hosts,
                 expected_ranks=arguments.expected_ranks,
                 profile_rank_stride=arguments.uprof_rank_stride,
+                analysis_type=arguments.analysis_type,
                 summary_path=arguments.summary,
                 markdown_path=arguments.markdown,
             )

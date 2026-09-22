@@ -45,13 +45,9 @@ def submit_pbs_run(
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
         raise ValueError("a nonzero profile rank requires a profile run")
-    if profile_analysis not in {
-        "hotspots",
-        "hpc-performance",
-        "memory-access",
-        "memory-access-core",
-    }:
-        raise ValueError("unsupported VTune profile analysis")
+    supported_analyses = {"assess", "data_access", "hotspots"} if profile_tool == "uprof" else {"hotspots", "hpc-performance", "memory-access", "memory-access-core"}
+    if profile_analysis not in supported_analyses:
+        raise ValueError(f"unsupported {profile_tool} profile analysis")
     if manifest.purpose != "profile" and profile_analysis != "hotspots":
         raise ValueError("hardware characterization requires a profile run")
     relative = PurePosixPath(pbs_script_repository_path)
@@ -86,6 +82,8 @@ def submit_pbs_run(
         if profile_tool == "vtune":
             environment["OPENFOAM_VTUNE_ANALYSIS"] = profile_analysis
             environment["OPENFOAM_VTUNE_RANK"] = str(profile_rank)
+        else:
+            environment["OPENFOAM_UPROF_ANALYSIS"] = profile_analysis
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")
     exported = ",".join(f"{name}={environment[name]}" for name in sorted(environment))

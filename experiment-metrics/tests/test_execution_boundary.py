@@ -427,7 +427,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
         encoding="utf-8"
     )
     assert "report_parallelism=4" in uprof_exporter
-    assert 'report --input-dir "${session}" --host "${host}" --detail --cutoff 30' in uprof_exporter
+    assert 'report_args=(report --input-dir "${session}" --host "${host}" --detail --cutoff 30)' in uprof_exporter
     uprof_target_launcher = (ROOT / "platforms/aspire2a/exec-uprof-target.c").read_text(encoding="utf-8")
     assert "getdelim(&argument, &argument_capacity, '\\0', input)" in uprof_target_launcher
     assert "execv(target_argv[0], target_argv)" in uprof_target_launcher

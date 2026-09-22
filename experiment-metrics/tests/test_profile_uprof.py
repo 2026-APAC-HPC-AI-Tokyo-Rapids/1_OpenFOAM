@@ -9,7 +9,12 @@ import pytest
 
 from experiment_metrics.cli import main
 from experiment_metrics.manifest import init_run
-from experiment_metrics.profile_uprof import parse_uprof_hotspots, record_uprof_hotspots
+from experiment_metrics.profile_uprof import (
+    parse_uprof_counters,
+    parse_uprof_hotspots,
+    record_uprof,
+    record_uprof_hotspots,
+)
 
 ROOT = Path(__file__).parents[2]
 
@@ -86,6 +91,65 @@ def _rank_report(*, host: str, rank: int) -> str:
     )
 
 
+def _assess_report(*, host: str = "node-a", scale: int = 1) -> str:
+    events = ("CYCLES_NOT_IN_HALT.USER", "RETIRED_INST.USER", "RETIRED_BR_INST.USER", "RETIRED_BR_INST_MISP.USER", "MISALIGNED_LOADS.USER", "L1_DC_ACCESSES_ALL.USER", "L1_DEMAND_DC_REFILLS_LOCAL.USER", "L1_DEMAND_DC_REFILLS_REMOTE.USER", "L2_CACHE_ACCESS_FROM_L1_DC_MISS.USER")
+    monitored = "\n".join(f',"{event} (PMCx001)",100000,0x00,0x00,False,True,False,"fixture"' for event in events)
+    header = ",".join(("PROCESS", *events))
+    function_header = ",".join(("FUNCTION", *events, "Module"))
+    values = [1000, 2000, 200, 10, 2, 500, 80, 20, 100]
+    row = ",".join(("simpleFoam (PID:1)", *(str(value * scale) for value in values)))
+    function_row = ",".join(("Foam::solve", *(str(value * scale) for value in values), "libfiniteVolume.so"))
+    return f'''\
+"AMD uProf (Version:5.3.521.0)"
+PERFORMANCE ANALYSIS REPORT
+
+EXECUTION
+Target Path:,"/opt/OpenFOAM/bin/simpleFoam"
+Collect Command:,"./AMDuProfCLI collect --config assess --output-dir /run/session /opt/OpenFOAM/bin/simpleFoam -parallel"
+Report Command:,"./AMDuProfCLI report --input-dir /run/session --host {host} --detail --cutoff 30 --show-event-count"
+
+PROFILE DETAILS
+Profile Session Type:,"Assess Performance"
+Profile Duration:,"12.000 seconds"
+Call Stack Sampling:,"False"
+
+MONITORED EVENTS
+PMC Events:,Name,Interval,Unitmask,Countmask,Invert Countmask,User,OS,Description
+{monitored}
+
+"30 HOTTEST FUNCTIONS (Sort Event - CYCLES_NOT_IN_HALT.USER)"
+{function_header}
+{function_row}
+
+"ALL PROCESSES (Sort Event - CYCLES_NOT_IN_HALT.USER)"
+{header}
+{row}
+
+'''
+
+
+def test_counter_parser_validates_assess_events() -> None:
+    report = parse_uprof_counters(_assess_report(), analysis_type="assess", expected_host_scope="node-a")
+    assert dict(report.counts)["RETIRED_INST.USER"] == 2000
+    assert report.functions[0][0] == "Foam::solve"
+
+
+def test_counter_recorder_aggregates_sampled_ranks(tmp_path: Path, registry_path: Path, identities: dict[str, object]) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    report_root = run_dir / "profile/raw/uprof/reports/node-a"
+    report_root.mkdir(parents=True)
+    (report_root / "rank-0.csv").write_text(_assess_report(scale=1))
+    (report_root / "rank-16.csv").write_text(_assess_report(scale=2))
+
+    result = record_uprof(manifest_path=manifest, runtime_dir=run_dir, report_root=report_root.parent, expected_hosts=1, expected_ranks=32, profile_rank_stride=16, analysis_type="assess", summary_path=run_dir / "results/uprof-summary.json", markdown_path=run_dir / "results/uprof-summary.md")
+
+    summary = json.loads(result.read_text())
+    assert summary["aggregate_event_counts"]["CYCLES_NOT_IN_HALT.USER"] == "3000"
+    assert summary["derived_metrics"]["ipc"] == "2"
+    assert summary["derived_metrics"]["remote_refill_share"] == "0.2"
+
+
 def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> None:
     cli = tmp_path / "AMDuProfCLI-bin"
     cli.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
@@ -105,6 +169,7 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
             str(ROOT / "platforms/aspire2a/exec-uprof.sh"),
             str(cli),
             str(session_root),
+            "hotspots",
             *arguments,
         ],
         check=True,
@@ -139,6 +204,7 @@ def test_launcher_profiles_only_numa_representative_ranks(tmp_path: Path) -> Non
             str(ROOT / "platforms/aspire2a/exec-uprof.sh"),
             str(cli),
             str(tmp_path / "sessions"),
+            "hotspots",
             str(target),
             "argument",
         ],
@@ -175,6 +241,7 @@ def test_exporter_reports_every_sampled_rank(tmp_path: Path) -> None:
             str(ROOT / "platforms/aspire2a/export-uprof.sh"),
             str(cli),
             str(output_root),
+            "hotspots",
         ],
         check=True,
         env={**os.environ, "OPENFOAM_NODES": "2", "OPENFOAM_MPI_PROCS": "64"},

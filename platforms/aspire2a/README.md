@@ -73,7 +73,11 @@ uProfはsite moduleにない。AMDのdownload pageでEULAへ同意して`AMDuPro
 
 profile workflowはAMD公表MD5 `45437d8bc0b4276a0b78e28d21de23cb`を検証し、初回だけ`tools/amduprof-5.3.521`へ展開する。EULA同意とdownloadはworkflowで自動化しない。回収したsessionは`AMDuProfCLI report --input-dir`の入力として保持し、CSV、構造化JSONおよびActions summaryを再生成可能にする。
 
-最初は権限依存の小さいtimer-based Hotspotsを使用する。login runnerは固定版のreport構造、収集引数、MPI rank/host集計および関数時間を検証し、`profile.uprof_hotspots`としてBigQueryへ送る。検証済みraw sessionと加工済みの要約は別に保存する。IBS、PMC、system-wide、power、OS tracingは別条件のprofileとして、compute node上の権限と実測した問いに応じて追加する。一度のprofileで主要因を混ぜない。
+最初は権限依存の小さいtimer-based Hotspotsを使用する。login runnerは固定版のreport構造、収集引数、MPI rank/host集計および関数時間を検証し、`profile.uprof_hotspots`としてBigQueryへ送る。検証済みraw sessionと加工済みの要約は別に保存する。一度のprofileで主要因を混ぜない。
+
+計算ノード`x1001c6s6b1n1`の短時間診断PBS `25288314.pbs101`では、`kernel.perf_event_paranoid=2`、`kptr_restrict=1`、`nmi_watchdog=1`だった。非rootでcore PMCの`assess`、`cpi`、`data_access`は収集できる。一方、IBSは`perf_event_paranoid <= 1`、`AMDuProfPcm`によるsystem/core/L3/Data FabricとDRAM bandwidth計測は`perf_event_paranoid=0`を要求して失敗した。このため現権限では、`assess`と`data_access`をprofile条件ごとに実行し、NUMA domainを代表するrankのevent countを合算する。event countはevent-based sampling intervalから復元された推定値であり、全rankへ外挿しない。IPC、branch mispredict率、L1 data accessに対するrefill・L2 access・DTLB miss、およびlocal/remote cache・DRAM refill構成をこの値から導出する。IBSの個別load latencyとPCMの実DRAM帯域は、site管理者による権限変更なしには取得できない未観測量として扱う。
+
+MPIの通信・同期・rank間不均衡はuProfのCPU profileへ混ぜない。site moduleにはHPE Cray Perftools 22.04の`perftools-preload`、`perftools-lite-events`等とArm/Linaro Forgeがある。現行binaryはCray MPICH 8.1.15/UCXであるため、まず同じベンダースタックのCrayPATを短時間PBSで検証し、成立後にMPI時間、同期・待ち、load balance、message統計を別のprofile条件で取得する。Forgeは代替手段とする。
 
 ## Cray MPICH transport
 

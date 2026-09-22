@@ -370,13 +370,15 @@ jobs:
           OPENFOAM_NODES: ${{ inputs.node_count }}
           OPENFOAM_MPI_PROCS: ${{ needs.select-build.outputs.ranks }}
         run: |
-          "${PROVISION_DIR}/platforms/aspire2a/export-uprof.sh" "${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin" "${RUN_DIR}/profile/raw/uprof"
+          analysis=$(jq -er '.analysis | select(. == "hotspots" or . == "assess" or . == "data_access")' "${PROVISION_DIR}/benchmark/profile.json")
+          "${PROVISION_DIR}/platforms/aspire2a/export-uprof.sh" "${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin" "${RUN_DIR}/profile/raw/uprof" "${analysis}"
           sed 's/^/uprof_/' "${RUN_DIR}/profile/raw/uprof/session.txt" >> "${RUN_DIR}/logs/profile-location.txt"
 
       - name: AMD uProf結果を構造化
         if: success() && inputs.profile
         run: |
-          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report-root "${RUN_DIR}/profile/raw/uprof/reports" --expected-hosts '${{ inputs.node_count }}' --expected-ranks '${{ needs.select-build.outputs.ranks }}' --uprof-rank-stride 16 --summary "${RUN_DIR}/results/uprof-summary.json" --markdown "${RUN_DIR}/results/uprof-summary.md"
+          analysis=$(jq -er '.analysis | select(. == "hotspots" or . == "assess" or . == "data_access")' "${PROVISION_DIR}/benchmark/profile.json")
+          "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report-root "${RUN_DIR}/profile/raw/uprof/reports" --expected-hosts '${{ inputs.node_count }}' --expected-ranks '${{ needs.select-build.outputs.ranks }}' --uprof-rank-stride 16 --analysis-type "${analysis}" --summary "${RUN_DIR}/results/uprof-summary.json" --markdown "${RUN_DIR}/results/uprof-summary.md"
 
       - name: AMD uProf概要をActionsの概要へ掲載
         if: success() && inputs.profile

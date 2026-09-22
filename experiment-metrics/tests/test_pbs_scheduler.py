@@ -184,3 +184,23 @@ def test_aspire2a_submission_uses_exclusive_full_nodes(
     assert "OPENFOAM_PROFILE_TOOL=uprof" in exported
     assert "OPENFOAM_VTUNE" not in exported
     assert request["profile_tool"] == "uprof"
+
+
+def test_aspire2a_submission_exports_uprof_assessment(tmp_path: Path, identities: dict[str, object]) -> None:
+    profile_identities = json.loads(json.dumps(identities))
+    profile_identities["source_track"]["base_role"] = "profile_base"
+    manifest = init_run(None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile")
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    execution = provision / "platforms/aspire2a/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+
+    outcome = submit_pbs_run(manifest_path=manifest, runtime_dir=run_dir, protocol_path=ASPIRE2A_PROTOCOL, pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs", execution_script=execution, provision_dir=provision, profile_tool="uprof", profile_analysis="assess", qsub_path=launcher, execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"24500000.pbs\n", b""))
+
+    exported = outcome.request_path.read_text()
+    assert "OPENFOAM_UPROF_ANALYSIS=assess" in exported
+    assert "OPENFOAM_VTUNE_ANALYSIS" not in exported
