@@ -4,6 +4,7 @@ workload_definition = "../../benchmark/workload.json"
 
 [variant.bench]
 # Scoring-scale comparison for node-aware domains (4 128).
+# Repeat the fixed condition before any adoption decision.
 nodes = 4
 ranks = 512
 resource_group = "normal"
