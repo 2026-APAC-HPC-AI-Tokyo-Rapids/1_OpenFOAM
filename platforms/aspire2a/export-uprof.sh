@@ -21,6 +21,9 @@ install -d -m 0750 "${output_root}/reports"
 : > "${output_root}/session.txt"
 rank_count=0
 declare -A seen_ranks=()
+report_hosts=()
+report_ranks=()
+report_sessions=()
 for host_root in "${host_roots[@]}"
 do
   host=$(basename -- "${host_root}")
@@ -37,12 +40,36 @@ do
     ((rank_count += 1))
     mapfile -t sessions < <(find "${rank_root}" -mindepth 1 -maxdepth 1 -type d -name 'AMDuProf-*' -print)
     [[ "${#sessions[@]}" -eq 1 ]]
-    session=${sessions[0]}
-    "${uprof_cli}" report --input-dir "${session}" --host "${host}" --detail --cutoff 0 > "${output_root}/reports/${host}/${rank_name}.stdout" 2> "${output_root}/reports/${host}/${rank_name}.stderr"
-    test -s "${session}/report.csv"
-    install -m 0640 "${session}/report.csv" "${output_root}/reports/${host}/${rank_name}.csv"
-    printf 'host=%s rank=%s session=%s\n' "${host}" "${rank}" "$(basename -- "${session}")" >> "${output_root}/session.txt"
+    report_hosts+=("${host}")
+    report_ranks+=("${rank}")
+    report_sessions+=("${sessions[0]}")
   done
 done
 [[ "${rank_count}" -eq "${OPENFOAM_MPI_PROCS}" ]]
 for ((rank = 0; rank < OPENFOAM_MPI_PROCS; rank += 1)); do [[ -n "${seen_ranks[${rank}]:-}" ]]; done
+
+wait_batch() {
+  local status=0
+  local pid
+  for pid in "$@"; do wait "${pid}" || status=$?; done
+  return "${status}"
+}
+
+report_parallelism=16
+report_pids=()
+for index in "${!report_sessions[@]}"
+do
+  host=${report_hosts[${index}]}
+  rank=${report_ranks[${index}]}
+  session=${report_sessions[${index}]}
+  (
+    "${uprof_cli}" report --input-dir "${session}" --host "${host}" --detail --cutoff 0 > "${output_root}/reports/${host}/rank-${rank}.stdout" 2> "${output_root}/reports/${host}/rank-${rank}.stderr"
+    test -s "${session}/report.csv"
+    install -m 0640 "${session}/report.csv" "${output_root}/reports/${host}/rank-${rank}.csv"
+  ) &
+  report_pids+=("$!")
+  if [[ "${#report_pids[@]}" -eq "${report_parallelism}" ]]; then wait_batch "${report_pids[@]}"; report_pids=(); fi
+done
+if [[ "${#report_pids[@]}" -gt 0 ]]; then wait_batch "${report_pids[@]}"; fi
+
+for index in "${!report_sessions[@]}"; do printf 'host=%s rank=%s session=%s\n' "${report_hosts[${index}]}" "${report_ranks[${index}]}" "$(basename -- "${report_sessions[${index}]}")" >> "${output_root}/session.txt"; done
