@@ -55,7 +55,7 @@ wait_batch() {
   return "${status}"
 }
 
-report_parallelism=16
+report_parallelism=4
 report_pids=()
 for index in "${!report_sessions[@]}"
 do

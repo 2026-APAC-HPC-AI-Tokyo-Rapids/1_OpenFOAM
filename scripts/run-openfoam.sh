@@ -282,16 +282,12 @@ fi
 "${METRICS_CLI}" collect-coefficient --case-root "${CASE_DIR}" --output-root "${RESULTS_DIR}" --iterations "${OPENFOAM_ITERATIONS}"
 if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
-  if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
-    "${compute_tools_root}/platforms/aspire2a/export-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}"
-  else
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" != uprof ]]; then
     set +e
     "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
     vtune_export_status=$?
     set -e
     if [[ "${vtune_export_status}" -ne 0 ]]; then printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2; fi
-  fi
 fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && -n "${paraview_collector}" ]]; then
@@ -374,7 +370,8 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : > "${LOG_DIR}/profile-location.txt"
   if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
     du -sh "${uprof_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
-    sed 's/^/uprof_/' "${uprof_root}/session.txt" >> "${LOG_DIR}/profile-location.txt"
+    mapfile -t uprof_sessions < <(find "${uprof_root}/sessions" -type d -name 'AMDuProf-*' -print)
+    printf 'uprof_collected_sessions=%d\n' "${#uprof_sessions[@]}" >> "${LOG_DIR}/profile-location.txt"
   else
     vtune_result_dirs=()
     for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
