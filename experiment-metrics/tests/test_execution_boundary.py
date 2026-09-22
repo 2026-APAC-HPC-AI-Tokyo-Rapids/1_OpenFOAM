@@ -221,6 +221,16 @@ def test_genkai_uploads_metrics_from_login_runner_after_the_job() -> None:
     assert "! -name 'node-*.json'" in workflow
 
 
+def test_genkai_wait_reconnects_in_bounded_slices() -> None:
+    workflow = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
+    wait_script = (ROOT / "platforms/genkai/wait-openfoam-job.sh").read_text(encoding="utf-8")
+
+    assert 'shell: bash\n        run: |\n          while true; do\n            if /opt/actions-runner-shells/genkai-shell --github-shell' in workflow
+    assert 'timeout --foreground 45s pjwait -z "${PJM_JOB_ID}"' in wait_script
+    assert 'exit 75' in wait_script
+    assert '[[ ! -e "${RUN_DIR}/run-success" ]]' in wait_script
+
+
 def test_control_plane_does_not_preflight_files_consumed_by_the_next_command() -> None:
     genkai = (ROOT / ".github/workflows/genkai.yml").read_text(encoding="utf-8")
     gadi = (ROOT / ".github/workflows/gadi.yml").read_text(encoding="utf-8")

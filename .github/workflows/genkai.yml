@@ -315,7 +315,7 @@ jobs:
           if [[ "${purpose}" == profile ]]; then
             control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_vtune.py scripts/allow-vtune-attach.py scripts/exec-profiler.sh scripts/export-vtune-hotspots.sh)
           fi
-          control_plane_files+=(platforms/genkai/prepare-openfoam-case.pjm platforms/genkai/run-openfoam.pjm scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          control_plane_files+=(platforms/genkai/prepare-openfoam-case.pjm platforms/genkai/run-openfoam.pjm platforms/genkai/wait-openfoam-job.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           readarray -t control_plane_files < <(printf '%s\n' "${control_plane_files[@]}" | LC_ALL=C sort -u)
           control_plane_args=()
           for control_plane_file in "${control_plane_files[@]}"; do control_plane_args+=(--control-plane-file "${control_plane_file}"); done
@@ -341,27 +341,16 @@ jobs:
           echo "profile_run_id=${run_id}-${job_id}" >> "${GITHUB_OUTPUT}"
 
       - name: OpenFOAMジョブの終了を待機
+        shell: bash
         run: |
-          # PJM記録はRUN_DIRへ永続化される。ソルバーの標準出力と標準エラーは一つにまとめたまま、スケジューラ診断だけを追跡する。
-          tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" &
-          stream_pid=$!
-          stop_stream() {
-            kill "${stream_pid}" 2>/dev/null || true
-            wait "${stream_pid}" 2>/dev/null || true
-          }
-          trap stop_stream EXIT
-          trap 'exit 130' INT
-          trap 'exit 143' TERM
-
-          pjwait -z "${PJM_JOB_ID}"
-          sleep 1
-          pjwait "${PJM_JOB_ID}"
-          if [[ ! -e "${RUN_DIR}/run-success" ]]; then
-            echo 'OpenFOAMジョブがrun-successを生成しませんでした' >&2
-            tail -n 240 "${RUN_DIR}/logs/${PJM_JOB_ID}.pjm.log" >&2 || true
-            tail -n 240 "${RUN_DIR}/logs/solver.log" >&2 || true
-            exit 1
-          fi
+          while true; do
+            if /opt/actions-runner-shells/genkai-shell --github-shell "${GITHUB_WORKSPACE}/platforms/genkai/wait-openfoam-job.sh"; then
+              break
+            else
+              status=$?
+            fi
+            [[ "${status}" -eq 75 ]] || exit "${status}"
+          done
 
       - name: VTuneホットスポットをActionsの概要へ掲載
         if: success() && inputs.profile
