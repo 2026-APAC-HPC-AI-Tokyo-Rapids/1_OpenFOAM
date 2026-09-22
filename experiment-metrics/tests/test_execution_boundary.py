@@ -392,6 +392,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "platforms/aspire2a/exec-uprof.sh" in workflow
     assert "platforms/aspire2a/exec-uprof-target.c" in workflow
+    assert "scripts/archive-paraview-case.sh" not in workflow
+    assert "scripts/finalize-paraview-case.sh" not in workflow
+    assert "--paraview-collector" not in wrapper
+    assert "--large-output-dir" not in wrapper
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
     assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
