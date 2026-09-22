@@ -11,7 +11,9 @@ mesh_archive=$5
 case "${cluster}" in genkai|gadi|aspire2a) ;; *) exit 64 ;; esac
 
 # identity-onlyではOpenFOAM executableを起動しない。runtime展開やmodule設定も不要。
-identity_output=$("${provision}/scripts/prepare-openfoam-case.sh" "${provision}/benchmark/occDrivAerStaticMesh" - - - "${mesh_archive}" "${provision}/benchmark/workload.json" "${provision}/control/build-sidecar.json" "${subdomains}" "${cache_root}" --identity-only) || exit 2
+prepare_options=(--identity-only)
+if [[ "${cluster}" == aspire2a ]]; then prepare_options+=(--multi-level-ranks-per-node 128); fi
+identity_output=$("${provision}/scripts/prepare-openfoam-case.sh" "${provision}/benchmark/occDrivAerStaticMesh" - - - "${mesh_archive}" "${provision}/benchmark/workload.json" "${provision}/control/build-sidecar.json" "${subdomains}" "${cache_root}" "${prepare_options[@]}") || exit 2
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 [[ "${cache_identity}" =~ ^[0-9a-f]{64}$ ]] || exit 2
 cache_dir="${cache_root}/${cache_identity}"

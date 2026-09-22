@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 9 || $# -gt 10 ]]; then
-  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only]" >&2
+if [[ $# -lt 9 ]]; then
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--multi-level-ranks-per-node RANKS]" >&2
   exit 64
 fi
 
@@ -15,12 +15,29 @@ workload_definition=$6
 build_sidecar=$7
 subdomains=$8
 cache_root=$9
-mode=${10:-}
-case "${mode}" in
-  ''|--require-cache|--identity-only) ;;
-  *) echo "未対応のケース準備モードです: ${mode}" >&2; exit 64 ;;
-esac
+shift 9
+mode=
+multi_level_ranks_per_node=
+while [[ $# -gt 0 ]]
+do
+  case "$1" in
+    --require-cache|--identity-only) [[ -z "${mode}" ]]; mode=$1; shift ;;
+    --multi-level-ranks-per-node) [[ $# -ge 2 && -z "${multi_level_ranks_per_node}" ]]; multi_level_ranks_per_node=$2; shift 2 ;;
+    *) echo "未対応のケース準備引数です: $1" >&2; exit 64 ;;
+  esac
+done
 [[ "${subdomains}" =~ ^[1-9][0-9]*$ ]]
+decomposition_method=scotch
+decomposition_domains=()
+if [[ -n "${multi_level_ranks_per_node}" ]]; then
+  [[ "${multi_level_ranks_per_node}" =~ ^[1-9][0-9]*$ ]]
+  (( subdomains % multi_level_ranks_per_node == 0 ))
+  node_domains=$(( subdomains / multi_level_ranks_per_node ))
+  decomposition_method=multiLevel
+  if (( node_domains == 1 )); then decomposition_domains=("${multi_level_ranks_per_node}"); else decomposition_domains=("${node_domains}" "${multi_level_ranks_per_node}"); fi
+fi
+decomposition_domains_text="(${decomposition_domains[*]})"
+decomposition_domains_json=$(printf '%s\n' "${decomposition_domains[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)')
 
 expected_size=$(jq -er '.mesh.size_bytes' "${workload_definition}")
 expected_md5=$(jq -er '.mesh.md5' "${workload_definition}")
@@ -32,7 +49,7 @@ test "$(sha256sum "${mesh_archive}" | awk '{print $1}')" = "${expected_sha256}"
 script_sha256=$(sha256sum "$0" | awk '{print $1}')
 source_identity=$(cd "${source_case}" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
 prepare_toolchain_identity=$(jq -ecS 'select(.schema_version == "build-sidecar/v1" and ([.runtime_objects[] | select(.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")) | .role] | sort) == ["checkMesh", "decomposePar"]) | {source_commits,compile_flags,precision,label_bits,runtime_objects:[.runtime_objects[] | select(.kind == "shared_library" or (.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")))]}' "${build_sidecar}" | sha256sum | awk '{print $1}')
-cache_identity=$(printf '%s\n' "prepare=${script_sha256}" "toolchain=${prepare_toolchain_identity}" "case=${source_identity}" "mesh=${expected_sha256}" "subdomains=${subdomains}" 'method=scotch' 'fileHandler=uncollated' | sha256sum | awk '{print $1}')
+cache_identity=$(printf '%s\n' "prepare=${script_sha256}" "toolchain=${prepare_toolchain_identity}" "case=${source_identity}" "mesh=${expected_sha256}" "subdomains=${subdomains}" "method=${decomposition_method}" "domains=${decomposition_domains_text}" 'fileHandler=uncollated' | sha256sum | awk '{print $1}')
 cache_dir="${cache_root}/${cache_identity}"
 if [[ "${mode}" == --identity-only ]]; then
   printf 'prepare_script_sha256=%s\ncache_identity=%s\ncache_dir=%s\n' "${script_sha256}" "${cache_identity}" "${cache_dir}"
@@ -68,7 +85,8 @@ if ! cache_valid; then
   cp "${temporary}/case/system/controlDict.noWrite" "${temporary}/case/system/controlDict"
   cp "${temporary}/case/system/fvSolution.fixedIter" "${temporary}/case/system/fvSolution"
   cp -a "${temporary}/case/0.orig" "${temporary}/case/0"
-  sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1${subdomains};/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1scotch;/" "${temporary}/case/system/include/caseDefinition"
+  sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1${subdomains};/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${decomposition_method};/" "${temporary}/case/system/include/caseDefinition"
+  if [[ "${decomposition_method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains %s;\n}\n' "${decomposition_domains_text}" >> "${temporary}/case/system/decomposeParDict"; fi
   tar -xzf "${mesh_archive}" -C "${temporary}/case/constant"
   (
     cd "${temporary}/case"
@@ -76,7 +94,7 @@ if ! cache_valid; then
     "${decompose_par}" -constant -fileHandler uncollated > logs/decomposePar.log 2>&1
   )
   printf '%s\n' "${cache_identity}" > "${temporary}/READY"
-  jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:"scotch",file_handler:"uncollated"}' > "${temporary}/manifest.json"
+  jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" --arg method "${decomposition_method}" --argjson domains "${decomposition_domains_json}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:$method,domains:$domains,file_handler:"uncollated"}' > "${temporary}/manifest.json"
   find "${temporary}/case" -type f -exec chmod a-w {} +
   find "${temporary}/case" -type d -exec chmod a-w {} +
   mv "${temporary}" "${cache_dir}"

@@ -28,6 +28,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, ...]:
         "system/controlDict.noWrite": "endTime 4000;\n",
         "system/fvSolution": "base\n",
         "system/fvSolution.fixedIter": "fixed\n",
+        "system/decomposeParDict": "numberOfSubdomains $nCores;\nmethod $decompositionMethod;\n",
         "system/include/caseDefinition": "nCores 512;\ndecompositionMethod hierarchical;\n",
     }.items():
         path = source / relative
@@ -133,12 +134,15 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     (provision / "benchmark/workload.json").symlink_to(definition)
     (provision / "control/build-sidecar.json").symlink_to(sidecar)
     cache_root = tmp_path / "cache"
-    command = [LOGIN_CHECK, cluster, provision, "4", cache_root, archive]
+    subdomains = "128" if cluster == "aspire2a" else "4"
+    changed_subdomains = "256" if cluster == "aspire2a" else "8"
+    command = [LOGIN_CHECK, cluster, provision, subdomains, cache_root, archive]
     assert subprocess.run(command, capture_output=True).returncode == 75
     assert not counter.exists()
 
     expanded = tmp_path / "expanded" if cluster in {"gadi", "aspire2a"} else cache_root
-    prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, "4", expanded], check=True, capture_output=True, text=True)
+    prepare_options = ["--multi-level-ranks-per-node", "128"] if cluster == "aspire2a" else []
+    prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, subdomains, expanded, *prepare_options], check=True, capture_output=True, text=True)
     cache_dir = Path(next(line.removeprefix("cache_dir=") for line in prepared.stdout.splitlines() if line.startswith("cache_dir=")))
     if cluster in {"gadi", "aspire2a"}:
         archived = cache_root / cache_dir.name
@@ -150,7 +154,7 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     assert str(cache_dir) in hit.stdout
     assert counter.read_text() == hits_before
     # MPI decomposition and toolchain changes never reuse the old READY marker.
-    assert subprocess.run([*command[:3], "8", *command[4:]], capture_output=True).returncode == 75
+    assert subprocess.run([*command[:3], changed_subdomains, *command[4:]], capture_output=True).returncode == 75
     original = sidecar.read_text()
     sidecar.write_text(original.replace("WM_COMPILE_OPTION=Opt", "WM_COMPILE_OPTION=Debug"))
     assert subprocess.run(command, capture_output=True).returncode == 75
@@ -277,6 +281,56 @@ def test_prepare_case_separates_different_subdomain_counts(tmp_path: Path) -> No
             check=True,
         )
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
+
+
+def test_prepare_case_records_node_aware_multilevel_decomposition(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
+        tmp_path
+    )
+    cache_root = tmp_path / "cache"
+    target = tmp_path / "case"
+    subprocess.run(
+        [
+            SCRIPT,
+            source,
+            target,
+            decompose_par,
+            check_mesh,
+            archive,
+            definition,
+            sidecar,
+            "512",
+            cache_root,
+            "--multi-level-ranks-per-node",
+            "128",
+        ],
+        check=True,
+    )
+
+    manifest = json.loads(next(cache_root.glob("*/manifest.json")).read_text())
+    assert manifest["method"] == "multiLevel"
+    assert manifest["domains"] == [4, 128]
+    assert "decompositionMethod multiLevel;" in (
+        target / "system/include/caseDefinition"
+    ).read_text()
+    dictionary = (target / "system/decomposeParDict").read_text()
+    assert "method $decompositionMethod;" in dictionary
+    assert "multiLevelCoeffs" in dictionary
+    assert "domains (4 128);" in dictionary
+
+
+def test_prepare_case_keeps_scotch_and_multilevel_caches_separate(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
+        tmp_path
+    )
+    cache_root = tmp_path / "cache"
+    base = [SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, "128", cache_root]
+    subprocess.run(base, check=True)
+    subprocess.run([*base, "--multi-level-ranks-per-node", "128"], check=True)
+
+    manifests = [json.loads(path.read_text()) for path in cache_root.glob("*/manifest.json")]
+    assert {manifest["method"] for manifest in manifests} == {"scotch", "multiLevel"}
+    assert len(manifests) == 2
 
 
 def test_prepare_case_separates_different_build_toolchains(tmp_path: Path) -> None:

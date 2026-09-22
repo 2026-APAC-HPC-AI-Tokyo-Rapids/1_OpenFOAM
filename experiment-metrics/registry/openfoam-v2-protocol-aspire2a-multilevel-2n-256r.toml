@@ -1,0 +1,19 @@
+[protocol]
+schema_version = "openfoam-v2-run-protocol/v2"
+workload_definition = "../../benchmark/workload.json"
+
+[variant.bench]
+nodes = 2
+ranks = 256
+resource_group = "normal"
+transport_policy = "cray-mpich-ucx"
+transport_environment = {}
+expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "rank_placement", "solver", "minimal_hardware_capture", "network_imb_mpi1"]
+
+[variant.profile]
+nodes = 2
+ranks = 256
+resource_group = "normal"
+transport_policy = "cray-mpich-ucx"
+transport_environment = {}
+expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "profile_warmup", "solver", "minimal_hardware_capture", "profile_hardware_capture", "network_imb_mpi1"]

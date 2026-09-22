@@ -23,7 +23,7 @@ set -eu
 
 decompose_par=$(command -v decomposePar)
 check_mesh=$(command -v checkMesh)
-identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}" --identity-only)
+identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}" --identity-only --multi-level-ranks-per-node 128)
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 archive_dir="${PREPARE_CACHE_ROOT}/${cache_identity}"
 
@@ -33,6 +33,6 @@ if "${PROVISION_DIR}/platforms/aspire2a/archive-openfoam-case.sh" verify "${arch
 fi
 
 expanded_root="${TMPDIR}/openfoam-case-expanded"
-prepare_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${expanded_root}")
+prepare_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${expanded_root}" --multi-level-ranks-per-node 128)
 expanded_cache_dir=$(sed -n 's/^cache_dir=//p' <<< "${prepare_output}")
 "${PROVISION_DIR}/platforms/aspire2a/archive-openfoam-case.sh" create "${expanded_cache_dir}" "${archive_dir}" "${cache_identity}"
