@@ -5,7 +5,7 @@ from experiment_metrics.protocol import RunProtocol
 REGISTRY = Path(__file__).parents[1] / "registry"
 
 
-def test_selected_scotch_presets_are_self_consistent() -> None:
+def test_selected_decomposition_presets_are_self_consistent() -> None:
     expected = {
         "scotch-1n-120r": (1, 120, "shm"),
         "scotch-2n-240r": (2, 240, "shm:ofi"),
@@ -16,6 +16,9 @@ def test_selected_scotch_presets_are_self_consistent() -> None:
         "aspire2a-scotch-1n-128r": (1, 128, "cray-mpich-ucx"),
         "aspire2a-scotch-2n-256r": (2, 256, "cray-mpich-ucx"),
         "aspire2a-scotch-4n-512r": (4, 512, "cray-mpich-ucx"),
+        "aspire2a-multilevel-1n-128r": (1, 128, "cray-mpich-ucx"),
+        "aspire2a-multilevel-2n-256r": (2, 256, "cray-mpich-ucx"),
+        "aspire2a-multilevel-4n-512r": (4, 512, "cray-mpich-ucx"),
     }
 
     for preset, (nodes, ranks, transport) in expected.items():

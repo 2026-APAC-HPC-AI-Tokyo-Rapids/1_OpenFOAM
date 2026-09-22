@@ -49,7 +49,6 @@ done
 [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
 [[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
 [[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
-[[ "${large_output_dir}" == /* ]]
 if [[ -n "${imb_bin}" ]]; then [[ "${imb_bin}" == /* && -x "${imb_bin}" ]]; fi
 for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
 do
@@ -83,6 +82,7 @@ case "${OPENFOAM_RUN_PURPOSE}" in
   *) printf '未対応のOPENFOAM_RUN_PURPOSEです: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
 esac
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
+  [[ "${large_output_dir}" == /* ]]
   : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
   : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
   case "${OPENFOAM_VTUNE_ANALYSIS}" in hotspots|hpc-performance|memory-access|memory-access-core) ;; *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;; esac
@@ -206,13 +206,16 @@ install -d -m 0755 "${SOURCE_DIR}/mesh" "${SOURCE_DIR}/hardware"
 "${METRICS_CLI}" capture-workload --manifest "${RUN_MANIFEST}" --case-root "${CASE_INPUT_DIR}" --definition "${PROVISION_DIR}/benchmark/workload.json" --output-root "${SOURCE_DIR}/workload"
 
 "${METRICS_CLI}" supervisor-mark-pipeline --state "${SUPERVISOR_STATE}" --mark start
+decomposition_method=
+prepare_decomposition_options=()
 case "${PROTOCOL_NAME}" in
-  *-scotch-*) ;;
+  *-scotch-*) decomposition_method=scotch ;;
+  *-multilevel-*) decomposition_method=multiLevel; prepare_decomposition_options=(--multi-level-ranks-per-node "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))") ;;
   *) echo "未対応の領域分割条件です: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
 if [[ -z "${prepared_case_manifest}" ]]; then
   PREPARE_COMMAND=("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${CASE_INPUT_DIR}" "${CASE_DIR}" "${DECOMPOSE_PAR}" "${CHECK_MESH}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_cache_root}")
-  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" "${PREPARE_COMMAND[@]}" --require-cache
+  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR%/*}" "${PREPARE_COMMAND[@]}" --require-cache "${prepare_decomposition_options[@]}"
   cache_dir=$(sed -n 's/^cache_dir=//p' "${LOG_DIR}/case-prepare.log" | tail -n 1)
   [[ "${cache_dir}" == "${case_cache_root}/"* ]]
   case_manifest="${cache_dir}/manifest.json"
@@ -220,12 +223,12 @@ if [[ -z "${prepared_case_manifest}" ]]; then
 else
   case_manifest=${prepared_case_manifest}
   restore_case=false
-  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR}" "${JQ}" -e --argjson number_of_subdomains "${OPENFOAM_MPI_PROCS}" 'select(.schema_version == "openfoam-case-cache/v4" and .number_of_subdomains == $number_of_subdomains)' "${prepared_case_manifest}"
+  stage_at case_prepare "${LOG_DIR}/case-prepare.log" "${CASE_DIR}" "${JQ}" -e --argjson number_of_subdomains "${OPENFOAM_MPI_PROCS}" --arg method "${decomposition_method}" 'select(.schema_version == "openfoam-case-cache/v4" and .number_of_subdomains == $number_of_subdomains and .method == $method)' "${prepared_case_manifest}"
 fi
 cd "${CASE_DIR}"
-sed -E -e 's/^(numberOfSubdomains[[:space:]]+)\$nCores;/\1'"${OPENFOAM_MPI_PROCS}"';/' -e 's/^(method[[:space:]]+)\$decompositionMethod;/\1scotch;/' "${DECOMPOSE_PAR_DICT}" > "${SOURCE_DIR}/mesh/decomposeParDict"
+sed -E -e 's/^(numberOfSubdomains[[:space:]]+)\$nCores;/\1'"${OPENFOAM_MPI_PROCS}"';/' -e 's/^(method[[:space:]]+)\$decompositionMethod;/\1'"${decomposition_method}"';/' "${DECOMPOSE_PAR_DICT}" > "${SOURCE_DIR}/mesh/decomposeParDict"
 grep -Eq "^numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS};$" "${SOURCE_DIR}/mesh/decomposeParDict"
-grep -Eq '^method[[:space:]]+scotch;' "${SOURCE_DIR}/mesh/decomposeParDict"
+grep -Eq "^method[[:space:]]+${decomposition_method};" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"

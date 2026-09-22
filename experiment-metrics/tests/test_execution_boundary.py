@@ -348,7 +348,7 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert "--placement-collector" in wrapper
     assert '"${node_launch[@]}" "${placement_collector}"' in runner
     assert "numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS}" in runner
-    assert "method[[:space:]]+scotch" in runner
+    assert 'decomposition_method=scotch' in runner
     assert "jobfs=100GB" in workflow
     assert '"${PROVISION_DIR}/platforms/gadi/wait-pbs-job.sh" "${job_id}"' in workflow
     assert "uses: ./.github/workflows/gadi.yml" in entry
@@ -396,6 +396,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "scripts/finalize-paraview-case.sh" not in workflow
     assert "--paraview-collector" not in wrapper
     assert "--large-output-dir" not in wrapper
+    assert 'if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then' in runner
+    assert '[[ "${large_output_dir}" == /* ]]' in runner
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
     assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
@@ -448,6 +450,11 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--solver-launch-arg -d" in wrapper
     assert 'LD_PRELOAD=${rank_affinity}"' in wrapper
     assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in wrapper
+    assert "--multi-level-ranks-per-node 128" in wrapper
+    assert "aspire2a-multilevel-1n-128r" in workflow
+    assert "aspire2a-multilevel-2n-256r" in workflow
+    assert "aspire2a-multilevel-4n-512r" in workflow
+    assert '*-multilevel-*) decomposition_method=multiLevel' in runner
     assert "--bind-rank-placement" in wrapper
     assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
     assert "experiment-metrics/src/experiment_metrics/rank_wrapper.py" in workflow
