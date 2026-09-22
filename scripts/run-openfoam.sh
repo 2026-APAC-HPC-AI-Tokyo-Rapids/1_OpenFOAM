@@ -49,7 +49,6 @@ done
 [[ "${job_id}" =~ ^[0-9]+([.][A-Za-z0-9.-]+)?$ ]]
 [[ "${#solver_launch[@]}" -gt 0 && "${solver_launch[0]}" == /* ]]
 [[ "${#node_launch[@]}" -gt 0 && "${node_launch[0]}" == /* ]]
-[[ "${large_output_dir}" == /* ]]
 if [[ -n "${imb_bin}" ]]; then [[ "${imb_bin}" == /* && -x "${imb_bin}" ]]; fi
 for rank_env in "${global_rank_env}" "${local_rank_env}" "${local_size_env}"
 do
@@ -83,6 +82,7 @@ case "${OPENFOAM_RUN_PURPOSE}" in
   *) printf '未対応のOPENFOAM_RUN_PURPOSEです: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
 esac
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
+  [[ "${large_output_dir}" == /* ]]
   : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
   : "${OPENFOAM_VTUNE_ANALYSIS:?scheduler-selected VTune analysis is required}"
   case "${OPENFOAM_VTUNE_ANALYSIS}" in hotspots|hpc-performance|memory-access|memory-access-core) ;; *) printf '未対応のVTune解析です: %s\n' "${OPENFOAM_VTUNE_ANALYSIS}" >&2; exit 2 ;; esac

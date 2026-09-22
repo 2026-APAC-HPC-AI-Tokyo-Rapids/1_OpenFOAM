@@ -396,6 +396,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "scripts/finalize-paraview-case.sh" not in workflow
     assert "--paraview-collector" not in wrapper
     assert "--large-output-dir" not in wrapper
+    assert 'if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then' in runner
+    assert '[[ "${large_output_dir}" == /* ]]' in runner
     assert "--profile-tool uprof" in workflow
     assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
     assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
