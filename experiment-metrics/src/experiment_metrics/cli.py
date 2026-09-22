@@ -253,6 +253,7 @@ def parser() -> argparse.ArgumentParser:
     profile_uprof.add_argument("--report-root", type=Path, required=True)
     profile_uprof.add_argument("--expected-hosts", type=int, required=True)
     profile_uprof.add_argument("--expected-ranks", type=int, required=True)
+    profile_uprof.add_argument("--uprof-rank-stride", type=int, default=1)
     profile_uprof.add_argument("--summary", type=Path, required=True)
     profile_uprof.add_argument("--markdown", type=Path, required=True)
 
@@ -754,6 +755,7 @@ def main(argv: list[str] | None = None) -> int:
                 report_root=arguments.report_root,
                 expected_hosts=arguments.expected_hosts,
                 expected_ranks=arguments.expected_ranks,
+                profile_rank_stride=arguments.uprof_rank_stride,
                 summary_path=arguments.summary,
                 markdown_path=arguments.markdown,
             )

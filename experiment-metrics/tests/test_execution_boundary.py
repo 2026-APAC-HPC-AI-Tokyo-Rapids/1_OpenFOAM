@@ -405,11 +405,13 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     )
     assert 'exec "${uprof_cli}" collect --config hotspots -g --output-dir' in uprof_launcher
     assert '--output-dir "${rank_session_root}"' in uprof_launcher
+    assert "PMI_LOCAL_RANK % profile_rank_stride" in uprof_launcher
     assert "eval" not in uprof_launcher
     uprof_exporter = (ROOT / "platforms/aspire2a/export-uprof.sh").read_text(
         encoding="utf-8"
     )
     assert "report_parallelism=4" in uprof_exporter
+    assert 'report --input-dir "${session}" --host "${host}" --detail --cutoff 30' in uprof_exporter
     uprof_target_launcher = (ROOT / "platforms/aspire2a/exec-uprof-target.c").read_text(encoding="utf-8")
     assert "getdelim(&argument, &argument_capacity, '\\0', input)" in uprof_target_launcher
     assert "execv(target_argv[0], target_argv)" in uprof_target_launcher
@@ -418,6 +420,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '"${compute_tools_root}/platforms/aspire2a/export-uprof.sh"' not in runner
     assert "AMD uProf reportをlogin nodeで生成" in workflow
     assert '"${PROVISION_DIR}/platforms/aspire2a/export-uprof.sh"' in workflow
+    assert "--uprof-rank-stride 16" in workflow
     assert 'results/uprof-summary.json' in workflow
     assert 'results/uprof-summary.md' in workflow
     assert 'profile/uprof-summary' not in workflow

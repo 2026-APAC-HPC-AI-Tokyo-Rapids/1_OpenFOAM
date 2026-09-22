@@ -74,7 +74,7 @@ def _profile_run(
 
 
 def _rank_report(*, host: str, rank: int) -> str:
-    report = _report(ranks="1", host=host, report_scope=host, cutoff="0")
+    report = _report(ranks="1", host=host, report_scope=host, cutoff="30")
     report = report.replace(" -g --mpi --output-dir", " -g --output-dir")
     report = report.replace(
         f'Number Of MPI ranks,"1"\nNumber Of MPI hosts,"1"\n\nMPI Ranks Per Node\n{host},1\n\n',
@@ -109,7 +109,7 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
         ],
         check=True,
         capture_output=True,
-        env={**os.environ, "PMI_RANK": "17"},
+        env={**os.environ, "PMI_RANK": "17", "PMI_LOCAL_RANK": "0"},
     )
 
     host = subprocess.check_output(["hostname"], text=True).strip()
@@ -125,7 +125,33 @@ def test_launcher_preserves_distributed_openfoam_arguments(tmp_path: Path) -> No
     assert completed.stdout.split(b"\0")[:-1] == [item.encode() for item in expected]
 
 
-def test_exporter_reports_every_global_rank(tmp_path: Path) -> None:
+def test_launcher_profiles_only_numa_representative_ranks(tmp_path: Path) -> None:
+    cli = tmp_path / "AMDuProfCLI-bin"
+    cli.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
+    cli.chmod(0o755)
+    target = tmp_path / "target"
+    target.write_text("#!/usr/bin/env bash\nprintf '%s\\0' \"$@\"\n", encoding="utf-8")
+    target.chmod(0o755)
+
+    completed = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "platforms/aspire2a/exec-uprof.sh"),
+            str(cli),
+            str(tmp_path / "sessions"),
+            str(target),
+            "argument",
+        ],
+        check=True,
+        capture_output=True,
+        env={**os.environ, "PMI_RANK": "18", "PMI_LOCAL_RANK": "2"},
+    )
+
+    assert completed.stdout == b"argument\0"
+    assert not (tmp_path / "sessions").exists()
+
+
+def test_exporter_reports_every_sampled_rank(tmp_path: Path) -> None:
     cli = tmp_path / "AMDuProfCLI-bin"
     cli.write_text(
         "#!/usr/bin/env bash\n"
@@ -138,7 +164,7 @@ def test_exporter_reports_every_global_rank(tmp_path: Path) -> None:
     )
     cli.chmod(0o755)
     output_root = tmp_path / "uprof"
-    for rank, host in enumerate(("node-a", "node-a", "node-b", "node-b")):
+    for rank, host in ((0, "node-a"), (16, "node-a"), (32, "node-b"), (48, "node-b")):
         (output_root / "sessions" / host / f"rank-{rank}" / "AMDuProf-test").mkdir(
             parents=True
         )
@@ -151,7 +177,7 @@ def test_exporter_reports_every_global_rank(tmp_path: Path) -> None:
             str(output_root),
         ],
         check=True,
-        env={**os.environ, "OPENFOAM_NODES": "2", "OPENFOAM_MPI_PROCS": "4"},
+        env={**os.environ, "OPENFOAM_NODES": "2", "OPENFOAM_MPI_PROCS": "64"},
     )
 
     assert sorted(
@@ -159,9 +185,9 @@ def test_exporter_reports_every_global_rank(tmp_path: Path) -> None:
         for path in (output_root / "reports").glob("*/rank-*.csv")
     ) == [
         "node-a/rank-0.csv",
-        "node-a/rank-1.csv",
-        "node-b/rank-2.csv",
-        "node-b/rank-3.csv",
+        "node-a/rank-16.csv",
+        "node-b/rank-32.csv",
+        "node-b/rank-48.csv",
     ]
     assert len((output_root / "session.txt").read_text().splitlines()) == 4
 
@@ -272,11 +298,13 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     assert value["tool_version"] == "5.3.521.0"
     assert value["collection"] == {
         "analysis_type": "hotspots",
-        "aggregation": "sum function/module CPU times across complete rank reports",
+        "aggregation": "sum function/module CPU times across profiled ranks without extrapolation",
         "application_mpi": True,
         "call_stack_sampling": True,
-        "report_cutoff": 0,
-        "report_scope": "per-rank",
+        "profile_rank_stride": 1,
+        "rank_selection": "local rank modulo profile rank stride equals zero",
+        "report_cutoff": 30,
+        "report_scope": "local-rank-stride sample",
         "uprof_mpi_session": False,
     }
     assert value["source"]["reports"][0]["member"] == (
@@ -288,7 +316,7 @@ def test_recording_writes_structured_fact_and_bounded_summary(
     assert document["source_hotspots"] == 2
     rendered = markdown.read_text()
     assert "slow\\|function" in rendered
-    assert "complete reports from every MPI rank" in rendered
+    assert "sampled-rank reports without extrapolation" in rendered
 
 
 def test_recording_aggregates_complete_rank_reports(
@@ -326,6 +354,37 @@ def test_recording_aggregates_complete_rank_reports(
     assert len(value["source"]["reports"]) == 4
 
 
+def test_recording_preserves_application_topology_for_sampled_ranks(
+    tmp_path: Path, registry_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = _profile_run(tmp_path, registry_path, identities)
+    run_dir = manifest.parents[1]
+    report_root = run_dir / "profile/raw/uprof/reports/node-a"
+    report_root.mkdir(parents=True)
+    for rank in (0, 16):
+        (report_root / f"rank-{rank}.csv").write_text(
+            _rank_report(host="node-a", rank=rank)
+        )
+
+    fragment = record_uprof_hotspots(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        report_root=report_root.parent,
+        expected_hosts=1,
+        expected_ranks=32,
+        profile_rank_stride=16,
+        summary_path=run_dir / "results/uprof-summary.json",
+        markdown_path=run_dir / "results/uprof-summary.md",
+    )
+
+    value = json.loads(json.loads(fragment.read_text())["value"])
+    assert value["mpi_ranks"] == 32
+    assert value["ranks_per_node"] == [{"host": "node-a", "ranks": 32}]
+    assert value["profiled_mpi_ranks"] == 2
+    assert value["profiled_ranks_per_node"] == [{"host": "node-a", "ranks": 2}]
+    assert value["collection"]["profile_rank_stride"] == 16
+
+
 def test_cli_records_per_rank_reports(
     tmp_path: Path, registry_path: Path, identities: dict[str, object]
 ) -> None:
@@ -349,7 +408,9 @@ def test_cli_records_per_rank_reports(
             "--expected-hosts",
             "1",
             "--expected-ranks",
-            "1",
+            "16",
+            "--uprof-rank-stride",
+            "16",
             "--summary",
             str(run_dir / "results/uprof-summary.json"),
             "--markdown",

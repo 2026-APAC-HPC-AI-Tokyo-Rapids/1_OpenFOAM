@@ -188,6 +188,7 @@ def record_uprof_hotspots(
     report_root: Path,
     expected_hosts: int,
     expected_ranks: int,
+    profile_rank_stride: int = 1,
     summary_path: Path,
     markdown_path: Path,
     limit: int = 30,
@@ -196,7 +197,12 @@ def record_uprof_hotspots(
     run_dir = runtime_dir.resolve(strict=True)
     if run_dir != manifest.path.parents[1] or manifest.purpose != "profile":
         raise ValueError("AMD uProf facts require the bound profile run")
-    if limit <= 0 or expected_hosts <= 0 or expected_ranks <= 0:
+    if (
+        limit <= 0
+        or expected_hosts <= 0
+        or expected_ranks <= 0
+        or profile_rank_stride <= 0
+    ):
         raise ValueError("AMD uProf summary limit is invalid")
     expected = {
         report_root: run_dir / "profile/raw/uprof/reports",
@@ -211,7 +217,14 @@ def record_uprof_hotspots(
     reports = sorted(
         report_root.glob("*/rank-*.csv"), key=lambda path: path.as_posix().encode()
     )
-    if len(reports) != expected_ranks:
+    if expected_ranks % expected_hosts != 0:
+        raise ValueError("AMD uProf application topology differs from the protocol")
+    ranks_per_host = expected_ranks // expected_hosts
+    if ranks_per_host % profile_rank_stride != 0:
+        raise ValueError("AMD uProf profile rank stride differs from the protocol")
+    profiled_ranks_per_host = ranks_per_host // profile_rank_stride
+    expected_profiled_ranks = expected_hosts * profiled_ranks_per_host
+    if len(reports) != expected_profiled_ranks:
         raise ValueError("AMD uProf rank report count differs from the scheduler request")
     parsed_by_rank: list[tuple[str, int, UProfReport, Path]] = []
     seen_ranks: set[int] = set()
@@ -229,19 +242,22 @@ def record_uprof_hotspots(
         parsed_rank = parse_uprof_hotspots(
             report_path.read_text(encoding="utf-8-sig"),
             expected_host_scope=host,
-            expected_cutoff=0,
+            expected_cutoff=30,
             expect_mpi_session=False,
         )
         parsed_by_rank.append((host, rank, parsed_rank, report_path))
-    if seen_ranks != set(range(expected_ranks)):
-        raise ValueError("AMD uProf rank reports are not the complete global rank set")
+    expected_rank_set = {
+        host_rank + local_rank
+        for host_rank in range(0, expected_ranks, ranks_per_host)
+        for local_rank in range(0, ranks_per_host, profile_rank_stride)
+    }
+    if seen_ranks != expected_rank_set:
+        raise ValueError("AMD uProf rank reports differ from the NUMA sampling protocol")
     parsed = _aggregate_rank_reports(parsed_by_rank)
-    ranks_per_host = expected_ranks // expected_hosts
     if (
-        expected_ranks % expected_hosts != 0
-        or parsed.mpi_hosts != expected_hosts
-        or parsed.mpi_ranks != expected_ranks
-        or any(ranks != ranks_per_host for _, ranks in parsed.ranks_per_node)
+        parsed.mpi_hosts != expected_hosts
+        or parsed.mpi_ranks != expected_profiled_ranks
+        or any(ranks != profiled_ranks_per_host for _, ranks in parsed.ranks_per_node)
     ):
         raise ValueError("AMD uProf aggregate topology differs from the protocol")
     value = {
@@ -253,16 +269,22 @@ def record_uprof_hotspots(
             "call_stack_sampling": True,
             "application_mpi": True,
             "uprof_mpi_session": False,
-            "report_scope": "per-rank",
-            "report_cutoff": 0,
-            "aggregation": "sum function/module CPU times across complete rank reports",
+            "report_scope": "local-rank-stride sample",
+            "report_cutoff": 30,
+            "profile_rank_stride": profile_rank_stride,
+            "rank_selection": "local rank modulo profile rank stride equals zero",
+            "aggregation": "sum function/module CPU times across profiled ranks without extrapolation",
         },
         "profile_duration_lexeme": parsed.duration_lexeme,
         "profile_duration_sec": _decimal_text(parsed.duration_sec),
         "thread_count": parsed.thread_count,
-        "mpi_ranks": parsed.mpi_ranks,
-        "mpi_hosts": parsed.mpi_hosts,
+        "mpi_ranks": expected_ranks,
+        "mpi_hosts": expected_hosts,
         "ranks_per_node": [
+            {"host": host, "ranks": ranks_per_host} for host, _ in parsed.ranks_per_node
+        ],
+        "profiled_mpi_ranks": parsed.mpi_ranks,
+        "profiled_ranks_per_node": [
             {"host": host, "ranks": ranks} for host, ranks in parsed.ranks_per_node
         ],
         "source": {
@@ -433,6 +455,8 @@ def _summary(
         "profile_duration_sec": value["profile_duration_sec"],
         "mpi_ranks": value["mpi_ranks"],
         "mpi_hosts": value["mpi_hosts"],
+        "profiled_mpi_ranks": value["profiled_mpi_ranks"],
+        "profile_rank_stride": value["collection"]["profile_rank_stride"],
         "source_hotspots": len(hotspots),
         "exported_hotspots": min(len(hotspots), limit),
         "top_hotspots": [item.fact_value() for item in hotspots[:limit]],
@@ -448,6 +472,7 @@ def _markdown(summary: dict[str, object]) -> str:
         f"- AMD uProf: {summary['tool_version']}",
         f"- Profile duration: {summary['profile_duration_sec']} s",
         f"- MPI topology: {summary['mpi_ranks']} ranks / {summary['mpi_hosts']} hosts",
+        f"- Profiled ranks: {summary['profiled_mpi_ranks']} (local-rank stride {summary['profile_rank_stride']})",
         f"- Reported functions: {summary['source_hotspots']}",
         "",
         "| Rank | Function | Module | Self CPU time (s) | Total CPU time (s) |",
@@ -461,7 +486,7 @@ def _markdown(summary: dict[str, object]) -> str:
     lines.extend(
         [
             "",
-            "The table aggregates validated complete reports from every MPI rank. The complete sessions are retained in the profile artifact.",
+            "The table aggregates validated sampled-rank reports without extrapolation. The sampled raw sessions are retained in the profile artifact.",
             "",
         ]
     )
