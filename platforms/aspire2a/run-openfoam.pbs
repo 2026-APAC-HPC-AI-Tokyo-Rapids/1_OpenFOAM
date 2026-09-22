@@ -15,7 +15,14 @@ source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 test "${OMP_NUM_THREADS:?PBS OpenMP thread count is required}" = 1
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"; test "${OPENFOAM_PROFILE_TOOL}" = uprof; export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521; fi
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
+  : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"
+  case "${OPENFOAM_PROFILE_TOOL}" in
+    uprof) export AMDUPROF_ROOT=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/tools/amduprof-5.3.521 ;;
+    craypat) module use /opt/cray/pe/modulefiles; module load perftools-base/22.04.0; module load perftools-preload ;;
+    *) printf 'ASPIRE-2Aで未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;;
+  esac
+fi
 
 mpiexec_path=$(command -v mpiexec)
 runtime_root="${TMPDIR}/openfoam-runtime"

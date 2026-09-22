@@ -69,6 +69,10 @@ required_for = []
 id = "openfoam.uprof-hotspots/v1"
 required_for = []
 
+[[producers]]
+id = "openfoam.craypat-mpi/v1"
+required_for = []
+
 [[keys]]
 pattern = "run.identity.run_id"
 owner = "runner.manifest"
@@ -469,6 +473,13 @@ id = "openfoam.uprof-hotspots/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
 activation = { kind = "bundle_component", component_id = "openfoam.uprof-hotspots/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "openfoam.craypat-mpi/v1"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.craypat-mpi/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
@@ -890,6 +901,15 @@ source_role = "uprof_hotspots_report"
 storage = "profile_raw"
 path_template = [{ literal = "profile/raw/uprof/report.csv" }]
 schema_id = "uprof-hotspots-csv/v1"
+required_when_applicable = false
+
+[[source]]
+id = "openfoam.craypat-mpi-report/v1"
+producer_id = "openfoam.craypat-mpi/v1"
+source_role = "craypat_mpi_report"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/craypat/pat-report.txt" }]
+schema_id = "craypat-mpi-text/v1"
 required_when_applicable = false
 
 [[source]]

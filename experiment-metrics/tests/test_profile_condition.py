@@ -44,6 +44,13 @@ def test_profile_condition_accepts_uprof_assess(tmp_path) -> None:
     assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "assess")
 
 
+def test_profile_condition_accepts_craypat_mpi(tmp_path) -> None:
+    condition = tmp_path / "profile.json"
+    condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi","rank":0}\n', encoding="utf-8")
+
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi")
+
+
 @pytest.mark.parametrize(
     "body",
     [

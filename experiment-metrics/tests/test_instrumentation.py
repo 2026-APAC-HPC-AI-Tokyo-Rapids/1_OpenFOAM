@@ -18,6 +18,7 @@ BUNDLES = Path(__file__).parents[1] / "bundles"
         ("openfoam-score-v1.json", "bench", "score"),
         ("openfoam-profile-vtune-hotspots-v1.json", "profile", "profile"),
         ("openfoam-profile-uprof-hotspots-v1.json", "profile", "profile"),
+        ("openfoam-profile-craypat-mpi-v1.json", "profile", "profile"),
     ],
 )
 def test_git_managed_bundle_is_closed_and_purpose_bound(

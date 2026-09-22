@@ -39,13 +39,18 @@ def submit_pbs_run(
     if run_dir != manifest.path.parents[1]:
         raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
-    if profile_tool not in {"uprof", "vtune"}:
+    if profile_tool not in {"craypat", "uprof", "vtune"}:
         raise ValueError("unsupported profile tool")
     if profile_rank < 0 or profile_rank >= protocol.ranks:
         raise ValueError("profile rank must be within the protocol rank range")
     if manifest.purpose != "profile" and profile_rank != 0:
         raise ValueError("a nonzero profile rank requires a profile run")
-    supported_analyses = {"assess", "data_access", "hotspots"} if profile_tool == "uprof" else {"hotspots", "hpc-performance", "memory-access", "memory-access-core"}
+    if profile_tool == "uprof":
+        supported_analyses = {"assess", "data_access", "hotspots"}
+    elif profile_tool == "craypat":
+        supported_analyses = {"mpi"}
+    else:
+        supported_analyses = {"hotspots", "hpc-performance", "memory-access", "memory-access-core"}
     if profile_analysis not in supported_analyses:
         raise ValueError(f"unsupported {profile_tool} profile analysis")
     if manifest.purpose != "profile" and profile_analysis != "hotspots":
@@ -82,7 +87,7 @@ def submit_pbs_run(
         if profile_tool == "vtune":
             environment["OPENFOAM_VTUNE_ANALYSIS"] = profile_analysis
             environment["OPENFOAM_VTUNE_RANK"] = str(profile_rank)
-        else:
+        elif profile_tool == "uprof":
             environment["OPENFOAM_UPROF_ANALYSIS"] = profile_analysis
     if any("," in value or "\n" in value for value in environment.values()):
         raise ValueError("PBS exported values cannot contain commas or newlines")

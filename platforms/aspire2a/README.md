@@ -79,6 +79,8 @@ profile workflowはAMD公表MD5 `45437d8bc0b4276a0b78e28d21de23cb`を検証し�
 
 MPIの通信・同期・rank間不均衡はuProfのCPU profileへ混ぜない。site moduleにはHPE Cray Perftools 22.04の`perftools-preload`、`perftools-lite-events`等とArm/Linaro Forgeがある。現行binaryはCray MPICH 8.1.15/UCXであるため、まず同じベンダースタックのCrayPATを短時間PBSで検証し、成立後にMPI時間、同期・待ち、load balance、message統計を別のprofile条件で取得する。Forgeは代替手段とする。
 
+PBS `25297379.pbs101`では1ノード4 ranksのIMB-MPI1 PingPongを`pat_run -g mpi`で完走し、4 PEの`.xf`をlogin nodeの`pat_report`で再解析できた。`load_balance`、`load_balance_cm`、`load_balance_sm`、`mpi_callers`、`mpi_sm_callers`、`mpi_coll_callers`、`mpi_dest_bytes`により、rank・MPI関数別時間、collectiveとpoint-to-pointの不均衡、caller別bytes・message count・size帯、rank距離を取得する。計算ノードではraw experiment directoryだけを共有run directoryへ生成し、scheduler終了後にlogin runnerがreportを作る。`pat_run`は存在しない`lib-ucx/libmpich.so`へのpreload警告を出すが、実際の`libmpi_gnu_91.so.12`を使う対象はexit 0で23 MPI関数をtraceした。login nodeのreportではcompute node側glibc/UCXとのfile size mismatch警告も出るため、生成表の欠落とsymbol解決状況を本番profileごとに確認する。
+
 ## Cray MPICH transport
 
 NSCCのFAQとworkshop資料が推奨する標準構成は`cray-mpich/8.1.15`とOFIである。ログインノードでは同じ`PrgEnv-gnu/8.3.3`からlibfabric 1.22.0が読み込まれる一方、PBS計算ノードではlibfabric 1.11.0.4.125が読み込まれ、計算ノードに`/opt/cray/libfabric/1.22.0`は存在しない。ビルドと実行のlink判定には計算ノード側の実体を用いる。

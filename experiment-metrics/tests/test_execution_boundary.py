@@ -398,6 +398,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"' in workflow
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
+    assert "openfoam-profile-craypat-mpi-v1.json" in workflow
     assert "provision-uprof.sh" in workflow
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "platforms/aspire2a/exec-uprof.sh" in workflow
@@ -408,8 +409,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--large-output-dir" not in wrapper
     assert 'if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then' in runner
     assert '[[ "${large_output_dir}" == /* ]]' in runner
-    assert "--profile-tool uprof" in workflow
-    assert 'test "${OPENFOAM_PROFILE_TOOL}" = uprof' in wrapper
+    assert '--profile-tool "${profile_tool}"' in workflow
+    assert 'module load perftools-preload' in wrapper
     assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
     assert 'OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"' in runner
     assert 'LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"' in runner
@@ -439,6 +440,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--uprof-rank-stride 16" in workflow
     assert 'results/uprof-summary.json' in workflow
     assert 'results/uprof-summary.md' in workflow
+    assert 'platforms/aspire2a/export-craypat.sh' in workflow
+    assert 'stage_at solver "${SOLVER_LOG}" "${craypat_root}"' in runner
     assert 'profile/uprof-summary' not in workflow
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow

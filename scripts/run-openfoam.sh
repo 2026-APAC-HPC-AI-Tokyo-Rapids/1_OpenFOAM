@@ -75,7 +75,7 @@ done
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 OPENFOAM_PROFILE_TOOL=${OPENFOAM_PROFILE_TOOL:-vtune}
-case "${OPENFOAM_PROFILE_TOOL}" in vtune|uprof) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
+case "${OPENFOAM_PROFILE_TOOL}" in craypat|vtune|uprof) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
@@ -124,6 +124,7 @@ SOLVER_LOG="${LOG_DIR}/solver.log"
 SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 profile_run_id="${RUN_ID}-${job_id}"
 uprof_root="${RUN_DIR}/profile/raw/uprof"
+craypat_root="${RUN_DIR}/profile/raw/craypat"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
   vtune_root="${large_output_dir}/vtune"
   OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
@@ -193,12 +194,18 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     export OPENFOAM_VTUNE_PATH
     provision_args+=(--executable "vtune=${OPENFOAM_VTUNE_PATH}")
   else
-    : "${AMDUPROF_ROOT:?AMD uProf installation root is required}"
-    uprof_bin_dir="${AMDUPROF_ROOT}/bin"
-    OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"
-    test -x "${OPENFOAM_UPROF_PATH}"
-    export OPENFOAM_UPROF_PATH
-    provision_args+=(--executable "uprof=${OPENFOAM_UPROF_PATH}")
+    if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
+      : "${AMDUPROF_ROOT:?AMD uProf installation root is required}"
+      uprof_bin_dir="${AMDUPROF_ROOT}/bin"
+      OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"
+      test -x "${OPENFOAM_UPROF_PATH}"
+      export OPENFOAM_UPROF_PATH
+      provision_args+=(--executable "uprof=${OPENFOAM_UPROF_PATH}")
+    else
+      OPENFOAM_CRAYPAT_PATH=$(command -v pat_run)
+      export OPENFOAM_CRAYPAT_PATH
+      provision_args+=(--executable "craypat=${OPENFOAM_CRAYPAT_PATH}")
+    fi
   fi
 fi
 if [[ -n "${uprof_bin_dir}" ]]; then LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"; else "${METRICS_CLI}" "${provision_args[@]}"; fi
@@ -251,14 +258,14 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # 共有libraryを後続の正式solver実行が再利用する。公式function objectは0反復の終了時に0/0を
   # 計算するため、warmupだけFPE trapを無効化する。solverの実行環境は変更しない。
   stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
-  if [[ "${OPENFOAM_PROFILE_TOOL:-vtune}" == vtune ]]; then install -d -m 2770 "${vtune_root}"; install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"; else install -d -m 0750 "${uprof_root}/sessions"; fi
+  if [[ "${OPENFOAM_PROFILE_TOOL:-vtune}" == vtune ]]; then install -d -m 2770 "${vtune_root}"; install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"; elif [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then install -d -m 0750 "${uprof_root}/sessions"; else install -d -m 0750 "${craypat_root}"; fi
   # v2512は既存coefficient.datがあると正式出力をcoefficient_0.datへ改名する。
   # warmupのrawを退避し、正式solverが規定名へ出力できるようにする。
   mv -T "${CASE_DIR}/postProcessing" "${RUN_DIR}/profile/raw/warmup-postProcessing"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
-if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof || "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
   stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" "${RANK_PLACEMENT_ARGS[@]}" --capture-only
 fi
 set +e
@@ -268,8 +275,10 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     printf '%s\0' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}" > "${uprof_target_argv_file}"
     chmod 0600 "${uprof_target_argv_file}"
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions" "${OPENFOAM_UPROF_ANALYSIS}" "${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"
-  else
+  elif [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  else
+    stage_at solver "${SOLVER_LOG}" "${craypat_root}" "${solver_launch[@]}" "${OPENFOAM_CRAYPAT_PATH}" -g mpi -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi
 else
   stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
@@ -286,7 +295,7 @@ fi
 "${METRICS_CLI}" collect-coefficient --case-root "${CASE_DIR}" --output-root "${RESULTS_DIR}" --iterations "${OPENFOAM_ITERATIONS}"
 if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" != uprof ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     set +e
     "${PROVISION_DIR}/scripts/export-vtune-hotspots.sh"
     vtune_export_status=$?
@@ -357,7 +366,7 @@ if [[ -n "${imb_bin}" ]]; then
   if [[ "${imb_status}" -eq 0 ]]; then
     "${METRICS_CLI}" record-imb-mpi1 --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --stdout "${IMB_STDOUT}" --stderr "${IMB_STDERR}" --argv-json "${IMB_ARGV}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --source-member source/network/imb-mpi1/stdout.txt ||
       printf '%s\n' 'IMB出力を正規化された完全な記録として取得できませんでした' >&2
-  else
+  elif [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     printf '%s\n' "IMB-MPI1 stage failed (${imb_status}); collection will be incomplete" >&2
   fi
 else
@@ -370,7 +379,7 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     du -sh "${uprof_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
     mapfile -t uprof_sessions < <(find "${uprof_root}/sessions" -type d -name 'AMDuProf-*' -print)
     printf 'uprof_collected_sessions=%d\n' "${#uprof_sessions[@]}" >> "${LOG_DIR}/profile-location.txt"
-  else
+  elif [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     vtune_result_dirs=()
     for candidate in "${OPENFOAM_VTUNE_RESULT_DIR}" "${OPENFOAM_VTUNE_RESULT_DIR}".*
     do
@@ -382,6 +391,10 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     else
       printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
     fi
+  else
+    du -sh "${craypat_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
+    mapfile -t craypat_experiments < <(find "${craypat_root}" -mindepth 1 -maxdepth 1 -type d -name 'simpleFoam+*' -print)
+    printf 'craypat_collected_experiments=%d\n' "${#craypat_experiments[@]}" >> "${LOG_DIR}/profile-location.txt"
   fi
 fi
 # スケジューラジョブの成功印はソルバーの有効性だけで決める。
