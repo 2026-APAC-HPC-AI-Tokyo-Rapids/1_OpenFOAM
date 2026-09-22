@@ -1,5 +1,5 @@
 {
   "schema_version": "openfoam-profile-condition/v1",
-  "analysis": "data_access",
+  "analysis": "mpi",
   "rank": 0
 }
