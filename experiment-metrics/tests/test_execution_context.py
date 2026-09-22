@@ -76,6 +76,7 @@ transport_environment = {{ I_MPI_FABRICS = "ofi" }}
                 "release": "v2512",
                 "solver": "simpleFoam",
                 "resource_group": "test",
+                "runtime_condition": "baseline",
                 "transport_policy": "ofi",
             }
         )

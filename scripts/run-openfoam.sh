@@ -62,6 +62,7 @@ done
 : "${OPENFOAM_NODES:?protocol node count is required}"
 : "${OPENFOAM_MPI_PROCS:?protocol rank count is required}"
 : "${OPENFOAM_RESOURCE_GROUP:?protocol resource group is required}"
+: "${OPENFOAM_RUNTIME_CONDITION:?protocol runtime condition is required}"
 : "${OPENFOAM_TRANSPORT_POLICY:?protocol transport policy is required}"
 : "${OPENFOAM_PROTOCOL_PATH:?effective protocol path is required}"
 : "${OPENFOAM_ITERATIONS:?protocol iteration target is required}"
@@ -72,6 +73,11 @@ done
 : "${OPENFOAM_WORKLOAD_ID:?workload identity is required}"
 : "${WORKLOAD_MESH_ARCHIVE:?verified mesh archive is required}"
 [[ "${OPENFOAM_SOLVER}" == simpleFoam && "${OPENFOAM_DISTRIBUTION}" == OpenFOAM.com && "${OPENFOAM_RELEASE}" == v2512 && "${OPENFOAM_WORKLOAD_ID}" == occDrivAerStaticMesh-65M ]]
+case "${OPENFOAM_RUNTIME_CONDITION}" in
+  baseline) ;;
+  poll-proc-interfaces) openfoam_args=(-opt-switch nPollProcInterfaces=-1 "${openfoam_args[@]}") ;;
+  *) printf '未対応のOpenFOAM runtime条件です: %s\n' "${OPENFOAM_RUNTIME_CONDITION}" >&2; exit 2 ;;
+esac
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 OPENFOAM_PROFILE_TOOL=${OPENFOAM_PROFILE_TOOL:-vtune}

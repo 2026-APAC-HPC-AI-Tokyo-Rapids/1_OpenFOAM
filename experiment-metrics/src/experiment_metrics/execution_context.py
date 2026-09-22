@@ -85,6 +85,7 @@ def _validate_request(request: dict[str, object], protocol: RunProtocol) -> None
         or request.get("nodes") != protocol.nodes
         or request.get("ranks") != protocol.ranks
         or request.get("resource_group") != protocol.resource_group
+        or request.get("runtime_condition") != protocol.runtime_condition
         or request.get("transport_policy") != protocol.transport_policy
         or request.get("workload_id") != protocol.workload_id
         or request.get("distribution") != protocol.distribution

@@ -14,7 +14,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _protocol() -> RunProtocol:
-    return RunProtocol(("solver",), 1, 2, "test", "shm", {}, "occDrivAerStaticMesh-65M", "a" * 64, 5, 65_334_765, "simpleFoam", "OpenFOAM.com", "v2512")
+    return RunProtocol(("solver",), 1, 2, "test", "baseline", "shm", {}, "occDrivAerStaticMesh-65M", "a" * 64, 5, 65_334_765, "simpleFoam", "OpenFOAM.com", "v2512")
 
 
 def test_solver_log_parser_and_reducer_preserve_complete_records() -> None:

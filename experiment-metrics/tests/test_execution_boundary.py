@@ -453,8 +453,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--multi-level-ranks-per-node 128" in wrapper
     assert "aspire2a-multilevel-1n-128r" in workflow
     assert "aspire2a-multilevel-2n-256r" in workflow
-    assert "aspire2a-multilevel-4n-512r" in workflow
+    assert "aspire2a-multilevel-poll-4n-512r" in workflow
     assert '*-multilevel-*) decomposition_method=multiLevel' in runner
+    assert 'poll-proc-interfaces) openfoam_args=(-opt-switch nPollProcInterfaces=-1 "${openfoam_args[@]}")' in runner
     assert "--bind-rank-placement" in wrapper
     assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
     assert "experiment-metrics/src/experiment_metrics/rank_wrapper.py" in workflow

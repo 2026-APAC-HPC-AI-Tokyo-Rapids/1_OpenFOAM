@@ -75,6 +75,7 @@ def submit_pbs_run(
         "OPENFOAM_PROTOCOL_PATH": str(protocol_path.resolve(strict=True)),
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
         "OPENFOAM_RUN_PURPOSE": manifest.purpose,
+        "OPENFOAM_RUNTIME_CONDITION": protocol.runtime_condition,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,
         "PROVISION_DIR": str(provision_dir.resolve(strict=True)),
         "RUN_DIR": str(run_dir),
@@ -124,6 +125,7 @@ def submit_pbs_run(
         "profile_rank": profile_rank,
         "profile_analysis": profile_analysis,
         "resource_group": protocol.resource_group,
+        "runtime_condition": protocol.runtime_condition,
         "transport_policy": protocol.transport_policy,
         "pbs_script": {
             "repository_path": pbs_script_repository_path,

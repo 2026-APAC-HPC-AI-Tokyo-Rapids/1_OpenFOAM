@@ -18,6 +18,7 @@ PROTOCOL = (
     Path(__file__).parents[1] / "registry/openfoam-v2-protocol-gadi-scotch-1n-104r.toml"
 )
 ASPIRE2A_PROTOCOL = Path(__file__).parents[1] / "registry/openfoam-v2-protocol-aspire2a-scotch-2n-256r.toml"
+ASPIRE2A_POLL_PROTOCOL = Path(__file__).parents[1] / "registry/openfoam-v2-protocol-aspire2a-multilevel-poll-4n-512r.toml"
 
 
 def test_pbs_submission_and_terminal_are_bound(
@@ -184,3 +185,33 @@ def test_aspire2a_submission_uses_exclusive_full_nodes(
     assert "OPENFOAM_PROFILE_TOOL=uprof" in exported
     assert "OPENFOAM_VTUNE" not in exported
     assert request["profile_tool"] == "uprof"
+
+
+def test_aspire2a_polling_condition_is_recorded_and_exported(
+    tmp_path: Path, identities: dict[str, object]
+) -> None:
+    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    execution = provision / "platforms/aspire2a/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+
+    outcome = submit_pbs_run(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        protocol_path=ASPIRE2A_POLL_PROTOCOL,
+        pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs",
+        execution_script=execution,
+        provision_dir=provision,
+        qsub_path=launcher,
+        execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"24500000.pbs\n", b""),
+    )
+
+    request = json.loads(outcome.request_path.read_text())
+    exported = request["argv"][request["argv"].index("-v") + 1]
+    assert request["runtime_condition"] == "poll-proc-interfaces"
+    assert "OPENFOAM_RUNTIME_CONDITION=poll-proc-interfaces" in exported

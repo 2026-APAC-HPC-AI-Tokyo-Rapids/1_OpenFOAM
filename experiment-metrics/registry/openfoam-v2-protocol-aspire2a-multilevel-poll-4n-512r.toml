@@ -1,0 +1,23 @@
+[protocol]
+schema_version = "openfoam-v2-run-protocol/v2"
+workload_definition = "../../benchmark/workload.json"
+
+[variant.bench]
+# Consume completed processor interfaces as they become available instead of
+# waiting for every outstanding interface request.
+nodes = 4
+ranks = 512
+resource_group = "normal"
+runtime_condition = "poll-proc-interfaces"
+transport_policy = "cray-mpich-ucx"
+transport_environment = {}
+expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "rank_placement", "solver", "minimal_hardware_capture", "network_imb_mpi1"]
+
+[variant.profile]
+nodes = 4
+ranks = 512
+resource_group = "normal"
+runtime_condition = "poll-proc-interfaces"
+transport_policy = "cray-mpich-ucx"
+transport_environment = {}
+expected_stages = ["case_prepare", "renumber_mesh", "potential_foam", "apply_boundary_layer", "profile_warmup", "solver", "minimal_hardware_capture", "profile_hardware_capture", "network_imb_mpi1"]

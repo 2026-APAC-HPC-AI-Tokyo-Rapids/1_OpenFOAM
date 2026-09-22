@@ -114,6 +114,7 @@ def submit_run(
         "OPENFOAM_SOLVER": protocol.solver,
         "OPENFOAM_WORKLOAD_ID": protocol.workload_id,
         "OPENFOAM_RESOURCE_GROUP": protocol.resource_group,
+        "OPENFOAM_RUNTIME_CONDITION": protocol.runtime_condition,
         "OPENFOAM_TRANSPORT_POLICY": protocol.transport_policy,
         "PROVISION_DIR": str(provision_dir.resolve(strict=True)),
         "RUN_DIR": str(run_dir),
@@ -153,6 +154,7 @@ def submit_run(
         "profile_rank": profile_rank,
         "profile_analysis": profile_analysis,
         "resource_group": protocol.resource_group,
+        "runtime_condition": protocol.runtime_condition,
         "transport_policy": protocol.transport_policy,
         "pjm_script": {
             "repository_path": pjm_script_repository_path,

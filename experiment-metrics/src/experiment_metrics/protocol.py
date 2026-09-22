@@ -13,6 +13,7 @@ class RunProtocol:
     nodes: int
     ranks: int
     resource_group: str
+    runtime_condition: str
     transport_policy: str
     transport_environment: dict[str, str]
     workload_id: str
@@ -52,12 +53,14 @@ class RunProtocol:
             "transport_policy",
             "transport_environment",
         }
-        if set(variant) != required:
+        allowed = required | {"runtime_condition"}
+        if not required.issubset(variant) or not set(variant).issubset(allowed):
             raise ValueError("protocol variant must contain exactly its v1 fields")
         stages = variant["expected_stages"]
         nodes = variant["nodes"]
         ranks = variant["ranks"]
         resource_group = variant["resource_group"]
+        runtime_condition = variant.get("runtime_condition", "baseline")
         transport = variant["transport_policy"]
         transport_environment = variant["transport_environment"]
         if not isinstance(root["workload_definition"], str):
@@ -86,6 +89,7 @@ class RunProtocol:
             or ranks % nodes
             or not isinstance(resource_group, str)
             or not resource_group
+            or runtime_condition not in {"baseline", "poll-proc-interfaces"}
             or not isinstance(transport, str)
             or not transport
             or (nodes > 1 and transport == "shm")
@@ -105,6 +109,7 @@ class RunProtocol:
             nodes,
             ranks,
             resource_group,
+            runtime_condition,
             transport,
             dict(transport_environment),
             workload_id,
