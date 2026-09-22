@@ -1,6 +1,7 @@
 [protocol]
 schema_version = "openfoam-v2-run-protocol/v2"
 workload_definition = "../../benchmark/workload.json"
+# Case preparation maps the two top-level domains to contiguous 128-rank nodes.
 
 [variant.bench]
 nodes = 2
