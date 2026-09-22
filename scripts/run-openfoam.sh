@@ -15,7 +15,6 @@ rank_manifest=
 rank_placement_root=
 placement_collector=
 bind_rank_placement=false
-paraview_collector=
 global_rank_env=
 local_rank_env=
 local_size_env=
@@ -36,7 +35,6 @@ do
     --rank-placement-root) [[ $# -ge 2 ]]; rank_placement_root=$2; shift 2 ;;
     --placement-collector) [[ $# -ge 2 ]]; placement_collector=$2; shift 2 ;;
     --bind-rank-placement) bind_rank_placement=true; shift ;;
-    --paraview-collector) [[ $# -ge 2 ]]; paraview_collector=$2; shift 2 ;;
     --global-rank-env) [[ $# -ge 2 ]]; global_rank_env=$2; shift 2 ;;
     --local-rank-env) [[ $# -ge 2 ]]; local_rank_env=$2; shift 2 ;;
     --local-size-env) [[ $# -ge 2 ]]; local_size_env=$2; shift 2 ;;
@@ -116,7 +114,6 @@ rank_manifest=${rank_manifest:-${RUN_MANIFEST}}
 rank_placement_root=${rank_placement_root:-${SOURCE_DIR}/placement}
 [[ "${rank_manifest}" == /* && "${rank_placement_root}" == /* ]]
 if [[ "${rank_manifest}" == "${RUN_MANIFEST}" ]]; then [[ "${rank_placement_root}" == "${SOURCE_DIR}/placement" && -z "${placement_collector}" ]]; else [[ "${placement_collector}" == /* ]]; fi
-if [[ -n "${paraview_collector}" ]]; then [[ "${paraview_collector}" == /* ]]; fi
 
 DECOMPOSE_PAR_DICT=system/decomposeParDict
 SOLVER_LOG="${LOG_DIR}/solver.log"
@@ -288,12 +285,6 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" != upro
     vtune_export_status=$?
     set -e
     if [[ "${vtune_export_status}" -ne 0 ]]; then printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2; fi
-fi
-
-if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && -n "${paraview_collector}" ]]; then
-  paraview_output_dir="${large_output_dir}/paraview"
-  "${node_launch[@]}" "${paraview_collector}" "${CASE_DIR}" "${paraview_output_dir}" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))" "${OPENFOAM_NODES}" "${global_rank_env}"
-  "${compute_tools_root}/scripts/finalize-paraview-case.sh" "${paraview_output_dir}" "${RUN_ID}" "${profile_run_id}" "${OPENFOAM_NODES}"
 fi
 
 "${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" "${RESULTS_DIR}/coefficient.dat" > "${RESULTS_DIR}/result.txt"

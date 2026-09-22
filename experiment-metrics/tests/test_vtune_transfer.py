@@ -22,24 +22,6 @@ def _environment(tmp_path: Path, *, broken_connection: bool = False, vtune_resul
         (result / "data.0").write_bytes(b"vtune raw data\n")
     else:
         result.parent.mkdir(parents=True)
-    paraview = source_dir / "paraview"
-    paraview.mkdir()
-    case = tmp_path / "paraview-case"
-    case.mkdir()
-    (case / "occDrivAerStaticMesh.foam").write_text("")
-    subprocess.run(["tar", "-I", "zstd", "-cf", paraview / "paraview-case.tar.zst", "-C", case, "occDrivAerStaticMesh.foam"], check=True)
-    paraview_archive = paraview / "paraview-case.tar.zst"
-    paraview_manifest = {
-        "schema_version": "openfoam-paraview-archive/v1",
-        "run_id": "r-0123456789abcdef0123456789abcdef",
-        "profile_run_id": PROFILE_RUN_ID,
-        "archive": {
-            "path": "paraview-case.tar.zst",
-            "size_bytes": paraview_archive.stat().st_size,
-            "sha256": subprocess.check_output(["sha256sum", paraview_archive], text=True).split()[0],
-        },
-    }
-    (paraview / "manifest.json").write_text(json.dumps(paraview_manifest) + "\n")
     archive_root = tmp_path / "home-archive"
     for cluster in ("genkai", "gadi"):
         wrapper = tmp_path / f"{cluster}-shell"
@@ -76,7 +58,7 @@ def test_transfer_archives_validates_and_preserves_source(tmp_path: Path, cluste
     assert "source_target" not in manifest
     assert manifest["vtune_result_available"] is True
     assert (destination / "vtune" / "vtune-result.tar.zst").is_file()
-    assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
+    assert [entry["path"] for entry in manifest["files"]] == ["vtune/vtune-result.tar.zst"]
     assert source_dir.is_dir()
 
     repeated = _run(environment, source_dir, cluster=cluster)
@@ -84,7 +66,7 @@ def test_transfer_archives_validates_and_preserves_source(tmp_path: Path, cluste
     assert not any(path.name.startswith(".") for path in destination.parent.iterdir())
 
 
-def test_transfer_keeps_paraview_when_vtune_produced_no_result(tmp_path: Path) -> None:
+def test_transfer_records_missing_vtune_result(tmp_path: Path) -> None:
     environment, source_dir, archive_root = _environment(tmp_path, vtune_result=False)
 
     completed = _run(environment, source_dir)
@@ -94,8 +76,7 @@ def test_transfer_keeps_paraview_when_vtune_produced_no_result(tmp_path: Path) -
     manifest = json.loads((destination / "manifest.json").read_text())
     assert manifest["vtune_result_available"] is False
     assert not (destination / "vtune").exists()
-    assert (destination / "paraview" / "paraview-case.tar.zst").is_file()
-    assert [entry["path"] for entry in manifest["files"]] == ["paraview/paraview-case.tar.zst", "paraview/manifest.json"]
+    assert manifest["files"] == []
     assert source_dir.is_dir()
 
 

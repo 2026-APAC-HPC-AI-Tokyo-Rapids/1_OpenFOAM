@@ -7,7 +7,7 @@
 
 本稿は、九州大学「玄界」においてOpenFOAM v2606の `simpleFoam` を用いたmotorBikeチュートリアルケースを実行し、実行時プロファイル計測および起動構成のチューニングを実施した結果を記録したものである。改善の対象はMPIプロセス配置、MPIおよびOpenFOAMのランタイム設定、ならびにプロファイラの起動オプションに限定し、OpenFOAMのソースコード自体は改変していない。
 
-過去のApplication Performance Snapshot（APS）およびIntel VTuneの完全な測定結果は、GitHub Actionsのアーティファクトとは別に永続保管している。2026年8月23日以降のVTuneおよびParaViewの完全結果は、自宅サーバー（home-lab）上のActions実行単位の成果物ツリーを正本とする。旧 `openfoam-vtune` ディレクトリ配下は過去実行の履歴データとして保持している。
+過去のApplication Performance Snapshot（APS）、Intel VTuneの完全な測定結果、および当時生成したParaView成果物は、GitHub Actionsのアーティファクトとは別に永続保管している。既存のParaView成果物は過去実行の履歴データとして保持するが、新規profile Actionsでは生成しない。旧 `openfoam-vtune` ディレクトリ配下も過去実行の履歴データとして保持している。
 
 ```text
 ~/openfoam-profile/<github-run-id>-<pjm-job-id>/
@@ -17,7 +17,6 @@
 
 ```text
 /hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/vtune/vtune-result.tar.zst
-/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/paraview/paraview-case.tar.zst
 ```
 
 共有プロファイル領域および各実行ディレクトリのパーミッションは `2770` に設定されている。本記録作成時点で、プロファイルデータ全体の容量は約3.0 GiBであった。
@@ -187,4 +186,4 @@ Intel MPIおよびVTuneの関連機能については、以下の公式ドキュ
 
 現在のワークフローでは、共通の `OpenFOAM` ワークフローを単一のエントリポイントとし、プッシュ時は `[profile]` タグ、手動実行時は `profile` 入力パラメータにより通常計測からプロファイル計測へ切り替える。プロファイル実行はソースコードやビルド成果物を改変せず、実行プロトコルで指定された単一のMPIランクに対して一定時間（60秒間等）のみIntel VTuneの収集プロセスをアタッチする。プロファイル条件の変更は個別のコミットとして追跡する。単一ランクのサンプリング結果のみから全ランクの通信特性を安易に結論付けてはならない。
 
-VTuneの完全な解析結果およびParaView用の領域分割済みケースデータは、固定成果物と同一の `RUN_DIR/large-output/{vtune,paraview}` に一時生成され、`home-lab` ランナーが既存のクラスタ接続ラッパーを介して直接回収する。ParaView用データは全 `processor*` ディレクトリおよび `occDrivAerStaticMesh.foam` を単一の `paraview-case.tar.zst` にまとめて転送する。なお、`noWrite` 設定下では保存されるフィールドデータは時刻0のものであり、最終反復ステップのフィールドではない点に留意する。自宅サーバー側においてデータの解凍可能性、サイズ、SHA-256ハッシュを検証し、Actions実行の固定成果物ディレクトリ配下へ確定配置した後に限り、クラスタ側の `RUN_DIR` 全体を削除する。検証済みレポート、収集ステータス、JSON形式の構造化ファクト、およびサマリーテーブルは、プロファイル成果物および `experiment-metrics` の記録として保持する。VTune実行バイナリの識別情報およびバージョンは、プロビジョニング検証ログにより一元管理される。
+VTuneの完全な解析結果は `RUN_DIR/large-output/vtune` に一時生成され、`home-lab` ランナーが既存のクラスタ接続ラッパーを介して直接回収する。自宅サーバー側で解凍可能性、サイズ、SHA-256ハッシュを検証し、Actions実行の固定成果物ディレクトリ配下へ確定配置した後に限り、クラスタ側の `RUN_DIR` 全体を削除する。ParaView用データは通常のprofile Actionsでは生成せず、必要時にケースキャッシュまたはケースアーカイブから用意する。検証済みレポート、収集ステータス、JSON形式の構造化ファクト、およびサマリーテーブルは、プロファイル成果物および `experiment-metrics` の記録として保持する。VTune実行バイナリの識別情報およびバージョンは、プロビジョニング検証ログにより一元管理される。

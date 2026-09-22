@@ -42,12 +42,11 @@ esac
 run_artifact_dir="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${github_run_id}/${cluster}/openfoam-${cluster}-v2-${run_id}"
 destination="${run_artifact_dir}/large-output"
 vtune_archive="${destination}/vtune/vtune-result.tar.zst"
-paraview_archive="${destination}/paraview/paraview-case.tar.zst"
 manifest="${destination}/manifest.json"
 
 validate_destination() {
-  local expected_size actual_size expected_sha actual_sha relative vtune_result_available
-  [[ -f "${paraview_archive}" && -f "${destination}/paraview/manifest.json" && -f "${manifest}" ]]
+  local expected_size expected_sha vtune_result_available
+  [[ -f "${manifest}" ]]
   jq -e --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_connection "${connection}" --arg source_path "${source_dir}" 'select(.schema_version == "openfoam-large-output-archive/v1" and .cluster == $cluster and .github_run_id == $github_run_id and .profile_run_id == $profile_run_id and .run_id == $run_id and .scheduler_job_id == $scheduler_job_id and .source_connection == $source_connection and .source_path == $source_path)' "${manifest}" >/dev/null
   vtune_result_available=$(jq -r 'if has("vtune_result_available") then .vtune_result_available elif any(.files[]; .path == "vtune/vtune-result.tar.zst") then true else false end | select(type == "boolean")' "${manifest}")
   [[ "${vtune_result_available}" == true || "${vtune_result_available}" == false ]]
@@ -57,22 +56,12 @@ validate_destination() {
   else
     [[ ! -e "${vtune_archive}" ]]
   fi
-  for relative in paraview/paraview-case.tar.zst paraview/manifest.json; do
-    expected_size=$(jq -er --arg relative "${relative}" '.files[] | select(.path == $relative) | .size_bytes' "${manifest}")
-    expected_sha=$(jq -er --arg relative "${relative}" '.files[] | select(.path == $relative) | .sha256' "${manifest}")
-    actual_size=$(stat -c '%s' "${destination}/${relative}")
-    actual_sha=$(sha256sum "${destination}/${relative}" | awk '{print $1}')
-    [[ "${expected_size}" =~ ^[0-9]+$ && "${expected_size}" == "${actual_size}" ]]
-    [[ "${expected_sha}" =~ ^[0-9a-f]{64}$ && "${expected_sha}" == "${actual_sha}" ]]
-  done
   if [[ "${vtune_result_available}" == true ]]; then
     expected_size=$(jq -er '.files[] | select(.path == "vtune/vtune-result.tar.zst") | .size_bytes' "${manifest}")
     expected_sha=$(jq -er '.files[] | select(.path == "vtune/vtune-result.tar.zst") | .sha256' "${manifest}")
     [[ "$(stat -c '%s' "${vtune_archive}")" == "${expected_size}" ]]
     [[ "$(sha256sum "${vtune_archive}" | awk '{print $1}')" == "${expected_sha}" ]]
   fi
-  tar -I zstd -tf "${paraview_archive}" | awk '$0 == "occDrivAerStaticMesh.foam" { found = 1 } END { exit(!found) }'
-  jq -e --arg run_id "${run_id}" --arg profile_run_id "${profile_run_id}" 'select(.schema_version == "openfoam-paraview-archive/v1" and .run_id == $run_id and .profile_run_id == $profile_run_id and .archive.path == "paraview-case.tar.zst")' "${destination}/paraview/manifest.json" >/dev/null
 }
 
 if [[ -e "${destination}" ]]; then
@@ -84,7 +73,7 @@ fi
 install -d -m 0750 "${run_artifact_dir}"
 staging="${run_artifact_dir}/.large-output.incoming-${$}"
 [[ ! -e "${staging}" ]]
-install -d -m 0750 "${staging}/paraview"
+install -d -m 0750 "${staging}"
 cleanup() {
   local status=$?
   trap - EXIT
@@ -116,26 +105,10 @@ else
   if [[ "${status}" -eq 3 ]]; then vtune_result_available=false; else exit "${status}"; fi
 fi
 
-"${connection}" bash -s -- "${source_dir}" "${run_id}" <<'REMOTE_PARAVIEW' | tar -xf - -C "${staging}"
-set -euo pipefail
-candidate=$(realpath -e -- "$1")
-run_id=$2
-[[ ! -L "$1" && "$(basename -- "${candidate}")" == large-output && "$(basename -- "$(dirname -- "${candidate}")")" == "${run_id}" ]]
-paraview="${candidate}/paraview"
-[[ -f "${paraview}/paraview-case.tar.zst" && -f "${paraview}/manifest.json" ]]
-expected_size=$(jq -er '.archive.size_bytes' "${paraview}/manifest.json")
-expected_sha=$(jq -er '.archive.sha256' "${paraview}/manifest.json")
-[[ "$(stat -c '%s' "${paraview}/paraview-case.tar.zst")" == "${expected_size}" ]]
-[[ "$(sha256sum "${paraview}/paraview-case.tar.zst" | awk '{print $1}')" == "${expected_sha}" ]]
-tar -cf - -C "${candidate}" paraview
-REMOTE_PARAVIEW
-
 if [[ "${vtune_result_available}" == true ]]; then tar -I zstd -tf "${staging}/vtune/vtune-result.tar.zst" | awk 'NF { found = 1 } END { exit(!found) }'; fi
-tar -I zstd -tf "${staging}/paraview/paraview-case.tar.zst" | awk '$0 == "occDrivAerStaticMesh.foam" { found = 1 } END { exit(!found) }'
 created_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 files=()
 if [[ "${vtune_result_available}" == true ]]; then files+=("$(jq -n -c --arg path vtune/vtune-result.tar.zst --argjson size_bytes "$(stat -c '%s' "${staging}/vtune/vtune-result.tar.zst")" --arg sha256 "$(sha256sum "${staging}/vtune/vtune-result.tar.zst" | awk '{print $1}')" '{path:$path,size_bytes:$size_bytes,sha256:$sha256}')"); fi
-for relative in paraview/paraview-case.tar.zst paraview/manifest.json; do files+=("$(jq -n -c --arg path "${relative}" --argjson size_bytes "$(stat -c '%s' "${staging}/${relative}")" --arg sha256 "$(sha256sum "${staging}/${relative}" | awk '{print $1}')" '{path:$path,size_bytes:$size_bytes,sha256:$sha256}')"); done
 printf '%s\n' "${files[@]}" | jq -s -c --arg cluster "${cluster}" --arg github_run_id "${github_run_id}" --arg profile_run_id "${profile_run_id}" --arg run_id "${run_id}" --arg scheduler_job_id "${scheduler_job_id}" --arg source_connection "${connection}" --arg source_path "${source_dir}" --arg created_utc "${created_utc}" --argjson vtune_result_available "${vtune_result_available}" '{schema_version:"openfoam-large-output-archive/v1",cluster:$cluster,github_run_id:$github_run_id,profile_run_id:$profile_run_id,run_id:$run_id,scheduler_job_id:$scheduler_job_id,source_connection:$source_connection,source_path:$source_path,created_utc:$created_utc,vtune_result_available:$vtune_result_available,files:.}' > "${staging}/manifest.json"
 mv -T -- "${staging}" "${destination}"
 trap - EXIT

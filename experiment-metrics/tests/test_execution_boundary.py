@@ -627,7 +627,9 @@ def test_cluster_workflows_have_the_same_job_lifecycle() -> None:
         assert "tomokazu@tomokazu-ubuntu-server" not in workflow
         assert "profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}" in workflow
         assert "run_dir: ${{ steps.v2_context.outputs.run_dir }}" in workflow
-        assert "- name: VTuneとParaViewの完全結果をrun単位で直接転送" in workflow
+        assert "- name: VTuneの完全結果をrun単位で直接転送" in workflow
+        assert "archive-paraview-case.sh" not in workflow
+        assert "finalize-paraview-case.sh" not in workflow
         assert "if: inputs.profile && needs.run.result == 'success'" in workflow
         assert f"--cluster {cluster} --github-run-id" in workflow
         assert "--profile-run-id" in workflow

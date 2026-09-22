@@ -34,6 +34,6 @@
 
 計測完了後、上位のホットスポット関数はGitHub Actionsの実行サマリーにテーブル形式で表示されます。なお、Perfetto用のトレースファイルは生成しません。
 
-VTuneの完全な解析結果およびParaView用の分割済みケースデータは、固定成果物と同じクラスタ側の`RUN_DIR`配下の`large-output/{vtune,paraview}`に出力されます。通常の`noWrite`設定では、保存されるフィールドデータは初期状態（時刻0）のものであり、最終反復ステップのフィールドデータではありません。最終反復の状態確認にはソルバーログおよび`coefficient.dat`を使用します。プロファイルの完了後、自宅サーバー上の`home-lab`ランナーがこれらの大容量出力を直接回収します。整合性検証済みの圧縮データとマニフェストは、自宅サーバーの`/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`に保存され、固定成果物の配置が完了した後にクラスタ側の`RUN_DIR`全体が削除されます。VTuneが結果ディレクトリを生成しなかった場合でも、エラーログを含む固定プロファイル成果物とParaViewケースは保持され、large-outputマニフェスト内の`vtune_result_available=false`によって完全結果が存在しない旨が記録されます。ParaView用データは、単一の`paraview-case.tar.zst`を展開した上で`occDrivAerStaticMesh.foam`を開くことで可視化できます。なお、データの転送または保存に失敗した場合は、調査のためクラスタ側の`RUN_DIR`がそのまま保持されます。
+VTuneの完全な解析結果は、クラスタ側の`RUN_DIR/large-output/vtune`に出力されます。プロファイルの完了後、自宅サーバー上の`home-lab`ランナーが直接回収し、整合性検証済みの圧縮データとマニフェストを`/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`に保存します。VTuneが結果ディレクトリを生成しなかった場合は、固定プロファイル成果物のエラーログを保持し、large-outputマニフェストに`vtune_result_available=false`を記録します。転送または保存に失敗した場合は、調査のためクラスタ側の`RUN_DIR`を保持します。ParaView用データはprofile Actionsでは生成せず、可視化が必要になった時点で永続化されたケースキャッシュまたはケースアーカイブから用意します。
 
 成果物の転送には、ランナー環境にセットアップ済みの`genkai-shell`または`gadi-shell`と既存のSSH鍵を使用するため、転送専用の外部設定ファイルは不要です。転送元パスはワークフロー実行時に`RUN_DIR`から動的に決定され、自宅サーバー側の保存ルートは`OPENFOAM_ARTIFACT_ARCHIVE_ROOT`環境変数経由で渡されます。
