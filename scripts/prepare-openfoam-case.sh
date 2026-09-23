@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 9 ]]; then
-  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--multi-level-ranks-per-node RANKS]" >&2
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
   exit 64
 fi
 
@@ -18,23 +18,33 @@ cache_root=$9
 shift 9
 mode=
 multi_level_ranks_per_node=
+multi_level_domains=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
     --require-cache|--identity-only) [[ -z "${mode}" ]]; mode=$1; shift ;;
     --multi-level-ranks-per-node) [[ $# -ge 2 && -z "${multi_level_ranks_per_node}" ]]; multi_level_ranks_per_node=$2; shift 2 ;;
+    --multi-level-domains) [[ $# -ge 2 && -z "${multi_level_domains}" ]]; multi_level_domains=$2; shift 2 ;;
     *) echo "未対応のケース準備引数です: $1" >&2; exit 64 ;;
   esac
 done
 [[ "${subdomains}" =~ ^[1-9][0-9]*$ ]]
 decomposition_method=scotch
 decomposition_domains=()
+[[ -z "${multi_level_ranks_per_node}" || -z "${multi_level_domains}" ]]
 if [[ -n "${multi_level_ranks_per_node}" ]]; then
   [[ "${multi_level_ranks_per_node}" =~ ^[1-9][0-9]*$ ]]
   (( subdomains % multi_level_ranks_per_node == 0 ))
   node_domains=$(( subdomains / multi_level_ranks_per_node ))
   decomposition_method=multiLevel
   if (( node_domains == 1 )); then decomposition_domains=("${multi_level_ranks_per_node}"); else decomposition_domains=("${node_domains}" "${multi_level_ranks_per_node}"); fi
+elif [[ -n "${multi_level_domains}" ]]; then
+  [[ "${multi_level_domains}" =~ ^[1-9][0-9]*(,[1-9][0-9]*)+$ ]]
+  IFS=, read -r -a decomposition_domains <<< "${multi_level_domains}"
+  product=1
+  for domain in "${decomposition_domains[@]}"; do (( product <= subdomains / domain )); product=$(( product * domain )); done
+  (( product == subdomains ))
+  decomposition_method=multiLevel
 fi
 decomposition_domains_text="(${decomposition_domains[*]})"
 decomposition_domains_json=$(printf '%s\n' "${decomposition_domains[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)')
