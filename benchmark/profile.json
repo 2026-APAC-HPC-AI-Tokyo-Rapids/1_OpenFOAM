@@ -1,5 +1,6 @@
 {
   "schema_version": "openfoam-profile-condition/v1",
-  "analysis": "hotspots",
-  "rank": 0
+  "analysis": "mpi",
+  "rank": 0,
+  "diagnostic_iterations": 40
 }
