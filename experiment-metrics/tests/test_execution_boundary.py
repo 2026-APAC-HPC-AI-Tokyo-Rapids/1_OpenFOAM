@@ -441,7 +441,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'results/uprof-summary.json' in workflow
     assert 'results/uprof-summary.md' in workflow
     assert 'platforms/aspire2a/export-craypat.sh' in workflow
-    assert 'stage_at solver "${SOLVER_LOG}" "${craypat_root}"' in runner
+    assert 'stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}"' in runner
+    assert "stage_at()" not in runner
     assert 'profile/uprof-summary' not in workflow
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow
