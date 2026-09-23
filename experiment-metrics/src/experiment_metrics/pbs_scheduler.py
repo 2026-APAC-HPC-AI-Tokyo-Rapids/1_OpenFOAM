@@ -58,8 +58,8 @@ def submit_pbs_run(
         raise ValueError(f"unsupported {profile_tool} profile analysis")
     if manifest.purpose != "profile" and profile_analysis != "hotspots":
         raise ValueError("hardware characterization requires a profile run")
-    if diagnostic_iterations not in {0, 40} or (diagnostic_iterations and (manifest.purpose != "profile" or protocol.nodes != 4 or pbs_script_repository_path != "platforms/aspire2a/run-openfoam.pbs")):
-        raise ValueError("40-step diagnostics require an ASPIRE-2A four-node profile")
+    if diagnostic_iterations not in {0, 10, 40} or (diagnostic_iterations and (manifest.purpose != "profile" or protocol.nodes != 4 or pbs_script_repository_path != "platforms/aspire2a/run-openfoam.pbs")):
+        raise ValueError("10- or 40-step diagnostics require an ASPIRE-2A four-node profile")
     relative = PurePosixPath(pbs_script_repository_path)
     if (
         not pbs_script_repository_path

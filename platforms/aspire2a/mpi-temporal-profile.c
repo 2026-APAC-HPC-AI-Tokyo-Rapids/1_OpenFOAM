@@ -19,6 +19,13 @@ struct event
     uint64_t exit_ns;
 };
 
+struct phase_event
+{
+    uint64_t at_ns;
+    char phase[64];
+    char field[64];
+};
+
 enum { long_event_threshold_ns = 10000000, stack_depth = 24, request_history_capacity = 8192, datatype_cache_capacity = 16 };
 
 struct long_event
@@ -66,6 +73,9 @@ struct datatype_size
 static struct event *events;
 static size_t event_count;
 static size_t event_capacity;
+static struct phase_event *phase_events;
+static size_t phase_event_count;
+static size_t phase_event_capacity;
 static uint64_t allreduce_count;
 static uint64_t waitall_count;
 static struct long_event *long_events;
@@ -82,7 +92,7 @@ static size_t datatype_size_count;
 static uint64_t now_ns(void)
 {
     struct timespec value;
-    if (clock_gettime(CLOCK_REALTIME, &value) != 0) _exit(125);
+    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) _exit(125);
     return (uint64_t)value.tv_sec * 1000000000ULL + (uint64_t)value.tv_nsec;
 }
 
@@ -97,6 +107,24 @@ static void append_event(char kind, uint64_t sequence, uint64_t enter_ns, uint64
         event_capacity = capacity;
     }
     events[event_count++] = (struct event){.kind = kind, .sequence = sequence, .enter_ns = enter_ns, .exit_ns = exit_ns};
+}
+
+void openfoam_issue33_phase_marker(const char *phase, const char *field)
+{
+    uint64_t at_ns = now_ns();
+    if (phase == NULL) _exit(125);
+    if (phase_event_count == phase_event_capacity)
+    {
+        size_t capacity = phase_event_capacity == 0 ? 256 : phase_event_capacity * 2;
+        struct phase_event *replacement = realloc(phase_events, capacity * sizeof(*replacement));
+        if (replacement == NULL) _exit(125);
+        phase_events = replacement;
+        phase_event_capacity = capacity;
+    }
+    struct phase_event *event = &phase_events[phase_event_count++];
+    event->at_ns = at_ns;
+    if (snprintf(event->phase, sizeof(event->phase), "%s", phase) >= (int)sizeof(event->phase)) _exit(125);
+    if (snprintf(event->field, sizeof(event->field), "%s", field == NULL ? "" : field) >= (int)sizeof(event->field)) _exit(125);
 }
 
 static void append_long_event(char kind, uint64_t sequence, uint64_t enter_ns, uint64_t exit_ns, int argument_count)
@@ -226,18 +254,29 @@ int MPI_Finalize(void)
     if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
     output = fopen(path, "w");
     if (output == NULL) _exit(125);
-    fprintf(output, "kind,sequence,enter_realtime_ns,exit_realtime_ns\n");
+    fprintf(output, "kind,sequence,enter_monotonic_ns,exit_monotonic_ns\n");
     for (size_t index = 0; index < event_count; index++)
     {
         const struct event *event = &events[index];
         fprintf(output, "%c,%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n", event->kind, event->sequence, event->enter_ns, event->exit_ns);
     }
     if (fclose(output) != 0) _exit(125);
+    length = snprintf(path, sizeof(path), "%s/rank-%s-phases.tsv", directory, rank);
+    if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
+    output = fopen(path, "w");
+    if (output == NULL) _exit(125);
+    fprintf(output, "phase\tfield\tat_monotonic_ns\n");
+    for (size_t index = 0; index < phase_event_count; index++)
+    {
+        const struct phase_event *event = &phase_events[index];
+        fprintf(output, "%s\t%s\t%" PRIu64 "\n", event->phase, event->field, event->at_ns);
+    }
+    if (fclose(output) != 0) _exit(125);
     length = snprintf(path, sizeof(path), "%s/rank-%s-long.tsv", directory, rank);
     if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
     output = fopen(path, "w");
     if (output == NULL) _exit(125);
-    fprintf(output, "kind\tsequence\tenter_realtime_ns\texit_realtime_ns\targument_count\tframe\tmodule\tmodule_offset_hex\tsymbol\tsymbol_offset_hex\n");
+    fprintf(output, "kind\tsequence\tenter_monotonic_ns\texit_monotonic_ns\targument_count\tframe\tmodule\tmodule_offset_hex\tsymbol\tsymbol_offset_hex\n");
     for (size_t index = 0; index < long_event_count; index++)
     {
         const struct long_event *event = &long_events[index];
@@ -256,7 +295,7 @@ int MPI_Finalize(void)
     if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
     output = fopen(path, "w");
     if (output == NULL) _exit(125);
-    fprintf(output, "wait_sequence\twait_enter_realtime_ns\twait_exit_realtime_ns\trequest_index\tkind\tpeer\ttag\tbytes\tissued_realtime_ns\tworld_communicator\n");
+    fprintf(output, "wait_sequence\twait_enter_monotonic_ns\twait_exit_monotonic_ns\trequest_index\tkind\tpeer\ttag\tbytes\tissued_monotonic_ns\tworld_communicator\n");
     for (size_t index = 0; index < wait_request_count; index++)
     {
         const struct wait_request_event *event = &wait_requests[index];
@@ -264,6 +303,7 @@ int MPI_Finalize(void)
     }
     if (fclose(output) != 0) _exit(125);
     free(events);
+    free(phase_events);
     free(long_events);
     free(wait_requests);
     return PMPI_Finalize();

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-if [[ "${1:-}" == --version && $# -eq 1 ]]; then printf '%s\n' 'mpi-temporal-profile/v2'; exit 0; fi
+if [[ "${1:-}" == --version && $# -eq 1 ]]; then printf '%s\n' 'mpi-temporal-profile/v3'; exit 0; fi
 if [[ $# -lt 3 ]]; then printf 'Usage: %s LIBRARY OUTPUT_DIR TARGET [ARGUMENT ...]\n' "$0" >&2; exit 64; fi
 
 library=$1

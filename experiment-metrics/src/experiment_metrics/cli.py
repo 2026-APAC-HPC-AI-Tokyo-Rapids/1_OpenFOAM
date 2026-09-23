@@ -40,8 +40,8 @@ def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str, int]:
     }:
         raise ValueError("unsupported profile analysis")
     diagnostic_iterations = document.get("diagnostic_iterations", 0)
-    if not isinstance(diagnostic_iterations, int) or isinstance(diagnostic_iterations, bool) or diagnostic_iterations not in {0, 40}:
-        raise ValueError("diagnostic profile requires exactly 40 iterations")
+    if not isinstance(diagnostic_iterations, int) or isinstance(diagnostic_iterations, bool) or diagnostic_iterations not in {0, 10, 40}:
+        raise ValueError("diagnostic profile requires 10 or 40 iterations")
     return rank, analysis, diagnostic_iterations
 
 

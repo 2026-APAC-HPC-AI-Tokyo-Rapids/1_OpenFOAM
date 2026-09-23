@@ -83,7 +83,7 @@ case "${OPENFOAM_RUN_PURPOSE}" in
 esac
 solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
 if [[ -n "${OPENFOAM_DIAGNOSTIC_ITERATIONS:-}" ]]; then
-  [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_NODES}" == 4 && "${solver_iterations}" == 40 && "${OPENFOAM_ITERATIONS}" == 150 ]] || { printf '%s\n' '短縮診断は4ノードprofileの40反復だけに限定します' >&2; exit 2; }
+  [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_NODES}" == 4 && ( "${solver_iterations}" == 10 || "${solver_iterations}" == 40 ) && "${OPENFOAM_ITERATIONS}" == 150 ]] || { printf '%s\n' '短縮診断は4ノードprofileの10反復または40反復だけに限定します' >&2; exit 2; }
 fi
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
   [[ "${large_output_dir}" == /* ]]
@@ -407,6 +407,9 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     mapfile -t mpi_timing_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*.csv' -print)
     printf 'mpi_timing_rank_files=%d\n' "${#mpi_timing_files[@]}" >> "${LOG_DIR}/profile-location.txt"
     [[ "${#mpi_timing_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
+    mapfile -t mpi_timing_phase_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*-phases.tsv' -print)
+    printf 'mpi_timing_phase_files=%d\n' "${#mpi_timing_phase_files[@]}" >> "${LOG_DIR}/profile-location.txt"
+    [[ "${#mpi_timing_phase_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
     mapfile -t mpi_timing_stack_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*-long.tsv' -print)
     printf 'mpi_timing_stack_files=%d\n' "${#mpi_timing_stack_files[@]}" >> "${LOG_DIR}/profile-location.txt"
     [[ "${#mpi_timing_stack_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]

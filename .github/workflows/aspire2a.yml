@@ -37,6 +37,7 @@ jobs:
       action: ${{ steps.select.outputs.action }}
       source_archive_key: ${{ steps.select.outputs.source_archive_key }}
       build_cache_key: ${{ steps.select.outputs.build_cache_key }}
+      openfoam_source_oid: ${{ steps.source.outputs.oid }}
       experiment_preset: ${{ steps.protocol.outputs.experiment_preset }}
       ranks: ${{ steps.protocol.outputs.ranks }}
       prepare_script_sha256: ${{ steps.prepare_identity.outputs.sha256 }}
@@ -49,6 +50,18 @@ jobs:
       - name: ケース準備処理を識別
         id: prepare_identity
         run: echo "sha256=$(sha256sum scripts/prepare-openfoam-case.sh | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
+
+      - name: 診断用ソースを選択
+        id: source
+        run: |
+          source_oid=${OPENFOAM_SOURCE_OID}
+          if [[ '${{ inputs.profile }}' == true ]] && jq -e '.analysis == "mpi_timing" and .diagnostic_iterations == 10' platforms/aspire2a/profile.json >/dev/null; then
+            [[ '${{ inputs.node_count }}' == 4 ]] || { echo '10反復診断にはASPIRE-2Aの4ノードを指定してください' >&2; exit 64; }
+            source_oid=$(cat platforms/aspire2a/diagnostic-source-oid.txt)
+            [[ "${source_oid}" =~ ^[0-9a-f]{40}$ ]]
+          fi
+          printf 'oid=%s\n' "${source_oid}" >> "${GITHUB_OUTPUT}"
+          printf 'OPENFOAM_SOURCE_OID=%s\n' "${source_oid}" >> "${GITHUB_ENV}"
 
       - name: 実験条件を決定
         id: protocol
@@ -121,14 +134,18 @@ jobs:
 
       - name: ソース圧縮ファイルを配置
         id: stage
+        env:
+          OPENFOAM_SOURCE_OID: ${{ needs.select-build.outputs.openfoam_source_oid }}
         run: |
           # 非公開source repositoryは、意図的にASPIRE-2A login runnerへ設定したgh認証で取得する。
           source_archive_run_dir="${SOURCE_ARCHIVE_DIR}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           install -d -m 0750 "${source_archive_run_dir}"
           echo "SOURCE_ARCHIVE_RUN_DIR=${source_archive_run_dir}" >> "${GITHUB_ENV}"
-          openfoam_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)
+          openfoam_oid=${OPENFOAM_SOURCE_OID}
+          if [[ "${openfoam_oid}" == 5a55da3fb12800863bf76122c50bb0850222cab0 ]]; then
+            test "$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/3_OpenFOAM_Src/git/ref/tags/OpenFOAM-v2512 --jq .object.sha)" = "${openfoam_oid}"
+          fi
           thirdparty_oid=$(gh api repos/2026-APAC-HPC-AI-Tokyo-Rapids/4_OpenFOAM_ThirdParty_Src/git/ref/tags/v2512 --jq .object.sha)
-          test "${openfoam_oid}" = "${OPENFOAM_SOURCE_OID}"
           test "${thirdparty_oid}" = "${THIRDPARTY_SOURCE_OID}"
           [[ "${openfoam_oid}" =~ ^[0-9a-f]{40}$ && "${thirdparty_oid}" =~ ^[0-9a-f]{40}$ ]]
           openfoam_archive="${source_archive_run_dir}/${openfoam_oid}.openfoam.tar.gz"
@@ -334,7 +351,7 @@ jobs:
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
-          control_plane_files=(.github/workflows/aspire2a.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml experiment-metrics/src/experiment_metrics/cli.py experiment-metrics/src/experiment_metrics/imb.py experiment-metrics/src/experiment_metrics/pbs_scheduler.py experiment-metrics/src/experiment_metrics/rank_wrapper.py platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/mpi-rank-affinity.c platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/profile.json platforms/aspire2a/provision-openfoam-runtime.sh platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh platforms/aspire2a/wait-pbs-job.sh scripts/check-openfoam-case-cache.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
+          control_plane_files=(.github/workflows/aspire2a.yml .github/workflows/openfoam.yml benchmark/parse_result.sh benchmark/profile.json benchmark/workload.json "${protocol_relative}" experiment-metrics/registry/openfoam-v2.toml experiment-metrics/src/experiment_metrics/cli.py experiment-metrics/src/experiment_metrics/imb.py experiment-metrics/src/experiment_metrics/pbs_scheduler.py experiment-metrics/src/experiment_metrics/rank_wrapper.py platforms/aspire2a/archive-openfoam-case.sh platforms/aspire2a/diagnostic-source-oid.txt platforms/aspire2a/mpi-rank-affinity.c platforms/aspire2a/prepare-openfoam-case.pbs platforms/aspire2a/profile.json platforms/aspire2a/provision-openfoam-runtime.sh platforms/aspire2a/run-openfoam.pbs platforms/aspire2a/stage-openfoam-case.sh platforms/aspire2a/stage-openfoam-runtime.sh platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh platforms/aspire2a/wait-pbs-job.sh scripts/check-openfoam-case-cache.sh scripts/prepare-openfoam-case.sh scripts/run-openfoam.sh)
           if [[ "${purpose}" == profile && "${profile_tool}" == uprof ]]; then control_plane_files+=(experiment-metrics/src/experiment_metrics/profile_uprof.py platforms/aspire2a/exec-uprof-target.c platforms/aspire2a/exec-uprof.sh platforms/aspire2a/export-uprof.sh platforms/aspire2a/provision-uprof.sh); fi
           if [[ "${purpose}" == profile && "${profile_tool}" == craypat ]]; then control_plane_files+=(platforms/aspire2a/export-craypat.sh); fi
           if [[ "${purpose}" == profile && "${profile_tool}" == mpi_timing ]]; then control_plane_files+=(platforms/aspire2a/exec-mpi-temporal-profile.sh platforms/aspire2a/mpi-temporal-profile.c experiment-metrics/src/experiment_metrics/provision.py); fi
