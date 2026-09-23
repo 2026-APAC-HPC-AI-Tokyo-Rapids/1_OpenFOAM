@@ -40,7 +40,7 @@ def submit_pbs_run(
     if run_dir != manifest.path.parents[1]:
         raise ValueError("submission runtime differs from the bound manifest")
     protocol = RunProtocol.load(protocol_path, manifest.purpose)
-    if profile_tool not in {"craypat", "uprof", "vtune"}:
+    if profile_tool not in {"craypat", "mpi_timing", "uprof", "vtune"}:
         raise ValueError("unsupported profile tool")
     if profile_rank < 0 or profile_rank >= protocol.ranks:
         raise ValueError("profile rank must be within the protocol rank range")
@@ -50,6 +50,8 @@ def submit_pbs_run(
         supported_analyses = {"assess", "data_access", "hotspots"}
     elif profile_tool == "craypat":
         supported_analyses = {"mpi"}
+    elif profile_tool == "mpi_timing":
+        supported_analyses = {"mpi_timing"}
     else:
         supported_analyses = {"hotspots", "hpc-performance", "memory-access", "memory-access-core"}
     if profile_analysis not in supported_analyses:

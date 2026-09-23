@@ -75,7 +75,7 @@ done
 
 OPENFOAM_RUN_PURPOSE=${OPENFOAM_RUN_PURPOSE:-bench}
 OPENFOAM_PROFILE_TOOL=${OPENFOAM_PROFILE_TOOL:-vtune}
-case "${OPENFOAM_PROFILE_TOOL}" in craypat|vtune|uprof) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
+case "${OPENFOAM_PROFILE_TOOL}" in craypat|mpi_timing|vtune|uprof) ;; *) printf '未対応のprofile toolです: %s\n' "${OPENFOAM_PROFILE_TOOL}" >&2; exit 2 ;; esac
 PROTOCOL_NAME=$(basename "${OPENFOAM_PROTOCOL_PATH}" .toml)
 case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
@@ -129,6 +129,7 @@ SUPERVISOR_STATE="${RUN_DIR}/domain/supervisor-state.json"
 profile_run_id="${RUN_ID}-${job_id}"
 uprof_root="${RUN_DIR}/profile/raw/uprof"
 craypat_root="${RUN_DIR}/profile/raw/craypat"
+mpi_timing_root="${RUN_DIR}/profile/raw/mpi-temporal"
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
   vtune_root="${large_output_dir}/vtune"
   OPENFOAM_VTUNE_RESULT_DIR="${vtune_root}/rank-${OPENFOAM_VTUNE_RANK}-${OPENFOAM_VTUNE_ANALYSIS}"
@@ -205,10 +206,12 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
       test -x "${OPENFOAM_UPROF_PATH}"
       export OPENFOAM_UPROF_PATH
       provision_args+=(--executable "uprof=${OPENFOAM_UPROF_PATH}")
-    else
+    elif [[ "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
       OPENFOAM_CRAYPAT_PATH=$(command -v pat_run)
       export OPENFOAM_CRAYPAT_PATH
       provision_args+=(--executable "craypat=${OPENFOAM_CRAYPAT_PATH}")
+    else
+      provision_args+=(--executable "mpi_timing=${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh")
     fi
   fi
 fi
@@ -262,14 +265,14 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   # 共有libraryを後続の正式solver実行が再利用する。公式function objectは0反復の終了時に0/0を
   # 計算するため、warmupだけFPE trapを無効化する。solverの実行環境は変更しない。
   stage profile_warmup "${LOG_DIR}/profile-warmup.log" "${ENV}" FOAM_SIGFPE=false "${solver_launch[@]}" "${SIMPLE_FOAM}" -postProcess -parallel -fileHandler uncollated "${openfoam_args[@]}"
-  if [[ "${OPENFOAM_PROFILE_TOOL:-vtune}" == vtune ]]; then install -d -m 2770 "${vtune_root}"; install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"; elif [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then install -d -m 0750 "${uprof_root}/sessions"; else install -d -m 0750 "${craypat_root}"; fi
+  if [[ "${OPENFOAM_PROFILE_TOOL:-vtune}" == vtune ]]; then install -d -m 2770 "${vtune_root}"; install -d -m 0700 "${RUN_DIR}/profile/raw/vtune-summary"; elif [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then install -d -m 0750 "${uprof_root}/sessions"; elif [[ "${OPENFOAM_PROFILE_TOOL}" == mpi_timing ]]; then install -d -m 0750 "${mpi_timing_root}"; else install -d -m 0750 "${craypat_root}"; fi
   # v2512は既存coefficient.datがあると正式出力をcoefficient_0.datへ改名する。
   # warmupのrawを退避し、正式solverが規定名へ出力できるようにする。
   mv -T "${CASE_DIR}/postProcessing" "${RUN_DIR}/profile/raw/warmup-postProcessing"
 fi
 install -d -m 0755 "${SOURCE_DIR}/env" "${SOURCE_DIR}/placement"
 "${METRICS_CLI}" capture-host-exec --manifest "${RUN_MANIFEST}" --output "${SOURCE_DIR}/env/host-exec.snapshot"
-if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof || "${OPENFOAM_PROFILE_TOOL}" == craypat ]]; then
+if [[ "${OPENFOAM_RUN_PURPOSE}" == bench || "${OPENFOAM_PROFILE_TOOL}" == uprof || "${OPENFOAM_PROFILE_TOOL}" == craypat || "${OPENFOAM_PROFILE_TOOL}" == mpi_timing ]]; then
   stage rank_placement "${LOG_DIR}/rank-placement.log" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" "${RANK_PLACEMENT_ARGS[@]}" --capture-only
 fi
 set +e
@@ -281,6 +284,8 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions" "${OPENFOAM_UPROF_ANALYSIS}" "${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"
   elif [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
+  elif [[ "${OPENFOAM_PROFILE_TOOL}" == mpi_timing ]]; then
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh" "${compute_tools_root}/platforms/aspire2a/libmpi-temporal-profile.so" "${mpi_timing_root}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   else
     stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}" "${solver_launch[@]}" "${OPENFOAM_CRAYPAT_PATH}" -g mpi -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi
@@ -398,6 +403,11 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     else
       printf 'VTune結果ディレクトリは%sに1件必要ですが、%d件見つかりました\n' "${OPENFOAM_VTUNE_RESULT_DIR}" "${#vtune_result_dirs[@]}" >&2
     fi
+  elif [[ "${OPENFOAM_PROFILE_TOOL}" == mpi_timing ]]; then
+    mapfile -t mpi_timing_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*.csv' -print)
+    printf 'mpi_timing_rank_files=%d\n' "${#mpi_timing_files[@]}" >> "${LOG_DIR}/profile-location.txt"
+    [[ "${#mpi_timing_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
+    du -sh "${mpi_timing_root}" >> "${LOG_DIR}/profile-location.txt"
   else
     du -sh "${craypat_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true
     mapfile -t craypat_experiments < <(find "${craypat_root}" -mindepth 1 -maxdepth 1 -type d -name 'simpleFoam+*' -print)

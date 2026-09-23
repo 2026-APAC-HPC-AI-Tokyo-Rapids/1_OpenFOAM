@@ -36,6 +36,7 @@ def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str, int]:
         "memory-access",
         "memory-access-core",
         "mpi",
+        "mpi_timing",
     }:
         raise ValueError("unsupported profile analysis")
     diagnostic_iterations = document.get("diagnostic_iterations", 0)
@@ -129,12 +130,12 @@ def parser() -> argparse.ArgumentParser:
     submit_pbs.add_argument("--pbs-script-repository-path", required=True)
     submit_pbs.add_argument("--execution-script", type=Path, required=True)
     submit_pbs.add_argument("--provision-dir", type=Path, required=True)
-    submit_pbs.add_argument("--profile-tool", choices=["craypat", "uprof", "vtune"], default="vtune")
+    submit_pbs.add_argument("--profile-tool", choices=["craypat", "mpi_timing", "uprof", "vtune"], default="vtune")
     submit_pbs.add_argument("--profile-condition", type=Path)
     submit_pbs.add_argument("--profile-rank", type=int, default=0)
     submit_pbs.add_argument(
         "--profile-analysis",
-        choices=["assess", "data_access", "hotspots", "hpc-performance", "memory-access", "memory-access-core", "mpi"],
+        choices=["assess", "data_access", "hotspots", "hpc-performance", "memory-access", "memory-access-core", "mpi", "mpi_timing"],
         default="hotspots",
     )
 

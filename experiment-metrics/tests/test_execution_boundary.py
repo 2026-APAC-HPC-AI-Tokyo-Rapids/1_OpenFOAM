@@ -400,6 +400,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
     assert "openfoam-profile-craypat-mpi-v1.json" in workflow
+    assert "openfoam-profile-mpi-timing-v1.json" in workflow
     assert "provision-uprof.sh" in workflow
     assert "AMDuProf_Linux_x64_5.3.521.tar.bz2" in workflow
     assert "platforms/aspire2a/exec-uprof.sh" in workflow
@@ -447,6 +448,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'tar -I zstd -xf "${build_archive}" -C "${output_root}" "./${simplefoam_relative}"' in craypat_exporter
     assert '"${pat_report}" -i "${report_binary}"' in craypat_exporter
     assert 'stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}"' in runner
+    assert 'stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh"' in runner
+    assert '[[ "${#mpi_timing_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]' in runner
+    assert 'platforms/aspire2a/mpi-temporal-profile.c' in workflow
+    assert 'mpi_timing) ;;' in wrapper
     assert "stage_at() {" in runner
     assert 'profile/uprof-summary' not in workflow
     assert "scripts/exec-profiler.sh" not in workflow

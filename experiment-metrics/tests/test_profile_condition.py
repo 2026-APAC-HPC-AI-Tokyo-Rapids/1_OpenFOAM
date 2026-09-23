@@ -58,6 +58,13 @@ def test_profile_condition_accepts_short_diagnostic(tmp_path) -> None:
     assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi", 40)
 
 
+def test_profile_condition_accepts_mpi_timing_diagnostic(tmp_path) -> None:
+    condition = tmp_path / "profile.json"
+    condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi_timing","rank":0,"diagnostic_iterations":40}\n', encoding="utf-8")
+
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi_timing", 40)
+
+
 @pytest.mark.parametrize(
     "body",
     [

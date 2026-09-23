@@ -13,7 +13,7 @@ from .fact import canonical_json
 from .manifest import SHA256, RunManifest
 
 BASE_ROLES = (*EXECUTABLE_ROLES, "mpirun")
-PROFILE_ROLES = {"craypat": "-V", "vtune": "--version", "uprof": "--version"}
+PROFILE_ROLES = {"craypat": "-V", "vtune": "--version", "uprof": "--version", "mpi_timing": "--version"}
 
 
 def validate_provision(

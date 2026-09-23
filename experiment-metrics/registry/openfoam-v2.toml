@@ -73,6 +73,10 @@ required_for = []
 id = "openfoam.craypat-mpi/v1"
 required_for = []
 
+[[producers]]
+id = "openfoam.mpi-timing/v1"
+required_for = []
+
 [[keys]]
 pattern = "run.identity.run_id"
 owner = "runner.manifest"
@@ -480,6 +484,13 @@ id = "openfoam.craypat-mpi/v1"
 owner_scope = "run"
 applicable_run_variants = ["profile"]
 activation = { kind = "bundle_component", component_id = "openfoam.craypat-mpi/v1" }
+instances = { kind = "singleton" }
+
+[[producer]]
+id = "openfoam.mpi-timing/v1"
+owner_scope = "run"
+applicable_run_variants = ["profile"]
+activation = { kind = "bundle_component", component_id = "openfoam.mpi-timing/v1" }
 instances = { kind = "singleton" }
 
 [[producer]]
@@ -910,6 +921,15 @@ source_role = "craypat_mpi_report"
 storage = "profile_raw"
 path_template = [{ literal = "profile/raw/craypat/pat-report.txt" }]
 schema_id = "craypat-mpi-text/v1"
+required_when_applicable = false
+
+[[source]]
+id = "openfoam.mpi-timing-rank0/v1"
+producer_id = "openfoam.mpi-timing/v1"
+source_role = "mpi_timing_rank0"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/mpi-temporal/rank-0.csv" }]
+schema_id = "mpi-timing-csv/v1"
 required_when_applicable = false
 
 [[source]]
