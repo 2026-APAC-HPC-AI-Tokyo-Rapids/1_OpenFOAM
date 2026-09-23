@@ -15,9 +15,9 @@ def parse_coefficient(path: Path, iterations: int) -> dict[str, object]:
 
 def parse_coefficient_text(text: str, iterations: int) -> dict[str, object]:
     """Read the final Cd observation; the published references are not gates."""
-    references = {40: "~0.43", 80: "~0.34", 150: "~0.28–0.29"}
+    references = {10: "not_applicable", 40: "~0.43", 80: "~0.34", 150: "~0.28–0.29"}
     if iterations not in references:
-        raise ValueError("Cd requires 40, 80, or 150 configured iterations")
+        raise ValueError("Cd requires 10, 40, 80, or 150 configured iterations")
     header: list[str] | None = None
     final: tuple[Decimal, Decimal] | None = None
     for line in text.splitlines():
