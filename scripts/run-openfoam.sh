@@ -407,6 +407,12 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
     mapfile -t mpi_timing_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*.csv' -print)
     printf 'mpi_timing_rank_files=%d\n' "${#mpi_timing_files[@]}" >> "${LOG_DIR}/profile-location.txt"
     [[ "${#mpi_timing_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
+    mapfile -t mpi_timing_stack_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*-long.tsv' -print)
+    printf 'mpi_timing_stack_files=%d\n' "${#mpi_timing_stack_files[@]}" >> "${LOG_DIR}/profile-location.txt"
+    [[ "${#mpi_timing_stack_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
+    mapfile -t mpi_timing_request_files < <(find "${mpi_timing_root}" -maxdepth 1 -type f -name 'rank-*-requests.tsv' -print)
+    printf 'mpi_timing_request_files=%d\n' "${#mpi_timing_request_files[@]}" >> "${LOG_DIR}/profile-location.txt"
+    [[ "${#mpi_timing_request_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]
     du -sh "${mpi_timing_root}" >> "${LOG_DIR}/profile-location.txt"
   else
     du -sh "${craypat_root}" >> "${LOG_DIR}/profile-location.txt" 2>/dev/null || true

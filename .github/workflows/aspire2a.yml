@@ -222,7 +222,7 @@ jobs:
           aspire2a_load_toolchain "${aspire2a_toolchain}"
           cc -O2 -Wall -Wextra -Werror -fPIC -shared -Wl,-z,defs -o "${provision_dir}/platforms/aspire2a/libmpi-rank-affinity.so" platforms/aspire2a/mpi-rank-affinity.c
           cc -O2 -Wall -Wextra -Werror -std=c11 -o "${provision_dir}/platforms/aspire2a/exec-uprof-target" platforms/aspire2a/exec-uprof-target.c
-          if [[ '${{ inputs.profile }}' == true ]] && [[ $(jq -r '.analysis' platforms/aspire2a/profile.json) == mpi_timing ]]; then cc -O2 -Wall -Wextra -Werror -std=c11 -fPIC -shared -Wl,-z,defs -o "${provision_dir}/platforms/aspire2a/libmpi-temporal-profile.so" platforms/aspire2a/mpi-temporal-profile.c; fi
+          if [[ '${{ inputs.profile }}' == true ]] && [[ $(jq -r '.analysis' platforms/aspire2a/profile.json) == mpi_timing ]]; then cc -O2 -Wall -Wextra -Werror -std=c11 -fPIC -shared -Wl,-z,defs -o "${provision_dir}/platforms/aspire2a/libmpi-temporal-profile.so" platforms/aspire2a/mpi-temporal-profile.c -ldl; fi
           ldd "${provision_dir}/platforms/aspire2a/libmpi-rank-affinity.so" > "${provision_dir}/control/mpi-rank-affinity-ldd.log"
           grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${provision_dir}/control/mpi-rank-affinity-ldd.log"
           if grep -q '/oneapi/' "${provision_dir}/control/mpi-rank-affinity-ldd.log"; then printf '%s\n' 'ASPIRE-2A用MPI affinity interposerがIntel oneAPIにlinkしています' >&2; exit 1; fi

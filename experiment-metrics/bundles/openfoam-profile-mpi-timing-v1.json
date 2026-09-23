@@ -10,7 +10,7 @@
   "components": [
     {
       "component_id": "openfoam.mpi-timing/v1",
-      "sink_ids": ["mpi-timing-rank0"],
+      "sink_ids": ["mpi-timing-long-rank0", "mpi-timing-rank0", "mpi-timing-requests-rank0"],
       "activation": {
         "kind": "executable",
         "artifact_relative_path": "scripts/run-openfoam.sh",
@@ -24,8 +24,18 @@
   "environment_capture_scopes": [],
   "sink_bindings": [
     {
+      "sink_id": "mpi-timing-long-rank0",
+      "source_id": "openfoam.mpi-timing-long-rank0/v1",
+      "buffering_mode": "stage_buffered"
+    },
+    {
       "sink_id": "mpi-timing-rank0",
       "source_id": "openfoam.mpi-timing-rank0/v1",
+      "buffering_mode": "stage_buffered"
+    },
+    {
+      "sink_id": "mpi-timing-requests-rank0",
+      "source_id": "openfoam.mpi-timing-requests-rank0/v1",
       "buffering_mode": "stage_buffered"
     }
   ],

@@ -450,6 +450,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}"' in runner
     assert 'stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh"' in runner
     assert '[[ "${#mpi_timing_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]' in runner
+    assert '[[ "${#mpi_timing_stack_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]' in runner
+    assert '[[ "${#mpi_timing_request_files[@]}" -eq "${OPENFOAM_MPI_PROCS}" ]]' in runner
     assert 'platforms/aspire2a/mpi-temporal-profile.c' in workflow
     assert 'mpi_timing) ;;' in wrapper
     assert "stage_at() {" in runner

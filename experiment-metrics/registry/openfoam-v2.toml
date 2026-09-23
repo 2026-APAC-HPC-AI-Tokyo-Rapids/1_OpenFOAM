@@ -933,6 +933,24 @@ schema_id = "mpi-timing-csv/v1"
 required_when_applicable = false
 
 [[source]]
+id = "openfoam.mpi-timing-long-rank0/v1"
+producer_id = "openfoam.mpi-timing/v1"
+source_role = "mpi_timing_long_rank0"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/mpi-temporal/rank-0-long.tsv" }]
+schema_id = "mpi-timing-long-tsv/v1"
+required_when_applicable = false
+
+[[source]]
+id = "openfoam.mpi-timing-requests-rank0/v1"
+producer_id = "openfoam.mpi-timing/v1"
+source_role = "mpi_timing_requests_rank0"
+storage = "profile_raw"
+path_template = [{ literal = "profile/raw/mpi-temporal/rank-0-requests.tsv" }]
+schema_id = "mpi-timing-requests-tsv/v1"
+required_when_applicable = false
+
+[[source]]
 id = "artifact.network_stdout"
 producer_id = "network.parser"
 source_role = "imb_mpi1_stdout"
