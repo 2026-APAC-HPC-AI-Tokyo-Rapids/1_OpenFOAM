@@ -10,15 +10,16 @@ from .recording import collect_once
 from .stage_runner import run_stage
 
 
-def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str]:
+def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str, int]:
     path = arguments.profile_condition
     if path is None:
-        return arguments.profile_rank, arguments.profile_analysis
+        return arguments.profile_rank, arguments.profile_analysis, 0
     document = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(document, dict) or set(document) != {
+    if not isinstance(document, dict) or not {"schema_version", "analysis", "rank"} <= set(document) or set(document) - {
         "schema_version",
         "analysis",
         "rank",
+        "diagnostic_iterations",
     }:
         raise ValueError("profile condition must be a closed v1 object")
     if document["schema_version"] != "openfoam-profile-condition/v1":
@@ -37,7 +38,10 @@ def _profile_condition(arguments: argparse.Namespace) -> tuple[int, str]:
         "mpi",
     }:
         raise ValueError("unsupported profile analysis")
-    return rank, analysis
+    diagnostic_iterations = document.get("diagnostic_iterations", 0)
+    if not isinstance(diagnostic_iterations, int) or isinstance(diagnostic_iterations, bool) or diagnostic_iterations not in {0, 40}:
+        raise ValueError("diagnostic profile requires exactly 40 iterations")
+    return rank, analysis, diagnostic_iterations
 
 
 def parser() -> argparse.ArgumentParser:
@@ -404,7 +408,9 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "submit-run":
         from .scheduler import submit_run
 
-        profile_rank, profile_analysis = _profile_condition(arguments)
+        profile_rank, profile_analysis, diagnostic_iterations = _profile_condition(arguments)
+        if diagnostic_iterations:
+            raise ValueError("short diagnostic profiles are supported only on ASPIRE-2A")
 
         outcome = submit_run(
             manifest_path=arguments.manifest,
@@ -422,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "submit-pbs-run":
         from .pbs_scheduler import submit_pbs_run
 
-        profile_rank, profile_analysis = _profile_condition(arguments)
+        profile_rank, profile_analysis, diagnostic_iterations = _profile_condition(arguments)
 
         outcome = submit_pbs_run(
             manifest_path=arguments.manifest,
@@ -434,6 +440,7 @@ def main(argv: list[str] | None = None) -> int:
             profile_tool=arguments.profile_tool,
             profile_rank=profile_rank,
             profile_analysis=profile_analysis,
+            diagnostic_iterations=diagnostic_iterations,
         )
         if outcome.job_id is not None:
             print(outcome.job_id)

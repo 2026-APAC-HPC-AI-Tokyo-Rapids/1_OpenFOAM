@@ -49,6 +49,7 @@ for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "
 if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
+solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
 rank_affinity="${PROVISION_DIR}/platforms/aspire2a/libmpi-rank-affinity.so"
 ldd "${rank_affinity}" > "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"
 grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"
@@ -58,7 +59,7 @@ identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISI
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 case_archive_dir="${case_archive_root}/${cache_identity}"
 case_dir="${TMPDIR}/openfoam-case/occDrivAerStaticMesh"
-"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${OPENFOAM_ITERATIONS}" "${case_dir}" "${runtime_root}"
+"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-case.sh" "${case_archive_dir}" "${cache_identity}" "${solver_iterations}" "${case_dir}" "${runtime_root}"
 rank_context_root="${TMPDIR}/openfoam-run"
 "${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/stage-rank-context.sh" "${RUN_MANIFEST}" "${rank_context_root}"
 host_roots="((\".*\" \"${TMPDIR}/openfoam-case\"))"

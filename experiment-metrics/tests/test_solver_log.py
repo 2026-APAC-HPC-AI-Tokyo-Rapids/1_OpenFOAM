@@ -65,6 +65,24 @@ def test_official_shell_parser_accepts_simplefoam_statistics(tmp_path: Path) -> 
     assert subprocess.run(command, capture_output=True).returncode != 0
 
 
+def test_short_profile_is_labeled_diagnostic_not_official(tmp_path: Path) -> None:
+    check_mesh = tmp_path / "checkMesh.log"
+    check_mesh.write_text("    cells: 65334765\nEnd\n")
+    solver = tmp_path / "solver.log"
+    solver.write_text("Build  : test OPENFOAM=2512\nExec   : simpleFoam -parallel\nnProcs : 512\n" + "".join(f"Time = {iteration}\n" for iteration in range(1, 41)) + "    Number of measured time steps = 39\n    Average wall-clock time per time step = 10.25\n    Standard deviation of wall-clock time per time step = 0.25\nEnd\n")
+    coefficient = tmp_path / "coefficient.dat"
+    coefficient.write_text("# Time Cd Cl\n40 0.435 0.01\n")
+    command = [Path(__file__).parents[2] / "benchmark/parse_result.sh", solver, check_mesh, "512", "4", "40", "65334765", "v2512", "occDrivAerStaticMesh-65M", "OpenFOAM.com", coefficient]
+    assert subprocess.run(command, capture_output=True).returncode != 0
+    result = subprocess.run([command[0], "--diagnostic", *command[1:]], check=True, capture_output=True, text=True)
+    assert "STATUS: DIAGNOSTIC" in result.stdout
+    assert "official_iterations=150" in result.stdout
+    assert "STATUS: VALID" not in result.stdout
+    assert "RESULT:" not in result.stdout
+    solver.write_text(solver.read_text().replace("Average wall-clock time per time step = 10.25", "Average wall-clock time per time step = NaN"))
+    assert subprocess.run([command[0], "--diagnostic", *command[1:]], capture_output=True).returncode != 0
+
+
 def test_official_evaluator_rejects_badnum_but_retains_lexemes() -> None:
     text = (FIXTURES / "solver-valid.log").read_text().replace("Final residual = 0.04", "Final residual = NaN", 1)
     parsed = parse_solver_log(text)

@@ -225,3 +225,27 @@ def test_aspire2a_submission_accepts_craypat_mpi(tmp_path: Path, identities: dic
     assert "OPENFOAM_PROFILE_TOOL=craypat" in exported
     assert "OPENFOAM_UPROF_ANALYSIS" not in exported
     assert "OPENFOAM_VTUNE_ANALYSIS" not in exported
+
+
+def test_aspire2a_four_node_profile_exports_short_diagnostic(tmp_path: Path, identities: dict[str, object]) -> None:
+    profile_identities = json.loads(json.dumps(identities))
+    profile_identities["source_track"]["base_role"] = "profile_base"
+    manifest = init_run(None, tmp_path, profile_identities, registry_path=REGISTRY, purpose="profile")
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    execution = provision / "platforms/aspire2a/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+    protocol = ASPIRE2A_PROTOCOL.with_name("openfoam-v2-protocol-aspire2a-multilevel-4n-512r.toml")
+
+    outcome = submit_pbs_run(manifest_path=manifest, runtime_dir=run_dir, protocol_path=protocol, pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs", execution_script=execution, provision_dir=provision, profile_tool="craypat", profile_analysis="mpi", diagnostic_iterations=40, qsub_path=launcher, execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"24500002.pbs\n", b""))
+
+    request = json.loads(outcome.request_path.read_text())
+    exported = request["argv"][request["argv"].index("-v") + 1]
+    assert "OPENFOAM_ITERATIONS=150" in exported
+    assert "OPENFOAM_DIAGNOSTIC_ITERATIONS=40" in exported
+    assert request["iterations"] == 150
+    assert request["diagnostic_iterations"] == 40

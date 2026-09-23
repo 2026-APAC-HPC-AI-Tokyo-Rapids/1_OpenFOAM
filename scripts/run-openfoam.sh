@@ -81,6 +81,10 @@ case "${OPENFOAM_RUN_PURPOSE}" in
   bench|profile) ;;
   *) printf '未対応のOPENFOAM_RUN_PURPOSEです: %s\n' "${OPENFOAM_RUN_PURPOSE}" >&2; exit 2 ;;
 esac
+solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
+if [[ -n "${OPENFOAM_DIAGNOSTIC_ITERATIONS:-}" ]]; then
+  [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_NODES}" == 4 && "${solver_iterations}" == 40 && "${OPENFOAM_ITERATIONS}" == 150 ]] || { printf '%s\n' '短縮診断は4ノードprofileの40反復だけに限定します' >&2; exit 2; }
+fi
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
   [[ "${large_output_dir}" == /* ]]
   : "${OPENFOAM_VTUNE_RANK:?scheduler-selected VTune rank is required}"
@@ -244,7 +248,7 @@ install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
 install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
-sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${OPENFOAM_ITERATIONS};/" system/controlDict
+sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${solver_iterations};/" system/controlDict
 install -m 0644 system/controlDict "${SOURCE_DIR}/mesh/controlDict"
 install -m 0644 system/include/caseDefinition "${SOURCE_DIR}/mesh/caseDefinition"
 if [[ "${restore_case}" == true ]]; then restore0Dir -processor; fi
@@ -292,7 +296,7 @@ if [[ "${solver_status}" -ne 0 ]]; then
 fi
 # This shell and MPI rank 0 share the first node's case root, including on Gadi.
 # Copy force coefficients to the persistent run before optional profile collection.
-"${METRICS_CLI}" collect-coefficient --case-root "${CASE_DIR}" --output-root "${RESULTS_DIR}" --iterations "${OPENFOAM_ITERATIONS}"
+"${METRICS_CLI}" collect-coefficient --case-root "${CASE_DIR}" --output-root "${RESULTS_DIR}" --iterations "${solver_iterations}"
 if [[ -n "${placement_collector}" ]]; then "${node_launch[@]}" "${placement_collector}" "${rank_placement_root}" "${SOURCE_DIR}/placement" "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))"; fi
 
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
@@ -303,9 +307,12 @@ if [[ "${OPENFOAM_RUN_PURPOSE}" == profile && "${OPENFOAM_PROFILE_TOOL}" == vtun
     if [[ "${vtune_export_status}" -ne 0 ]]; then printf 'VTuneホットスポットの出力に失敗しました（%d）。ソルバーの結果を正本として維持します\n' "${vtune_export_status}" >&2; fi
 fi
 
-"${PROVISION_DIR}/benchmark/parse_result.sh" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${OPENFOAM_ITERATIONS}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" "${RESULTS_DIR}/coefficient.dat" > "${RESULTS_DIR}/result.txt"
-grep -qx 'STATUS: VALID' "${RESULTS_DIR}/result.txt"
-grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"
+result_mode=()
+expected_status=VALID
+if [[ -n "${OPENFOAM_DIAGNOSTIC_ITERATIONS:-}" ]]; then result_mode=(--diagnostic); expected_status=DIAGNOSTIC; fi
+"${PROVISION_DIR}/benchmark/parse_result.sh" "${result_mode[@]}" "${SOLVER_LOG}" "${LOG_DIR}/checkMesh.log" "${OPENFOAM_MPI_PROCS}" "${OPENFOAM_NODES}" "${solver_iterations}" "${OPENFOAM_EXPECTED_CELLS}" "${OPENFOAM_RELEASE}" "${OPENFOAM_WORKLOAD_ID}" "${OPENFOAM_DISTRIBUTION}" "${RESULTS_DIR}/coefficient.dat" > "${RESULTS_DIR}/result.txt"
+grep -qx "STATUS: ${expected_status}" "${RESULTS_DIR}/result.txt"
+if [[ "${expected_status}" == VALID ]]; then grep -q '^RESULT:' "${RESULTS_DIR}/result.txt"; else grep -q '^DIAGNOSTIC:' "${RESULTS_DIR}/result.txt"; fi
 
 # 小さく永続的な準備ログを再利用する。計測値を集めるだけのために、65Mセルの
 # 非分割メッシュやprocessorメッシュを開き直したりハッシュ計算したりしない。

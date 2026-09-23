@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+diagnostic=false
+if [[ "${1:-}" == --diagnostic ]]; then diagnostic=true; shift; fi
 if [[ $# -ne 10 ]]; then
   echo "使用方法: $0 SOLVER_LOG CHECK_MESH_LOG RANKS NODES ITERATIONS EXPECTED_CELLS RELEASE WORKLOAD_ID DISTRIBUTION COEFFICIENT_DAT" >&2
   exit 64
@@ -22,7 +24,12 @@ case "${nodes}" in
   2) expected_iterations=80 ;;
   4) expected_iterations=150 ;;
 esac
-[[ "${iterations}" == "${expected_iterations}" && "${release}" == v2512 && "${workload_id}" == occDrivAerStaticMesh-65M && "${distribution}" == OpenFOAM.com ]]
+if [[ "${diagnostic}" == true ]]; then
+  [[ "${nodes}" == 4 && "${iterations}" == 40 && "${expected_iterations}" == 150 ]]
+else
+  [[ "${iterations}" == "${expected_iterations}" ]]
+fi
+[[ "${release}" == v2512 && "${workload_id}" == occDrivAerStaticMesh-65M && "${distribution}" == OpenFOAM.com ]]
 
 grep -Eq '^Exec[[:space:]]*:[[:space:]].*simpleFoam([[:space:]]|$)' "${solver_log}"
 grep -Eq "(OPENFOAM=|OpenFOAM-)[v]?${release#v}([^0-9]|$)" "${solver_log}"
@@ -47,6 +54,11 @@ test "${measured}" = "$((iterations - 1))"
 metrics_cli="$(dirname "${BASH_SOURCE[0]}")/../experiment-metrics/.venv/bin/experiment-metrics"
 cd_sanity=$("${metrics_cli}" parse-coefficient --path "${coefficient}" --iterations "${iterations}")
 
-printf 'STATUS: VALID\n'
-printf 'RESULT: average_wall_clock_seconds_per_iteration=%s standard_deviation=%s measured_iterations=%s configured_iterations=%s cells=%s ranks=%s nodes=%s workload_id=%s distribution=%s release=%s solver=simpleFoam\n' "${average}" "${stddev}" "${measured}" "${iterations}" "${cells}" "${ranks}" "${nodes}" "${workload_id}" "${distribution}" "${release}"
+if [[ "${diagnostic}" == true ]]; then
+  printf 'STATUS: DIAGNOSTIC\n'
+  printf 'DIAGNOSTIC: average_wall_clock_seconds_per_iteration=%s standard_deviation=%s measured_iterations=%s configured_iterations=%s official_iterations=%s cells=%s ranks=%s nodes=%s workload_id=%s distribution=%s release=%s solver=simpleFoam\n' "${average}" "${stddev}" "${measured}" "${iterations}" "${expected_iterations}" "${cells}" "${ranks}" "${nodes}" "${workload_id}" "${distribution}" "${release}"
+else
+  printf 'STATUS: VALID\n'
+  printf 'RESULT: average_wall_clock_seconds_per_iteration=%s standard_deviation=%s measured_iterations=%s configured_iterations=%s cells=%s ranks=%s nodes=%s workload_id=%s distribution=%s release=%s solver=simpleFoam\n' "${average}" "${stddev}" "${measured}" "${iterations}" "${cells}" "${ranks}" "${nodes}" "${workload_id}" "${distribution}" "${release}"
+fi
 printf '%s\n' "${cd_sanity}"

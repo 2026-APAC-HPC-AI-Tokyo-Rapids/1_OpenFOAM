@@ -18,7 +18,7 @@ def test_profile_condition_loads_tracked_condition(tmp_path) -> None:
             profile_rank=0,
             profile_analysis="hotspots",
         )
-    ) == (17, "memory-access")
+    ) == (17, "memory-access", 0)
 
 
 def test_profile_condition_accepts_selected_rank_memory_events(tmp_path) -> None:
@@ -34,21 +34,28 @@ def test_profile_condition_accepts_selected_rank_memory_events(tmp_path) -> None
             profile_rank=0,
             profile_analysis="hotspots",
         )
-    ) == (365, "memory-access-core")
+    ) == (365, "memory-access-core", 0)
 
 
 def test_profile_condition_accepts_uprof_assess(tmp_path) -> None:
     condition = tmp_path / "profile.json"
     condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"assess","rank":0}\n', encoding="utf-8")
 
-    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "assess")
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "assess", 0)
 
 
 def test_profile_condition_accepts_craypat_mpi(tmp_path) -> None:
     condition = tmp_path / "profile.json"
     condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi","rank":0}\n', encoding="utf-8")
 
-    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi")
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi", 0)
+
+
+def test_profile_condition_accepts_short_diagnostic(tmp_path) -> None:
+    condition = tmp_path / "profile.json"
+    condition.write_text('{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi","rank":0,"diagnostic_iterations":40}\n', encoding="utf-8")
+
+    assert _profile_condition(Namespace(profile_condition=condition, profile_rank=0, profile_analysis="hotspots")) == (0, "mpi", 40)
 
 
 @pytest.mark.parametrize(
@@ -57,6 +64,8 @@ def test_profile_condition_accepts_craypat_mpi(tmp_path) -> None:
         '{}',
         '{"schema_version":"openfoam-profile-condition/v1","analysis":"hotspots","rank":true}',
         '{"schema_version":"openfoam-profile-condition/v1","analysis":"unknown","rank":0}',
+        '{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi","rank":0,"diagnostic_iterations":true}',
+        '{"schema_version":"openfoam-profile-condition/v1","analysis":"mpi","rank":0,"diagnostic_iterations":39}',
     ],
 )
 def test_profile_condition_rejects_invalid_documents(tmp_path, body) -> None:
