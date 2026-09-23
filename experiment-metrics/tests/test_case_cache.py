@@ -335,6 +335,19 @@ def test_prepare_case_records_socket_aware_multilevel_decomposition(tmp_path: Pa
     assert subprocess.run([*base, "--identity-only", "--multi-level-ranks-per-node", "128", "--multi-level-domains", "4,2,64"], capture_output=True).returncode != 0
 
 
+def test_prepare_case_records_numa_aware_multilevel_decomposition(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
+    cache_root = tmp_path / "cache"
+    target = tmp_path / "case"
+    base = [SCRIPT, source, target, decompose_par, check_mesh, archive, definition, sidecar, "512", cache_root]
+    subprocess.run([*base, "--multi-level-domains", "4,2,4,16"], check=True)
+
+    manifest = json.loads(next(cache_root.glob("*/manifest.json")).read_text())
+    assert manifest["method"] == "multiLevel"
+    assert manifest["domains"] == [4, 2, 4, 16]
+    assert "domains (4 2 4 16);" in (target / "system/decomposeParDict").read_text()
+
+
 def test_prepare_case_keeps_scotch_and_multilevel_caches_separate(tmp_path: Path) -> None:
     source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
         tmp_path
