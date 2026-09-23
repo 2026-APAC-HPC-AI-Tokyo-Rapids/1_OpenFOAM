@@ -396,7 +396,7 @@ jobs:
         if: success() && inputs.profile
         run: |
           [[ "${OPENFOAM_PROFILE_TOOL}" == craypat ]] || exit 0
-          "${PROVISION_DIR}/platforms/aspire2a/export-craypat.sh" "${RUN_DIR}/profile/raw/craypat"
+          "${PROVISION_DIR}/platforms/aspire2a/export-craypat.sh" "${RUN_DIR}/profile/raw/craypat" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json"
           grep -E '^Table [0-9]+:' "${RUN_DIR}/profile/raw/craypat/pat-report.txt" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 計測記録を確定して成果物を梱包

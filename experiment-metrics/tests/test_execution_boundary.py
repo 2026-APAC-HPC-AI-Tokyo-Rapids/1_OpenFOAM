@@ -442,6 +442,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'results/uprof-summary.json' in workflow
     assert 'results/uprof-summary.md' in workflow
     assert 'platforms/aspire2a/export-craypat.sh' in workflow
+    assert '"${RUN_DIR}/profile/raw/craypat" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json"' in workflow
+    craypat_exporter = (ROOT / "platforms/aspire2a/export-craypat.sh").read_text(encoding="utf-8")
+    assert 'tar -I zstd -xf "${build_archive}" -C "${output_root}" "./${simplefoam_relative}"' in craypat_exporter
+    assert '"${pat_report}" -i "${report_binary}"' in craypat_exporter
     assert 'stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}"' in runner
     assert "stage_at() {" in runner
     assert 'profile/uprof-summary' not in workflow
