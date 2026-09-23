@@ -32,6 +32,24 @@
 
 さらに、上記区間の最後の`Amul`開始時刻幅は約1.1～1.5 ms、`omega`内Allreduceの3回前に当たるAllreduce（反復1では番号2891）から直前の番号2893まで、各終了時刻幅は約3 µsだった。番号2893のAllreduce終了後から`omega`開始までに差が再び広がる。ソースの`simpleFoam.C`と`pEqn.H`では、その尾部に連続性誤差の評価、圧力の緩和、速度の補正と境界条件更新、`laminarTransport.correct()`、`turbulence->correct()`がある。ただし現在のフェーズマーカーはこれらを個別に囲んでいないため、どの呼び出しが差を作ったかはまだ確定できない。
 
-## 次の計測
+## 第2段階: 圧力補正後から`omega`の解法開始まで
 
-次は同じ4ノード・10反復の診断で、`pEqn.H`の圧力解法終了後、連続性誤差、圧力緩和、速度補正・境界条件更新、および`simpleFoam.C`の`laminarTransport.correct()`と`turbulence->correct()`の前後を記録する。計算内容を変えず、既存のPMPI記録と同じ時計で比較する。これにより、最後のAllreduceの後に生じる約82～109 msの差を区間ごとに分ける。メモリ帯域や個々のload遅延の判定には別途counter/IBSが必要であり、この時刻診断だけで`GaussSeidelSmoother::smooth`、`lduMatrix::residual`、`Amul`の演算器・キャッシュ律速を断定しない。
+- [Actions 35919017538](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/35919017538)、PBS `25527197.pbs101`は正常終了（終了コード0）。利用側コミットは`918d3beffa8fcbcb604fe7d4f7492f48dc187675`、ソースは診断コミット`32369caf51ccb94fb4df1bada3adcd4ea715a71f`。4ノード・512ランク・10反復、公式パーサーは`STATUS: DIAGNOSTIC`。フェーズTSVは全512ランクで各52,600行（ヘッダーを除く）を確認した。
+- 生データの正本は自宅サーバーの`/hdd_raid/samba/net_share/openfoam-artifacts/35919017538/aspire2a/openfoam-aspire2a-v2-r-d3bfb184dbbe54b8ff82a330ae4fbddd/`に保存された`profile-raw.tar.zst`と`run-artifacts.tar.zst`。第1段階と同じく同一ノード内の128ランクを比較し、各反復の時刻幅の10回中央値を示す。別run間の差を性能差とは解釈しない。
+
+| フェーズ開始・終了点 | node 0 | node 1 | node 2 | node 3 |
+|---|---:|---:|---:|---:|
+| `pEqn.solve()`開始 | 0.048 | 0.032 | 0.004 | 0.032 |
+| `pEqn.solve()`終了 | 1.803 | 1.538 | 1.709 | 1.697 |
+| 連続性誤差の評価終了 | 0.037 | 0.017 | 0.015 | 0.026 |
+| `U`境界条件の更新終了 | 2.474 | 2.128 | 1.596 | 2.366 |
+| `turbulence->correct()`開始 | 4.013 | 3.683 | 3.574 | 4.531 |
+| `omega`の最初の`Amul`開始 | 109.402 | 83.879 | 90.258 | 91.613 |
+
+単位はms。圧力補正尾部で時刻幅が約4 msまで縮まった後、`turbulence->correct()`の開始から`omega`の`smoothSolver`内の最初の`Amul`開始までに約84～109 msへ拡大した。各ノード・各反復で`omega`開始が最も遅いランクと最も早いランクを選ぶと、この区間の所要時間差の中央値はnode 0～3でそれぞれ108.032、83.711、89.942、89.942 msだった。一方、`pEqn.solve()`の同じランク対の所要時間差の中央値は0.014～0.113 ms。圧力ソルバー中のランク間差が今回の`omega` Allreduce到着差の主因とは言えない。
+
+この約392～410 msの区間には、実際に選択された`kOmegaSST`の`kOmegaSSTBase::correct()`で、`divU`、`grad(U)`、`S2`、壁面と連結境界の`omega`更新、`grad(k)`と`grad(omega)`、`F1`/`F23`、`omega`方程式の組立・緩和・境界操作などが含まれる。今回の計測ではこれらを個別に囲んでいない。したがって、差を作るのが局所計算量、メモリアクセス、境界処理、またはその前後のMPI待ちのどれかは未確定である。約84～109 msの到着時刻幅をそのまま全体の短縮可能時間とみなしてはいけない。
+
+## 次の計測と判断
+
+次に`kOmegaSSTBase::correct()`の`omega`解法前を、勾配、壁面・連結境界、`F1`/`F23`、方程式組立・緩和の区間に分けて10反復で記録する。PMPIログと対応付け、待ち時間が主か局所処理時間が主かを先に判定する。ハードウェアcounter/IBSによる`GaussSeidelSmoother::smooth`、`lduMatrix::residual`、`Amul`のload遅延、キャッシュミス、帯域、演算器利用率は別の測定として扱う。今あるフェーズ時刻だけでこれらの律速要因を断定しない。
