@@ -470,7 +470,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'LD_PRELOAD=${rank_affinity}"' in wrapper
     assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in wrapper
     assert "--multi-level-ranks-per-node 128" in wrapper
-    assert "--multi-level-domains" not in wrapper
+    assert "--multi-level-domains 4,2,4,16" in wrapper
     assert "aspire2a-multilevel-1n-128r" in workflow
     assert "aspire2a-multilevel-2n-256r" in workflow
     assert "aspire2a-multilevel-4n-512r" in workflow

@@ -24,6 +24,7 @@ set -eu
 decompose_par=$(command -v decomposePar)
 check_mesh=$(command -v checkMesh)
 decomposition_options=(--multi-level-ranks-per-node 128)
+if (( PREPARE_SUBDOMAINS == 512 )); then decomposition_options=(--multi-level-domains 4,2,4,16); fi
 identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "${decompose_par}" "${check_mesh}" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${PROVISION_DIR}/control/build-sidecar.json" "${PREPARE_SUBDOMAINS}" "${PREPARE_CACHE_ROOT}" --identity-only "${decomposition_options[@]}")
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 archive_dir="${PREPARE_CACHE_ROOT}/${cache_identity}"
