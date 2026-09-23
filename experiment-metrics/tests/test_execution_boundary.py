@@ -56,6 +56,7 @@ def test_pjm_compute_boundary_is_credential_free_and_uses_exact_stages() -> None
     assert '"${node_launch[@]}"' in text
     assert '--node-ordinal-from-env "${global_rank_env}"' in text
     assert "stage_at case_prepare" in text
+    assert "stage_at() {" in text
     assert "stage rank_placement" in text
     assert 'stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}"' in text
     assert text.index("stage rank_placement") < text.index(
@@ -442,7 +443,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'results/uprof-summary.md' in workflow
     assert 'platforms/aspire2a/export-craypat.sh' in workflow
     assert 'stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}"' in runner
-    assert "stage_at()" not in runner
+    assert "stage_at() {" in runner
     assert 'profile/uprof-summary' not in workflow
     assert "scripts/exec-profiler.sh" not in workflow
     assert "scripts/allow-vtune-attach.py" not in workflow

@@ -159,6 +159,14 @@ stage() {
   "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${CASE_DIR}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
 }
 
+stage_at() {
+  local stage_name=$1
+  local stdout_path=$2
+  local cwd=$3
+  shift 3
+  "${METRICS_CLI}" run-stage --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --producer stage.runner --stage "${stage_name}" --cwd "${cwd}" --stderr-mode stdout --stdout-path "${stdout_path}" -- "$@"
+}
+
 set +u
 source "${WM_PROJECT_DIR:?OpenFOAM project directory is required}/bin/tools/RunFunctions"
 set -u
