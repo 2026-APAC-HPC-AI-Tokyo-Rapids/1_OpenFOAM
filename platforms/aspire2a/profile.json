@@ -1,6 +1,6 @@
 {
   "schema_version": "openfoam-profile-condition/v1",
-  "analysis": "mpi_timing",
+  "analysis": "data_access",
   "rank": 0,
-  "diagnostic_iterations": 10
+  "diagnostic_iterations": 0
 }
