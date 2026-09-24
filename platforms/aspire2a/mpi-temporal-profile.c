@@ -1,13 +1,18 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include <dlfcn.h>
+#include <errno.h>
 #include <execinfo.h>
 #include <inttypes.h>
+#include <linux/perf_event.h>
 #include <limits.h>
 #include <mpi.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -24,6 +29,28 @@ struct phase_event
     uint64_t at_ns;
     char phase[64];
     char field[64];
+};
+
+struct pmu_event
+{
+    uint64_t at_ns;
+    uint64_t thread_cpu_ns;
+    uint64_t cycles;
+    uint64_t instructions;
+    uint64_t cache_misses;
+    uint64_t time_enabled;
+    uint64_t time_running;
+    long voluntary_switches;
+    long involuntary_switches;
+    char phase[64];
+};
+
+struct pmu_group_read
+{
+    uint64_t count;
+    uint64_t time_enabled;
+    uint64_t time_running;
+    uint64_t values[3];
 };
 
 enum { long_event_threshold_ns = 10000000, stack_depth = 24, request_history_capacity = 8192, datatype_cache_capacity = 16 };
@@ -76,6 +103,12 @@ static size_t event_capacity;
 static struct phase_event *phase_events;
 static size_t phase_event_count;
 static size_t phase_event_capacity;
+static struct pmu_event *pmu_events;
+static size_t pmu_event_count;
+static size_t pmu_event_capacity;
+static int pmu_selected = -1;
+static int pmu_group_fd = -1;
+static int pmu_member_fds[2] = {-1, -1};
 static uint64_t allreduce_count;
 static uint64_t waitall_count;
 static struct long_event *long_events;
@@ -94,6 +127,103 @@ static uint64_t now_ns(void)
     struct timespec value;
     if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) _exit(125);
     return (uint64_t)value.tv_sec * 1000000000ULL + (uint64_t)value.tv_nsec;
+}
+
+static int selected_pmu_rank(void)
+{
+    if (pmu_selected >= 0) return pmu_selected;
+    const char *rank_text = getenv("PMI_RANK");
+    if (rank_text == NULL) _exit(125);
+    char *end;
+    long rank = strtol(rank_text, &end, 10);
+    if (*end != '\0') _exit(125);
+    // Early and late omega-Amul arrivals observed in the prior 10-iteration run.
+    const int selected[] = {44, 102, 176, 208, 287, 349, 407, 494};
+    pmu_selected = 0;
+    for (size_t index = 0; index < sizeof(selected) / sizeof(selected[0]); index++)
+    {
+        if (rank == selected[index]) pmu_selected = 1;
+    }
+    return pmu_selected;
+}
+
+static int pmu_phase(const char *phase)
+{
+    const char *names[] =
+    {
+        "kOmegaSST.omegaDiv.begin", "kOmegaSST.omegaDiv.end",
+        "omegaDiv.surfaceIntegrate.begin", "omegaDiv.surfaceIntegrate.end",
+        "omegaDiv.gauss.begin", "omegaDiv.gauss.end",
+        "omegaDiv.weights.begin", "omegaDiv.weights.end",
+        "omegaDiv.matrixAlloc.begin", "omegaDiv.matrixAlloc.end",
+        "omegaDiv.internalFaces.begin", "omegaDiv.internalFaces.end",
+        "omegaDiv.negSumDiag.begin", "omegaDiv.negSumDiag.end",
+        "omegaDiv.boundaryCoeffs.begin", "omegaDiv.boundaryCoeffs.end"
+    };
+    for (size_t index = 0; index < sizeof(names) / sizeof(names[0]); index++)
+    {
+        if (strcmp(phase, names[index]) == 0) return 1;
+    }
+    return 0;
+}
+
+static int open_pmu_event(uint64_t config, int group_fd)
+{
+    struct perf_event_attr attributes = {0};
+    attributes.type = PERF_TYPE_HARDWARE;
+    attributes.size = sizeof(attributes);
+    attributes.config = config;
+    attributes.exclude_kernel = 1;
+    attributes.exclude_hv = 1;
+    attributes.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+    return (int)syscall(__NR_perf_event_open, &attributes, 0, -1, group_fd, 0);
+}
+
+static void initialize_pmu(void)
+{
+    pmu_group_fd = open_pmu_event(PERF_COUNT_HW_CPU_CYCLES, -1);
+    if (pmu_group_fd >= 0) pmu_member_fds[0] = open_pmu_event(PERF_COUNT_HW_INSTRUCTIONS, pmu_group_fd);
+    if (pmu_member_fds[0] >= 0) pmu_member_fds[1] = open_pmu_event(PERF_COUNT_HW_CACHE_MISSES, pmu_group_fd);
+    if (pmu_group_fd >= 0 && pmu_member_fds[0] >= 0 && pmu_member_fds[1] >= 0) return;
+    fprintf(stderr, "issue33 PMU unavailable for rank %s: %s\n", getenv("PMI_RANK"), strerror(errno));
+    if (pmu_group_fd >= 0) close(pmu_group_fd);
+    if (pmu_member_fds[0] >= 0) close(pmu_member_fds[0]);
+    if (pmu_member_fds[1] >= 0) close(pmu_member_fds[1]);
+    pmu_group_fd = -2;
+}
+
+static void append_pmu_event(const char *phase, uint64_t at_ns)
+{
+    if (!selected_pmu_rank() || !pmu_phase(phase)) return;
+    if (pmu_group_fd == -1) initialize_pmu();
+    if (pmu_event_count == pmu_event_capacity)
+    {
+        size_t capacity = pmu_event_capacity == 0 ? 256 : pmu_event_capacity * 2;
+        struct pmu_event *replacement = realloc(pmu_events, capacity * sizeof(*replacement));
+        if (replacement == NULL) _exit(125);
+        pmu_events = replacement;
+        pmu_event_capacity = capacity;
+    }
+    struct pmu_event *event = &pmu_events[pmu_event_count++];
+    *event = (struct pmu_event){.at_ns = at_ns};
+    if (snprintf(event->phase, sizeof(event->phase), "%s", phase) >= (int)sizeof(event->phase)) _exit(125);
+    struct timespec thread_time;
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_time) != 0) _exit(125);
+    event->thread_cpu_ns = (uint64_t)thread_time.tv_sec * 1000000000ULL + (uint64_t)thread_time.tv_nsec;
+    struct rusage usage;
+    if (getrusage(RUSAGE_THREAD, &usage) != 0) _exit(125);
+    event->voluntary_switches = usage.ru_nvcsw;
+    event->involuntary_switches = usage.ru_nivcsw;
+    if (pmu_group_fd >= 0)
+    {
+        struct pmu_group_read counters;
+        if (read(pmu_group_fd, &counters, sizeof(counters)) != sizeof(counters) || counters.count != 3) _exit(125);
+        event->time_enabled = counters.time_enabled;
+        event->time_running = counters.time_running;
+        event->cycles = counters.values[0];
+        event->instructions = counters.values[1];
+        event->cache_misses = counters.values[2];
+    }
 }
 
 static void append_event(char kind, uint64_t sequence, uint64_t enter_ns, uint64_t exit_ns)
@@ -125,6 +255,7 @@ void openfoam_issue33_phase_marker(const char *phase, const char *field)
     event->at_ns = at_ns;
     if (snprintf(event->phase, sizeof(event->phase), "%s", phase) >= (int)sizeof(event->phase)) _exit(125);
     if (snprintf(event->field, sizeof(event->field), "%s", field == NULL ? "" : field) >= (int)sizeof(event->field)) _exit(125);
+    append_pmu_event(phase, at_ns);
 }
 
 static void append_long_event(char kind, uint64_t sequence, uint64_t enter_ns, uint64_t exit_ns, int argument_count)
@@ -261,6 +392,20 @@ int MPI_Finalize(void)
         fprintf(output, "%c,%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n", event->kind, event->sequence, event->enter_ns, event->exit_ns);
     }
     if (fclose(output) != 0) _exit(125);
+    if (pmu_selected == 1)
+    {
+        length = snprintf(path, sizeof(path), "%s/rank-%s-pmu.tsv", directory, rank);
+        if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
+        output = fopen(path, "w");
+        if (output == NULL) _exit(125);
+        fprintf(output, "phase\tat_monotonic_ns\tthread_cpu_ns\tcycles\tinstructions\tcache_misses\ttime_enabled\ttime_running\tvoluntary_switches\tinvoluntary_switches\n");
+        for (size_t index = 0; index < pmu_event_count; index++)
+        {
+            const struct pmu_event *event = &pmu_events[index];
+            fprintf(output, "%s\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%ld\t%ld\n", event->phase, event->at_ns, event->thread_cpu_ns, event->cycles, event->instructions, event->cache_misses, event->time_enabled, event->time_running, event->voluntary_switches, event->involuntary_switches);
+        }
+        if (fclose(output) != 0) _exit(125);
+    }
     length = snprintf(path, sizeof(path), "%s/rank-%s-phases.tsv", directory, rank);
     if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
     output = fopen(path, "w");
@@ -304,6 +449,9 @@ int MPI_Finalize(void)
     if (fclose(output) != 0) _exit(125);
     free(events);
     free(phase_events);
+    free(pmu_events);
+    if (pmu_group_fd >= 0) close(pmu_group_fd);
+    for (size_t index = 0; index < 2; index++) if (pmu_member_fds[index] >= 0) close(pmu_member_fds[index]);
     free(long_events);
     free(wait_requests);
     return PMPI_Finalize();
