@@ -530,8 +530,23 @@ jobs:
           install -d -m 0750 "${destination}"
           cp -a artifacts/. "${destination}/"
 
+      - name: 保管済み成果物をマニフェストと照合
+        id: archive_verify
+        run: |
+          set -euo pipefail
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/aspire2a"
+          for bundle in "${destination}"/openfoam-aspire2a-v2-*; do
+            manifest="${bundle}/artifact-manifest.json"
+            jq -e --argjson profile '${{ inputs.profile }}' '.schema_version == "artifact-manifest/v1" and ([.files[].role] | sort) == (if $profile then ["profile_raw", "run_bundle"] else ["run_bundle"] end)' "${manifest}" >/dev/null
+            while IFS=$'\t' read -r role expected_size expected_sha; do
+              case "${role}" in run_bundle) member=run-artifacts.tar.zst ;; profile_raw) member=profile-raw.tar.zst ;; *) exit 2 ;; esac
+              test "$(stat -c '%s' "${bundle}/${member}")" = "${expected_size}"
+              test "$(sha256sum "${bundle}/${member}" | awk '{print $1}')" = "${expected_sha}"
+            done < <(jq -r '.files[] | [.role, .size_bytes, .sha256] | @tsv' "${manifest}")
+          done
+
       - name: 保管済みのクラスタruntimeを削除
-        if: always()
+        if: steps.archive_verify.outcome == 'success'
         env:
           RUN_DIR: ${{ needs.run.outputs.run_dir }}
         run: scripts/remove-openfoam-runtime.sh --cluster aspire2a --connection aspire2a-shell --run-dir "${RUN_DIR}"
