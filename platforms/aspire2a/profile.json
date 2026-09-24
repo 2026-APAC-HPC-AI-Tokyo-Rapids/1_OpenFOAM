@@ -1,6 +1,6 @@
 {
   "schema_version": "openfoam-profile-condition/v1",
-  "analysis": "assess",
+  "analysis": "data_access",
   "rank": 0,
   "diagnostic_iterations": 0
 }
