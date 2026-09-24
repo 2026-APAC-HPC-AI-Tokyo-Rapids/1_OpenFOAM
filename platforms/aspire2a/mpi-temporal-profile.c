@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <time.h>
@@ -37,7 +38,10 @@ struct pmu_event
     uint64_t thread_cpu_ns;
     uint64_t cycles;
     uint64_t instructions;
-    uint64_t cache_misses;
+    uint64_t local_l2_refills;
+    uint64_t local_cache_refills;
+    uint64_t local_dram_refills;
+    uint64_t remote_dram_refills;
     uint64_t time_enabled;
     uint64_t time_running;
     long voluntary_switches;
@@ -50,7 +54,7 @@ struct pmu_group_read
     uint64_t count;
     uint64_t time_enabled;
     uint64_t time_running;
-    uint64_t values[3];
+    uint64_t values[6];
 };
 
 enum { long_event_threshold_ns = 10000000, stack_depth = 24, request_history_capacity = 8192, datatype_cache_capacity = 16 };
@@ -108,7 +112,7 @@ static size_t pmu_event_count;
 static size_t pmu_event_capacity;
 static int pmu_selected = -1;
 static int pmu_group_fd = -1;
-static int pmu_member_fds[2] = {-1, -1};
+static int pmu_member_fds[5] = {-1, -1, -1, -1, -1};
 static uint64_t allreduce_count;
 static uint64_t waitall_count;
 static struct long_event *long_events;
@@ -167,28 +171,38 @@ static int pmu_phase(const char *phase)
     return 0;
 }
 
-static int open_pmu_event(uint64_t config, int group_fd)
+static int open_pmu_event(uint32_t type, uint64_t config, int group_fd)
 {
     struct perf_event_attr attributes = {0};
-    attributes.type = PERF_TYPE_HARDWARE;
+    attributes.type = type;
     attributes.size = sizeof(attributes);
     attributes.config = config;
     attributes.exclude_kernel = 1;
     attributes.exclude_hv = 1;
+    attributes.disabled = group_fd == -1;
     attributes.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
     return (int)syscall(__NR_perf_event_open, &attributes, 0, -1, group_fd, 0);
 }
 
 static void initialize_pmu(void)
 {
-    pmu_group_fd = open_pmu_event(PERF_COUNT_HW_CPU_CYCLES, -1);
-    if (pmu_group_fd >= 0) pmu_member_fds[0] = open_pmu_event(PERF_COUNT_HW_INSTRUCTIONS, pmu_group_fd);
-    if (pmu_member_fds[0] >= 0) pmu_member_fds[1] = open_pmu_event(PERF_COUNT_HW_CACHE_MISSES, pmu_group_fd);
-    if (pmu_group_fd >= 0 && pmu_member_fds[0] >= 0 && pmu_member_fds[1] >= 0) return;
+    pmu_group_fd = open_pmu_event(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES, -1);
+    if (pmu_group_fd >= 0) pmu_member_fds[0] = open_pmu_event(PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS, pmu_group_fd);
+    // AMD PMCx043 demand DC refill-source umasks from the uProf data_access event set.
+    const uint64_t masks[4] = {0x01, 0x02, 0x08, 0x40};
+    for (size_t index = 0; index < 4 && pmu_member_fds[index] >= 0; index++)
+    {
+        pmu_member_fds[index + 1] = open_pmu_event(PERF_TYPE_RAW, 0x43 | (masks[index] << 8), pmu_group_fd);
+    }
+    if (pmu_group_fd >= 0 && pmu_member_fds[4] >= 0)
+    {
+        if (ioctl(pmu_group_fd, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP) != 0) _exit(125);
+        if (ioctl(pmu_group_fd, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP) != 0) _exit(125);
+        return;
+    }
     fprintf(stderr, "issue33 PMU unavailable for rank %s: %s\n", getenv("PMI_RANK"), strerror(errno));
     if (pmu_group_fd >= 0) close(pmu_group_fd);
-    if (pmu_member_fds[0] >= 0) close(pmu_member_fds[0]);
-    if (pmu_member_fds[1] >= 0) close(pmu_member_fds[1]);
+    for (size_t index = 0; index < 5; index++) if (pmu_member_fds[index] >= 0) close(pmu_member_fds[index]);
     pmu_group_fd = -2;
 }
 
@@ -217,12 +231,15 @@ static void append_pmu_event(const char *phase, uint64_t at_ns)
     if (pmu_group_fd >= 0)
     {
         struct pmu_group_read counters;
-        if (read(pmu_group_fd, &counters, sizeof(counters)) != sizeof(counters) || counters.count != 3) _exit(125);
+        if (read(pmu_group_fd, &counters, sizeof(counters)) != sizeof(counters) || counters.count != 6) _exit(125);
         event->time_enabled = counters.time_enabled;
         event->time_running = counters.time_running;
         event->cycles = counters.values[0];
         event->instructions = counters.values[1];
-        event->cache_misses = counters.values[2];
+        event->local_l2_refills = counters.values[2];
+        event->local_cache_refills = counters.values[3];
+        event->local_dram_refills = counters.values[4];
+        event->remote_dram_refills = counters.values[5];
     }
 }
 
@@ -398,11 +415,12 @@ int MPI_Finalize(void)
         if (length < 0 || (size_t)length >= sizeof(path)) _exit(125);
         output = fopen(path, "w");
         if (output == NULL) _exit(125);
-        fprintf(output, "phase\tat_monotonic_ns\tthread_cpu_ns\tcycles\tinstructions\tcache_misses\ttime_enabled\ttime_running\tvoluntary_switches\tinvoluntary_switches\n");
+        fprintf(output, "phase\tat_monotonic_ns\tthread_cpu_ns\tcycles\tinstructions\tlocal_l2_refills\tlocal_cache_refills\tlocal_dram_refills\tremote_dram_refills\ttime_enabled\ttime_running\tvoluntary_switches\tinvoluntary_switches\n");
         for (size_t index = 0; index < pmu_event_count; index++)
         {
             const struct pmu_event *event = &pmu_events[index];
-            fprintf(output, "%s\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%ld\t%ld\n", event->phase, event->at_ns, event->thread_cpu_ns, event->cycles, event->instructions, event->cache_misses, event->time_enabled, event->time_running, event->voluntary_switches, event->involuntary_switches);
+            fprintf(output, "%s\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t", event->phase, event->at_ns, event->thread_cpu_ns, event->cycles, event->instructions);
+            fprintf(output, "%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%ld\t%ld\n", event->local_l2_refills, event->local_cache_refills, event->local_dram_refills, event->remote_dram_refills, event->time_enabled, event->time_running, event->voluntary_switches, event->involuntary_switches);
         }
         if (fclose(output) != 0) _exit(125);
     }
@@ -451,7 +469,7 @@ int MPI_Finalize(void)
     free(phase_events);
     free(pmu_events);
     if (pmu_group_fd >= 0) close(pmu_group_fd);
-    for (size_t index = 0; index < 2; index++) if (pmu_member_fds[index] >= 0) close(pmu_member_fds[index]);
+    for (size_t index = 0; index < 5; index++) if (pmu_member_fds[index] >= 0) close(pmu_member_fds[index]);
     free(long_events);
     free(wait_requests);
     return PMPI_Finalize();
