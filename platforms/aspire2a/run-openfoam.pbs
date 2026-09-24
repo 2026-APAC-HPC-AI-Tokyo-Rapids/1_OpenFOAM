@@ -57,7 +57,13 @@ grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${RUN_DIR}/logs/mpi-rank-af
 if grep -q '/oneapi/' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"; then printf '%s\n' 'ASPIRE-2A用MPI affinity interposerがIntel oneAPIにlinkしています' >&2; exit 1; fi
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
 decomposition_options=(--multi-level-ranks-per-node 128)
-if (( OPENFOAM_MPI_PROCS == 512 )); then decomposition_options=(--multi-level-domains 4,2,4,16); fi
+if (( OPENFOAM_MPI_PROCS == 512 )); then
+  case $(cat "${PROVISION_DIR}/platforms/aspire2a/decomposition-4n.txt") in
+    hierarchical) decomposition_options=(--case-default-hierarchical) ;;
+    multilevel) decomposition_options=(--multi-level-domains 4,2,4,16) ;;
+    *) echo '未対応の4ノード分割条件です' >&2; exit 64 ;;
+  esac
+fi
 identity_output=$("${PROVISION_DIR}/scripts/prepare-openfoam-case.sh" "${PROVISION_DIR}/benchmark/occDrivAerStaticMesh" - "$(command -v decomposePar)" "$(command -v checkMesh)" "${WORKLOAD_MESH_ARCHIVE}" "${PROVISION_DIR}/benchmark/workload.json" "${RUN_DIR}/control/build-sidecar.json" "${OPENFOAM_MPI_PROCS}" "${case_archive_root}" --identity-only "${decomposition_options[@]}")
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")
 case_archive_dir="${case_archive_root}/${cache_identity}"

@@ -29,7 +29,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, ...]:
         "system/fvSolution": "base\n",
         "system/fvSolution.fixedIter": "fixed\n",
         "system/decomposeParDict": "numberOfSubdomains $nCores;\nmethod $decompositionMethod;\n",
-        "system/include/caseDefinition": "nCores 512;\ndecompositionMethod hierarchical;\n",
+        "system/include/caseDefinition": "nCores 512;\ndecompositionMethod hierarchical;\nnHierarchical (16 8 4);\n",
     }.items():
         path = source / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -346,6 +346,24 @@ def test_prepare_case_records_numa_aware_multilevel_decomposition(tmp_path: Path
     assert manifest["method"] == "multiLevel"
     assert manifest["domains"] == [4, 2, 4, 16]
     assert "domains (4 2 4 16);" in (target / "system/decomposeParDict").read_text()
+
+
+def test_case_default_hierarchical_is_separate_from_optimized_cache(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
+    cache_root = tmp_path / "cache"
+    target = tmp_path / "case"
+    base = [SCRIPT, source, target, decompose_par, check_mesh, archive, definition, sidecar, "512", cache_root]
+    subprocess.run([*base, "--case-default-hierarchical"], check=True)
+    assert "decompositionMethod hierarchical;" in (target / "system/include/caseDefinition").read_text()
+    assert "nHierarchical (16 8 4);" in (target / "system/include/caseDefinition").read_text()
+    assert "multiLevelCoeffs" not in (target / "system/decomposeParDict").read_text()
+    subprocess.run([*base, "--multi-level-domains", "4,2,4,16"], check=True)
+
+    manifests = [json.loads(path.read_text()) for path in cache_root.glob("*/manifest.json")]
+    assert {(manifest["method"], tuple(manifest["domains"])) for manifest in manifests} == {
+        ("hierarchical", (16, 8, 4)), ("multiLevel", (4, 2, 4, 16)),
+    }
+    assert subprocess.run([*base, "--identity-only", "--case-default-hierarchical", "--multi-level-domains", "4,2,4,16"], capture_output=True).returncode != 0
 
 
 def test_prepare_case_keeps_scotch_and_multilevel_caches_separate(tmp_path: Path) -> None:

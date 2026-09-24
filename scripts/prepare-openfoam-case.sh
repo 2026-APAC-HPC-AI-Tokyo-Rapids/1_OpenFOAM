@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 9 ]]; then
-  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--case-default-hierarchical|--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
   exit 64
 fi
 
@@ -19,12 +19,14 @@ shift 9
 mode=
 multi_level_ranks_per_node=
 multi_level_domains=
+case_default_hierarchical=false
 while [[ $# -gt 0 ]]
 do
   case "$1" in
     --require-cache|--identity-only) [[ -z "${mode}" ]]; mode=$1; shift ;;
     --multi-level-ranks-per-node) [[ $# -ge 2 && -z "${multi_level_ranks_per_node}" ]]; multi_level_ranks_per_node=$2; shift 2 ;;
     --multi-level-domains) [[ $# -ge 2 && -z "${multi_level_domains}" ]]; multi_level_domains=$2; shift 2 ;;
+    --case-default-hierarchical) [[ "${case_default_hierarchical}" == false ]]; case_default_hierarchical=true; shift ;;
     *) echo "未対応のケース準備引数です: $1" >&2; exit 64 ;;
   esac
 done
@@ -32,6 +34,13 @@ done
 decomposition_method=scotch
 decomposition_domains=()
 [[ -z "${multi_level_ranks_per_node}" || -z "${multi_level_domains}" ]]
+if [[ "${case_default_hierarchical}" == true ]]; then
+  [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" && "${subdomains}" == 512 ]]
+  grep -Eq '^[[:space:]]*decompositionMethod[[:space:]]+hierarchical;' "${source_case}/system/include/caseDefinition"
+  grep -Eq '^[[:space:]]*nHierarchical[[:space:]]+\(16 8 4\);' "${source_case}/system/include/caseDefinition"
+  decomposition_method=hierarchical
+  decomposition_domains=(16 8 4)
+fi
 if [[ -n "${multi_level_ranks_per_node}" ]]; then
   [[ "${multi_level_ranks_per_node}" =~ ^[1-9][0-9]*$ ]]
   (( subdomains % multi_level_ranks_per_node == 0 ))

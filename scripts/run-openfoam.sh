@@ -228,6 +228,7 @@ decomposition_method=
 prepare_decomposition_options=()
 case "${PROTOCOL_NAME}" in
   *-scotch-*) decomposition_method=scotch ;;
+  *-hierarchical-*) decomposition_method=hierarchical; prepare_decomposition_options=(--case-default-hierarchical) ;;
   *-multilevel-*) decomposition_method=multiLevel; prepare_decomposition_options=(--multi-level-ranks-per-node "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))") ;;
   *) echo "未対応の領域分割条件です: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
