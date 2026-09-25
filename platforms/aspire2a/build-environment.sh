@@ -18,7 +18,7 @@ test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRD
 test "$(sha256sum "${IMB_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${IMB_SOURCE_ARCHIVE_SHA256}"
 build_parallelism=16
 build_directory_mode=0750
-build_extra_cxxflags="${build_tuning_flags}"
+build_extra_cxxflags="${build_tuning_flags} -march=znver3"
 build_compile_control=+ccache
 build_use_ccache=true
 openfoam_source_oid="${OPENFOAM_SOURCE_OID}"
