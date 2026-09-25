@@ -380,12 +380,37 @@ jobs:
           echo "profile_run_id=${run_id}-${job_id}" >> "${GITHUB_OUTPUT}"
 
       - name: OpenFOAMジョブの終了を待機
+        shell: bash
         run: |
-          tail --lines=+1 --follow=name --retry "${RUN_DIR}/logs/pbs.log" &
-          stream_pid=$!
-          trap 'kill "${stream_pid}" 2>/dev/null || true; wait "${stream_pid}" 2>/dev/null || true' EXIT
-          platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"
-          test -e "${RUN_DIR}/run-success"
+          set -euo pipefail
+          failures=0
+          success_failures=0
+          while true
+          do
+            if accounting=$(aspire2a-shell qstat -fx "${PBS_JOB_ID}"); then
+              failures=0
+            else
+              failures=$((failures + 1))
+              [[ "${failures}" -lt 12 ]] || { printf 'PBS状態の取得に12回連続で失敗しました: %s\n' "${PBS_JOB_ID}" >&2; exit 1; }
+              sleep 30
+              continue
+            fi
+            state=$(sed -n 's/^[[:space:]]*job_state = //p' <<< "${accounting}")
+            [[ "${state}" =~ ^[A-Z]$ ]]
+            printf 'job_id=%s state=%s\n' "${PBS_JOB_ID}" "${state}"
+            if [[ "${state}" == F ]]; then
+              exit_status=$(sed -n 's/^[[:space:]]*Exit_status = //p' <<< "${accounting}")
+              [[ "${exit_status}" =~ ^-?[0-9]+$ ]]
+              printf 'job_id=%s state=%s exit_status=%s\n' "${PBS_JOB_ID}" "${state}" "${exit_status}"
+              [[ "${exit_status}" -eq 0 ]]
+              if aspire2a-shell test -e "${RUN_DIR}/run-success"; then break; fi
+              success_failures=$((success_failures + 1))
+              [[ "${success_failures}" -lt 12 ]] || { printf 'run-successを12回連続で確認できませんでした: %s\n' "${RUN_DIR}" >&2; exit 1; }
+            else
+              case "${state}" in Q|H|R|B|E) ;; *) printf '未対応のPBSジョブ状態です: %s\n' "${state}" >&2; exit 65 ;; esac
+            fi
+            sleep 30
+          done
 
       - name: AMD uProf reportをlogin nodeで生成
         if: success() && inputs.profile
