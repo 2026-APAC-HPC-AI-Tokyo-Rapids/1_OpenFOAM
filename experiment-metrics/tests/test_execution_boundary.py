@@ -623,14 +623,14 @@ def test_workflow_dispatch_exposes_only_inputs_owned_by_each_entry_workflow() ->
         assert "--profile-analysis" not in workflow
         assert '--profile-condition "${PROVISION_DIR}/benchmark/profile.json"' in workflow
         assert 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst")' in workflow
-        assert 'commit="${GITHUB_SHA}"' in workflow
-        assert 'git rev-parse --verify "${commit}^"' in workflow
+        assert "find \"${BUILD_ARCHIVE_DIR}\" -maxdepth 1 -type f -name '*.build-sidecar.json'" in workflow
+        assert "LC_ALL=C sort -rn" in workflow
         assert "git diff --quiet" not in workflow
         assert "git cat-file" not in workflow
         assert "commit_role" not in workflow
         assert "scripts/build-inputs-match.sh" in workflow
     for workflow in (genkai, gadi, aspire2a):
-        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000' in workflow
+        assert 'gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000' not in workflow
     push_gate = 'if [[ "${GITHUB_EVENT_NAME}" == push ]]; then\n            commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"'
     assert push_gate in genkai
     assert push_gate in gadi
