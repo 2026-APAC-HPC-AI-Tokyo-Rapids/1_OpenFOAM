@@ -396,7 +396,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "submit-pbs-run" in workflow
     assert "qsub -P 59000014 -q normal" in workflow
     assert 'platforms/aspire2a/wait-pbs-job.sh" "${job_id}"' in workflow
-    assert 'platforms/aspire2a/wait-pbs-job.sh "${PBS_JOB_ID}"' in workflow
+    assert 'accounting=$(aspire2a-shell qstat -fx "${PBS_JOB_ID}")' in workflow
+    assert 'aspire2a-shell test -e "${RUN_DIR}/run-success"' in workflow
     assert "select=1:ncpus=4:mpiprocs=1:mem=120gb" in workflow
     assert "openfoam-profile-uprof-hotspots-v1.json" in workflow
     assert "openfoam-profile-craypat-mpi-v1.json" in workflow
