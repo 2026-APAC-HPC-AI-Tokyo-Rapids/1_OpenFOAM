@@ -21,7 +21,7 @@ def test_weight_generator_marks_unique_target_owner_cells(tmp_path: Path) -> Non
     owner = tmp_path / "owner"
     owner.write_bytes(
         b'FoamFile\n{\n format binary;\n arch "LSB;label=32;scalar=64";\n'
-        b' note "nPoints:8 nCells:4 nFaces:8 nInternalFaces:3";\n}\n8\n(\n'
+        b' note "nPoints:8 nCells:4 nFaces:8 nInternalFaces:3";\n}\n8\n('
         + struct.pack("<8I", 0, 0, 1, 0, 1, 2, 2, 2)
         + b"\n)\n"
     )

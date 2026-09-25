@@ -94,7 +94,9 @@ static void read_owner_header(FILE *in, uint64_t *cells, uint64_t *faces, off_t 
         if (isdigit((unsigned char)*s)) {
             char extra;
             if (sscanf(s, "%" SCNu64 " %c", faces, &extra) == 1) {
-                if (!fgets(line, sizeof(line), in) || strcmp(trim(line), "(") != 0) fail("invalid owner list start");
+                int opening;
+                do { opening = fgetc(in); } while (opening != EOF && isspace((unsigned char)opening));
+                if (opening != '(') fail("invalid owner list start");
                 *offset = ftello(in);
                 list_start = 1;
                 break;
