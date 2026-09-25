@@ -33,4 +33,5 @@ def test_weight_generator_marks_unique_target_owner_cells(tmp_path: Path) -> Non
     text = output.read_text()
     assert "internalField nonuniform List<scalar>\n4\n(\n1\n1\n3\n1\n)" in text
     assert "object costWeight;" in text
+    assert 'location "constant";' in text
     assert "type calculated;" in text

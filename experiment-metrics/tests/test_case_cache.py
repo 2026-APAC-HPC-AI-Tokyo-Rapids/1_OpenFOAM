@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import struct
 import subprocess
 import tarfile
 from pathlib import Path
@@ -456,3 +458,30 @@ def test_prepare_case_can_resolve_identity_without_expanding(tmp_path: Path) -> 
     assert f"cache_dir={cache_root}/" in completed.stdout
     assert not cache_root.exists()
     assert not counter.exists()
+
+
+def test_weighted_case_preparation_uses_constant_field_only_for_decomposition(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
+    mesh = tmp_path / "mesh/polyMesh"
+    (mesh / "boundary").write_text("FoamFile\n{\n format binary;\n}\n1\n(\n Tiresfront\n {\n type wall;\n nFaces 2;\n startFace 3;\n }\n)\n")
+    (mesh / "owner").write_bytes(b'FoamFile\n{\n format binary;\n arch "LSB;label=32;scalar=64";\n note "nPoints:8 nCells:4 nFaces:5 nInternalFaces:3";\n}\n5\n(' + struct.pack("<5I", 0, 0, 1, 2, 2) + b"\n)\n")
+    with tarfile.open(archive, "w:gz") as stream:
+        stream.add(mesh, arcname="polyMesh")
+    document = json.loads(definition.read_text())
+    document["mesh"].update(size_bytes=archive.stat().st_size, md5=hashlib.md5(archive.read_bytes()).hexdigest(), sha256=hashlib.sha256(archive.read_bytes()).hexdigest())
+    definition.write_text(json.dumps(document))
+    _executable(decompose_par, 'test -f constant/costWeight\nmkdir -p processor0/constant\ncp constant/costWeight processor0/constant/costWeight\n')
+    provision = tmp_path / "provision"
+    (provision / "scripts").mkdir(parents=True)
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    script = provision / "scripts/prepare-openfoam-case.sh"
+    shutil.copy2(SCRIPT, script)
+    generator_source = SCRIPT.parents[1] / "platforms/aspire2a/write-decomposition-weights.c"
+    shutil.copy2(generator_source, provision / "platforms/aspire2a/write-decomposition-weights.c")
+    subprocess.run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", "-o", str(provision / "platforms/aspire2a/write-decomposition-weights"), str(generator_source)], check=True)
+    subprocess.run([script, source, "-", decompose_par, check_mesh, archive, definition, sidecar, "512", tmp_path / "cache", "--multi-level-domains", "4,2,4,16", "--weighted-boundary-cells"], check=True)
+    prepared = next((tmp_path / "cache").glob("*/case"))
+    assert "weightField costWeight;" in (prepared / "system/decomposeParDict").read_text()
+    assert "selected_cells=1" in (prepared / "logs/decomposition-weights.log").read_text()
+    assert not (prepared / "constant/costWeight").exists()
+    assert not (prepared / "processor0/constant/costWeight").exists()

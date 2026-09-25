@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
     if (!selected_patches || !selected_cells) fail("target patch cells not found");
     FILE *out = fopen(argv[3], "w");
     if (!out) fail("cannot create weight field");
-    fprintf(out, "FoamFile\n{\n    version 2.0;\n    format ascii;\n    class volScalarField;\n    location \"0\";\n    object costWeight;\n}\n");
+    fprintf(out, "FoamFile\n{\n    version 2.0;\n    format ascii;\n    class volScalarField;\n    location \"constant\";\n    object costWeight;\n}\n");
     fprintf(out, "dimensions [0 0 0 0 0 0 0];\ninternalField nonuniform List<scalar>\n%" PRIu64 "\n(\n", cells);
     for (uint64_t i = 0; i < cells; ++i) fprintf(out, "%d\n", weighted[i] ? 3 : 1);
     fprintf(out, ")\n;\nboundaryField\n{\n");

@@ -121,9 +121,9 @@ if ! cache_valid; then
   (
     cd "${temporary}/case"
     "${check_mesh}" -constant -fileHandler uncollated > logs/checkMesh.log 2>&1
-    if [[ "${weighted_boundary_cells}" == true ]]; then "${weight_generator}" constant/polyMesh/boundary constant/polyMesh/owner 0/costWeight > logs/decomposition-weights.log; fi
+    if [[ "${weighted_boundary_cells}" == true ]]; then "${weight_generator}" constant/polyMesh/boundary constant/polyMesh/owner constant/costWeight > logs/decomposition-weights.log; fi
     "${decompose_par}" -constant -fileHandler uncollated > logs/decomposePar.log 2>&1
-    if [[ "${weighted_boundary_cells}" == true ]]; then rm -f -- 0/costWeight processor*/0/costWeight; fi
+    if [[ "${weighted_boundary_cells}" == true ]]; then rm -f -- constant/costWeight processor*/constant/costWeight; fi
   )
   printf '%s\n' "${cache_identity}" > "${temporary}/READY"
   jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" --arg method "${decomposition_method}" --argjson domains "${decomposition_domains_json}" --arg weight_source_sha256 "${weight_source_sha256}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:$method,domains:$domains,weight_source_sha256:$weight_source_sha256,file_handler:"uncollated"}' > "${temporary}/manifest.json"
