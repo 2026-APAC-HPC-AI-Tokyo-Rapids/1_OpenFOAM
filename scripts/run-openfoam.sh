@@ -250,6 +250,7 @@ grep -Eq "^numberOfSubdomains[[:space:]]+${OPENFOAM_MPI_PROCS};$" "${SOURCE_DIR}
 grep -Eq "^method[[:space:]]+${decomposition_method};" "${SOURCE_DIR}/mesh/decomposeParDict"
 install -m 0644 logs/checkMesh.log "${LOG_DIR}/checkMesh.log"
 install -m 0644 logs/decomposePar.log "${LOG_DIR}/decomposePar.log"
+if [[ -f logs/decomposition-weights.log ]]; then install -m 0644 logs/decomposition-weights.log "${SOURCE_DIR}/mesh/decomposition-weights.log"; fi
 install -m 0644 "${case_manifest}" "${SOURCE_DIR}/mesh/case-cache-manifest.json"
 
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${solver_iterations};/" system/controlDict
