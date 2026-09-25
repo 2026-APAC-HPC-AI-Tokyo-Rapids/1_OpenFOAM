@@ -59,8 +59,6 @@ jobs:
 
       - name: 既存成果物の再利用または新規ビルドを選択
         id: select
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
             commit_message="$(git log -1 --format=%B "${GITHUB_SHA}")"
@@ -70,25 +68,20 @@ jobs:
               exit 0
             fi
           fi
-          commit="${GITHUB_SHA}"
-          while [[ -n "${commit}" ]]
+          while IFS= read -r run_id
           do
-            while IFS= read -r run_id
-            do
-              [[ "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
-              archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
-              sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
-              scripts/build-inputs-match.sh gadi "${sidecar}" || continue
-              expected_size=$(jq -er 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst") | .build_archive.size_bytes' "${sidecar}") || continue
-              expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
-              [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
-              [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
-              echo "利用可能な最も近い親コミットのビルドを選択しました: ${archive}"
-              printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
-              exit 0
-            done < <(gh run list --workflow openfoam.yml --commit "${commit}" --limit 1000 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
-            commit=$(git rev-parse --verify "${commit}^" 2>/dev/null || true)
-          done
+            [[ "${run_id}" =~ ^[0-9]+$ && "${run_id}" != "${GITHUB_RUN_ID}" ]] || continue
+            archive="${BUILD_ARCHIVE_DIR}/${run_id}.tar.zst"
+            sidecar="${BUILD_ARCHIVE_DIR}/${run_id}.build-sidecar.json"
+            scripts/build-inputs-match.sh gadi "${sidecar}" || continue
+            expected_size=$(jq -er 'select(.schema_version == "build-sidecar/v1" and .build_archive.path == "build.tar.zst") | .build_archive.size_bytes' "${sidecar}") || continue
+            expected_sha=$(jq -er '.build_archive.sha256' "${sidecar}") || continue
+            [[ "$(stat -c '%s' "${archive}")" == "${expected_size}" ]] || continue
+            [[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${expected_sha}" ]] || continue
+            echo "利用可能な最新のビルドを選択しました: ${archive}"
+            printf 'action=reuse\nsource_archive_key=%s\nbuild_cache_key=%s\n' "${run_id}" "${run_id}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          done < <(find "${BUILD_ARCHIVE_DIR}" -maxdepth 1 -type f -name '*.build-sidecar.json' -printf '%f\n' 2>/dev/null | sed 's/[.]build-sidecar[.]json$//' | LC_ALL=C sort -rn)
           echo '再利用可能なGadi向け成果物がないため、新しくビルドします'
           printf 'action=build\nbuild_cache_key=%s\n' "${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
 
