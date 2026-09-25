@@ -341,6 +341,7 @@ jobs:
             profile_tool=uprof
             bundle_path="${GITHUB_WORKSPACE}/experiment-metrics/bundles/openfoam-score-v1.json"
           fi
+          printf 'profile_tool=%s\n' "${profile_tool}" >> "${GITHUB_OUTPUT}"
           bundle_sha256=$("${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" bundle-identity --bundle "${bundle_path}" --purpose "${purpose}")
           head_commit=$(git rev-parse HEAD)
           base_commit=$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || printf '%s' "${head_commit}")
@@ -406,33 +407,29 @@ jobs:
           done
 
       - name: AMD uProf reportをlogin nodeで生成
-        if: success() && inputs.profile
+        if: success() && inputs.profile && steps.v2_context.outputs.profile_tool == 'uprof'
         env:
           OPENFOAM_NODES: ${{ inputs.node_count }}
           OPENFOAM_MPI_PROCS: ${{ needs.select-build.outputs.ranks }}
         run: |
-          [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]] || exit 0
           analysis=$(jq -er '.analysis | select(. == "hotspots" or . == "assess" or . == "data_access")' "${PROVISION_DIR}/benchmark/profile.json")
           "${PROVISION_DIR}/platforms/aspire2a/export-uprof.sh" "${AMDUPROF_ROOT}/bin/AMDuProfCLI-bin" "${RUN_DIR}/profile/raw/uprof" "${analysis}"
           sed 's/^/uprof_/' "${RUN_DIR}/profile/raw/uprof/session.txt" >> "${RUN_DIR}/logs/profile-location.txt"
 
       - name: AMD uProf結果を構造化
-        if: success() && inputs.profile
+        if: success() && inputs.profile && steps.v2_context.outputs.profile_tool == 'uprof'
         run: |
-          [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]] || exit 0
           analysis=$(jq -er '.analysis | select(. == "hotspots" or . == "assess" or . == "data_access")' "${PROVISION_DIR}/benchmark/profile.json")
           "${PROVISION_DIR}/experiment-metrics/.venv/bin/experiment-metrics" record-profile-uprof --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --report-root "${RUN_DIR}/profile/raw/uprof/reports" --expected-hosts '${{ inputs.node_count }}' --expected-ranks '${{ needs.select-build.outputs.ranks }}' --uprof-rank-stride 16 --analysis-type "${analysis}" --summary "${RUN_DIR}/results/uprof-summary.json" --markdown "${RUN_DIR}/results/uprof-summary.md"
 
       - name: AMD uProf概要をActionsの概要へ掲載
-        if: success() && inputs.profile
+        if: success() && inputs.profile && steps.v2_context.outputs.profile_tool == 'uprof'
         run: |
-          [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]] || exit 0
           cat "${RUN_DIR}/results/uprof-summary.md" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: CrayPAT MPI reportをlogin nodeで生成
-        if: success() && inputs.profile
+        if: success() && inputs.profile && steps.v2_context.outputs.profile_tool == 'craypat'
         run: |
-          [[ "${OPENFOAM_PROFILE_TOOL}" == craypat ]] || exit 0
           "${PROVISION_DIR}/platforms/aspire2a/export-craypat.sh" "${RUN_DIR}/profile/raw/craypat" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json"
           grep -E '^Table [0-9]+:' "${RUN_DIR}/profile/raw/craypat/pat-report.txt" >> "${GITHUB_STEP_SUMMARY}"
 
