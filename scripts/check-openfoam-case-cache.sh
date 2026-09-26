@@ -18,6 +18,7 @@ if [[ "${cluster}" == aspire2a ]]; then
     case $(cat "${provision}/platforms/aspire2a/decomposition-4n.txt") in
       hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
       multilevel) prepare_options=(--identity-only --multi-level-domains 4,2,4,16) ;;
+      scotch) prepare_options=(--identity-only) ;;
       *) echo '未対応の4ノード分割条件です' >&2; exit 64 ;;
     esac
   fi
