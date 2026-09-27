@@ -127,3 +127,24 @@ def test_rank_wrapper_can_capture_placement_without_launching_solver(
     assert document["run_id"] == manifest.parents[1].name
     assert document["global_rank"] == 0
     assert affinity_calls == [(0, {0})]
+
+
+def test_l3_aware_cpu_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    from experiment_metrics.rank_wrapper import _l3_aware_cpu
+
+    monkeypatch.delenv("ASPIRE2A_RANKS_PER_L3", raising=False)
+    assert _l3_aware_cpu(0) == 0
+    assert _l3_aware_cpu(7) == 7
+
+    monkeypatch.setenv("ASPIRE2A_RANKS_PER_L3", "7")
+    assert _l3_aware_cpu(0) == 0
+    assert _l3_aware_cpu(6) == 6
+    assert _l3_aware_cpu(7) == 8
+    assert _l3_aware_cpu(111) == 126
+
+    monkeypatch.setenv("ASPIRE2A_RANKS_PER_L3", "4")
+    assert _l3_aware_cpu(63) == 123
+
+    monkeypatch.setenv("ASPIRE2A_RANKS_PER_L3", "0")
+    with pytest.raises(ValueError, match="ASPIRE2A_RANKS_PER_L3"):
+        _l3_aware_cpu(0)

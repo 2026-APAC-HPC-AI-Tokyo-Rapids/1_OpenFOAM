@@ -7,6 +7,29 @@ from pathlib import Path
 from .manifest import RunManifest
 from .placement import capture_rank_placement
 
+# ASPIRE-2A: 16 L3 groups (CCDs) per node with 8 physical cores each. Ranks are
+# spread so that ASPIRE2A_RANKS_PER_L3 ranks share one L3; the default 8 equals
+# one rank per physical core, a smaller value reserves cores per L3.
+ASPIRE2A_L3_GROUPS = 16
+ASPIRE2A_CORES_PER_L3 = 8
+
+
+def _ranks_per_l3() -> int:
+    value = os.environ.get("ASPIRE2A_RANKS_PER_L3")
+    if value is None or value == "":
+        return ASPIRE2A_CORES_PER_L3
+    if not value.isdecimal() or not 1 <= int(value) <= ASPIRE2A_CORES_PER_L3:
+        raise ValueError("invalid ASPIRE2A_RANKS_PER_L3")
+    return int(value)
+
+
+def _l3_aware_cpu(local_rank: int) -> int:
+    per_l3 = _ranks_per_l3()
+    cpu = (local_rank // per_l3) * ASPIRE2A_CORES_PER_L3 + (local_rank % per_l3)
+    if not 0 <= cpu < ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3:
+        raise ValueError("L3-aware CPU mapping is out of range")
+    return cpu
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="openfoam-rank-wrapper")
@@ -60,8 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     if local_size != ranks_per_node:
         raise ValueError("rank wrapper local size differs from expected axes")
     if arguments.bind_local_rank:
-        os.sched_setaffinity(0, {local_rank})
-        if os.sched_getaffinity(0) != {local_rank}:
+        cpu = _l3_aware_cpu(local_rank)
+        os.sched_setaffinity(0, {cpu})
+        if os.sched_getaffinity(0) != {cpu}:
             raise RuntimeError("rank wrapper could not bind the local rank")
     capture_rank_placement(
         placement_root / f"rank-{rank}.json",

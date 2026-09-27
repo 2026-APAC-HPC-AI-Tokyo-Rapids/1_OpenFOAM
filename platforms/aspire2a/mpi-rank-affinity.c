@@ -7,6 +7,33 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+/* ASPIRE-2A: each node has 16 L3 groups (CCDs) with 8 physical cores each.
+   Ranks are spread so that ASPIRE2A_RANKS_PER_L3 ranks share one L3; the
+   default 8 equals one rank per physical core across all L3 groups, while a
+   smaller value reserves cores per L3 to reduce cache overflow. */
+#define ASPIRE2A_L3_GROUPS 16
+#define ASPIRE2A_CORES_PER_L3 8
+
+static long ranks_per_l3(void)
+{
+    const char *value = getenv("ASPIRE2A_RANKS_PER_L3");
+    char *end = NULL;
+    long parsed;
+
+    if (value == NULL || *value == '\0')
+    {
+        return ASPIRE2A_CORES_PER_L3;
+    }
+    errno = 0;
+    parsed = strtol(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || parsed < 1 || parsed > ASPIRE2A_CORES_PER_L3)
+    {
+        fprintf(stderr, "invalid ASPIRE2A_RANKS_PER_L3: %s\n", value);
+        _exit(126);
+    }
+    return parsed;
+}
+
 /* PALS can overwrite a prior affinity mask while UCX initializes MPI. */
 static void bind_local_rank(void)
 {
@@ -14,6 +41,8 @@ static void bind_local_rank(void)
     char *end = NULL;
     cpu_set_t mask;
     cpu_set_t observed;
+    long rank;
+    long per_l3 = ranks_per_l3();
     long cpu;
 
     if (value == NULL)
@@ -23,10 +52,17 @@ static void bind_local_rank(void)
     }
 
     errno = 0;
-    cpu = strtol(value, &end, 10);
-    if (errno != 0 || end == value || *end != '\0' || cpu < 0 || cpu >= CPU_SETSIZE)
+    rank = strtol(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || rank < 0 || rank >= CPU_SETSIZE)
     {
         fprintf(stderr, "invalid PMI_LOCAL_RANK: %s\n", value);
+        _exit(126);
+    }
+
+    cpu = (rank / per_l3) * ASPIRE2A_CORES_PER_L3 + (rank % per_l3);
+    if (cpu < 0 || cpu >= ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3)
+    {
+        fprintf(stderr, "L3-aware CPU mapping is out of range for rank %s\n", value);
         _exit(126);
     }
 
