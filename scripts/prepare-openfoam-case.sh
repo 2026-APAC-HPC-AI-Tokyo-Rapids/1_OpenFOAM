@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 9 ]]; then
-  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--case-default-hierarchical|--hierarchical-n \"DOMAIN DOMAIN ...\"|--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--case-default-hierarchical|--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
   exit 64
 fi
 
@@ -20,8 +20,6 @@ mode=
 multi_level_ranks_per_node=
 multi_level_domains=
 case_default_hierarchical=false
-hierarchical_domains=()
-hierarchical_order=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
@@ -29,8 +27,6 @@ do
     --multi-level-ranks-per-node) [[ $# -ge 2 && -z "${multi_level_ranks_per_node}" ]]; multi_level_ranks_per_node=$2; shift 2 ;;
     --multi-level-domains) [[ $# -ge 2 && -z "${multi_level_domains}" ]]; multi_level_domains=$2; shift 2 ;;
     --case-default-hierarchical) [[ "${case_default_hierarchical}" == false ]]; case_default_hierarchical=true; shift ;;
-    --hierarchical-n) [[ $# -ge 2 && ${#hierarchical_domains[@]} -eq 0 ]]; IFS=' ' read -r -a hierarchical_domains <<< "$2"; shift 2 ;;
-    --hierarchical-order) [[ $# -ge 2 && -z "${hierarchical_order}" ]]; hierarchical_order=$2; shift 2 ;;
     *) echo "未対応のケース準備引数です: $1" >&2; exit 64 ;;
   esac
 done
@@ -38,18 +34,6 @@ done
 decomposition_method=scotch
 decomposition_domains=()
 [[ -z "${multi_level_ranks_per_node}" || -z "${multi_level_domains}" ]]
-[[ "${case_default_hierarchical}" == false || ${#hierarchical_domains[@]} -eq 0 ]]
-[[ -z "${hierarchical_order}" || ${#hierarchical_domains[@]} -gt 0 ]]
-[[ -z "${hierarchical_order}" || "${hierarchical_order}" =~ ^[a-z]{3}$ ]]
-if [[ ${#hierarchical_domains[@]} -gt 0 ]]; then
-  [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" ]]
-  (( ${#hierarchical_domains[@]} >= 1 )) && [[ "${hierarchical_domains[0]}" =~ ^[1-9][0-9]*$ ]]
-  product=1
-  for domain in "${hierarchical_domains[@]}"; do [[ "${domain}" =~ ^[1-9][0-9]*$ ]] && (( product <= subdomains / domain )); product=$(( product * domain )); done
-  (( product == subdomains ))
-  decomposition_method=hierarchical
-  decomposition_domains=("${hierarchical_domains[@]}")
-fi
 if [[ "${case_default_hierarchical}" == true ]]; then
   [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" && "${subdomains}" == 512 ]]
   grep -Eq '^[[:space:]]*decompositionMethod[[:space:]]+hierarchical;' "${source_case}/system/include/caseDefinition"
@@ -84,7 +68,7 @@ test "$(sha256sum "${mesh_archive}" | awk '{print $1}')" = "${expected_sha256}"
 script_sha256=$(sha256sum "$0" | awk '{print $1}')
 source_identity=$(cd "${source_case}" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
 prepare_toolchain_identity=$(jq -ecS 'select(.schema_version == "build-sidecar/v1" and ([.runtime_objects[] | select(.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")) | .role] | sort) == ["checkMesh", "decomposePar"]) | {source_commits,compile_flags,precision,label_bits,runtime_objects:[.runtime_objects[] | select(.kind == "shared_library" or (.kind == "executable" and (.role == "checkMesh" or .role == "decomposePar")))]}' "${build_sidecar}" | sha256sum | awk '{print $1}')
-cache_identity=$(printf '%s\n' "prepare=${script_sha256}" "toolchain=${prepare_toolchain_identity}" "case=${source_identity}" "mesh=${expected_sha256}" "subdomains=${subdomains}" "method=${decomposition_method}" "domains=${decomposition_domains_text}" "order=${hierarchical_order}" 'fileHandler=uncollated' | sha256sum | awk '{print $1}')
+cache_identity=$(printf '%s\n' "prepare=${script_sha256}" "toolchain=${prepare_toolchain_identity}" "case=${source_identity}" "mesh=${expected_sha256}" "subdomains=${subdomains}" "method=${decomposition_method}" "domains=${decomposition_domains_text}" 'fileHandler=uncollated' | sha256sum | awk '{print $1}')
 cache_dir="${cache_root}/${cache_identity}"
 if [[ "${mode}" == --identity-only ]]; then
   printf 'prepare_script_sha256=%s\ncache_identity=%s\ncache_dir=%s\n' "${script_sha256}" "${cache_identity}" "${cache_dir}"
@@ -121,8 +105,6 @@ if ! cache_valid; then
   cp "${temporary}/case/system/fvSolution.fixedIter" "${temporary}/case/system/fvSolution"
   cp -a "${temporary}/case/0.orig" "${temporary}/case/0"
   sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1${subdomains};/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${decomposition_method};/" "${temporary}/case/system/include/caseDefinition"
-  if [[ "${decomposition_method}" == hierarchical ]]; then sed -i -E "s/^(nHierarchical[[:space:]]+)\([^)]*\);/\1${decomposition_domains_text};/" "${temporary}/case/system/include/caseDefinition"; fi
-  if [[ "${decomposition_method}" == hierarchical && -n "${hierarchical_order}" ]]; then sed -i -E "s/^([[:space:]]*order[[:space:]]+)[a-z]+;/\1${hierarchical_order};/" "${temporary}/case/system/decomposeParDict"; fi
   if [[ "${decomposition_method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains %s;\n}\n' "${decomposition_domains_text}" >> "${temporary}/case/system/decomposeParDict"; fi
   tar -xzf "${mesh_archive}" -C "${temporary}/case/constant"
   (
@@ -131,7 +113,7 @@ if ! cache_valid; then
     "${decompose_par}" -constant -fileHandler uncollated > logs/decomposePar.log 2>&1
   )
   printf '%s\n' "${cache_identity}" > "${temporary}/READY"
-  jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" --arg method "${decomposition_method}" --argjson domains "${decomposition_domains_json}" --arg order "${hierarchical_order}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:$method,domains:$domains,order:$order,file_handler:"uncollated"}' > "${temporary}/manifest.json"
+  jq -n --arg cache_identity "${cache_identity}" --arg prepare_script_sha256 "${script_sha256}" --arg prepare_toolchain_identity "${prepare_toolchain_identity}" --arg case_identity "${source_identity}" --arg mesh_sha256 "${expected_sha256}" --argjson number_of_subdomains "${subdomains}" --arg method "${decomposition_method}" --argjson domains "${decomposition_domains_json}" '{schema_version:"openfoam-case-cache/v4",cache_identity:$cache_identity,prepare_script_sha256:$prepare_script_sha256,prepare_toolchain_identity:$prepare_toolchain_identity,case_identity:$case_identity,mesh_sha256:$mesh_sha256,number_of_subdomains:$number_of_subdomains,method:$method,domains:$domains,file_handler:"uncollated"}' > "${temporary}/manifest.json"
   find "${temporary}/case" -type f -exec chmod a-w {} +
   find "${temporary}/case" -type d -exec chmod a-w {} +
   mv "${temporary}" "${cache_dir}"

@@ -28,7 +28,7 @@ def _inputs(tmp_path: Path) -> tuple[Path, ...]:
         "system/controlDict.noWrite": "endTime 4000;\n",
         "system/fvSolution": "base\n",
         "system/fvSolution.fixedIter": "fixed\n",
-        "system/decomposeParDict": "numberOfSubdomains $nCores;\nmethod $decompositionMethod;\nhierarchicalCoeffs\n{\n    n $nHierarchical;\n    delta 0.001;\n    order xyz;\n}\n",
+        "system/decomposeParDict": "numberOfSubdomains $nCores;\nmethod $decompositionMethod;\n",
         "system/include/caseDefinition": "nCores 512;\ndecompositionMethod hierarchical;\nnHierarchical (16 8 4);\n",
     }.items():
         path = source / relative
@@ -364,39 +364,6 @@ def test_case_default_hierarchical_is_separate_from_optimized_cache(tmp_path: Pa
         ("hierarchical", (16, 8, 4)), ("multiLevel", (4, 2, 4, 16)),
     }
     assert subprocess.run([*base, "--identity-only", "--case-default-hierarchical", "--multi-level-domains", "4,2,4,16"], capture_output=True).returncode != 0
-
-
-def test_hierarchical_n_sets_custom_n(tmp_path: Path) -> None:
-    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
-    cache_root = tmp_path / "cache"
-    target = tmp_path / "case"
-    base = [SCRIPT, source, target, decompose_par, check_mesh, archive, definition, sidecar, "512", cache_root]
-    subprocess.run([*base, "--hierarchical-n", "8 8 8"], check=True)
-    case = (target / "system/include/caseDefinition").read_text()
-    assert "decompositionMethod hierarchical;" in case
-    assert "nHierarchical (8 8 8);" in case
-    assert "multiLevelCoeffs" not in (target / "system/decomposeParDict").read_text()
-
-    manifest = json.loads(next(cache_root.glob("*/manifest.json")).read_text())
-    assert manifest["method"] == "hierarchical"
-    assert manifest["domains"] == [8, 8, 8]
-
-    assert subprocess.run([*base, "--identity-only", "--hierarchical-n", "8 8 9"], capture_output=True).returncode != 0
-
-
-def test_hierarchical_order_sets_decompose_dict(tmp_path: Path) -> None:
-    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
-    cache_root = tmp_path / "cache"
-    target = tmp_path / "case"
-    base = [SCRIPT, source, target, decompose_par, check_mesh, archive, definition, sidecar, "512", cache_root]
-    subprocess.run([*base, "--hierarchical-n", "4 8 16", "--hierarchical-order", "zyx"], check=True)
-    assert "nHierarchical (4 8 16);" in (target / "system/include/caseDefinition").read_text()
-    assert "order zyx;" in (target / "system/decomposeParDict").read_text()
-
-    manifest = json.loads(next(cache_root.glob("*/manifest.json")).read_text())
-    assert manifest["order"] == "zyx"
-
-    assert subprocess.run([*base, "--identity-only", "--hierarchical-order", "zyx"], capture_output=True).returncode != 0
 
 
 def test_prepare_case_keeps_scotch_and_multilevel_caches_separate(tmp_path: Path) -> None:

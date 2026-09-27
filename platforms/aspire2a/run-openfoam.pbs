@@ -59,9 +59,8 @@ case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case
 decomposition_options=(--multi-level-ranks-per-node 128)
 if (( OPENFOAM_MPI_PROCS == 512 )); then
   case $(cat "${PROVISION_DIR}/platforms/aspire2a/decomposition-4n.txt") in
-    hierarchical) decomposition_options=(--hierarchical-n "$(cat "${PROVISION_DIR}/platforms/aspire2a/hierarchical-n.txt")" --hierarchical-order "$(cat "${PROVISION_DIR}/platforms/aspire2a/hierarchical-order.txt")") ;;
+    hierarchical) decomposition_options=(--case-default-hierarchical) ;;
     multilevel) decomposition_options=(--multi-level-domains 4,2,4,16) ;;
-    scotch) decomposition_options=() ;;
     *) echo '未対応の4ノード分割条件です' >&2; exit 64 ;;
   esac
 fi
