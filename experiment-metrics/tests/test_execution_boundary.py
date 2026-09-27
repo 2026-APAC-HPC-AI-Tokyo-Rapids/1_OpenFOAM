@@ -417,7 +417,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'uprof_bin_dir="${AMDUPROF_ROOT}/bin"' in runner
     assert 'OPENFOAM_UPROF_PATH="${uprof_bin_dir}/AMDuProfCLI-bin"' in runner
     assert 'LD_LIBRARY_PATH="${uprof_bin_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" "${METRICS_CLI}" "${provision_args[@]}"' in runner
-    assert 'printf \'%s\\0\' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}" > "${uprof_target_argv_file}"' in runner
+    assert 'printf \'%s\\0\' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}" > "${uprof_target_argv_file}"' in runner
     assert '"${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions"' in runner
     assert '"${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"' in runner
     uprof_launcher = (ROOT / "platforms/aspire2a/exec-uprof.sh").read_text(
