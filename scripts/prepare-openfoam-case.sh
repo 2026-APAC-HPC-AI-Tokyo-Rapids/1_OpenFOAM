@@ -35,16 +35,11 @@ decomposition_method=scotch
 decomposition_domains=()
 [[ -z "${multi_level_ranks_per_node}" || -z "${multi_level_domains}" ]]
 if [[ "${case_default_hierarchical}" == true ]]; then
-  [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" ]]
+  [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" && "${subdomains}" == 512 ]]
   grep -Eq '^[[:space:]]*decompositionMethod[[:space:]]+hierarchical;' "${source_case}/system/include/caseDefinition"
   grep -Eq '^[[:space:]]*nHierarchical[[:space:]]+\(16 8 4\);' "${source_case}/system/include/caseDefinition"
   decomposition_method=hierarchical
-  case "${subdomains}" in
-    512) decomposition_domains=(16 8 4) ;;
-    448) decomposition_domains=(7 8 8) ;;
-    1024) decomposition_domains=(16 8 8) ;;
-    *) echo "未対応のhierarchical分割サイズです: ${subdomains}" >&2; exit 64 ;;
-  esac
+  decomposition_domains=(16 8 4)
 fi
 if [[ -n "${multi_level_ranks_per_node}" ]]; then
   [[ "${multi_level_ranks_per_node}" =~ ^[1-9][0-9]*$ ]]
@@ -109,8 +104,7 @@ if ! cache_valid; then
   cp "${temporary}/case/system/controlDict.noWrite" "${temporary}/case/system/controlDict"
   cp "${temporary}/case/system/fvSolution.fixedIter" "${temporary}/case/system/fvSolution"
   cp -a "${temporary}/case/0.orig" "${temporary}/case/0"
-  sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\1${subdomains};/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\1${decomposition_method};/" "${temporary}/case/system/include/caseDefinition"
-  if [[ "${decomposition_method}" == hierarchical ]]; then sed -i -E "s/^(nHierarchical[[:space:]]+)\([^)]*\);/\1${decomposition_domains_text};/" "${temporary}/case/system/include/caseDefinition"; fi
+  sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1${subdomains};/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${decomposition_method};/" "${temporary}/case/system/include/caseDefinition"
   if [[ "${decomposition_method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains %s;\n}\n' "${decomposition_domains_text}" >> "${temporary}/case/system/decomposeParDict"; fi
   tar -xzf "${mesh_archive}" -C "${temporary}/case/constant"
   (

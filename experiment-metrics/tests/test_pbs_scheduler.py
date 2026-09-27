@@ -178,7 +178,7 @@ def test_aspire2a_submission_uses_exclusive_full_nodes(
     argv = request["argv"]
     assert argv[argv.index("-P") + 1] == "59000014"
     assert argv[argv.index("-q") + 1] == "normal"
-    assert "select=2:ncpus=256:mpiprocs=256:ompthreads=1:mem=400gb" in argv
+    assert "select=2:ncpus=128:mpiprocs=128:ompthreads=1:mem=400gb" in argv
     assert "place=excl" in argv
     exported = argv[argv.index("-v") + 1]
     assert "OPENFOAM_PROFILE_TOOL=uprof" in exported

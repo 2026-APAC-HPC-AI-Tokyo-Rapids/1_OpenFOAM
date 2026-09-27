@@ -14,7 +14,7 @@ case "${cluster}" in genkai|gadi|aspire2a) ;; *) exit 64 ;; esac
 prepare_options=(--identity-only)
 if [[ "${cluster}" == aspire2a ]]; then
   prepare_options+=(--multi-level-ranks-per-node 128)
-  if [[ "${subdomains}" == 448 || "${subdomains}" == 1024 ]]; then
+  if [[ "${subdomains}" == 512 ]]; then
     case $(cat "${provision}/platforms/aspire2a/decomposition-4n.txt") in
       hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
       multilevel) prepare_options=(--identity-only --multi-level-domains 4,2,4,16) ;;

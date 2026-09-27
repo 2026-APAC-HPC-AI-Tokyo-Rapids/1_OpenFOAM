@@ -106,7 +106,7 @@ def submit_pbs_run(
             "-q",
             protocol.resource_group,
             "-l",
-            f"select={protocol.nodes}:ncpus=256:mpiprocs=256:ompthreads=1:mem=400gb",
+            f"select={protocol.nodes}:ncpus=128:mpiprocs=128:ompthreads=1:mem=400gb",
             "-l",
             "place=excl",
         ]
