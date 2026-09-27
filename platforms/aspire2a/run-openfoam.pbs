@@ -52,7 +52,7 @@ if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 # Ranks sharing one L3 (ASPIRE-2A has 16 L3 groups per node with 8 cores each).
 # 8 fills every physical core; a smaller fixed value reserves cores per L3.
-ranks_per_l3=7
+ranks_per_l3=8
 if (( ranks_per_node % 16 != 0 )); then printf '%s\n' 'ASPIRE-2Aのrank数がL3グループ数に整合しません' >&2; exit 64; fi
 if (( ranks_per_l3 < 1 || ranks_per_l3 > 8 )); then printf '%s\n' 'ASPIRE-2Aのranks-per-L3が範囲外です' >&2; exit 64; fi
 solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
