@@ -24,7 +24,7 @@ set -eu
 decompose_par=$(command -v decomposePar)
 check_mesh=$(command -v checkMesh)
 decomposition_options=(--multi-level-ranks-per-node 128)
-if (( PREPARE_SUBDOMAINS == 512 )); then
+if (( PREPARE_SUBDOMAINS == 448 )); then
   case $(cat "${PROVISION_DIR}/platforms/aspire2a/decomposition-4n.txt") in
     hierarchical) decomposition_options=(--case-default-hierarchical) ;;
     multilevel) decomposition_options=(--multi-level-domains 4,2,4,16) ;;

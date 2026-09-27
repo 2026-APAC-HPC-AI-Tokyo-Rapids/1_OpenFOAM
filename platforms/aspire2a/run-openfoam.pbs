@@ -52,8 +52,8 @@ if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 # Ranks sharing one L3 (ASPIRE-2A has 16 L3 groups per node with 8 cores each).
 # 8 fills every physical core; a smaller fixed value reserves cores per L3.
-ranks_per_l3=8
-if (( ranks_per_node % 16 != 0 )); then ranks_per_l3=8; fi
+ranks_per_l3=7
+if (( ranks_per_node % 16 != 0 )); then printf '%s\n' 'ASPIRE-2Aのrank数がL3グループ数に整合しません' >&2; exit 64; fi
 if (( ranks_per_l3 < 1 || ranks_per_l3 > 8 )); then printf '%s\n' 'ASPIRE-2Aのranks-per-L3が範囲外です' >&2; exit 64; fi
 solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
 rank_affinity="${PROVISION_DIR}/platforms/aspire2a/libmpi-rank-affinity.so"
@@ -62,7 +62,7 @@ grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${RUN_DIR}/logs/mpi-rank-af
 if grep -q '/oneapi/' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"; then printf '%s\n' 'ASPIRE-2A用MPI affinity interposerがIntel oneAPIにlinkしています' >&2; exit 1; fi
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
 decomposition_options=(--multi-level-ranks-per-node 128)
-if (( OPENFOAM_MPI_PROCS == 512 )); then
+if (( OPENFOAM_MPI_PROCS == 448 )); then
   case $(cat "${PROVISION_DIR}/platforms/aspire2a/decomposition-4n.txt") in
     hierarchical) decomposition_options=(--case-default-hierarchical) ;;
     multilevel) decomposition_options=(--multi-level-domains 4,2,4,16) ;;
