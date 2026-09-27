@@ -280,18 +280,18 @@ set +e
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   if [[ "${OPENFOAM_PROFILE_TOOL}" == uprof ]]; then
     uprof_target_argv_file="${RUN_DIR}/control/uprof-target.argv"
-    printf '%s\0' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}" > "${uprof_target_argv_file}"
+    printf '%s\0' "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}" > "${uprof_target_argv_file}"
     chmod 0600 "${uprof_target_argv_file}"
     stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-uprof.sh" "${OPENFOAM_UPROF_PATH}" "${uprof_root}/sessions" "${OPENFOAM_UPROF_ANALYSIS}" "${compute_tools_root}/platforms/aspire2a/exec-uprof-target" "${uprof_target_argv_file}"
   elif [[ "${OPENFOAM_PROFILE_TOOL}" == vtune ]]; then
-    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}"
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${RANK_PYTHON_LAUNCH[@]}" -m experiment_metrics.rank_wrapper --manifest "${rank_manifest}" --expected-ranks "${OPENFOAM_MPI_PROCS}" --expected-nodes "${OPENFOAM_NODES}" --placement-root "${rank_placement_root}" --global-rank-env "${global_rank_env}" --local-rank-env "${local_rank_env}" --local-size-env "${local_size_env}" --profile-rank "${OPENFOAM_VTUNE_RANK}" --profile-wrapper "${compute_tools_root}/scripts/exec-profiler.sh" -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   elif [[ "${OPENFOAM_PROFILE_TOOL}" == mpi_timing ]]; then
-    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh" "${compute_tools_root}/platforms/aspire2a/libmpi-temporal-profile.so" "${mpi_timing_root}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}"
+    stage solver "${SOLVER_LOG}" "${solver_launch[@]}" /usr/bin/bash "${compute_tools_root}/platforms/aspire2a/exec-mpi-temporal-profile.sh" "${compute_tools_root}/platforms/aspire2a/libmpi-temporal-profile.so" "${mpi_timing_root}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   else
-    stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}" "${solver_launch[@]}" "${OPENFOAM_CRAYPAT_PATH}" -g mpi -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}"
+    stage solver "${SOLVER_LOG}" "${ENV}" PAT_RT_EXPDIR_BASE="${craypat_root}" "${solver_launch[@]}" "${OPENFOAM_CRAYPAT_PATH}" -g mpi -- "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
   fi
 else
-  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated -opt-switch commsType=scheduled "${openfoam_args[@]}"
+  stage solver "${SOLVER_LOG}" "${solver_launch[@]}" "${SIMPLE_FOAM}" -parallel -fileHandler uncollated "${openfoam_args[@]}"
 fi
 solver_status=$?
 set -e
