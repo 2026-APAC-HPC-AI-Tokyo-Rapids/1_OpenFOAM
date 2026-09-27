@@ -26,7 +26,7 @@ def _ranks_per_l3() -> int:
 def _l3_aware_cpu(local_rank: int) -> int:
     per_l3 = _ranks_per_l3()
     cpu = (local_rank // per_l3) * ASPIRE2A_CORES_PER_L3 + (local_rank % per_l3)
-    if not 0 <= cpu < ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3:
+    if not 0 <= cpu < ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3 * 2:
         raise ValueError("L3-aware CPU mapping is out of range")
     return cpu
 

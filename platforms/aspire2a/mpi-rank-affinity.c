@@ -60,7 +60,7 @@ static void bind_local_rank(void)
     }
 
     cpu = (rank / per_l3) * ASPIRE2A_CORES_PER_L3 + (rank % per_l3);
-    if (cpu < 0 || cpu >= ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3)
+    if (cpu < 0 || cpu >= ASPIRE2A_L3_GROUPS * ASPIRE2A_CORES_PER_L3 * 2)
     {
         fprintf(stderr, "L3-aware CPU mapping is out of range for rank %s\n", value);
         _exit(126);

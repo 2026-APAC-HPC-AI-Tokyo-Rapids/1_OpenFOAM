@@ -42,6 +42,7 @@ if [[ "${case_default_hierarchical}" == true ]]; then
   case "${subdomains}" in
     512) decomposition_domains=(16 8 4) ;;
     448) decomposition_domains=(7 8 8) ;;
+    1024) decomposition_domains=(16 8 8) ;;
     *) echo "未対応のhierarchical分割サイズです: ${subdomains}" >&2; exit 64 ;;
   esac
 fi

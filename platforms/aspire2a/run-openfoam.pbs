@@ -62,7 +62,7 @@ grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${RUN_DIR}/logs/mpi-rank-af
 if grep -q '/oneapi/' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"; then printf '%s\n' 'ASPIRE-2A用MPI affinity interposerがIntel oneAPIにlinkしています' >&2; exit 1; fi
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
 decomposition_options=(--multi-level-ranks-per-node 128)
-if (( OPENFOAM_MPI_PROCS == 448 )); then
+if (( OPENFOAM_MPI_PROCS == 448 || OPENFOAM_MPI_PROCS == 1024 )); then
   case $(cat "${PROVISION_DIR}/platforms/aspire2a/decomposition-4n.txt") in
     hierarchical) decomposition_options=(--case-default-hierarchical) ;;
     multilevel) decomposition_options=(--multi-level-domains 4,2,4,16) ;;
