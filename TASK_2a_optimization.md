@@ -40,6 +40,7 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
 - [ ] Basicの分割手法（`hierarchical`または`scotch`）による1/2/4ノード公式runを確保し、Bonus比較の基準にする。
   - [x] `scotch`の4ノード512 rank公式150反復（Actions 36255514227 / PBS 25570270.pbs101、run r-aaebc6de54a2abf23731ddae4fde371b）は`VALID`、5.032413983758389秒/iteration（標準偏差0.06618520537694263）、Cd 0.28404934573921931。multiLevel比+75.5%、hierarchical既定比+約55%で、scotchはノード/NUMA境界を考慮せずノード間境界面が増えるため採用しない。ASPIRE-2AのBasicはhierarchicalを基準とする。
   - [x] `nHierarchical`は編集可能なため、`(16 8 4)`以外の候補もBasic候補として比較した。`(4 8 16)`・order `zyx`（Actions 36258849614 / PBS 25570770.pbs101）は`VALID`、3.25790536361745秒/iteration、Cd 0.28264876338289940で、既定`(16 8 4)`の約3.245と+0.4%以内（ノイズ内）であり、n/orderの変更では改善しない。`(16 8 4)`・order `xyz`をBasic基準として維持する。
+  - [x] Basicの`hierarchical (16 8 4)`・40反復ベースラインを確立した（Actions 36373671818、`decomposition-4n.txt=hierarchical`、3.214143072384615秒/iteration、Cd 0.43724132489600431、`VALID`、`configured_iterations=40`）。150反復の3.244826秒/iterationと整合する（差0.95%）。スクリーニングはこの40反復値を基準にする。
   - [ ] 1ノード40反復・2ノード80反復も同条件で取得する。
   - [ ] 最終分割でCrayPAT/PMPIによる全rankの待ち・不均衡・message統計をE2Eで完走・再解析する（公式ルールがMPI profilingを強く推奨）。
 - [ ] Basic最適化（性能スコアの対象）を、source無改変・同一計算の範囲で進める。
