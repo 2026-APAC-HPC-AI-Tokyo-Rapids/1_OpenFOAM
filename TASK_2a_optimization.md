@@ -49,7 +49,8 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [x] `commsType=scheduled`を準備工程・simpleFoam solverの両方で試験したが、準備工程では`potentialFoam`のGAMG `scale()`、solver限定でもGAMG `scale()`/`Vcycle()`でSIGFPEとなった（Actions 36311011900 / 36313378631）。結果・Cdは生成されず、現行ASPIRE-2A GNU/Cray MPICH UCXではBasic候補から除外し、既定`nonBlocking`へ戻す。
   - [x] OpenFOAMのtopology-aware collective選択（`topoControl=2`、bit2=reduce）をsimpleFoam solver限定で試した。Actions 36368984582は`decomposition-4n.txt`が`multilevel`のまま実行されており（`source/mesh/caseDefinition`で確認）、2.861892秒/iteration・Cd 0.29138860626177504はmultiLevel+topoControlの結果である。既存multiLevel 3回平均2.866837秒/iterationとの差は約-0.17%でノイズ内、**topoControlは効果なし（負の対照）**と判定する。bit16（combine）は`gAverage`/`gSum`が`mpiAllReduce`を通るため対象外であり、追加検証しない。
   - [x] ノード間processor exchangeを対象に`nbx.tuning=1`と`pbufs.tuning=1`をhierarchical 40反復で比較した。`nbx.tuning=1`（Actions 36375558400）は3.201892秒/iterationでベースライン3.214143比-0.38%、`pbufs.tuning=1`（Actions 36375610008）は3.250510で+1.13%。3runともCdは0.43724132489600431で完全一致し、交換スケジューリングは計算結果を変えないが、改善は1%閾値未満または悪化であり**不採用**。hierarchicalのノード間ペナルティは生のメッセージ量・レイテンシ由来で、NBX/PEXの管理処理では縮まない。
-  - [x] Basicのランタイムスイッチは上記で一通り探索済みとし、Basicはcase-default`hierarchical (16 8 4)`・512 rank・8/L3の約3.2秒/iterationを確定値とする。以降の最適化はBonus（multiLevel階層の調整、GAMG processorAgglomerator、source変更）へ移る。
+  - [x] `unifiedGeometricField=1`（境界fieldの単一確保へのレイアウト変更）をhierarchical 40反復で試した（Actions 36380214006）。3.249373秒/iterationでベースライン3.214143比+1.10%、Cdは0.43724132489600431で完全一致。悪化のため**不採用**。
+  - [x] Basicのランタイムスイッチ（commsType/topoControl/nbx.tuning/pbufs.tuning/unifiedGeometricField）は一通り探索済みで改善なし。Basicはcase-default`hierarchical (16 8 4)`・512 rank・8/L3の約3.2秒/iterationを確定値とする。以降の最適化はBonus（multiLevel階層の調整（済・不採用）、GAMG processorAgglomerator、source変更）へ移る。
   - [ ] Cray MPICH UCXのパラメータ（collective選択等）を調整する。玄界のMPI autotune上限は約10%と推定済み。
   - [ ] ジョブ配置とホスト選定でrun間分散を制御する（ASPIREのホスト群で48%差を実測済み）。
   - [ ] `-fileHandler`/`-hostRoots`/`-ioRanks`やnode-local storageを含むI/O・filesystem設定を確認する。
