@@ -55,7 +55,7 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [ ] `-fileHandler`/`-hostRoots`/`-ioRanks`やnode-local storageを含むI/O・filesystem設定を確認する。
   - [ ] unsafeでない追加ビルドflagを試す。
 - [ ] Bonus（分割）を検討する。
-  - [ ] `multiLevel`の階層係数をトポロジに合わせて調整する（例 `(4 8 2 8)` 等）。
+  - [x] `multiLevel`の階層係数をトポロジに合わせて比較した。(4 2 4 16)は40反復で2.846727秒/iteration（Actions 36377437153、Cd 0.43422333004788705）、L3に整合する(4 2 8 8)は2.865666（Actions 36377508967、Cd 0.43954323815986718）で+0.67%遅く、**階層変更は不採用**。確立済みBonusは(4 2 4 16)の約2.85秒/iterationで、Basic hierarchical約3.21に対して約11.5%高速。
   - [ ] `structured`または`manual`分割で4ノード×8 NUMAへ厳密に対応させる。
   - [ ] `kahip`/`metis`/`ptscotch`をスクリーニングする。
   - [ ] `renumberMesh`オプション（`-dict`/`-renumber-method`/`blockSize`）を再確認する（玄界は<1%）。
