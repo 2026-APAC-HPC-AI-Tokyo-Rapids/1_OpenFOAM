@@ -46,7 +46,8 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [ ] `OptimisationSwitches`のメモリ管理（アロケータ/プール等）を有効化し、一時配列・旧fieldのchurnと局所性を改善する。
   - [x] ランク数とL3あたりプロセス数を検証した。ASPIRE-2Aは1ノード16 L3（各8物理コア）。同一448 rankで、全16 L3へ7プロセスずつ分散（B2、Actions 36286767867）は3.443525秒/iteration、14 L3へ8プロセス詰め（B1、Actions 36289009710）は3.950424秒/iterationで、**分散配置が12.8%高速**（L3溢れ仮説を支持）。ただし両者とも512 rank・8/L3×16（hierarchical `(16 8 4)`、約3.245）より遅く、**Basic最適は全コア512 rankの分散配置**で、プロセス/L3を減らすとrank数減の不利が上回る。Cdは両者一致（0.28831843092215143、同一分割）。単発runでnode分散の併存に注意。
   - [x] `commsType=scheduled`を準備工程・simpleFoam solverの両方で試験したが、準備工程では`potentialFoam`のGAMG `scale()`、solver限定でもGAMG `scale()`/`Vcycle()`でSIGFPEとなった（Actions 36311011900 / 36313378631）。結果・Cdは生成されず、現行ASPIRE-2A GNU/Cray MPICH UCXではBasic候補から除外し、既定`nonBlocking`へ戻す。
-  - [ ] OpenFOAMのtopology-aware collective選択（`topoControl`）で小メッセージAllreduceをノード内reduce＋ノード間Allreduce＋ノード内broadcastへ分解する。`gAverage`/`gSum`は`mpiAllReduce`を通りbit2（reduce）で階層化されるため、`-opt-switch topoControl=2`をsimpleFoam solver限定で試す。効果がなければbit16（combine）を検討する。
+  - [x] OpenFOAMのtopology-aware collective選択（`topoControl=2`、bit2=reduce）をsimpleFoam solver限定で試した。Actions 36368984582は`decomposition-4n.txt`が`multilevel`のまま実行されており（`source/mesh/caseDefinition`で確認）、2.861892秒/iteration・Cd 0.29138860626177504はmultiLevel+topoControlの結果である。既存multiLevel 3回平均2.866837秒/iterationとの差は約-0.17%でノイズ内、**topoControlは効果なし（負の対照）**と判定する。bit16（combine）は`gAverage`/`gSum`が`mpiAllReduce`を通るため対象外であり、追加検証しない。
+  - [ ] Basicの`hierarchical (16 8 4)`を40反復で再確立し、ノード間processor exchangeを対象とする`nbx.tuning`/`pbufs.tuning`等の交換スケジューリングを比較する。hierarchicalはmultiLevel比+13.18%でノード間境界面が11.20倍のため、この差を縮められればBasic性能の直接改善になる。
   - [ ] Cray MPICH UCXのパラメータ（collective選択等）を調整する。玄界のMPI autotune上限は約10%と推定済み。
   - [ ] ジョブ配置とホスト選定でrun間分散を制御する（ASPIREのホスト群で48%差を実測済み）。
   - [ ] `-fileHandler`/`-hostRoots`/`-ioRanks`やnode-local storageを含むI/O・filesystem設定を確認する。
