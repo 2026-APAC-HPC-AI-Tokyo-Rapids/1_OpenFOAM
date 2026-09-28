@@ -35,4 +35,4 @@ def test_selected_decomposition_presets_are_self_consistent() -> None:
             assert protocol.solver == "simpleFoam"
             assert protocol.distribution == "OpenFOAM.com"
             assert protocol.release == "v2512"
-            assert protocol.iteration_target == {1: 40, 2: 80, 4: 150}[nodes]
+            assert protocol.iteration_target == {1: 40, 2: 80, 4: 40}[nodes]
