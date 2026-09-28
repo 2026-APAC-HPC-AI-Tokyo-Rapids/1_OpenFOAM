@@ -43,7 +43,7 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [x] Basicの`hierarchical (16 8 4)`・40反復ベースラインを確立した（Actions 36373671818、`decomposition-4n.txt=hierarchical`、3.214143072384615秒/iteration、Cd 0.43724132489600431、`VALID`、`configured_iterations=40`）。150反復の3.244826秒/iterationと整合する（差0.95%）。スクリーニングはこの40反復値を基準にする。
   - [ ] 1ノード40反復・2ノード80反復も同条件で取得する。
   - [ ] 最終分割でCrayPAT/PMPIによる全rankの待ち・不均衡・message統計をE2Eで完走・再解析する（公式ルールがMPI profilingを強く推奨）。
-- [ ] Basic最適化（性能スコアの対象）を、source無改変・同一計算の範囲で進める。
+- [x] Basic最適化（性能スコアの対象）を、source無改変・同一計算の範囲で進める。ランタイムスイッチのスクリーニングは完了し、case-default`hierarchical (16 8 4)`・512 rank・8/L3の約3.2秒/iterationを確定値とする。commsType/topoControl/nbx.tuning/pbufs.tuning/unifiedGeometricFieldはいずれも1%超の改善なし。UCXパラメータ、ホスト選定、I/O設定、追加ビルドflagは、profileに裏付けられた仮説とcontrol-plane変更またはrebuildを要するため、この段階では未実施として保留する。
   - [ ] `OptimisationSwitches`のメモリ管理（アロケータ/プール等）を有効化し、一時配列・旧fieldのchurnと局所性を改善する。
   - [x] ランク数とL3あたりプロセス数を検証した。ASPIRE-2Aは1ノード16 L3（各8物理コア）。同一448 rankで、全16 L3へ7プロセスずつ分散（B2、Actions 36286767867）は3.443525秒/iteration、14 L3へ8プロセス詰め（B1、Actions 36289009710）は3.950424秒/iterationで、**分散配置が12.8%高速**（L3溢れ仮説を支持）。ただし両者とも512 rank・8/L3×16（hierarchical `(16 8 4)`、約3.245）より遅く、**Basic最適は全コア512 rankの分散配置**で、プロセス/L3を減らすとrank数減の不利が上回る。Cdは両者一致（0.28831843092215143、同一分割）。単発runでnode分散の併存に注意。
   - [x] `commsType=scheduled`を準備工程・simpleFoam solverの両方で試験したが、準備工程では`potentialFoam`のGAMG `scale()`、solver限定でもGAMG `scale()`/`Vcycle()`でSIGFPEとなった（Actions 36311011900 / 36313378631）。結果・Cdは生成されず、現行ASPIRE-2A GNU/Cray MPICH UCXではBasic候補から除外し、既定`nonBlocking`へ戻す。
