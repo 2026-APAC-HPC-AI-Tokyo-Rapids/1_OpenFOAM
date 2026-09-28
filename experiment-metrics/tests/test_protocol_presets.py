@@ -19,6 +19,8 @@ def test_selected_decomposition_presets_are_self_consistent() -> None:
         "aspire2a-multilevel-1n-128r": (1, 128, "cray-mpich-ucx"),
         "aspire2a-multilevel-2n-256r": (2, 256, "cray-mpich-ucx"),
         "aspire2a-multilevel-4n-512r": (4, 512, "cray-mpich-ucx"),
+        "aspire2a-hierarchical-1n-128r": (1, 128, "cray-mpich-ucx"),
+        "aspire2a-hierarchical-2n-256r": (2, 256, "cray-mpich-ucx"),
         "aspire2a-hierarchical-4n-512r": (4, 512, "cray-mpich-ucx"),
     }
 
@@ -35,4 +37,4 @@ def test_selected_decomposition_presets_are_self_consistent() -> None:
             assert protocol.solver == "simpleFoam"
             assert protocol.distribution == "OpenFOAM.com"
             assert protocol.release == "v2512"
-            assert protocol.iteration_target == {1: 40, 2: 80, 4: 40}[nodes]
+            assert protocol.iteration_target == {1: 40, 2: 80, 4: 150}[nodes]

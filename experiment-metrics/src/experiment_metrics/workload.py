@@ -83,7 +83,7 @@ def load_workload_definition(path: Path) -> WorkloadDefinition:
         or SHA256.fullmatch(mesh["sha256"]) is None
         or not isinstance(iterations, dict)
         or set(iterations) != {"1", "2", "4"}
-        or iterations != {"1": 40, "2": 80, "4": 40}
+        or iterations != {"1": 40, "2": 80, "4": 150}
     ):
         raise ValueError("課題定義の来歴または実行条件が無効です")
     return WorkloadDefinition(

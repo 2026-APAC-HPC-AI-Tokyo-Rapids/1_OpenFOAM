@@ -141,7 +141,7 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     assert not counter.exists()
 
     expanded = tmp_path / "expanded" if cluster in {"gadi", "aspire2a"} else cache_root
-    prepare_options = ["--multi-level-ranks-per-node", "128"] if cluster == "aspire2a" else []
+    prepare_options = ["--case-default-hierarchical"] if cluster == "aspire2a" else []
     prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, subdomains, expanded, *prepare_options], check=True, capture_output=True, text=True)
     cache_dir = Path(next(line.removeprefix("cache_dir=") for line in prepared.stdout.splitlines() if line.startswith("cache_dir=")))
     if cluster in {"gadi", "aspire2a"}:

@@ -13,14 +13,20 @@ case "${cluster}" in genkai|gadi|aspire2a) ;; *) exit 64 ;; esac
 # identity-onlyではOpenFOAM executableを起動しない。runtime展開やmodule設定も不要。
 prepare_options=(--identity-only)
 if [[ "${cluster}" == aspire2a ]]; then
-  prepare_options+=(--multi-level-ranks-per-node 128)
-  if [[ "${subdomains}" == 512 ]]; then
-    case $(cat "${provision}/platforms/aspire2a/decomposition-4n.txt") in
-      hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
-      multilevel) prepare_options=(--identity-only --multi-level-domains 4,2,4,16) ;;
-      *) echo '未対応の4ノード分割条件です' >&2; exit 64 ;;
-    esac
-  fi
+  case "${subdomains}" in
+    128) decomposition_file=decomposition-1n.txt ;;
+    256) decomposition_file=decomposition-2n.txt ;;
+    512) decomposition_file=decomposition-4n.txt ;;
+    *) echo "未対応のsubdomain数です: ${subdomains}" >&2; exit 64 ;;
+  esac
+  case $(cat "${provision}/platforms/aspire2a/${decomposition_file}") in
+    hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
+    multilevel)
+      [[ "${subdomains}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
+      prepare_options=(--identity-only --multi-level-domains 4,2,4,16)
+      ;;
+    *) echo '未対応の分割条件です' >&2; exit 64 ;;
+  esac
 fi
 identity_output=$("${provision}/scripts/prepare-openfoam-case.sh" "${provision}/benchmark/occDrivAerStaticMesh" - - - "${mesh_archive}" "${provision}/benchmark/workload.json" "${provision}/control/build-sidecar.json" "${subdomains}" "${cache_root}" "${prepare_options[@]}") || exit 2
 cache_identity=$(sed -n 's/^cache_identity=//p' <<< "${identity_output}")

@@ -69,14 +69,14 @@ def test_short_profile_is_labeled_diagnostic_not_official(tmp_path: Path) -> Non
     check_mesh = tmp_path / "checkMesh.log"
     check_mesh.write_text("    cells: 65334765\nEnd\n")
     solver = tmp_path / "solver.log"
-    solver.write_text("Build  : test OPENFOAM=2512\nExec   : simpleFoam -parallel\nnProcs : 512\n" + "".join(f"Time = {iteration}\n" for iteration in range(1, 11)) + "    Number of measured time steps = 9\n    Average wall-clock time per time step = 10.25\n    Standard deviation of wall-clock time per time step = 0.25\nEnd\n")
+    solver.write_text("Build  : test OPENFOAM=2512\nExec   : simpleFoam -parallel\nnProcs : 512\n" + "".join(f"Time = {iteration}\n" for iteration in range(1, 41)) + "    Number of measured time steps = 39\n    Average wall-clock time per time step = 10.25\n    Standard deviation of wall-clock time per time step = 0.25\nEnd\n")
     coefficient = tmp_path / "coefficient.dat"
-    coefficient.write_text("# Time Cd Cl\n10 0.435 0.01\n")
-    command = [Path(__file__).parents[2] / "benchmark/parse_result.sh", solver, check_mesh, "512", "4", "10", "65334765", "v2512", "occDrivAerStaticMesh-65M", "OpenFOAM.com", coefficient]
+    coefficient.write_text("# Time Cd Cl\n40 0.435 0.01\n")
+    command = [Path(__file__).parents[2] / "benchmark/parse_result.sh", solver, check_mesh, "512", "4", "40", "65334765", "v2512", "occDrivAerStaticMesh-65M", "OpenFOAM.com", coefficient]
     assert subprocess.run(command, capture_output=True).returncode != 0
     result = subprocess.run([command[0], "--diagnostic", *command[1:]], check=True, capture_output=True, text=True)
     assert "STATUS: DIAGNOSTIC" in result.stdout
-    assert "official_iterations=40" in result.stdout
+    assert "official_iterations=150" in result.stdout
     assert "STATUS: VALID" not in result.stdout
     assert "RESULT:" not in result.stdout
     solver.write_text(solver.read_text().replace("Average wall-clock time per time step = 10.25", "Average wall-clock time per time step = NaN"))

@@ -477,11 +477,15 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--solver-launch-arg -d" in wrapper
     assert 'LD_PRELOAD=${rank_affinity}"' in wrapper
     assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in wrapper
-    assert "--multi-level-ranks-per-node 128" in wrapper
     assert "--multi-level-domains 4,2,4,16" in wrapper
-    assert "aspire2a-multilevel-1n-128r" in workflow
-    assert "aspire2a-multilevel-2n-256r" in workflow
+    assert "decomposition-1n.txt" in wrapper
+    assert "decomposition-2n.txt" in wrapper
+    assert "decomposition-4n.txt" in wrapper
+    assert "aspire2a-hierarchical-1n-128r" in workflow
+    assert "aspire2a-hierarchical-2n-256r" in workflow
     assert 'experiment_preset="aspire2a-${decomposition}-4n-512r"' in workflow
+    assert 'platforms/aspire2a/decomposition-1n.txt' in workflow
+    assert 'platforms/aspire2a/decomposition-2n.txt' in workflow
     assert 'platforms/aspire2a/decomposition-4n.txt' in workflow
     assert '*-multilevel-*) decomposition_method=multiLevel' in runner
     assert "--bind-rank-placement" in wrapper

@@ -268,7 +268,7 @@ def test_aspire2a_four_node_profile_exports_short_diagnostic(tmp_path: Path, ide
 
     request = json.loads(outcome.request_path.read_text())
     exported = request["argv"][request["argv"].index("-v") + 1]
-    assert "OPENFOAM_ITERATIONS=40" in exported
+    assert "OPENFOAM_ITERATIONS=150" in exported
     assert "OPENFOAM_DIAGNOSTIC_ITERATIONS=40" in exported
-    assert request["iterations"] == 40
+    assert request["iterations"] == 150
     assert request["diagnostic_iterations"] == 40
