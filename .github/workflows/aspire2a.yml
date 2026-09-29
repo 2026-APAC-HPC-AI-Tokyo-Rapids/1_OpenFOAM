@@ -69,7 +69,7 @@ jobs:
           case '${{ inputs.node_count }}' in
             1) experiment_preset=aspire2a-hierarchical-1n-128r; ranks=128 ;;
             2) experiment_preset=aspire2a-hierarchical-2n-256r; ranks=256 ;;
-            4) decomposition=$(cat platforms/aspire2a/decomposition-4n.txt); case "${decomposition}" in hierarchical|multilevel) ;; *) exit 64 ;; esac; experiment_preset="aspire2a-${decomposition}-4n-512r"; ranks=512 ;;
+            4) decomposition=$(cat platforms/aspire2a/decomposition-4n.txt); case "${decomposition}" in hierarchical|multilevel|scotch|metis|kahip|ptscotch) ;; *) exit 64 ;; esac; experiment_preset="aspire2a-${decomposition}-4n-512r"; ranks=512 ;;
             *) echo 'ASPIRE-2Aのノード数には1、2、4のいずれかを指定してください' >&2; exit 64 ;;
           esac
           printf 'experiment_preset=%s\nranks=%s\n' "${experiment_preset}" "${ranks}" >> "${GITHUB_OUTPUT}"

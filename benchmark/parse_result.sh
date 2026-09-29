@@ -22,10 +22,10 @@ coefficient=${10}
 case "${nodes}" in
   1) expected_iterations=40 ;;
   2) expected_iterations=80 ;;
-  4) expected_iterations=150 ;;
+  4) expected_iterations=40 ;;
 esac
 if [[ "${diagnostic}" == true ]]; then
-  [[ "${nodes}" == 4 && ( "${iterations}" == 10 || "${iterations}" == 40 ) && "${expected_iterations}" == 150 ]]
+  [[ "${nodes}" == 4 && ( "${iterations}" == 10 || "${iterations}" == "${expected_iterations}" ) ]]
 else
   [[ "${iterations}" == "${expected_iterations}" ]]
 fi

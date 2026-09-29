@@ -19,12 +19,14 @@ if [[ "${cluster}" == aspire2a ]]; then
     512) decomposition_file=decomposition-4n.txt ;;
     *) echo "未対応のsubdomain数です: ${subdomains}" >&2; exit 64 ;;
   esac
-  case $(cat "${provision}/platforms/aspire2a/${decomposition_file}") in
+  decomposition=$(cat "${provision}/platforms/aspire2a/${decomposition_file}")
+  case "${decomposition}" in
     hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
     multilevel)
       [[ "${subdomains}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
       prepare_options=(--identity-only --multi-level-domains 4,2,4,16)
       ;;
+    scotch|metis|kahip|ptscotch) prepare_options=(--identity-only --decomposition-method "${decomposition}") ;;
     *) echo '未対応の分割条件です' >&2; exit 64 ;;
   esac
 fi

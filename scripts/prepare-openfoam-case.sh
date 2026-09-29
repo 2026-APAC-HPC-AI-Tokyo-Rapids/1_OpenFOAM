@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 9 ]]; then
-  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--case-default-hierarchical|--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...]" >&2
+  echo "使用方法: $0 SOURCE_CASE TARGET_CASE DECOMPOSE_PAR CHECK_MESH MESH_ARCHIVE WORKLOAD_DEFINITION BUILD_SIDECAR SUBDOMAINS CACHE_ROOT [--require-cache|--identity-only] [--case-default-hierarchical|--multi-level-ranks-per-node RANKS|--multi-level-domains DOMAIN,DOMAIN,...|--decomposition-method METHOD]" >&2
   exit 64
 fi
 
@@ -20,6 +20,7 @@ mode=
 multi_level_ranks_per_node=
 multi_level_domains=
 case_default_hierarchical=false
+decomposition_method_override=
 while [[ $# -gt 0 ]]
 do
   case "$1" in
@@ -27,6 +28,7 @@ do
     --multi-level-ranks-per-node) [[ $# -ge 2 && -z "${multi_level_ranks_per_node}" ]]; multi_level_ranks_per_node=$2; shift 2 ;;
     --multi-level-domains) [[ $# -ge 2 && -z "${multi_level_domains}" ]]; multi_level_domains=$2; shift 2 ;;
     --case-default-hierarchical) [[ "${case_default_hierarchical}" == false ]]; case_default_hierarchical=true; shift ;;
+    --decomposition-method) [[ $# -ge 2 && -z "${decomposition_method_override}" ]]; decomposition_method_override=$2; shift 2 ;;
     *) echo "未対応のケース準備引数です: $1" >&2; exit 64 ;;
   esac
 done
@@ -58,6 +60,11 @@ elif [[ -n "${multi_level_domains}" ]]; then
   for domain in "${decomposition_domains[@]}"; do (( product <= subdomains / domain )); product=$(( product * domain )); done
   (( product == subdomains ))
   decomposition_method=multiLevel
+fi
+if [[ -n "${decomposition_method_override}" ]]; then
+  [[ -z "${multi_level_ranks_per_node}" && -z "${multi_level_domains}" && "${case_default_hierarchical}" == false ]]
+  case "${decomposition_method_override}" in scotch|metis|kahip|ptscotch) ;; *) echo "未対応の分割手法です: ${decomposition_method_override}" >&2; exit 64 ;; esac
+  decomposition_method=${decomposition_method_override}
 fi
 decomposition_domains_text="(${decomposition_domains[*]})"
 decomposition_domains_json=$(printf '%s\n' "${decomposition_domains[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)')

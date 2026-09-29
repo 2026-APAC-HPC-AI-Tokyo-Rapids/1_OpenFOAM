@@ -366,6 +366,24 @@ def test_case_default_hierarchical_is_separate_from_optimized_cache(tmp_path: Pa
     assert subprocess.run([*base, "--identity-only", "--case-default-hierarchical", "--multi-level-domains", "4,2,4,16"], capture_output=True).returncode != 0
 
 
+def test_prepare_case_records_alternative_decomposition_methods(tmp_path: Path) -> None:
+    source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(tmp_path)
+    cache_root = tmp_path / "cache"
+    target = tmp_path / "case"
+    base = [SCRIPT, source, target, decompose_par, check_mesh, archive, definition, sidecar, "512", cache_root]
+    subprocess.run([*base, "--decomposition-method", "kahip"], check=True)
+    assert "decompositionMethod kahip;" in (target / "system/include/caseDefinition").read_text()
+    assert "method $decompositionMethod;" in (target / "system/decomposeParDict").read_text()
+    subprocess.run([*base, "--decomposition-method", "metis"], check=True)
+
+    manifests = [json.loads(path.read_text()) for path in cache_root.glob("*/manifest.json")]
+    assert {(manifest["method"], tuple(manifest["domains"])) for manifest in manifests} == {
+        ("kahip", ()), ("metis", ()),
+    }
+    assert subprocess.run([*base, "--identity-only", "--decomposition-method", "invalid"], capture_output=True).returncode != 0
+    assert subprocess.run([*base, "--identity-only", "--decomposition-method", "metis", "--multi-level-domains", "4,2,4,16"], capture_output=True).returncode != 0
+
+
 def test_prepare_case_keeps_scotch_and_multilevel_caches_separate(tmp_path: Path) -> None:
     source, archive, definition, sidecar, check_mesh, decompose_par, _ = _inputs(
         tmp_path

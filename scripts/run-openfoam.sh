@@ -230,6 +230,9 @@ case "${PROTOCOL_NAME}" in
   *-scotch-*) decomposition_method=scotch ;;
   *-hierarchical-*) decomposition_method=hierarchical; prepare_decomposition_options=(--case-default-hierarchical) ;;
   *-multilevel-*) decomposition_method=multiLevel; prepare_decomposition_options=(--multi-level-ranks-per-node "$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))") ;;
+  *-kahip-*) decomposition_method=kahip; prepare_decomposition_options=(--decomposition-method kahip) ;;
+  *-metis-*) decomposition_method=metis; prepare_decomposition_options=(--decomposition-method metis) ;;
+  *-ptscotch-*) decomposition_method=ptscotch; prepare_decomposition_options=(--decomposition-method ptscotch) ;;
   *) echo "未対応の領域分割条件です: ${PROTOCOL_NAME}" >&2; exit 64 ;;
 esac
 if [[ -z "${prepared_case_manifest}" ]]; then

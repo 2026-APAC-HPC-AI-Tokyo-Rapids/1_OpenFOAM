@@ -488,6 +488,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert 'platforms/aspire2a/decomposition-2n.txt' in workflow
     assert 'platforms/aspire2a/decomposition-4n.txt' in workflow
     assert '*-multilevel-*) decomposition_method=multiLevel' in runner
+    assert '*-kahip-*) decomposition_method=kahip' in runner
+    assert '*-metis-*) decomposition_method=metis' in runner
+    assert '*-ptscotch-*) decomposition_method=ptscotch' in runner
     assert "--bind-rank-placement" in wrapper
     assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
     assert "experiment-metrics/src/experiment_metrics/rank_wrapper.py" in workflow
