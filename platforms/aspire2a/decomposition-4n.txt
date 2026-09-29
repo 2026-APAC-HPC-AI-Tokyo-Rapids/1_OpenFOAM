@@ -1,1 +1,1 @@
-ptscotch
+hierarchical
