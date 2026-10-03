@@ -14,7 +14,7 @@ aspire2a_load_toolchain() {
       ;;
     aocc)
       module load aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0
-      aspire2a_wm_compiler=Clang
+      aspire2a_wm_compiler=Amd
       aspire2a_cc=clang
       aspire2a_cxx=clang++
       aspire2a_aocl_module=aocl/5.1.0-aocc5.0
