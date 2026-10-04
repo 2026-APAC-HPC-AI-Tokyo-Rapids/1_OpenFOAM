@@ -482,8 +482,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "decomposition-1n.txt" in wrapper
     assert "decomposition-2n.txt" in wrapper
     assert "decomposition-4n.txt" in wrapper
-    assert "aspire2a-hierarchical-1n-128r" in workflow
-    assert "aspire2a-hierarchical-2n-256r" in workflow
+    assert 'experiment_preset="aspire2a-${decomposition}-1n-128r"' in workflow
+    assert 'experiment_preset="aspire2a-${decomposition}-2n-256r"' in workflow
     assert 'experiment_preset="aspire2a-${decomposition}-4n-512r"' in workflow
     assert 'platforms/aspire2a/decomposition-1n.txt' in workflow
     assert 'platforms/aspire2a/decomposition-2n.txt' in workflow
