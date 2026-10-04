@@ -29,6 +29,15 @@ hierarchicalCoeffs
     order           xyz;
 }
 
+// Map the subdomains onto the ASPIRE-2A node tree (scotch tree-leaf target).
+// scotchDecomp adds the node level with weight 1 when nCores exceeds 128;
+// below it come 2 sockets, 4 NUMA domains per socket and 16 cores per domain.
+scotchCoeffs
+{
+    domains         (2 4 16);
+    domainWeights   (0.125 0.0625 0.015625);
+}
+
 kahipCoeffs
 {
     config          fast; // fast | eco | strong
