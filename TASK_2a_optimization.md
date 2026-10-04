@@ -71,15 +71,18 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [x] ~~`kahip`/`metis`/`ptscotch`をスクリーニングする。~~ 見送り（#35）。ビルドではダミーのライブラリで、ThirdPartyの再ビルドが必要。トポロジを考慮しない分割なので見込みも低い。
   - [x] ~~`renumberMesh`オプション（`-dict`/`-renumber-method`/`blockSize`）を再確認する（玄界は<1%）。~~ 見送り（#37 F3、2026-10-04）。準備工程は既定でCuthillMcKeeを使っており、玄界ではCuthillMcKeeもブロック化も1%未満。並び順を疑うprofileもない。
   - [x] 実測駆動の`weightField`を検討した（#37 F1）。境界面に接するセルの重み2:1（回帰の見積もりで境界面1枚≒セル0.85個）は3回平均3.1067で+6.5%。セル数の最大/平均が1.101に崩れる。計算コストはセル数でほぼ決まる。不採用。
+  - [x] 計算の不均衡（rank別の計算時間の最大/中央値1.072）を、rank別の点の数（相関+0.66。セル数+0.01、壁の面+0.48）で説明し、セルの重みを「1＋点の取り分」にしたmultiLevel＋パッチを試した（#37、自作ツール`cell-weights`）。倍率12（重みの合計約16.6億）は32 bitのScotchで最上位の分割から崩れ（ノード間の面が5倍）、2.9441で+6.1%。倍率2は分割の質が保たれ、点の数の偏りは1.089→1.039になったが、セル数の偏りが1.073になり2.8367で+2.2%。静的な重みでは不均衡を減らせず、セル数を均等に保つのが最優先。不採用。
 - [ ] Bonus（ソース、F3必須）を検討する。
   - [x] ~~`lduMatrix::upper()`が直後の代入で上書きする`lower`コピーを除去する。~~ 見送り（#37 F5）。eu-stackの呼び出し履歴（下記）では、組み立て時のゼロ埋め・コピーは約1%で、`lduMatrix`の確保APIから変える必要がある。
   - [ ] `omegaDiv.internalFaces`の一時配列・deep copyを削減する（Stage 11で5配列処理に分散、差+16.6 ms）。
   - [x] `residual`/`Amul`/`GaussSeidelSmoother`の一時配列・deep copyを削減した（#37 F5）。まず40反復のCrayPAT診断中にhead nodeの8 rankの呼び出し履歴をeu-stackで480サンプル採った（37199243400）。memcpy/memsetは4.4%で（9月のuProfの18.8%は古い）、最大は`smoothSolver::solve`が残差を一時配列で受けてコピーする箇所（全体の1.7%、Uの解法の約10%）。パッチ`patches/openfoam/0001-drop-redundant-solver-copies.patch`（branch `experiment/issue37-solver-copies`、ビルド時に当てる。組織のsource repositoryは変えない）は、smoothSolverで既存のin-place版`lduMatrix::residual`を使い、GAMGの残差を1回の`subtract`で作る。演算と順序は変えない。4ノード3回平均2.8193（同じ時期のBasic 2.9186比**−3.40%**）、2ノード6.1701（−3.25%、同じホストの組）、1ノード13.0663（−2.08%）。
   - [ ] `Pstream`の通信実装を改善する。
   - [ ] `LD_PRELOAD`/`-Wl,--wrap`でアロケータまたはmemcpyを再利用する。
-  - [x] 上のパッチは、1/2/4ノードともcoefficient.datがBasic（main 6396eeb）とビット一致した（ルール6.9の「bit-identical → pass」）。multiLevel＋パッチの組み合わせを、1/2/4ノードの同じ分割の基準（branch `experiment/issue37-multilevel-1-2n`）と比べている。
+  - [x] 上のパッチは、1/2/4ノードともcoefficient.datがBasic（main 6396eeb）とビット一致した（ルール6.9の「bit-identical → pass」）。
+  - [x] Bonusの最良構成はmultiLevel＋パッチ（branch `experiment/issue37-multilevel-copies`、e2730db）。1ノード(2 4 16)・2ノード(2 2 4 16)・4ノード(4 2 4 16)。4ノード4回2.7738／2.7772／2.7778／2.7749（平均2.7759、Basic 2.9181比**−4.9%**、パッチなしmultiLevel 2.8733比−3.4%）、2ノード6.1663（−3.31%）、1ノード12.9931（−2.63%）。パッチだけを外した基準（branch `experiment/issue37-multilevel-1-2n`）と、1/2/4ノードともcoefficient.datがビット一致した。multiLevelの効果は4ノード−1.5%、1・2ノード−0.4〜−0.5%。
 - [x] Bonus（fvSolution）としてGAMG `processorAgglomerator`を検討した。`masterCoarsest`（全rankを1 masterへ）は+4.95%（#35）。最も粗い段のPCGはAllreduce 1,578回/stepの81%を占めるが、IMBの512 rank・8 byteのAllreduceは約12 µsで、段全体でもstepの約0.6%。ノード・NUMA単位のmasterでも節約は0.1〜0.3%の見積もりで、1%に届かないため見送り（#37 F4）。
 - [ ] 最終構成で4ノードを複数run、1/2ノードのscaling、改善前後を取得し、律速の因果を発表用に整理する。
+  - [x] Basicのscaling（main 6396eeb、1ノード13.3439、2ノード6.3775、4ノード4回）は、提出用の`experiment_metrics.scaling`の検査（同じcommit・ビルド・分割など）を通った。Bonus（multiLevel）はノード数ごとに`domains`が違うため、このツールでは1つの表にできない。
 - [x] `hierarchical`既定採用、重み3:1分割、`-march=znver3`、AOCC常用、MPI autotune/CM renumbering（玄界で<1%）、fast-math、精度低下・GPU・結果捏造を実施しない。
 - [ ] 各runでActions全job success、PBS/PJM exit 0、残留jobなし、`run-success`存在、公式parser `VALID`、1/2/4のノード数・rank数・CPUアフィニティ・NUMA配置一致、build/workload identity一致、固定artifactのarchive保存とSHA-256照合、BigQueryメトリクス、実験台帳の記録を確認する。
 
