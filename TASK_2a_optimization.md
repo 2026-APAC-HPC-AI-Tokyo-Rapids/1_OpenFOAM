@@ -37,7 +37,9 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
   - [x] AOCC 5.0/AOCL 5.1.0は4ノードで約0.36%高速な後2回を含む一方、1/2ノード差と外れ値のため一貫した優位と判定せず、GNUを標準・AOCCを検証済み選択肢とする。
   - [x] `WM_LABEL_SIZE=32`はASPIRE-2Aの実行経路で既に適用済みであり、追加の改善軸ではない。
   - [x] 玄界（参考）で公式workloadのMemory Bound約61%、DRAM約405 GB/s・bound約86%、Gauss-Seidel最大トラフィック、NUMA remote/TLBが律速外であることを確認済みである。
-- [ ] Basicの分割手法（`hierarchical`または`scotch`）による1/2/4ノード公式runを確保し、Bonus比較の基準にする。
+- [x] Basicの分割手法（`hierarchical`または`scotch`）による1/2/4ノード公式runを確保し、Bonus比較の基準にする。
+  - [x] 同じcommit（main 6396eeb、1/2/4ノードともscotch、numactl＋keeper）で1/2/4ノードを取得した（2026-10-04、すべて`VALID`）。1ノード13.3439（37203914409、Cd 0.43598848994661615）、2ノード6.3775（37203905233、Cd 0.32713924728038718）、4ノード2.9217／2.9155／2.9185／2.9165（37200996533／37202026690／37202900063／37206922099、平均2.9181、Cd 0.28404934573921931）。1・2ノードのcoefficient.datは過去のscotchのrunと一致した。提出用scalingの候補。
+  - [x] Issue #38：scotchCoeffsの`domains (2 4 16)`／`domainWeights`（未改変v2512のscotchDecompが読むtree-leafの対象アーキテクチャ、ルール6.6のBasicの手法係数）を試した。ノード・ソケット・NUMAをまたぐ面は10〜22%減るが、processor境界面の合計が約3%増え、セル数の最大/平均が1.0247に悪化した。3回平均2.8994（対照2.9181比−0.64%）。`strategy`にScotch既定の戦略＋`SCOTCH_STRATBALANCE`の項を足して偏りを1.0100に戻すと、3回平均2.8942（−0.82%、範囲は対照と重ならない）。いずれも1%に届かず、**Basicはscotchのまま**（採用するかは要相談）。
   - [x] `scotch`の4ノード512 rank公式150反復（Actions 36255514227 / PBS 25570270.pbs101、run r-aaebc6de54a2abf23731ddae4fde371b）は`VALID`、5.032413983758389秒/iteration（標準偏差0.06618520537694263）、Cd 0.28404934573921931。multiLevel比+75.5%、hierarchical既定比+約55%で、scotchはノード/NUMA境界を考慮せずノード間境界面が増えるため採用しない。ASPIRE-2AのBasicはhierarchicalを基準とする。→ Issue #36で撤回：この5.03 sは3 chassisにまたがるノード割当の外れ値（全stepで4.9〜5.0 s）だった。
   - [x] `nHierarchical`は編集可能なため、`(16 8 4)`以外の候補もBasic候補として比較した。`(4 8 16)`・order `zyx`（Actions 36258849614 / PBS 25570770.pbs101）は`VALID`、3.25790536361745秒/iteration、Cd 0.28264876338289940で、既定`(16 8 4)`の約3.245と+0.4%以内（ノイズ内）であり、n/orderの変更では改善しない。`(16 8 4)`・order `xyz`をBasic基準として維持する。
   - [x] Basicの`hierarchical (16 8 4)`・40反復ベースラインを確立した（Actions 36373671818、`decomposition-4n.txt=hierarchical`、3.214143072384615秒/iteration、Cd 0.43724132489600431、`VALID`、`configured_iterations=40`）。150反復の3.244826秒/iterationと整合する（差0.95%）。スクリーニングはこの40反復値を基準にする。
@@ -66,17 +68,17 @@ profiler・instrumentationは通常benchから分離し、その所要時間を�
 - [ ] Bonus（分割）を検討する。
   - [x] `multiLevel`の階層係数をトポロジに合わせて比較した。(4 2 4 16)は40反復で2.846727秒/iteration（Actions 36377437153、Cd 0.43422333004788705）、L3に整合する(4 2 8 8)は2.865666（Actions 36377508967、Cd 0.43954323815986718）で+0.67%遅く、**階層変更は不採用**。確立済みBonusは(4 2 4 16)の約2.85秒/iterationで、Basic hierarchical約3.21に対して約11.5%高速。
   - [ ] `structured`または`manual`分割で4ノード×8 NUMAへ厳密に対応させる。
-  - [ ] `kahip`/`metis`/`ptscotch`をスクリーニングする。
-  - [ ] `renumberMesh`オプション（`-dict`/`-renumber-method`/`blockSize`）を再確認する（玄界は<1%）。
-  - [ ] 実測駆動の`weightField`を検討する（重み3:1はCd−2.6%で失敗したためCdを先に確認する）。
+  - [x] ~~`kahip`/`metis`/`ptscotch`をスクリーニングする。~~ 見送り（#35）。ビルドではダミーのライブラリで、ThirdPartyの再ビルドが必要。トポロジを考慮しない分割なので見込みも低い。
+  - [x] ~~`renumberMesh`オプション（`-dict`/`-renumber-method`/`blockSize`）を再確認する（玄界は<1%）。~~ 見送り（#37 F3、2026-10-04）。準備工程は既定でCuthillMcKeeを使っており、玄界ではCuthillMcKeeもブロック化も1%未満。並び順を疑うprofileもない。
+  - [x] 実測駆動の`weightField`を検討した（#37 F1）。境界面に接するセルの重み2:1（回帰の見積もりで境界面1枚≒セル0.85個）は3回平均3.1067で+6.5%。セル数の最大/平均が1.101に崩れる。計算コストはセル数でほぼ決まる。不採用。
 - [ ] Bonus（ソース、F3必須）を検討する。
-  - [ ] `lduMatrix::upper()`が直後の代入で上書きする`lower`コピーを除去する。
+  - [x] ~~`lduMatrix::upper()`が直後の代入で上書きする`lower`コピーを除去する。~~ 見送り（#37 F5）。eu-stackの呼び出し履歴（下記）では、組み立て時のゼロ埋め・コピーは約1%で、`lduMatrix`の確保APIから変える必要がある。
   - [ ] `omegaDiv.internalFaces`の一時配列・deep copyを削減する（Stage 11で5配列処理に分散、差+16.6 ms）。
-  - [ ] `residual`/`Amul`/`GaussSeidelSmoother`の一時配列・deep copyを削減する（時間上位の大カーネル）。
+  - [x] `residual`/`Amul`/`GaussSeidelSmoother`の一時配列・deep copyを削減した（#37 F5）。まず40反復のCrayPAT診断中にhead nodeの8 rankの呼び出し履歴をeu-stackで480サンプル採った（37199243400）。memcpy/memsetは4.4%で（9月のuProfの18.8%は古い）、最大は`smoothSolver::solve`が残差を一時配列で受けてコピーする箇所（全体の1.7%、Uの解法の約10%）。パッチ`patches/openfoam/0001-drop-redundant-solver-copies.patch`（branch `experiment/issue37-solver-copies`、ビルド時に当てる。組織のsource repositoryは変えない）は、smoothSolverで既存のin-place版`lduMatrix::residual`を使い、GAMGの残差を1回の`subtract`で作る。演算と順序は変えない。4ノード3回平均2.8193（同じ時期のBasic 2.9186比**−3.40%**）、2ノード6.1701（−3.25%、同じホストの組）、1ノード13.0663（−2.08%）。
   - [ ] `Pstream`の通信実装を改善する。
   - [ ] `LD_PRELOAD`/`-Wl,--wrap`でアロケータまたはmemcpyを再利用する。
-  - [ ] 各候補で1/2/4ノードのCd±0.5%（F3）と同一マシン上の自分のBasic比を確認する。
-- [ ] Bonus（fvSolution）としてGAMG `processorAgglomerator`で圧力solveの集約・Allreduceをrank間移動する（ルール明示許可）。
+  - [x] 上のパッチは、1/2/4ノードともcoefficient.datがBasic（main 6396eeb）とビット一致した（ルール6.9の「bit-identical → pass」）。multiLevel＋パッチの組み合わせを、1/2/4ノードの同じ分割の基準（branch `experiment/issue37-multilevel-1-2n`）と比べている。
+- [x] Bonus（fvSolution）としてGAMG `processorAgglomerator`を検討した。`masterCoarsest`（全rankを1 masterへ）は+4.95%（#35）。最も粗い段のPCGはAllreduce 1,578回/stepの81%を占めるが、IMBの512 rank・8 byteのAllreduceは約12 µsで、段全体でもstepの約0.6%。ノード・NUMA単位のmasterでも節約は0.1〜0.3%の見積もりで、1%に届かないため見送り（#37 F4）。
 - [ ] 最終構成で4ノードを複数run、1/2ノードのscaling、改善前後を取得し、律速の因果を発表用に整理する。
 - [x] `hierarchical`既定採用、重み3:1分割、`-march=znver3`、AOCC常用、MPI autotune/CM renumbering（玄界で<1%）、fast-math、精度低下・GPU・結果捏造を実施しない。
 - [ ] 各runでActions全job success、PBS/PJM exit 0、残留jobなし、`run-success`存在、公式parser `VALID`、1/2/4のノード数・rank数・CPUアフィニティ・NUMA配置一致、build/workload identity一致、固定artifactのarchive保存とSHA-256照合、BigQueryメトリクス、実験台帳の記録を確認する。
