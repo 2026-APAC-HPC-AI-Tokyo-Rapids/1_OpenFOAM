@@ -158,7 +158,7 @@ def render_scaling(runs: list[ScalingRun]) -> str:
         raise ValueError("incompatible transport policies")
     columns = ["nodes", "purpose", "ranks", "decomposition", "transport", "steps", "mean_step_s", "stddev_s", "Cd", "run"]
     ordered = sorted(runs, key=lambda run: (run.nodes, run.run_id))
-    rows = [[str(run.nodes), "scaling" if run.nodes < 4 else "scored" if run.cluster == "gadi" else "reference", str(run.ranks), run.decomposition, run.transport, str(run.iterations), str(run.mean), str(run.stddev), run.cd, run.run_id] for run in ordered]
+    rows = [[str(run.nodes), "scaling" if run.nodes < 4 else "scored" if run.cluster in {"gadi", "aspire2a"} else "reference", str(run.ranks), run.decomposition, run.transport, str(run.iterations), str(run.mean), str(run.stddev), run.cd, run.run_id] for run in ordered]
     widths = [max(len(row[index]) for row in [columns, *rows]) for index in range(len(columns))]
     def line(row: list[str]) -> str:
         return "| " + " | ".join(value.ljust(width) for value, width in zip(row, widths, strict=True)) + " |"

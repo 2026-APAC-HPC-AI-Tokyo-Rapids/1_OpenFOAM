@@ -151,3 +151,10 @@ def test_gadi_four_nodes_are_marked_scored():
     table = render_scaling(series)
     assert "scored" in table
     assert "reference" not in table
+
+
+def test_aspire2a_four_nodes_are_marked_scored():
+    series = [replace(run, cluster="aspire2a", transport="cray-mpich-ucx", condition={**run.condition, "cluster": "aspire2a"}) for run in runs()]
+    table = render_scaling(series)
+    assert "scored" in table
+    assert "reference" not in table
