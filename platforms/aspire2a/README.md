@@ -21,7 +21,7 @@ GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定�
 - compute nodeは既定で共有されるため、性能計測では`place=excl`を要求する。
 - `openfoam/2512`が利用でき、`simpleFoam`は`linux64GccDPInt32Opt`で構築されている。
 - site moduleは`PrgEnv-gnu/8.3.3`、GCC 11.2.0、Cray MPICH 8.1.15、PALS 1.1.6をロードする。
-- MPI launcherは`/opt/cray/pe/pals/1.1.6/bin/mpiexec`であり、`mpirun`も同じ実体へのsymlinkである。OpenMPI固有の起動optionを持ち込まず、NSCCの推奨どおり`--cpu-bind depth -d 1`を指定する。現行計算ノードでは、この指定だけではOFI/UCXとも`MPI_Init`後にaffinityが全CPUへ戻ることを実測しているため、非MPIの配置記録は記録直前に`PMI_LOCAL_RANK`と同じCPUへ自己固定し、MPI processはASPIRE 2A専用interposerで`MPI_Init`/`MPI_Init_thread`の正常終了直後に固定・検証する。
+- MPI launcherは`/opt/cray/pe/pals/1.1.6/bin/mpiexec`であり、`mpirun`も同じ実体へのsymlinkである。OpenMPI固有の起動optionを持ち込まず、NSCCの推奨どおり`--cpu-bind depth -d 1`を指定する。現行計算ノードでは、PALSのCPU固定とNUMA固定（`--mem-bind`）が`MPI_Init`中にプロセスの外から全CPU・全NUMAノードへ戻される（Issue #36）。固定が外れたrankはメモリを遠いNUMAノードへ確保し、4ノードで17〜20%遅くなる。そこで各rankを`exec-local-numa.sh`（`numactl --membind=$((PMI_LOCAL_RANK/16))`）経由でexecし、メモリポリシーで自身のNUMAノードへ固定する。さらに各nodeの`keep-rank-affinity.sh`が、simpleFoamのmain threadをlocal rankと同じCPUへ`taskset`で固定し直す。以前のLD_PRELOAD interposer（`MPI_Init`直後に固定）と同じ速さで、LD_PRELOADを使わない。非MPIの配置記録は、記録直前に`PMI_LOCAL_RANK`と同じCPUへ自己固定する。
 - PBSの`ncpus`は1ノード128であり、基準rank数は1/2/4ノードで128/256/512とする。基準構成では1 physical coreあたり1 rankを配置する。
 - 1ノード128 coreは`qdev`または`q4`、2・4ノードは`q5`へroutingされる。`q4`はwalltimeが`02:00:01`以上、`qdev`は`02:00:00`以下である。
 - PBSの既定メモリは実行に不足するため、各chunkに`mem=`を必ず指定する。計測ジョブは、完走済みの基準runと同じく1ノードあたり400 GBを要求する。

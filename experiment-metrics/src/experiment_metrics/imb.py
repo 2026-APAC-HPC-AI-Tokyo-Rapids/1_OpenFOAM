@@ -140,6 +140,16 @@ def _validate_imb_argv(argv: list[str], protocol: RunProtocol) -> None:
         and launcher[-len(aspire_manual_binding) :] == aspire_manual_binding
     ):
         allowed_launcher = True
+    # ASPIRE-2Aの現行形：PALSのdepth bindingに加え、各rankをnumactl --membindのwrapper経由で起動する。
+    if (
+        len(launcher) == 1 + len(aspire_tail) + len(aspire_manual_binding) + 2
+        and launcher[1 : 1 + len(aspire_tail)] == aspire_tail
+        and launcher[1 + len(aspire_tail) : -2] == aspire_manual_binding
+        and launcher[-2] == "/usr/bin/bash"
+        and Path(launcher[-1]).is_absolute()
+        and Path(launcher[-1]).parts[-3:] == ("platforms", "aspire2a", "exec-local-numa.sh")
+    ):
+        allowed_launcher = True
     if not allowed_launcher and len(launcher) == len(basic_launcher) + 3:
         allowed_launcher = (
             launcher[: len(basic_launcher)] == basic_launcher

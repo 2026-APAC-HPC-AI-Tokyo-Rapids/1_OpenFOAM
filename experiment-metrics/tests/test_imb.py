@@ -98,6 +98,28 @@ def test_imb_argv_accepts_cluster_launcher_shapes() -> None:
     _validate_imb_argv(aspire2a_without_libmem, _Protocol())  # type: ignore[arg-type]
 
 
+def test_imb_argv_accepts_aspire_numa_wrapper_shape() -> None:
+    launcher = [
+        "/opt/cray/pe/pals/bin/mpiexec",
+        "-n",
+        "120",
+        "-ppn",
+        "120",
+        "--cpu-bind",
+        "depth",
+        "-d",
+        "1",
+        "/usr/bin/bash",
+        "/scratch/provision/platforms/aspire2a/exec-local-numa.sh",
+    ]
+
+    _validate_imb_argv([*launcher, *_imb_command()], _Protocol())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="closed launcher shape"):
+        _validate_imb_argv([*launcher[:-1], "/tmp/other-wrapper.sh", *_imb_command()], _Protocol())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="closed launcher shape"):
+        _validate_imb_argv([*launcher[:-2], "/bin/sh", launcher[-1], *_imb_command()], _Protocol())  # type: ignore[arg-type]
+
+
 def test_imb_argv_accepts_previous_aspire_binding_shape() -> None:
     argv = [
         "/opt/cray/pe/pals/bin/mpiexec",
