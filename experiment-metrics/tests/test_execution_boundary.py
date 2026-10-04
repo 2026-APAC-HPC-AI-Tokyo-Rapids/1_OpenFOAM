@@ -478,7 +478,8 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '--solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh"' in wrapper
     assert '-ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/keep-rank-affinity.sh" &' in wrapper
     assert 'kill "${keeper_pid}"' in wrapper
-    assert "--multi-level-domains 4,2,4,16" in wrapper
+    assert "128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;;" in wrapper
+    assert '--multi-level-domains "${multi_level_domains}"' in wrapper
     assert "decomposition-1n.txt" in wrapper
     assert "decomposition-2n.txt" in wrapper
     assert "decomposition-4n.txt" in wrapper

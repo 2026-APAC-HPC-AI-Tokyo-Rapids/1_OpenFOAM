@@ -23,8 +23,8 @@ if [[ "${cluster}" == aspire2a ]]; then
   case "${decomposition}" in
     hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
     multilevel)
-      [[ "${subdomains}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
-      prepare_options=(--identity-only --multi-level-domains 4,2,4,16)
+      case "${subdomains}" in 128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;; esac
+      prepare_options=(--identity-only --multi-level-domains "${multi_level_domains}")
       ;;
     scotch|metis|kahip|ptscotch) prepare_options=(--identity-only --decomposition-method "${decomposition}") ;;
     *) echo '未対応の分割条件です' >&2; exit 64 ;;
