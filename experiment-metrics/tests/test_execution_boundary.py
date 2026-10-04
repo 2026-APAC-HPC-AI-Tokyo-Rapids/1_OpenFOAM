@@ -382,9 +382,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
 def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     workflow = (ROOT / ".github/workflows/aspire2a.yml").read_text(encoding="utf-8")
     wrapper = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
-    rank_affinity = (ROOT / "platforms/aspire2a/mpi-rank-affinity.c").read_text(
-        encoding="utf-8"
-    )
+    numa_wrapper = (ROOT / "platforms/aspire2a/exec-local-numa.sh").read_text(encoding="utf-8")
+    keeper = (ROOT / "platforms/aspire2a/keep-rank-affinity.sh").read_text(encoding="utf-8")
     runner = (ROOT / "scripts/run-openfoam.sh").read_text(encoding="utf-8")
     entry = (ROOT / ".github/workflows/openfoam.yml").read_text(encoding="utf-8")
 
@@ -475,8 +474,10 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "--solver-launch-arg --cpu-bind" in wrapper
     assert "--solver-launch-arg depth" in wrapper
     assert "--solver-launch-arg -d" in wrapper
-    assert 'LD_PRELOAD=${rank_affinity}"' in wrapper
-    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in wrapper
+    assert "LD_PRELOAD" not in wrapper
+    assert '--solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh"' in wrapper
+    assert '-ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/keep-rank-affinity.sh" &' in wrapper
+    assert 'kill "${keeper_pid}"' in wrapper
     assert "--multi-level-domains 4,2,4,16" in wrapper
     assert "decomposition-1n.txt" in wrapper
     assert "decomposition-2n.txt" in wrapper
@@ -492,17 +493,17 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '*-metis-*) decomposition_method=metis' in runner
     assert '*-ptscotch-*) decomposition_method=ptscotch' in runner
     assert "--bind-rank-placement" in wrapper
-    assert "platforms/aspire2a/mpi-rank-affinity.c" in workflow
+    assert "platforms/aspire2a/exec-local-numa.sh" in workflow
+    assert "platforms/aspire2a/keep-rank-affinity.sh" in workflow
+    assert "mpi-rank-affinity" not in workflow
     assert "experiment-metrics/src/experiment_metrics/rank_wrapper.py" in workflow
     assert "experiment-metrics/src/experiment_metrics/pbs_scheduler.py" in workflow
     assert "experiment-metrics/src/experiment_metrics/imb.py" in workflow
     assert "platforms/aspire2a/bind-local-rank.sh" not in workflow
-    assert "int MPI_Init(int *argc, char ***argv)" in rank_affinity
-    assert "int MPI_Init_thread(" in rank_affinity
-    assert "if (status == MPI_SUCCESS) bind_local_rank();" in rank_affinity
-    assert "sched_getaffinity" in rank_affinity
-    assert "CPU_COUNT(&observed) != 1" in rank_affinity
-    assert "__attribute__((constructor))" not in rank_affinity
+    assert 'exec numactl --membind="$(( PMI_LOCAL_RANK / 16 ))" "$@"' in numa_wrapper
+    assert 'pgrep -u "${user}" -x simpleFoam' in keeper
+    assert 'taskset -pc "${local_rank_of[${pid}]}" "${pid}"' in keeper
+    assert "trap " in keeper
     assert "--bind-local-rank" in runner
     assert "--solver-launch-arg --depth" not in wrapper
     assert 'grep -Fq "${aspire2a_mpi_library_root}/libmpi_"' in wrapper
@@ -547,8 +548,7 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert '-lalm -Wl,--as-needed' not in build
     assert '--compile-flag "FOAM_EXTRA_LDFLAGS=${FOAM_EXTRA_LDFLAGS}"' in shared_build
     assert 'LD_PRELOAD="${aspire2a_aocl_libmem}" ldd "$(command -v simpleFoam)"' not in runtime
-    assert '--solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${rank_affinity}"' in runtime
-    assert 'LD_PRELOAD=${rank_affinity}:${aspire2a_aocl_libmem}' not in runtime
+    assert "LD_PRELOAD" not in runtime
     assert 'grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert 'if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" in build
