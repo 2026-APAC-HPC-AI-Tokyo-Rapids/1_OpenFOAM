@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[2]
         ("platforms/aspire2a/toolchain.sh", "aspire2a", False, False),
         ("platforms/aspire2a/toolchain.conf", "genkai", False, True),
         ("platforms/gadi/build-environment.sh", "aspire2a", False, True),
+        ("patches/openfoam/0001-change.patch", "genkai", False, False),
+        ("patches/openfoam/0001-change.patch", "aspire2a", False, False),
         ("README.md", "genkai", True, False),
     ],
 )

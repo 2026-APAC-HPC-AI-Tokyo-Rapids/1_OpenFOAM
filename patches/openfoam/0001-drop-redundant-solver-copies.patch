@@ -1,0 +1,44 @@
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -186,15 +186,17 @@
+                     nSweeps_
+                 );
+ 
+-                residual =
+-                    matrix_.residual
+-                    (
+-                        psi,
+-                        source,
+-                        interfaceBouCoeffs_,
+-                        interfaces_,
+-                        cmpt
+-                    );
++                // Evaluate in place: the tmp-returning overload allocates a
++                // new field and the assignment then copies it into residual
++                matrix_.residual
++                (
++                    residual,
++                    psi,
++                    source,
++                    interfaceBouCoeffs_,
++                    interfaces_,
++                    cmpt
++                );
+ 
+                 // Calculate the residual to check convergence
+                 solverPerf.finalResidual() =
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
+@@ -137,8 +137,8 @@
+ 
+             // Calculate finest level residual field
+             matrix_.Amul(Apsi, psi, interfaceBouCoeffs_, interfaces_, cmpt);
+-            finestResidual = tsource();
+-            finestResidual -= Apsi;
++            // One pass instead of a copy followed by a subtraction
++            subtract(finestResidual, tsource(), Apsi);
+ 
+             solverPerf.finalResidual() = gSumMag
+             (

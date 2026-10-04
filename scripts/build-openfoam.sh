@@ -77,6 +77,13 @@ install -d -m "${build_directory_mode}" "${BUILD_ARCHIVE_DIR}" "${build_tree}" "
 if [[ "${build_use_ccache}" == true ]]; then install -d -m 0700 "${ccache_local_dir}"; fi
 
 prepare_build_sources
+# Bonusのv2512ソース変更は、組織のsource repositoryを変えずにpatches/openfoam/のpatchとして追跡し、展開したソースへ名前順に当てる。
+for source_patch in "${GITHUB_WORKSPACE}"/patches/openfoam/*.patch
+do
+  [[ -e "${source_patch}" ]] || continue
+  echo "OpenFOAMソースへpatchを適用します: ${source_patch#"${GITHUB_WORKSPACE}/"}"
+  patch -p1 --forward --batch -d "${build_tree}/OpenFOAM" < "${source_patch}"
+done
 ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
 
 # 使用するコンパイラとccacheが利用可能であることを確認する。
