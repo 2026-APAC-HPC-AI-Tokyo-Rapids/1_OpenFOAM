@@ -62,8 +62,8 @@ decomposition=$(cat "${PROVISION_DIR}/platforms/aspire2a/${decomposition_file}")
 case "${decomposition}" in
   hierarchical) decomposition_options=(--case-default-hierarchical) ;;
   multilevel)
-    [[ "${OPENFOAM_MPI_PROCS}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
-    decomposition_options=(--multi-level-domains 4,2,4,16)
+    case "${OPENFOAM_MPI_PROCS}" in 128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;; esac
+    decomposition_options=(--multi-level-domains "${multi_level_domains}")
     ;;
   scotch|metis|kahip|ptscotch) decomposition_options=(--decomposition-method "${decomposition}") ;;
   *) echo '未対応の分割条件です' >&2; exit 64 ;;

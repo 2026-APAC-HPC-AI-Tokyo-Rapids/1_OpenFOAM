@@ -145,7 +145,7 @@ def test_login_cache_check_skips_compute_only_for_matching_valid_cache(tmp_path:
     if cluster == "aspire2a":
         # 128 subdomainはASPIRE-2Aの1ノード構成なので、login checkと同じ分割ファイルに従う。
         decomposition = (SCRIPT.parents[1] / "platforms/aspire2a/decomposition-1n.txt").read_text().strip()
-        prepare_options = ["--case-default-hierarchical"] if decomposition == "hierarchical" else ["--decomposition-method", decomposition]
+        prepare_options = {"hierarchical": ["--case-default-hierarchical"], "multilevel": ["--multi-level-domains", "2,4,16"]}.get(decomposition, ["--decomposition-method", decomposition])
     prepared = subprocess.run([SCRIPT, source, "-", decompose_par, check_mesh, archive, definition, sidecar, subdomains, expanded, *prepare_options], check=True, capture_output=True, text=True)
     cache_dir = Path(next(line.removeprefix("cache_dir=") for line in prepared.stdout.splitlines() if line.startswith("cache_dir=")))
     if cluster in {"gadi", "aspire2a"}:
