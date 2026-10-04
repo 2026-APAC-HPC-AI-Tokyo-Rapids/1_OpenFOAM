@@ -1,8 +1,11 @@
 name: OpenFOAM
 
 # push起動ではコミットメッセージの[cluster:*]、[nodes:*]、[profile]から実験条件を決める。
+# tagのpushでは起動しない（記録用のtagが、指す commit の[cluster:*]で計算を投入してしまうため）。
 on:
   push:
+    branches:
+      - "**"
     paths-ignore:
       - "research/**"
       - "**/*.md"
