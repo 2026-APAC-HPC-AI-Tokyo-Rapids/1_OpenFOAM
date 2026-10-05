@@ -1,0 +1,586 @@
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+index e94c3314..c8f9bdf2 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -29,6 +29,8 @@ License
+ #include "smoothSolver.H"
+ #include "profiling.H"
+ #include "PrecisionAdaptor.H"
++#include "GaussSeidelSmoother.H"
++#include <type_traits>
+ 
+ // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+ 
+@@ -44,6 +46,126 @@ namespace Foam
+ }
+ 
+ 
++// * * * * * * * * * * * * * * * Local Functions * * * * * * * * * * * * * //
++
++namespace
++{
++
++// One GaussSeidel sweep of N components that share the off-diagonal
++// coefficients and the addressing. Per component the operations and their
++// order are those of GaussSeidelSmoother::smooth.
++template<int N>
++void gaussSeidelSweep
++(
++    const Foam::label nCells,
++    const Foam::label* const __restrict__ ownStartPtr,
++    const Foam::label* const __restrict__ uPtr,
++    const Foam::scalar* const __restrict__ upperPtr,
++    const Foam::scalar* const __restrict__ lowerPtr,
++    const Foam::scalar* const diagPtr[N],
++    Foam::solveScalar* const psiPtr[N],
++    Foam::solveScalar* const bPrimePtr[N]
++)
++{
++    using namespace Foam;
++
++    solveScalar psii[N];
++    label fStart;
++    label fEnd = ownStartPtr[0];
++
++    for (label celli=0; celli<nCells; celli++)
++    {
++        // Start and end of this row
++        fStart = fEnd;
++        fEnd = ownStartPtr[celli + 1];
++
++        // Get the accumulated neighbour side
++        for (int k=0; k<N; k++)
++        {
++            psii[k] = bPrimePtr[k][celli];
++        }
++
++        // Accumulate the owner product side
++        for (label facei=fStart; facei<fEnd; facei++)
++        {
++            const scalar a = upperPtr[facei];
++            const label j = uPtr[facei];
++            for (int k=0; k<N; k++)
++            {
++                psii[k] -= a*psiPtr[k][j];
++            }
++        }
++
++        // Finish psi for this cell
++        for (int k=0; k<N; k++)
++        {
++            psii[k] /= diagPtr[k][celli];
++        }
++
++        // Distribute the neighbour side using psi for this cell
++        for (label facei=fStart; facei<fEnd; facei++)
++        {
++            const scalar a = lowerPtr[facei];
++            const label j = uPtr[facei];
++            for (int k=0; k<N; k++)
++            {
++                bPrimePtr[k][j] -= a*psii[k];
++            }
++        }
++
++        for (int k=0; k<N; k++)
++        {
++            psiPtr[k][celli] = psii[k];
++        }
++    }
++}
++
++
++// The internal part of lduMatrix::residual for N components that share the
++// off-diagonal coefficients and the addressing, with the same operations
++// and order per component. The interface contributions are added afterwards.
++template<int N>
++void internalResidual
++(
++    const Foam::label nCells,
++    const Foam::label nFaces,
++    const Foam::label* const __restrict__ lPtr,
++    const Foam::label* const __restrict__ uPtr,
++    const Foam::scalar* const __restrict__ upperPtr,
++    const Foam::scalar* const __restrict__ lowerPtr,
++    const Foam::scalar* const diagPtr[N],
++    const Foam::solveScalar* const psiPtr[N],
++    const Foam::solveScalar* const sourcePtr[N],
++    Foam::solveScalar* const rAPtr[N]
++)
++{
++    using namespace Foam;
++
++    for (label cell=0; cell<nCells; cell++)
++    {
++        for (int k=0; k<N; k++)
++        {
++            rAPtr[k][cell] = sourcePtr[k][cell] - diagPtr[k][cell]*psiPtr[k][cell];
++        }
++    }
++
++    for (label face=0; face<nFaces; face++)
++    {
++        const label l = lPtr[face];
++        const label u = uPtr[face];
++        const scalar lower = lowerPtr[face];
++        const scalar upper = upperPtr[face];
++        for (int k=0; k<N; k++)
++        {
++            rAPtr[k][u] -= lower*psiPtr[k][l];
++            rAPtr[k][l] -= upper*psiPtr[k][u];
++        }
++    }
++}
++
++} // End anonymous namespace
++
++
+ // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+ 
+ Foam::smoothSolver::smoothSolver
+@@ -224,3 +346,244 @@ Foam::solverPerformance Foam::smoothSolver::solve
+ 
+ 
+ // ************************************************************************* //
++
++
++void Foam::smoothSolver::solveGaussSeidelComponents
++(
++    lduMatrix& matrix,
++    const UList<const smoothSolver*>& solvers,
++    const UList<const scalarField*>& diag,
++    const UList<scalarField*>& psi,
++    const UList<const scalarField*>& source,
++    UList<solverPerformance>& solverPerf
++)
++{
++    static_assert
++    (
++        std::is_same<solveScalar, scalar>::value,
++        "component smoothing works on the scalarField of each component"
++    );
++
++    const label nCmpt = solvers.size();
++    if (nCmpt != 3)
++    {
++        FatalErrorInFunction
++            << "Expected 3 components, got " << nCmpt << abort(FatalError);
++    }
++
++    const label nSweeps = solvers[0]->nSweeps_;
++    const label comm = matrix.mesh().comm();
++
++    // Initial residuals, as in solve(), with the diagonal of each component
++    scalarField& matrixDiag = matrix.diag();
++    const scalarField saveDiag(matrixDiag);
++    List<solveScalar> normFactor(nCmpt);
++    PtrList<solveScalarField> residual(nCmpt);
++
++    for (label k=0; k<nCmpt; k++)
++    {
++        const smoothSolver& s = *solvers[k];
++
++        if (s.nSweeps_ != nSweeps)
++        {
++            FatalErrorInFunction
++                << "Components with different nSweeps" << abort(FatalError);
++        }
++
++        matrixDiag = *diag[k];
++        solverPerf[k] = solverPerformance(typeName, s.fieldName_);
++        residual.set(k, new solveScalarField());
++
++        {
++            solveScalarField Apsi(psi[k]->size());
++            solveScalarField temp(psi[k]->size());
++
++            // Calculate A.psi
++            matrix.Amul(Apsi, *psi[k], s.interfaceBouCoeffs_, s.interfaces_, k);
++
++            // Calculate normalisation factor
++            normFactor[k] = s.normFactor(*psi[k], *source[k], Apsi, temp);
++
++            residual[k] = *source[k] - Apsi;
++
++            matrix.setResidualField(residual[k], s.fieldName_, true);
++
++            // Calculate residual magnitude
++            solverPerf[k].initialResidual() =
++                gSumMag(residual[k], comm)/normFactor[k];
++            solverPerf[k].finalResidual() = solverPerf[k].initialResidual();
++        }
++
++        if ((s.log_ >= 2) || (lduMatrix::debug >= 2))
++        {
++            Info.masterStream(comm)
++                << "   Normalisation factor = " << normFactor[k] << endl;
++        }
++    }
++
++    matrixDiag = saveDiag;
++
++    // Components that still smooth, decided as in solve()
++    List<bool> active(nCmpt);
++    for (label k=0; k<nCmpt; k++)
++    {
++        const smoothSolver& s = *solvers[k];
++        active[k] =
++            s.minIter_ > 0
++         || !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_);
++    }
++
++    // Coefficients and addressing through the const matrix, as the smoother
++    // and lduMatrix::residual read them
++    const lduMatrix& cmatrix = matrix;
++    const label nCells = saveDiag.size();
++    const label nFaces = cmatrix.upper().size();
++    const label* const ownStartPtr =
++        cmatrix.lduAddr().ownerStartAddr().begin();
++    const label* const uPtr = cmatrix.lduAddr().upperAddr().begin();
++    const label* const lPtr = cmatrix.lduAddr().lowerAddr().begin();
++    const scalar* const upperPtr = cmatrix.upper().begin();
++    const scalar* const lowerPtr = cmatrix.lower().begin();
++
++    PtrList<solveScalarField> bPrime(nCmpt);
++    for (label k=0; k<nCmpt; k++)
++    {
++        bPrime.set(k, new solveScalarField(nCells));
++    }
++
++    while (active[0] || active[1] || active[2])
++    {
++        // All three components share one pass while all of them smooth; once
++        // some have converged, the others go through the same kernels one at
++        // a time (the operations per component do not depend on the grouping)
++        const bool together = active[0] && active[1] && active[2];
++
++        for (label sweep=0; sweep<nSweeps; sweep++)
++        {
++            for (label k=0; k<nCmpt; k++)
++            {
++                if (!active[k]) continue;
++
++                const smoothSolver& s = *solvers[k];
++                bPrime[k] = *source[k];
++
++                const label startRequest = UPstream::nRequests();
++
++                matrix.initMatrixInterfaces
++                (
++                    false,
++                    s.interfaceBouCoeffs_,
++                    s.interfaces_,
++                    *psi[k],
++                    bPrime[k],
++                    k
++                );
++
++                matrix.updateMatrixInterfaces
++                (
++                    false,
++                    s.interfaceBouCoeffs_,
++                    s.interfaces_,
++                    *psi[k],
++                    bPrime[k],
++                    k,
++                    startRequest
++                );
++            }
++
++            if (together)
++            {
++                const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
++                solveScalar* p[3] = {psi[0]->data(), psi[1]->data(), psi[2]->data()};
++                solveScalar* b[3] = {bPrime[0].data(), bPrime[1].data(), bPrime[2].data()};
++                gaussSeidelSweep<3>(nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, b);
++            }
++            else
++            {
++                for (label k=0; k<nCmpt; k++)
++                {
++                    if (!active[k]) continue;
++                    const scalar* d[1] = {diag[k]->cdata()};
++                    solveScalar* p[1] = {psi[k]->data()};
++                    solveScalar* b[1] = {bPrime[k].data()};
++                    gaussSeidelSweep<1>(nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, b);
++                }
++            }
++        }
++
++        // Residuals: internal part for all active components, then the
++        // interface contributions of each component in turn
++        if (together)
++        {
++            const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
++            const solveScalar* p[3] = {psi[0]->cdata(), psi[1]->cdata(), psi[2]->cdata()};
++            const solveScalar* b[3] = {source[0]->cdata(), source[1]->cdata(), source[2]->cdata()};
++            solveScalar* r[3] = {residual[0].data(), residual[1].data(), residual[2].data()};
++            internalResidual<3>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
++        }
++        else
++        {
++            for (label k=0; k<nCmpt; k++)
++            {
++                if (!active[k]) continue;
++                const scalar* d[1] = {diag[k]->cdata()};
++                const solveScalar* p[1] = {psi[k]->cdata()};
++                const solveScalar* b[1] = {source[k]->cdata()};
++                solveScalar* r[1] = {residual[k].data()};
++                internalResidual<1>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
++            }
++        }
++
++        for (label k=0; k<nCmpt; k++)
++        {
++            if (!active[k]) continue;
++
++            const smoothSolver& s = *solvers[k];
++            const label startRequest = UPstream::nRequests();
++
++            matrix.initMatrixInterfaces
++            (
++                false,
++                s.interfaceBouCoeffs_,
++                s.interfaces_,
++                *psi[k],
++                residual[k],
++                k
++            );
++
++            matrix.updateMatrixInterfaces
++            (
++                false,
++                s.interfaceBouCoeffs_,
++                s.interfaces_,
++                *psi[k],
++                residual[k],
++                k,
++                startRequest
++            );
++        }
++
++        for (label k=0; k<nCmpt; k++)
++        {
++            if (!active[k]) continue;
++
++            const smoothSolver& s = *solvers[k];
++
++            // Calculate the residual to check convergence
++            solverPerf[k].finalResidual() =
++                gSumMag(residual[k], comm)/normFactor[k];
++
++            active[k] =
++            (
++                (solverPerf[k].nIterations() += nSweeps) < s.maxIter_
++             && !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_)
++            )
++         || solverPerf[k].nIterations() < s.minIter_;
++        }
++    }
++
++    for (label k=0; k<nCmpt; k++)
++    {
++        matrix.setResidualField(residual[k], solvers[k]->fieldName_, false);
++    }
++}
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
+index 0c33854c..39256b12 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
+@@ -105,6 +105,23 @@ public:
+             const scalarField& source,
+             const direction cmpt=0
+         ) const;
++
++        //- Solve the components of one equation together with the
++        //- GaussSeidel smoother. solvers[k] is the solver of component k
++        //- on matrix (its controls, interface coefficients and interfaces)
++        //- and diag[k] the diagonal of component k. Each component gets the
++        //- operations of solve(), in the same order; the sweeps and residuals
++        //- of all components share one pass over the off-diagonal
++        //- coefficients and the addressing.
++        static void solveGaussSeidelComponents
++        (
++            lduMatrix& matrix,
++            const UList<const smoothSolver*>& solvers,
++            const UList<const scalarField*>& diag,
++            const UList<scalarField*>& psi,
++            const UList<const scalarField*>& source,
++            UList<solverPerformance>& solverPerf
++        );
+ };
+ 
+ 
+diff --git a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
+index 72a9e691..5e444df6 100644
+--- a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
++++ b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
+@@ -30,6 +30,9 @@ License
+ #include "diagTensorField.H"
+ #include "profiling.H"
+ #include "PrecisionAdaptor.H"
++#include "smoothSolver.H"
++#include "GaussSeidelSmoother.H"
++#include <type_traits>
+ 
+ // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+ 
+@@ -158,6 +161,158 @@ Foam::SolverPerformance<Type> Foam::fvMatrix<Type>::solveSegregated
+         psi.mesh().template validComponents<Type>()
+     );
+ 
++    // The components of a vector equation share the off-diagonal coefficients
++    // and the addressing. With smoothSolver and the GaussSeidel smoother they
++    // are smoothed together, so that each sweep and residual reads those
++    // arrays once instead of once per component. Each component gets the same
++    // set-up and operations, in the same order, as in the loop below.
++    if constexpr
++    (
++        std::is_same<Type, vector>::value
++     && std::is_same<solveScalar, scalar>::value
++    )
++    {
++        if
++        (
++            cmptMin(validComponents) != -1
++         && solverControls.get<word>("solver") == smoothSolver::typeName
++         && lduMatrix::smoother::getName(solverControls)
++            == GaussSeidelSmoother::typeName
++         && solverControls.getOrDefault<label>("nSweeps", 1) > 0
++        )
++        {
++            constexpr label nCmpt = Type::nComponents;
++
++            PtrList<scalarField> psiCmpt(nCmpt);
++            PtrList<scalarField> diagCmpt(nCmpt);
++            PtrList<scalarField> sourceCmpt(nCmpt);
++            PtrList<FieldField<Field, scalar>> bouCoeffsCmpt(nCmpt);
++            PtrList<FieldField<Field, scalar>> intCoeffsCmpt(nCmpt);
++            PtrList<lduMatrix::solver> solvers(nCmpt);
++
++            lduInterfaceFieldPtrsList interfaces =
++                psi.boundaryField().scalarInterfaces();
++
++            for (direction cmpt=0; cmpt<nCmpt; cmpt++)
++            {
++                psiCmpt.set
++                (
++                    cmpt,
++                    new scalarField(psi.primitiveField().component(cmpt))
++                );
++                diagCmpt.set(cmpt, new scalarField(saveDiag));
++                addBoundaryDiag(diagCmpt[cmpt], cmpt);
++                sourceCmpt.set
++                (
++                    cmpt,
++                    new scalarField(source.component(cmpt))
++                );
++                bouCoeffsCmpt.set
++                (
++                    cmpt,
++                    new FieldField<Field, scalar>
++                    (
++                        boundaryCoeffs_.component(cmpt)
++                    )
++                );
++                intCoeffsCmpt.set
++                (
++                    cmpt,
++                    new FieldField<Field, scalar>
++                    (
++                        internalCoeffs_.component(cmpt)
++                    )
++                );
++
++                // Correct the source for the explicit part of the coupled
++                // boundary conditions
++                const label startRequest = UPstream::nRequests();
++
++                initMatrixInterfaces
++                (
++                    true,
++                    bouCoeffsCmpt[cmpt],
++                    interfaces,
++                    psiCmpt[cmpt],
++                    sourceCmpt[cmpt],
++                    cmpt
++                );
++
++                updateMatrixInterfaces
++                (
++                    true,
++                    bouCoeffsCmpt[cmpt],
++                    interfaces,
++                    psiCmpt[cmpt],
++                    sourceCmpt[cmpt],
++                    cmpt,
++                    startRequest
++                );
++
++                solvers.set
++                (
++                    cmpt,
++                    lduMatrix::solver::New
++                    (
++                        psi.name() + pTraits<Type>::componentNames[cmpt],
++                        *this,
++                        bouCoeffsCmpt[cmpt],
++                        intCoeffsCmpt[cmpt],
++                        interfaces,
++                        solverControls
++                    )
++                );
++            }
++
++            List<const smoothSolver*> smoothSolvers(nCmpt);
++            List<const scalarField*> diags(nCmpt);
++            List<scalarField*> psis(nCmpt);
++            List<const scalarField*> sources(nCmpt);
++            List<solverPerformance> solverPerf(nCmpt);
++
++            for (direction cmpt=0; cmpt<nCmpt; cmpt++)
++            {
++                smoothSolvers[cmpt] =
++                    &refCast<const smoothSolver>(solvers[cmpt]);
++                diags[cmpt] = &diagCmpt[cmpt];
++                psis[cmpt] = &psiCmpt[cmpt];
++                sources[cmpt] = &sourceCmpt[cmpt];
++            }
++
++            smoothSolver::solveGaussSeidelComponents
++            (
++                *this,
++                smoothSolvers,
++                diags,
++                psis,
++                sources,
++                solverPerf
++            );
++
++            for (direction cmpt=0; cmpt<nCmpt; cmpt++)
++            {
++                if (logLevel)
++                {
++                    solverPerf[cmpt].print
++                    (
++                        Info.masterStream(this->mesh().comm())
++                    );
++                }
++
++                solverPerfVec.replace(cmpt, solverPerf[cmpt]);
++                solverPerfVec.solverName() = solverPerf[cmpt].solverName();
++
++                psi.primitiveFieldRef().replace(cmpt, psiCmpt[cmpt]);
++            }
++
++            psi.correctBoundaryConditions();
++
++            psi.mesh().data().setSolverPerformance(psi.name(), solverPerfVec);
++
++            return solverPerfVec;
++        }
++    }
++
+     for (direction cmpt=0; cmpt<Type::nComponents; cmpt++)
+     {
+         if (validComponents[cmpt] == -1) continue;
