@@ -20,8 +20,8 @@ from experiment_metrics.scaling import (
 URL = "https://github.com/team/openfoam/actions/runs/123"
 
 
-def members_for(nodes):
-    ranks, steps = nodes * 120, ITERATIONS[nodes]
+def members_for(nodes, ranks_per_node=120):
+    ranks, steps = nodes * ranks_per_node, ITERATIONS[nodes]
     documents = {
         "control/run-manifest.json": {"run_purpose": "bench", "run_id": f"r-{nodes:032x}", "source_track": {"head_commit": "a" * 40}, "instrumentation_bundle_sha256": "b" * 64},
         "control/scheduler-request.json": {"nodes": nodes, "ranks": ranks, "iterations": steps, "pjm_script": {"repository_path": "platforms/genkai/run-openfoam.pjm"}, "workload_id": "65M", "distribution": "OpenFOAM.com", "release": "v2512", "solver": "simpleFoam", "resource_group": "a-batch", "transport_policy": "shm" if nodes == 1 else "shm:ofi"},
@@ -158,3 +158,54 @@ def test_aspire2a_four_nodes_are_marked_scored():
     table = render_scaling(series)
     assert "scored" in table
     assert "reference" not in table
+
+
+def multi_level_members(nodes, domains=None, cache_domains=None):
+    """An ASPIRE-2A run of the NUMA-aware multiLevel Bonus with its actual decomposeParDict and case cache."""
+    declared = {1: (2, 4, 16), 2: (2, 2, 4, 16), 4: (4, 2, 4, 16)}[nodes]
+    members = members_for(nodes, ranks_per_node=128)
+    request = json.loads(members["control/scheduler-request.json"])
+    del request["pjm_script"]
+    request.update(pbs_script={"repository_path": "platforms/aspire2a/run-openfoam.pbs"}, transport_policy="cray-mpich-ucx")
+    cache = json.loads(members["source/mesh/case-cache-manifest.json"])
+    cache.update(method="multiLevel", domains=list(cache_domains or declared))
+    members["control/scheduler-request.json"] = json.dumps(request).encode()
+    members["source/mesh/case-cache-manifest.json"] = json.dumps(cache).encode()
+    members["source/mesh/decomposeParDict"] = f"numberOfSubdomains {nodes * 128};\nmethod multiLevel;\n\nmultiLevelCoeffs\n{{\n    method scotch;\n    domains ({' '.join(map(str, domains or declared))});\n}}\n".encode()
+    return members
+
+
+def test_multi_level_series_differs_only_in_declared_domains():
+    table = render_scaling([parse_run(URL, f"/archives/{node}/run-artifacts.tar.zst", multi_level_members(node)) for node in (1, 2, 4)])
+    for evidence in ("multiLevel (2 4 16)", "multiLevel (2 2 4 16)", "multiLevel (4 2 4 16)", "cray-mpich-ucx", "scored"):
+        assert evidence in table
+
+
+@pytest.mark.parametrize(("domains", "cache_domains"), [
+    ((4, 2, 2, 16), None),
+    ((2, 2, 4, 16), (4, 2, 2, 16)),
+])
+def test_multi_level_rejects_undeclared_or_mismatched_domains(domains, cache_domains):
+    with pytest.raises(ValueError, match="declared node/socket/NUMA/core"):
+        parse_run(URL, "/archive/run-artifacts.tar.zst", multi_level_members(2, domains, cache_domains))
+
+
+def test_multi_level_rejects_other_clusters():
+    members = multi_level_members(1)
+    request = json.loads(members["control/scheduler-request.json"])
+    request["pbs_script"]["repository_path"] = "platforms/gadi/run-openfoam.pbs"
+    members["control/scheduler-request.json"] = json.dumps(request).encode()
+    with pytest.raises(ValueError, match="declared node/socket/NUMA/core"):
+        parse_run(URL, "/archive/run-artifacts.tar.zst", members)
+
+
+def test_multi_level_domains_do_not_hide_other_differences():
+    bundles = [multi_level_members(node) for node in (1, 2, 4)]
+    bundles[1]["source/mesh/decomposeParDict"] = bundles[1]["source/mesh/decomposeParDict"].replace(b"method scotch;", b"method metis;")
+    series = [parse_run(URL, f"/archives/{node}/run-artifacts.tar.zst", bundle) for node, bundle in zip((1, 2, 4), bundles, strict=True)]
+    with pytest.raises(ValueError, match="incompatible scaling conditions: input/decomposeParDict"):
+        render_scaling(series)
+    series = [parse_run(URL, f"/archives/{node}/run-artifacts.tar.zst", multi_level_members(node)) for node in (1, 2, 4)]
+    series[0] = replace(series[0], condition={**series[0].condition, "build": "unpatched"})
+    with pytest.raises(ValueError, match="incompatible scaling conditions: build"):
+        render_scaling(series)

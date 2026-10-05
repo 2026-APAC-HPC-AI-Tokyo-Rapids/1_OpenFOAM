@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import re
 import subprocess
 import tarfile
@@ -16,6 +17,10 @@ from .coefficient import parse_coefficient_text
 from .solver_log import evaluate_official, parse_solver_log
 
 ITERATIONS = {1: 40, 2: 80, 4: 150}
+# ASPIRE-2A's NUMA-aware multiLevel splits node -> socket (2) -> NUMA (4) -> core (16); one node has no node level.
+# These declared per-node-count domains are the only input a series may vary across node counts.
+MULTI_LEVEL_DOMAINS = {("aspire2a", 1): (2, 4, 16), ("aspire2a", 2): (2, 2, 4, 16), ("aspire2a", 4): (4, 2, 4, 16)}
+MULTI_LEVEL_DOMAINS_ENTRY = r"(?ms)^(multiLevelCoeffs\s*\{[^{}]*?^\s*domains\s+)\(([0-9 ]+)\);"
 
 
 def read_bundle(directory: Path) -> dict[str, bytes]:
@@ -140,7 +145,15 @@ def parse_run(actions: str, artifact: str, members: dict[str, bytes]) -> Scaling
         if len(values) != 1 or int(values[0][1]) != expected:
             raise ValueError(f"actual input differs from request: {name}/{field}")
         condition[f"input/{name}"] = re.sub(expression, rf"\g<1><{field}>;", text)
-    return ScalingRun(actions, artifact, manifest["run_id"], condition["commit"], cluster, nodes, ranks, cache["method"], request["transport_policy"], iterations, mean, stddev, str(cd["cd"]), condition)
+    decomposition = cache["method"]
+    if decomposition == "multiLevel":
+        declared = MULTI_LEVEL_DOMAINS.get((cluster, nodes))
+        entries = re.findall(MULTI_LEVEL_DOMAINS_ENTRY, condition["input/decomposeParDict"])
+        if declared is None or math.prod(declared) != ranks or len(entries) != 1 or tuple(map(int, entries[0][1].split())) != declared or tuple(cache.get("domains", ())) != declared:
+            raise ValueError("multiLevel domains differ from the declared node/socket/NUMA/core split")
+        condition["input/decomposeParDict"] = re.sub(MULTI_LEVEL_DOMAINS_ENTRY, r"\g<1><domains>;", condition["input/decomposeParDict"])
+        decomposition = f"multiLevel ({' '.join(map(str, declared))})"
+    return ScalingRun(actions, artifact, manifest["run_id"], condition["commit"], cluster, nodes, ranks, decomposition, request["transport_policy"], iterations, mean, stddev, str(cd["cd"]), condition)
 
 
 def render_scaling(runs: list[ScalingRun]) -> str:
