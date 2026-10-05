@@ -263,6 +263,8 @@ jobs:
       needs.provision.result == 'success' &&
       needs.prepare-case.result == 'success'
     runs-on: [self-hosted, home-lab]
+    # 計算ジョブの待ち行列時間は上限がないため、既定の360分ではなく、self-hosted runnerでGITHUB_TOKENを更新できる24時間まで待つ。
+    timeout-minutes: 1440
     outputs:
       artifact_uploaded: ${{ steps.upload_v2.outcome == 'success' }}
       profile_run_id: ${{ steps.v2_context.outputs.profile_run_id }}
