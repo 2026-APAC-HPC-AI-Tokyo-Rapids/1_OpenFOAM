@@ -13,4 +13,5 @@ jobs:
         run: |
           command -v aspire2a-shell
           ps -eo pid,comm,pcpu,pmem --sort=-pcpu | head -20
-          ss -tin '( dport = :22 )'
+          cat /proc/net/tcp /proc/net/tcp6
+          time aspire2a-shell true
