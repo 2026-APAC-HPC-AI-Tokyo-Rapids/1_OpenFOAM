@@ -1,0 +1,16 @@
+name: Inspect ASPIRE-2A transfer
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  inspect:
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    steps:
+      - name: 転送中の接続を読み取り調査
+        run: |
+          command -v aspire2a-shell
+          ps -eo pid,comm,pcpu,pmem --sort=-pcpu | head -20
+          ss -tin '( dport = :22 )'
