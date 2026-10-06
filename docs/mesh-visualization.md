@@ -1,5 +1,13 @@
 # ASPIRE-2Aの分割済みメッシュ回収
 
+## 現在の回収状況
+
+[回収Actions 37420126890](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/37420126890)でBonusは回収・zstd整合性検査に成功した。[Bonusのアーカイブ](https://mizuha-dev.com/files/openfoam-artifacts/37420126890/aspire2a/mesh-bonus/case.tar.zst)は8,661,745,718 bytesで、同じディレクトリの[recovery.json](https://mizuha-dev.com/files/openfoam-artifacts/37420126890/aspire2a/mesh-bonus/recovery.json)に来歴がある。
+
+Basicは未回収。最初の試行は転送中のSSH応答タイムアウト、attempt 2は接続開始時のタイムアウトで失敗した。[読み取り接続診断](https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/actions/runs/37446743081)でも約100秒で接続がタイムアウトしており、接続経路の復旧が必要。VPN・踏み台・SSHのどの部分が原因かは未特定。診断用workflowは削除済み。復旧後は成功済みBonusを保持して、上記回収Actionsの失敗jobだけを再実行する。
+
+## 回収方法
+
 Actionsの **ASPIRE-2A mesh archive recovery** をmainから手動実行する。既存のhome-lab runner、home-lab-shell、aspire2a-shellを使い、BasicとBonusの4ノード512分割のケースアーカイブを個別のjobで回収する。runner側のVPN・SSH接続が有効であることが必要。ビルドやPBS投入は行わず、ASPIRE側のファイルを変更・削除しない。
 
 | 対象 | 参照run | 分割 | cache_identity |
