@@ -8,12 +8,11 @@ permissions:
 
 jobs:
   recover:
-    name: Recover ${{ matrix.case }} mesh
+    name: Resume Basic mesh recovery
     runs-on: [self-hosted, home-lab]
-    strategy:
-      fail-fast: false
-      matrix:
-        case: [basic, bonus]
+    concurrency:
+      group: aspire2a-basic-mesh-recovery
+      cancel-in-progress: false
     defaults:
       run:
         shell: home-lab-shell {0}
@@ -24,4 +23,4 @@ jobs:
         uses: actions/checkout@v7
 
       - name: 既存の分割済みメッシュを回収
-        run: bash platforms/aspire2a/recover-mesh-archive.sh '${{ matrix.case }}'
+        run: bash platforms/aspire2a/recover-mesh-archive.sh
