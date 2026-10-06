@@ -1,0 +1,17 @@
+name: Inspect ASPIRE-2A resumable transfer
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  inspect:
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    steps:
+      - name: 再開に必要な転送機能を確認
+        run: |
+          command -v rsync || true
+          command -v sftp || true
+          aspire2a-shell 'command -v rsync; command -v tail; command -v dd'
+          aspire2a-shell 'printf OPENFOAM-RESUME-PROBE' | wc -c
