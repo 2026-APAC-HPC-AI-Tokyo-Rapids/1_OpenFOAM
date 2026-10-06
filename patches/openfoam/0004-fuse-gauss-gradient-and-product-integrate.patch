@@ -13,18 +13,18 @@ index 782f3019..801fd20a 100644
      }
  
 diff --git a/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.C b/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.C
-index b6bcdc15..fc35224f 100644
+index b6bcdc15..4fa2aff9 100644
 --- a/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.C
 +++ b/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.C
 @@ -175,6 +175,68 @@ surfaceIntegrateInternal
  }
  
  
-+template<class Type>
++template<class Type, class GType>
 +tmp<DimensionedField<Type, volMesh>>
 +surfaceIntegrateInternal
 +(
-+    const surfaceScalarField& a,
++    const GeometricField<GType, fvsPatchField, surfaceMesh>& a,
 +    const tmp<GeometricField<Type, fvsPatchField, surfaceMesh>>& tb
 +)
 +{
@@ -50,7 +50,7 @@ index b6bcdc15..fc35224f 100644
 +    const labelUList& owner = mesh.owner();
 +    const labelUList& neighbour = mesh.neighbour();
 +
-+    const scalarField& ia = a;
++    const Field<GType>& ia = a;
 +    const Field<Type>& ib = b;
 +
 +    forAll(owner, facei)
@@ -66,7 +66,7 @@ index b6bcdc15..fc35224f 100644
 +        const labelUList& pFaceCells =
 +            mesh.boundary()[patchi].faceCells();
 +
-+        const fvsPatchScalarField& pa = a.boundaryField()[patchi];
++        const fvsPatchField<GType>& pa = a.boundaryField()[patchi];
 +        const fvsPatchField<Type>& pb = b.boundaryField()[patchi];
 +
 +        forAll(mesh.boundary()[patchi], facei)
@@ -86,7 +86,7 @@ index b6bcdc15..fc35224f 100644
  tmp<GeometricField<Type, fvPatchField, volMesh>>
  surfaceSum
 diff --git a/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.H b/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.H
-index 1d683ea2..3fe6713e 100644
+index 1d683ea2..8cce5ab5 100644
 --- a/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.H
 +++ b/src/finiteVolume/finiteVolume/fvc/fvcSurfaceIntegrate.H
 @@ -91,6 +91,16 @@ namespace fvc
@@ -95,11 +95,11 @@ index 1d683ea2..3fe6713e 100644
  
 +    //- The internal field of surfaceIntegrate(a*b), with each product
 +    //- formed in the face loop (no product surface field is stored)
-+    template<class Type>
++    template<class Type, class GType>
 +    tmp<DimensionedField<Type, volMesh>>
 +    surfaceIntegrateInternal
 +    (
-+        const surfaceScalarField& a,
++        const GeometricField<GType, fvsPatchField, surfaceMesh>& a,
 +        const tmp<GeometricField<Type, fvsPatchField, surfaceMesh>>& tb
 +    );
 +
