@@ -1,0 +1,38 @@
+name: Check Basic mesh recovery at 03:50 JST
+
+on:
+  schedule:
+    - cron: '50 18 6 10 *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: 完了状態を確認して必要なら続行
+        shell: bash
+        run: |
+          if [[ "$(date -u +%F)" != 2026-10-06 ]]; then echo 'Outside the one-time recovery date.'; exit 0; fi
+          final_url=https://mizuha-dev.com/files/openfoam-artifacts/37420126890/aspire2a/mesh-basic
+          http_status=$(curl --silent --show-error --head --output /dev/null --write-out '%{http_code}' "${final_url}/case.tar.zst")
+          if [[ "${http_status}" == 200 ]]; then
+            curl --fail --silent --show-error "${final_url}/recovery.json" | jq -e 'select(.schema_version == "openfoam-mesh-recovery/v1" and .case_name == "basic" and .archive.size_bytes == 8666755938)'
+            echo 'Basic mesh recovery is complete; no restart.' >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          [[ "${http_status}" == 404 ]]
+          active_runs=$(gh api "repos/${GH_REPO}/actions/workflows/recover-aspire2a-mesh.yml/runs?per_page=100" --jq '[.workflow_runs[] | select(.status != "completed")] | length')
+          if [[ "${active_runs}" -gt 0 ]]; then echo 'Recovery is already active; no duplicate restart.' >> "${GITHUB_STEP_SUMMARY}"; exit 0; fi
+          if [[ "${GITHUB_EVENT_NAME}" != schedule ]]; then echo 'Manual validation: incomplete and idle; no restart before the scheduled check.' >> "${GITHUB_STEP_SUMMARY}"; exit 0; fi
+          gh workflow run recover-aspire2a-mesh.yml --ref main
+          echo 'Basic is incomplete. Dispatched recovery from the retained partial archive.' >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 一度だけの予約を無効化
+        if: ${{ always() && github.event_name == 'schedule' }}
+        run: gh workflow disable check-basic-mesh-recovery.yml

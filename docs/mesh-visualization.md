@@ -19,6 +19,8 @@ ASPIRE上の保存先は`/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire
 
 回収先はhome-labの`/hdd_raid/samba/net_share/openfoam-artifacts/37420126890/aspire2a/mesh-{basic,bonus}/`。公開サーバーでは`https://mizuha-dev.com/files/openfoam-artifacts/37420126890/aspire2a/mesh-{basic,bonus}/`から取得する。途中ファイルは同じ親ディレクトリの`mesh-basic.incoming-3/`に固定し、成功後に`mesh-basic/`へ切り替える。新しいActionsの実行IDとcommitは`recovery.json`に記録する。大容量アーカイブはGitHub artifactへ重複アップロードしない。公開済みのBasicは上書きせず、Bonusも保持する。
 
+2026年10月7日03:50 JST（10月6日18:50 UTC）の一度だけの確認を`check-basic-mesh-recovery.yml`で予約する。完成品が公開済みなら終了し、未完了かつ回収workflowが停止中の場合だけmainから継続回収を起動する。実行後は予約workflowを無効化する。GitHubのscheduleは遅延する場合がある。手動実行は確認のみで、再開は行わない。
+
 ## ParaViewでの表示
 
 それぞれ別の空ディレクトリへ`case.tar.zst`を展開し、ケース直下に空の`.foam`ファイルを作る。
