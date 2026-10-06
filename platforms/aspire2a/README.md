@@ -13,6 +13,8 @@ $ASPIRE2A_SSH_CMD hostname
 
 GitHub Actionsは`/home/tomokazu/actions-runner`のself-hosted runnerに設定された`aspire2a-shell`を使う。認証、PBS投入、終了待機、成果物回収までの経路はActions run `35540131525`で完走済みである。クラスタ上のGitHub CLI認証を含むこの接続方式は意図した構成である。
 
+既存のBasic／Bonusの分割済みメッシュは、専用workflow **ASPIRE-2A mesh archive recovery** でhome-labへ回収できる。個人PCからVPNへ接続せずrunnerの既存経路を使い、ビルドやPBS投入は行わない。対象ケース、保存先とParaViewの手順は[メッシュ可視化ガイド](../../docs/mesh-visualization.md)を参照する。
+
 ## 実機で確認した構成
 
 - OSはRHEL 8系、スケジューラはPBS Proである。

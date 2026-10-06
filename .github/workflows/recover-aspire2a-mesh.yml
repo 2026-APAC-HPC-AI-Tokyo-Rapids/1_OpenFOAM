@@ -1,0 +1,27 @@
+name: ASPIRE-2A mesh archive recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Recover ${{ matrix.case }} mesh
+    runs-on: [self-hosted, home-lab]
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [basic, bonus]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    env:
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+    steps:
+      - name: 回収処理を取得
+        uses: actions/checkout@v7
+
+      - name: 既存の分割済みメッシュを回収
+        run: bash platforms/aspire2a/recover-mesh-archive.sh '${{ matrix.case }}'
