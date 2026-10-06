@@ -1,0 +1,64 @@
+name: ASPIRE-2A run directory archive recovery
+
+# 一時的な回収用。計算は終わったが、runnerからASPIRE-2Aへのsshが切れて成果物の回収・保管だけが失敗したrunについて、
+# サーバー上のrun directoryにある梱包済みの成果物を、通常の保管と同じ配置・照合で自宅サーバーへ置く。回収後に削除する。
+on:
+  workflow_dispatch:
+    inputs:
+      actions_run_id:
+        description: 元のActions run ID
+        required: true
+        type: string
+      run_dir:
+        description: ASPIRE-2A上のrun directory（runs/runs/r-…）
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    name: 梱包済みの成果物を自宅サーバーへ保管
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: home-lab-shell {0}
+    env:
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+      ACTIONS_RUN_ID: ${{ inputs.actions_run_id }}
+      RUN_DIR: ${{ inputs.run_dir }}
+    steps:
+      - name: 回収処理を取得
+        uses: actions/checkout@v7
+
+      - name: runnerのssh待機設定を表示
+        run: |
+          for host in aspire2a aspire2a.nscc.sg; do echo "== ${host}"; ssh -G "${host}" | grep -i -E '^(hostname|serveraliveinterval|serveralivecountmax|connecttimeout|proxyjump|controlmaster|controlpath) '; done
+          head -n 40 "$(command -v aspire2a-shell)"
+
+      - name: 梱包済みの成果物を配置
+        run: |
+          [[ "${ACTIONS_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${RUN_DIR}" =~ ^/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/runs/runs/r-[0-9a-f]+$ ]]
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${ACTIONS_RUN_ID}/aspire2a/openfoam-aspire2a-v2-$(basename "${RUN_DIR}")"
+          test ! -e "${destination}"
+          install -d -m 0750 "${destination}"
+          aspire2a-shell --pull "${RUN_DIR}/artifact-manifest.json" "${destination}"
+          aspire2a-shell --pull "${RUN_DIR}/run-artifacts.tar.zst" "${destination}"
+          echo "DESTINATION=${destination}" >> "${GITHUB_ENV}"
+
+      - name: 保管済み成果物をマニフェストと照合
+        id: archive_verify
+        run: |
+          set -euo pipefail
+          manifest="${DESTINATION}/artifact-manifest.json"
+          jq -e '.schema_version == "artifact-manifest/v1" and ([.files[].role] | sort) == ["run_bundle"]' "${manifest}" >/dev/null
+          while IFS=$'\t' read -r role expected_size expected_sha; do
+            test "$(stat -c '%s' "${DESTINATION}/run-artifacts.tar.zst")" = "${expected_size}"
+            test "$(sha256sum "${DESTINATION}/run-artifacts.tar.zst" | awk '{print $1}')" = "${expected_sha}"
+          done < <(jq -r '.files[] | [.role, .size_bytes, .sha256] | @tsv' "${manifest}")
+
+      - name: 保管済みのクラスタruntimeを削除
+        if: steps.archive_verify.outcome == 'success'
+        run: scripts/remove-openfoam-runtime.sh --cluster aspire2a --connection aspire2a-shell --run-dir "${RUN_DIR}"
