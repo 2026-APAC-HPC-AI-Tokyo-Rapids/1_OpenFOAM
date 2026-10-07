@@ -61,6 +61,8 @@ PBS projectは`59000014`である。通常の計測ジョブは次の資源指�
 
 walltimeは処理別に指定する。ケース準備は性能計測ではないため、必要core数とmemoryだけを要求し、`place=excl`を付けない。
 
+計測runは`run-openfoam.pbs`で40分を要求する。2026-10-04〜06の計測run 65本の実使用は9〜22分で、長い2本は計算ノードへの展開（+5分）またはsolver後のIMB（+7分）が遅れた回だった。以前の1時間の要求では、4ノードが8時間前後待つことがあった。主催者の記録（`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`）でも、4ノードで1時間を要求したジョブは5時間始まらず、40分に変えると35分以内に始まった。課金は使った時間だけなので、要求を短くしても費用は変わらない。SMTの1024 rankのように1 stepが極端に遅い実験では、その実験のcommitで要求を延ばす。
+
 ## Profile
 
 ASPIRE-2AのAMD EPYC Milanに対応するAMD uProf 5.3をprofile経路の正本とする。通常計測用binaryは変更せず、共通`OpenFOAM` workflowの`profile`入口だけが`AMDuProfCLI collect --config hotspots -g`を使う。計算ノードは8 NUMA domainを持ち、各local rankはCPU 0〜127へ固定されるため、local rank 0から16間隔の8 rankだけをuProfで収集し、他の120 rankは同じsolverを直接実行する。これにより全hostと全NUMA domainを観測しつつ、同質な独立sessionの生成、変換、圧縮および転送を1/16へ抑える。サンプルしたrankのCPU時間は合算するが、全rank値への外插はしない。配布scriptの`AMDuProfCLI`は引数列を`eval`で再解釈し、複数ノードOpenFOAMの`-hostRoots`と`-ioRanks`に含まれる括弧をshell構文として誤認するため使用しない。一方、PALSへ`AMDuProfCLI-bin`を直接指定すると実行ファイルがnode-localへstageされ、uProfのData/config探索が壊れる。PALSには`/usr/bin/bash`を指定し、node-localへ配備した`exec-uprof.sh`から共有領域上の`AMDuProfCLI-bin`をargv配列のまま起動する。uProf自身もtargetの括弧付き引数を再解釈するため、OpenFOAMの完全なargvはNUL区切りfileへ記録し、uProfにはCで実装した`exec-uprof-target`と安全なfile pathだけを渡す。target wrapperはfileからargv配列を復元してshellを介さず`execv`する。
