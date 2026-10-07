@@ -201,7 +201,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - 固定した後のhierarchicalの3本（3.257）は、当時の`LD_PRELOAD`による固定で測ったものです。Basicで使う`numactl`＋`taskset`は同じ速さです（スライド4の図）。
 - 効率が1を超える理由は、rankあたりのデータがキャッシュに入りやすくなるためという仮説です。カウンタは1ノードのパッチ前後だけで、ノード数による違いは測っていません。
 - 主催者との差は条件がまとめて違うので、原因を1つに断定しません（ビルド、MPI、配置）。
-- 再現性：提出した単独スクリプトで流し直し、`coefficient.dat`がビット一致、時間も記録の範囲内でした（#54。4ノードの結果が出たら数字を入れる）。
+- 再現性：提出した単独スクリプトをそのまま流し直し、Basic・Bonusの1/2/4ノードすべてで`coefficient.dat`がビット一致、時間は記録の平均から±0.24 %以内でした。4ノードBasicは2.9200（記録の平均2.9196）（#54）。
 
 ### 9. What did not work, what we learned
 
@@ -292,10 +292,16 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Organisers' setup (ASPIRE-2A notes, tasks 4.3): site module, `mpirun` with no options, default MPI settings, no binding.
 - Against their `scotch` mean: Basic −8 / −13 / −11 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
 
-### S7. The submitted scripts reproduce the results（#54、4ノードの結果待ち）
+### S7. The submitted scripts reproduce the results（#54）
 
-- 2026-10-07, Actions 37584763848: the official sources downloaded from their public URLs, built with `build/build.pbs`, run with `run/submit.sh`.
-- 1 and 2 nodes, Basic and Bonus: `coefficient.dat` bit-identical to the recorded runs; s/step 13.333, 6.371 (Basic) and 11.644, 5.650 (Bonus), within or near the recorded ranges.
+- 2026-10-07, Actions 37584763848: the official sources downloaded from their public URLs, built with `build/build.pbs`, every run started with `run/submit.sh`.
+- Basic and Bonus at 1, 2 and 4 nodes: `coefficient.dat` bit-identical to the recorded runs; s/step within 0.24 % of the recorded means (Basic 4 nodes: 2.9200 against 2.9196).
+- Both CrayPAT profiles: 3.065 and 2.701 s/step under CrayPAT against 3.063 and 2.712; the same number of MPI calls per rank.
+
+| | 1 node | 2 nodes | 4 nodes |
+|---|---:|---:|---:|
+| Basic, re-run (recorded mean) | 13.333 (13.364) | 6.371 (6.367) | 2.920 (2.920) |
+| Bonus, re-run (recorded mean) | 11.644 (11.668) | 5.650 (5.641) | 2.601 (2.599) |
 
 ### S8. Hardware counters before and after the patches（#55）
 
@@ -368,7 +374,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Yes. It is job-script placement: `numactl` sets the memory policy before each rank starts, and `taskset` sets the CPU affinity from outside. F1 lists job scripts, rank placement and affinity as Basic. We did not use `LD_PRELOAD`, which would be Bonus work.
 
 **Q18. Can the organisers reproduce your Basic number?**
-- Yes. `build/build.pbs` builds from the official public sources, and `run/submit.sh 1|2|4` runs the whole Allrun chain with plain `qsub`. We re-ran them ourselves on 2026-10-07: `coefficient.dat` was bit-identical and the times were within the recorded ranges.（#54の4ノードの結果を入れる）
+- Yes. `build/build.pbs` builds from the official public sources, and `run/submit.sh 1|2|4` runs the whole Allrun chain with plain `qsub`. We re-ran them ourselves on 2026-10-07: at every node count `coefficient.dat` was bit-identical and the time within 0.24 % of our recorded mean; on 4 nodes 2.9200 against 2.9196 s/step.
 
 **Q19. Why did you not tune the hierarchical coefficients instead?**
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5 % faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
