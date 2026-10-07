@@ -14,6 +14,8 @@ set -euo pipefail
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
+# OFIの既定（FI_OFI_RXM_USE_SRX=1）では、2/4ノードでMPI_Finalize中にSIGBUSが出る（tasks 4.3）。
+if [[ "${aspire2a_mpi_transport}" == ofi ]]; then export FI_OFI_RXM_USE_SRX=0; fi
 test "${OMP_NUM_THREADS:?PBS OpenMP thread count is required}" = 1
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"
@@ -37,17 +39,13 @@ export WORKLOAD_MESH_ARCHIVE="/scratch/users/industry/ai-hpc/${USER}/openfoam/as
 imb_bin="${FOAM_APPBIN}/IMB-MPI1"
 ldd "${imb_bin}" > "${RUN_DIR}/logs/imb-mpi1-ldd.log"
 cat "${RUN_DIR}/logs/imb-mpi1-ldd.log"
-grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/imb-mpi1-ldd.log"
-for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "${RUN_DIR}/logs/imb-mpi1-ldd.log"; done
-if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'UCX版IMB-MPI1がlibfabricにlinkしています' >&2; exit 1; fi
+aspire2a_check_mpi_link "${RUN_DIR}/logs/imb-mpi1-ldd.log"
 if grep -q '/oneapi/' "${RUN_DIR}/logs/imb-mpi1-ldd.log"; then printf '%s\n' 'ASPIRE-2A用IMB-MPI1がIntel oneAPIにlinkしています' >&2; exit 1; fi
 ldd "$(command -v simpleFoam)" > "${RUN_DIR}/logs/aocl-runtime-link.log"
 cat "${RUN_DIR}/logs/aocl-runtime-link.log"
 grep -Fq "${aspire2a_aocl_libm}" "${RUN_DIR}/logs/aocl-runtime-link.log"
-if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX実行へAOCL LibMemがpreloadされています' >&2; exit 1; fi
-grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${RUN_DIR}/logs/aocl-runtime-link.log"
-for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "${RUN_DIR}/logs/aocl-runtime-link.log"; done
-if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
+if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' '実行へAOCL LibMemがpreloadされています' >&2; exit 1; fi
+aspire2a_check_mpi_link "${RUN_DIR}/logs/aocl-runtime-link.log"
 if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
 solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
