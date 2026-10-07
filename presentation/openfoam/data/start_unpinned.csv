@@ -1,0 +1,4 @@
+configuration,nodes,actions_run,s_per_step,source
+hierarchical (16 8 4) with the launcher binding lost at MPI_Init,4,36973596442,3.6983,#36
+hierarchical (16 8 4) with the launcher binding lost at MPI_Init,4,36995859798,3.5850,#36
+hierarchical (16 8 4) with the launcher binding lost at MPI_Init,4,36996824227,3.7270,#36

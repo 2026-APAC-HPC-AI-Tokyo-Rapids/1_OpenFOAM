@@ -347,6 +347,39 @@ def reference_comparison(output):
     save(figure, output, "fig14_vs_organiser_reference")
 
 
+def journey(output):
+    methods = defaultdict(list)
+    for row in read("decomposition_basic.csv"):
+        methods[(int(row["nodes"]), row["method"])].append(float(row["s_per_step"]))
+    final = defaultdict(list)
+    for row in read("final_runs.csv"):
+        final[(row["configuration"], int(row["nodes"]))].append(float(row["s_per_step"]))
+    changes = changes_by_role()
+    organisers = [float(row["s_per_step"]) for row in read("organiser_reference_aspire2a.csv") if row["method"] == "scotch" and row["nodes"] == "4" and row["setting"] == "defaults"]
+    start = [float(row["s_per_step"]) for row in read("start_unpinned.csv")]
+    steps = [("Start:\nhierarchical,\nbinding lost", start, CONTROL, None), ("+ CPU and\nNUMA pinning", methods[(4, "hierarchical")], BASIC, change(methods[(4, "hierarchical")], start)), ("+ scotch\n= Basic", final[("Basic", 4)], BASIC, change(methods[(4, "scotch")], methods[(4, "hierarchical")]))]
+    for key, label in (("multiLevel", "+ multiLevel\n(4 2 4 16)"), ("0001", "+ 0001\nsolver copies"), ("0002", "+ 0002\nU together"), ("0003", "+ 0003\ndiscarded updates"), ("0004", "+ 0004 fused loops\n= Bonus")):
+        steps.append((label, changes[(key, 4, "candidate")], BONUS, change(changes[(key, 4, "candidate")], changes[(key, 4, "control")])))
+    figure, axis = plt.subplots(figsize=WIDE)
+    axis.axhline(statistics.fmean(organisers), color=CONTROL, linestyle="--", linewidth=1.5)
+    axis.text(len(steps) - 0.45, statistics.fmean(organisers) + 0.012, f"organisers' vanilla scotch, mean of {len(organisers)}: {statistics.fmean(organisers):.3f}", ha="right", fontsize=12, color="#555555")
+    means = [statistics.fmean(values) for _, values, _, _ in steps]
+    axis.plot(range(len(steps)), means, color="#555555", linewidth=1.2, zorder=2)
+    for index, (label, values, color, percent) in enumerate(steps):
+        axis.scatter(spread(values, index, 0.24), values, s=60, color=color, edgecolor="black", linewidth=0.5, zorder=3)
+        axis.hlines(means[index], index - 0.22, index + 0.22, color=color, linewidth=2.5, zorder=3)
+        axis.annotate(f"{means[index]:.3f}", (index, min(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, color=color, fontweight="bold")
+        if percent is not None:
+            axis.text(index - 0.45, (means[index - 1] + means[index]) / 2 + 0.035, f"{percent:+.1f} %", ha="left", fontsize=13, fontweight="bold", color=ACCENT)
+    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=11)
+    axis.set_xlim(-0.5, len(steps) - 0.4)
+    axis.set_ylim(2.5, 3.78)
+    axis.set_ylabel("4 nodes, s / step (each point is one job)")
+    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[2][1], start):+.1f} %. Basic {means[2]:.3f} (n = {len(steps[2][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[2][1]):+.1f} %. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
+    figure.tight_layout()
+    save(figure, output, "fig16_journey")
+
+
 def box(axis, x, y, width, height, text, color, size=12, weight="normal"):
     axis.add_patch(FancyBboxPatch((x, y), width, height, boxstyle="round,pad=0.01,rounding_size=0.015", facecolor=color, edgecolor="#333333", linewidth=1))
     axis.text(x + width / 2, y + height / 2, text, ha="center", va="center", fontsize=size, fontweight=weight, wrap=True)
@@ -578,7 +611,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
         make(output)
 
 
