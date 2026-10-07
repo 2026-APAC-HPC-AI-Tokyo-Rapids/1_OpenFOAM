@@ -1,0 +1,38 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l select=1:ncpus=4:mem=120gb
+#PBS -l walltime=00:30:00
+#PBS -j oe
+#
+# First job of a run, on 4 cores: the case setup and the serial steps of Allrun.
+#   cp controlDict.noWrite and fvSolution.fixedIter, decomposePar -constant, restore0Dir -processor
+# submit.sh passes SCRIPT_DIR, OPENFOAM_DIR, CASE_SOURCE, MESH_ARCHIVE, CASE_DIR, NODES, CONFIGURATION and PROFILE.
+set -euo pipefail
+source "${SCRIPT_DIR}/environment.sh"
+
+# endTime is 40 / 80 / 150 on 1 / 2 / 4 nodes. A CrayPAT profile run stops after 40 steps.
+case "${NODES}" in
+  1) steps=40; levels="2 4 16" ;;
+  2) steps=80; levels="2 2 4 16" ;;
+  4) steps=150; levels="4 2 4 16" ;;
+esac
+if [[ "${PROFILE:-}" == craypat ]]; then steps=40; fi
+# Basic: scotch with its defaults. Bonus: multiLevel with scotch on every level: nodes, the 2 sockets of a node, the 4 NUMA
+# domains of a socket, the 16 cores of a NUMA domain. On 1 node there is no node level.
+case "${CONFIGURATION}" in
+  basic) method=scotch ;;
+  bonus) method=multiLevel ;;
+esac
+
+mkdir -p "${CASE_DIR}/logFiles"
+cp -a "${CASE_SOURCE}/." "${CASE_DIR}/"
+cd "${CASE_DIR}"
+tar -xzf "${MESH_ARCHIVE}" -C constant
+cp system/controlDict.noWrite system/controlDict
+cp system/fvSolution.fixedIter system/fvSolution
+sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${steps};/" system/controlDict
+sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1$(( NODES * 128 ));/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${method};/" system/include/caseDefinition
+if [[ "${method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains (%s);\n}\n' "${levels}" >> system/decomposeParDict; fi
+
+decomposePar -constant -fileHandler uncollated > logFiles/10_decomposePar.log 2>&1
+restore0Dir -processor

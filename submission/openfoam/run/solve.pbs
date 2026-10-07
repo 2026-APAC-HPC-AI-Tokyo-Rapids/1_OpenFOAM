@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l place=excl
+#PBS -l walltime=00:40:00
+#PBS -j oe
+#
+# Second job of a run, on full nodes with 128 ranks each: the parallel steps of Allrun.
+#   renumberMesh -constant -overwrite, potentialFoam -initialiseUBCs, applyBoundaryLayer -ybl 0.0450244, simpleFoam
+# submit.sh starts it after prepare.pbs has succeeded, with select=NODES:ncpus=128:mpiprocs=128:ompthreads=1:mem=400gb.
+set -euo pipefail
+source "${SCRIPT_DIR}/environment.sh"
+ranks=$(( NODES * 128 ))
+
+# Every node works on its own copy of the case in node-local storage. On more than one node, -hostRoots points every rank
+# at the copy on its node, and -ioRanks makes the first rank of each node read and write for that node.
+mpiexec -n "${NODES}" -ppn 1 cp -a "${CASE_DIR}" "${TMPDIR}/"
+options=(-parallel -fileHandler uncollated)
+if (( NODES > 1 )); then options+=(-hostRoots "((\".*\" \"${TMPDIR}\"))" -ioRanks "($(seq -s ' ' 0 128 $(( ranks - 1 ))))"); fi
+
+# Placement. The launcher binds rank r of a node to core r, and every rank starts under numactl --membind for the NUMA
+# domain of that core (exec-local-numa.sh). The launcher's binding is removed during MPI_Init on ASPIRE-2A, so one watcher
+# per node (keep-rank-affinity.sh) puts every simpleFoam main thread back on its core.
+launch=(mpiexec -n "${ranks}" -ppn 128 --cpu-bind depth -d 1 /usr/bin/bash "${SCRIPT_DIR}/exec-local-numa.sh")
+mpiexec -n "${NODES}" -ppn 1 --cpu-bind none /usr/bin/bash "${SCRIPT_DIR}/keep-rank-affinity.sh" &
+keeper=$!
+
+cd "${TMPDIR}/$(basename "${CASE_DIR}")"
+"${launch[@]}" renumberMesh -constant -overwrite "${options[@]}" > "${CASE_DIR}/logFiles/20_renumberMesh.log" 2>&1
+"${launch[@]}" potentialFoam -initialiseUBCs "${options[@]}" > "${CASE_DIR}/logFiles/30_potentialFoam.log" 2>&1
+"${launch[@]}" applyBoundaryLayer -ybl 0.0450244 "${options[@]}" > "${CASE_DIR}/logFiles/40_applyBoundaryLayer.log" 2>&1
+if [[ "${PROFILE:-}" == craypat ]]; then
+  # A first run without iterations compiles the coded function objects, so that the profile does not contain the compile.
+  # Its function objects divide by zero at iteration 0, so it runs without the floating-point trap. Its output is dropped.
+  FOAM_SIGFPE=false "${launch[@]}" simpleFoam -postProcess "${options[@]}" > "${CASE_DIR}/logFiles/45_warmup.log" 2>&1
+  rm -r postProcessing
+  PAT_RT_EXPDIR_BASE="${CASE_DIR}" "${launch[@]}" pat_run -g mpi -- "$(command -v simpleFoam)" "${options[@]}" > "${CASE_DIR}/logFiles/50_simpleFoam.log" 2>&1
+else
+  "${launch[@]}" simpleFoam "${options[@]}" > "${CASE_DIR}/logFiles/50_simpleFoam.log" 2>&1
+fi
+kill "${keeper}"
+wait "${keeper}" || true
+
+# Rank 0 runs on this node, so its copy of the case holds postProcessing/forceCoeffsAll/0/coefficient.dat.
+cp -a postProcessing "${CASE_DIR}/"
+grep 'Average wall-clock time per time step' "${CASE_DIR}/logFiles/50_simpleFoam.log"

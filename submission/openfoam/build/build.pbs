@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l select=1:ncpus=16:mem=120gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#
+# Builds the OpenFOAM v2512 that our runs used: GCC 11.2 (PrgEnv-gnu/8.3.3), Cray MPICH 8.1.15 over UCX, double precision,
+# 32-bit labels, WM_COMPILE_OPTION=Opt (-O3), and AOCL-LibM linked into every library and application.
+# Only what the case needs is built: wmake, Scotch without MPI, the libraries in src/, and the applications of Allrun.
+#
+#   qsub -P <project> -v SOURCE_DIR=<dir>,OPENFOAM_DIR=<new dir>[,PATCH_DIR=<dir>] build.pbs
+#
+# SOURCE_DIR holds OpenFOAM-v2512.tgz and thirdparty-common-v2512.tar.gz (../README.md says where they come from).
+# The Bonus build sets PATCH_DIR to ../bonus/patches; its *.patch files are applied to the OpenFOAM sources in name order.
+set -euo pipefail
+
+module purge
+module load PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2
+module swap craype-network-ofi craype-network-ucx
+module swap cray-mpich cray-mpich-ucx/8.1.15
+
+# Build in node-local storage, then copy the tree to OPENFOAM_DIR.
+tree="${TMPDIR}/openfoam"
+mkdir -p "${tree}/OpenFOAM" "${tree}/ThirdParty/sources/scotch"
+tar -xzf "${SOURCE_DIR}/OpenFOAM-v2512.tgz" -C "${tree}/OpenFOAM" --strip-components=1
+tar -xzf "${SOURCE_DIR}/thirdparty-common-v2512.tar.gz" -C "${tree}/ThirdParty" --strip-components=1
+# The Scotch 6.1.0 sources of the site's v2512 installation.
+cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${tree}/ThirdParty/sources/scotch/"
+ln -s ../ThirdParty "${tree}/OpenFOAM/ThirdParty"
+if [[ -n "${PATCH_DIR:-}" ]]; then
+  for patch_file in "${PATCH_DIR}"/*.patch; do patch -p1 --forward --batch -d "${tree}/OpenFOAM" < "${patch_file}"; done
+fi
+
+# OpenFOAM's scripts use unset variables and return non-zero codes while they set up.
+set +eu
+source "${tree}/OpenFOAM/etc/bashrc" WM_COMPILER=Gcc WM_MPLIB=CRAY-MPICH WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+set -eu
+# AOCL-LibM (libalm) goes into every library and application; --no-as-needed keeps it there.
+export FOAM_EXTRA_LDFLAGS="-Wl,--no-as-needed -L${AOCL_ROOT}/lib -lalm"
+export WM_NCOMPPROCS=16
+
+cd "${WM_PROJECT_DIR}"
+wmake/src/Allmake
+"${WM_THIRD_PARTY_DIR}/makeSCOTCH" -no-mpi
+src/Allwmake
+for application in utilities/parallelProcessing/decomposePar utilities/mesh/manipulation/renumberMesh solvers/basic/potentialFoam utilities/preProcessing/applyBoundaryLayer solvers/incompressible/simpleFoam; do wmake -j 16 "applications/${application}"; done
+ldd "${FOAM_APPBIN}/simpleFoam" | grep -E 'libalm|libmpi|libucp'
+
+mkdir -p "${OPENFOAM_DIR}"
+cp -a "${tree}/." "${OPENFOAM_DIR}/"
