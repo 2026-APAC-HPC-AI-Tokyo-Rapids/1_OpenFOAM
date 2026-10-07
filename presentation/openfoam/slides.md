@@ -29,7 +29,7 @@
 2. **最初に答えを言う。** 1枚目で4ノードの結果と3つの柱（配置、分割、運ぶデータ）を言い、最後にもう一度まとめます。
 3. **改善ごとに同じ順で話す。** 症状 → 診断（何を測って分かったか）→ 対策 → 効果（同時期の対照、run数）→ 理由。
 4. **BonusはR3の4点を1枚で見せる。** 審査員が表と照らし合わせやすいように、4つのマスに分けます。
-5. **測ったことと仮説を分ける。** 例：キャッシュとDRAMの話は、カウンタで確かめた範囲だけ言い切ります（#55の結果待ち）。
+5. **測ったことと仮説を分ける。** 例：DRAMの話は、カウンタで確かめた範囲（1ノード、demand refill）だけ言い切り、スケーリングのキャッシュ説明は仮説のままにします。
 6. **数値は全スライドで同じにする。** 4ノード：出発点3.670、Basic 2.920（出発点から−20.4 %）、Bonus 2.599（Basicから−11.0 %）、主催者のscotch平均3.296。小数は3桁まで。
 7. **1枚1メッセージ。** タイトルは主張の文にし、図は1つ、強調する数字は赤の1か所にします。y軸が0から始まらない図は、その旨を図の下に書いてあります。
 
@@ -49,7 +49,7 @@
 | 3 | Where the time goes | `fig09_mpi_breakdown`（Basicの行）、`fig13_solver_flow`（小） | 1:00 | ボトルネックの特定 |
 | 4 | Basic 1: the launcher's pinning disappears at MPI_Init | `fig06_pinning` | 1:30 | Basic（見せ場） |
 | 5 | Basic 2: scotch splits the mesh better | `fig05_decomposition_basic` | 1:00 | Basic |
-| 6 | Bonus: the same arithmetic, fewer bytes moved | `fig03_changes_4node`、R3の4マス | 1:30 | Bonus |
+| 6 | Bonus: the same arithmetic, fewer bytes moved | `fig03_changes_4node`、R3の4マス、`fig17_counters` | 1:30 | Bonus |
 | 7 | Same math, proven | `tab02_f3_check` | 0:30 | Bonus（F3） |
 | 8 | From 3.67 to 2.60 s/step | `fig16_journey`、`fig02_scaling` | 1:00 | before/after、スケーリング |
 | 9 | What did not work, what we learned | `tab04_not_adopted`（抜粋） | 0:30 | 筋道、再現性 |
@@ -100,7 +100,7 @@
 メモ（1分）：
 - 「計算・メモリ・MPI・I/Oの円グラフ」にはしません。メモリ待ちは計算の中にあり、MPI待ちには他rankの計算待ちも入っているからです。
 - I/Oは計測区間の約0.01 %（#46）。
-- 「memory-bound」の根拠は2つ：STREAMでL3あたり1 coreでもノードの帯域が飽和すること（#36、STREAMの数え方で290 GB/s、書き込み時の読み込みを含めると約387 GB/sでカタログ値409.6 GB/sの約94 %）と、コンパイラやフラグを変えても0.13 %以内しか変わらないこと（#36 D）。カウンタの結果（#55）が出たら、ここに1行足します。
+- 「memory-bound」の根拠は3つ：STREAMでL3あたり1 coreでもノードの帯域が飽和すること（#36、STREAMの数え方で290 GB/s、書き込み時の読み込みを含めると約387 GB/sでカタログ値409.6 GB/sの約94 %）、コンパイラやフラグを変えても0.13 %以内しか変わらないこと（#36 D）、計算部分のIPCが0.36と低いこと（#55のuProf、1ノード）。
 
 ### 4. Basic 1: the launcher's pinning disappears at MPI_Init
 
@@ -147,6 +147,8 @@
 | **Evidence** | **Speedup against our Basic, same machine** |
 | `coefficient.dat` bit-identical to our pre-change baseline at 1, 2 and 4 nodes, and for each patch on its own. | −11.0 % (4 nodes), −11.4 % (2 nodes), −12.7 % (1 node). |
 
+- Hardware counters (1 node, AMD uProf): with the patches, L1 refills from DRAM fall 17 % while instructions fall only 4 % — the same math with less data moved.
+
 図：`figures/fig03_changes_4node.png`（変更ごとの前後、同時期の対照）。表は`tab03_bonus_changes`。
 
 メモ（1分30秒）：
@@ -158,7 +160,9 @@ before: for c in (x, y, z): for each cell: read lower/upper/diag/addressing; upd
 after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U_z
 ```
 
-- 効果はノード数が少ないほど大きい（0002：1ノード−6.4 %、4ノード−2.3 %）。rankあたりのデータが多いほどDRAMから来る量が多いからだ、と説明します。カウンタの結果（#55）が出たら、根拠として1行入れます。
+- 効果はノード数が少ないほど大きい（0002：1ノード−6.4 %、4ノード−2.3 %）。rankあたりのデータが多いほどDRAMから来る量が多いからだ、と説明します。
+- カウンタ（#55、`fig17_counters`）：1ノードでパッチの有無を2本ずつ測り、計算部分（MPIを除く）で比べました。cycles −10.8 %、命令数 −4.1 %、L1アクセス −5.8 %、DRAMからのL1 refill −17.2 %、L2へのアクセス（prefetch込み）−9.6 %、IPC 0.36 → 0.39。L2からのrefillは変わりません。「計算は同じで、DRAMから運ぶデータが減った」ことの直接の根拠です。
+- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではありません（uncoreの計測は権限がなく使えません）。4ノードでは測っていません。
 - 各%は別々の実験で、足し合わせません。
 
 ### 7. Same math, proven
@@ -195,7 +199,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - 経路図は「どの順で何をして、いくつ速くなったか」を1枚で見せるためのものです。赤い%は、それぞれ同時期の対照に対する値で、足し合わせません。
 - 出発点（3.670）は私たちの最初の状態で、主催者の参照（hierarchicalで3.415）より遅いことに触れます。固定が外れたとき、各rankのページは自分のNUMAに中央値7 %しかありませんでした。固定を頼まない場合より悪くなったのはこのためと考えていますが、主催者とはビルドもMPIも違うので確かめてはいません。
 - 固定した後のhierarchicalの3本（3.257）は、当時の`LD_PRELOAD`による固定で測ったものです。Basicで使う`numactl`＋`taskset`は同じ速さです（スライド4の図）。
-- 効率が1を超える理由は、rankあたりのデータがキャッシュに入りやすくなるためという仮説です（カウンタで確かめられた範囲だけ言います）。
+- 効率が1を超える理由は、rankあたりのデータがキャッシュに入りやすくなるためという仮説です。カウンタは1ノードのパッチ前後だけで、ノード数による違いは測っていません。
 - 主催者との差は条件がまとめて違うので、原因を1つに断定しません（ビルド、MPI、配置）。
 - 再現性：提出した単独スクリプトで流し直し、`coefficient.dat`がビット一致、時間も記録の範囲内でした（#54。4ノードの結果が出たら数字を入れる）。
 
@@ -293,7 +297,13 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - 2026-10-07, Actions 37584763848: the official sources downloaded from their public URLs, built with `build/build.pbs`, run with `run/submit.sh`.
 - 1 and 2 nodes, Basic and Bonus: `coefficient.dat` bit-identical to the recorded runs; s/step 13.333, 6.371 (Basic) and 11.644, 5.650 (Bonus), within or near the recorded ranges.
 
-### S8. Hardware counters before and after the patches（#55、結果待ち）
+### S8. Hardware counters before and after the patches（#55）
+
+図：`figures/fig17_counters.png`
+
+- 1 node, 128 ranks, 40 steps, multiLevel (2 4 16); AMD uProf `data_access` on one rank per NUMA domain; 2 runs with the patches (fa4f5b0) and 2 without (the same commit with `patches/openfoam/` removed).
+- Computation only (MPI, UCX and Pstream left out), mean of 7 ranks: cycles −10.8 %, instructions −4.1 %, L1 data accesses −5.8 %, L1 refills from DRAM −17.2 %, from L2 −0.2 %, L2 accesses including prefetches −9.6 %; IPC 0.360 → 0.388.
+- Two runs of the same side agree within about 4 % on every counter. Both sides give the same `coefficient.dat` (Cd 0.43827636195043501).
 
 ### S9. OFI against UCX under our placement（#56、結果待ち）
 
@@ -319,11 +329,12 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Static weights moved cells away from an even split: the cell-count imbalance grew to 1.073 with weight ×2. With ×12, the top-level split broke down and the faces between nodes grew five times.
 
 **Q6. Why are the effects different on 1, 2 and 4 nodes?**
-- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (0002: −6.4 % against −2.3 %). The same reasoning fits the super-linear scaling.（#55の結果で、確かめられた範囲を書き足す）
+- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (0002: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. The same reasoning fits the super-linear scaling, but we have not measured counters across node counts.
 
 **Q7. What is proven and what is not?**
 - Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat`, and the pinning problem (seen in `/proc` during the solve).
-- Not proven: that DRAM traffic fell by the amount the source suggests, and the cache explanation of the scaling. We present those as hypotheses.（#55の結果で更新）
+- Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
+- Not proven: the DRAM traffic in bytes (we cannot read the memory-controller counters), the effect on 4 nodes, and the cache explanation of the super-linear scaling. We present those as hypotheses.
 
 **Q8. Why rebuild OpenFOAM instead of using the site module?**
 - A single run with the site module gave the same speed (−0.08 %). Our own build records exactly what ran, and the Bonus patches need a build anyway.

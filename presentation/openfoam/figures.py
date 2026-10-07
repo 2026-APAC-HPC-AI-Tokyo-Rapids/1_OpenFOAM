@@ -347,6 +347,31 @@ def reference_comparison(output):
     save(figure, output, "fig14_vs_organiser_reference")
 
 
+def counters(output):
+    values = defaultdict(lambda: defaultdict(list))
+    seconds = defaultdict(dict)
+    for row in read("counters_1node.csv"):
+        values[row["metric"]][row["condition"]].append(float(row["per_rank_mean"]))
+        seconds[row["condition"]][row["actions_run"]] = float(row["s_per_step_under_uprof"])
+    rows = [("s / step", list(seconds["unpatched"].values()), list(seconds["patched"].values()))]
+    rows += [(metric, values[metric]["unpatched"], values[metric]["patched"]) for metric in ("cycles", "instructions", "L1 data accesses", "L1 refills from L2", "L1 refills from L3", "L1 refills from DRAM", "L2 accesses incl. prefetch")]
+    figure, axis = plt.subplots(figsize=WIDE)
+    for index, (metric, before, after) in enumerate(rows):
+        color = ACCENT if metric == "L1 refills from DRAM" else BONUS
+        axis.barh(index, change(after, before), color=color, height=0.6)
+        pairs = [(b / a - 1) * 100 for a in before for b in after]
+        axis.scatter(pairs, [index] * len(pairs), s=28, color="black", zorder=3)
+        axis.text(min(min(pairs), change(after, before)) - 0.5, index, f"{change(after, before):+.1f} %", va="center", ha="right", fontsize=13, fontweight="bold", color=color)
+    axis.axvline(0, color="black", linewidth=1)
+    axis.set_yticks(range(len(rows)), [metric for metric, _, _ in rows], fontsize=13)
+    axis.invert_yaxis()
+    axis.set_xlim(-22, 4.5)
+    axis.set_xlabel("Patches 0001-0004 against the same build without them (%)")
+    figure.text(0.5, -0.06, "1 node, 128 ranks, 40 steps, multiLevel (2 4 16). AMD uProf data_access on one rank per NUMA domain (rank 0 left out: it also writes the output);\ncomputation only (MPI, UCX and Pstream left out). Bars: mean of 2 runs per side; dots: the 4 run pairs. Refills count demand misses only;\nhardware prefetches are in the L2 accesses. Instructions fall 4 % while DRAM refills fall 17 %: the same math with less data moved.", ha="center", fontsize=10.5)
+    figure.tight_layout()
+    save(figure, output, "fig17_counters")
+
+
 def journey(output):
     methods = defaultdict(list)
     for row in read("decomposition_basic.csv"):
@@ -611,7 +636,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
         make(output)
 
 
