@@ -83,7 +83,7 @@
 
 メモ（1分）：
 - この木構造（ノード → ソケット → NUMA → コア）が、Basicの固定（スライド4）とBonusのmultiLevel `(4 2 4 16)`（スライド6）の両方につながる、と予告します。
-- UCXを選んだ理由は1文だけ：既定のOFIは2/4ノードの`MPI_Finalize`でSIGBUSになり、UCXは全runが完走した。詳しくはQ16（#56の比較結果を入れる）。
+- UCXを選んだ理由は1文だけ：既定のOFIは2/4ノードの`MPI_Finalize`でSIGBUSになり、UCXは全runが完走した。主催者の回避策（`FI_OFI_RXM_USE_SRX=0`）を入れたOFIも、同じ配置で0.77 %遅かった（Q16、#56）。
 - ASPIRE-2Aを選んだ理由はチームで書き足します（Q1）。
 
 ### 3. Where the time goes
@@ -311,7 +311,12 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Computation only (MPI, UCX and Pstream left out), mean of 7 ranks: cycles −10.8 %, instructions −4.1 %, L1 data accesses −5.8 %, L1 refills from DRAM −17.2 %, from L2 −0.2 %, L2 accesses including prefetches −9.6 %; IPC 0.360 → 0.388.
 - Two runs of the same side agree within about 4 % on every counter. Both sides give the same `coefficient.dat` (Cd 0.43827636195043501).
 
-### S9. OFI against UCX under our placement（#56、結果待ち）
+### S9. OFI against UCX under our placement（#56）
+
+- Basic configuration on 4 nodes, only the MPI transport changed; 3 runs each, alternated in the same period (2026-10-07).
+- UCX (main): 2.9176, 2.9168, 2.9246 s/step, mean 2.9197. OFI with `FI_OFI_RXM_USE_SRX=0`: 2.9452, 2.9374, 2.9438, mean 2.9421 (+0.77 %).
+- All 6 runs VALID, every step returned 0 (no SIGBUS), the same `coefficient.dat` Cd (0.28404934573921931).
+- OFI's own spread is also 0.26 %, so the narrow spread of our runs does not come from UCX (Q15).
 
 ---
 
@@ -365,10 +370,10 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - No. That comes from the default OFI provider at `MPI_Finalize`. Our job scripts use Cray MPICH over UCX, and every step of every run returned 0.
 
 **Q15. Why is your run-to-run spread so much smaller than the organisers'?**
-- Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. We pin every rank and keep its memory on its NUMA domain, and we use UCX. We have not tested which of these narrows the spread, so we present it as an observation.（#56の結果で更新）
+- Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. It is not UCX: our runs with the organisers' transport (OFI with `FI_OFI_RXM_USE_SRX=0`) also lie within 0.26 %. The main remaining difference is the placement — every rank pinned with its memory on its NUMA domain — which also removed the random slow ranks we saw before pinning.
 
 **Q16. Why UCX and not the site's default OFI?**
-- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` or `FI_VERBS_PREFER_XRC=0` avoids the crash.（#56：同じ配置でOFI＋`FI_OFI_RXM_USE_SRX=0`とUCXを交互に各3本比べた結果を入れる）
+- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` avoids the crash, so we compared again with everything else as in Basic: 3 alternated 4-node runs each, OFI 2.942 against UCX 2.920 s/step (+0.77 %, ranges not overlapping), the same Cd, no crash. So UCX stays.
 
 **Q17. Is the pinning fix allowed in Basic?**
 - Yes. It is job-script placement: `numactl` sets the memory policy before each rank starts, and `taskset` sets the CPU affinity from outside. F1 lists job scripts, rank placement and affinity as Basic. We did not use `LD_PRELOAD`, which would be Bonus work.
