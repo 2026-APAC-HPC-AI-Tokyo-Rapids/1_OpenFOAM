@@ -460,6 +460,54 @@ def solver_flow(output):
     save(figure, output, "fig13_solver_flow")
 
 
+def storage_flow(output):
+    figure, axis = plt.subplots(figsize=(12.8, 6.6))
+    figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    axis.set_xlim(0, 1)
+    axis.set_ylim(0, 1)
+    axis.axis("off")
+    columns = [(0.01, "GitHub Actions runner\n(team server)", "#eeeeee"), (0.345, "ASPIRE-2A login node\n/scratch (Lustre, shared)", "#e8f0fa"), (0.68, "Compute nodes\n$TMPDIR (node-local)", "#fff4e6")]
+    for x, title, color in columns:
+        axis.add_patch(Rectangle((x, 0.16), 0.31, 0.74, facecolor=color, edgecolor="#555555", linewidth=1.2))
+        axis.text(x + 0.155, 0.85, title, ha="center", va="center", fontsize=13, fontweight="bold")
+    runner = ["start build, case and run jobs\n(ssh + qsub)", "after the job: pack the run,\ncopy it to the archive,\nsend metrics to the database"]
+    scratch = ["mesh archive (3.2 GB)", "build archive per build\n(OpenFOAM tree, flags, hashes)", "decomposed case per\nbuild and decomposition", "run directory per run\n(logs, results, records)"]
+    compute = ["unpack the OpenFOAM build", "copy the decomposed case,\nrestore0Dir", "Allrun chain + simpleFoam:\nall case I/O stays local\n(-hostRoots, -ioRanks)", "write logs and\ncoefficient.dat back"]
+    for index, text in enumerate(runner):
+        box(axis, 0.035, 0.6 - index * 0.33, 0.26, 0.17, text, "white", size=11)
+    for index, text in enumerate(scratch):
+        box(axis, 0.37, 0.68 - index * 0.155, 0.26, 0.12, text, "white", size=11)
+    for index, text in enumerate(compute):
+        box(axis, 0.705, 0.68 - index * 0.155, 0.26, 0.12, text, "white", size=11)
+    arrow(axis, (0.295, 0.685), (0.345, 0.685))
+    arrow(axis, (0.63, 0.585), (0.705, 0.74))
+    arrow(axis, (0.63, 0.43), (0.705, 0.585))
+    arrow(axis, (0.705, 0.275), (0.63, 0.275))
+    arrow(axis, (0.37, 0.275), (0.295, 0.355))
+    axis.text(0.5, 0.07, "Home is not used for runs. /dev/shm is noexec, so it only holds the compiler cache during builds.\nMeasured file I/O inside the timed steps: about 0.01 % of the run time (Issue #46).", ha="center", fontsize=11.5)
+    save(figure, output, "fig15_storage_flow")
+
+
+def environment_tables(output):
+    environment_rows = [
+        ["OpenFOAM", "v2512 rebuilt from the official source: GCC 11.2, -O3, AOCL-LibM, label 32, double precision. PBS build job, 16 cores, compiler cache on /scratch", "Same speed as the site module; we know exactly what ran; the Bonus patches need a build anyway"],
+        ["MPI", "Cray MPICH 8.1.15 over UCX (craype-network-ucx, cray-mpich-ucx/8.1.15)", "The default OFI provider died with SIGBUS at MPI_Finalize on 2 and 4 nodes in our September tests; UCX completed every run"],
+        ["Launch and placement", "PALS mpiexec --cpu-bind depth -d 1; numactl --membind per rank; a taskset watcher per node", "The launcher's binding is removed during MPI_Init (slide 6)"],
+        ["/scratch (Lustre, shared)", "Mesh, build archives, decomposed cases, run directories", "Shared by the login node and all compute nodes"],
+        ["$TMPDIR (node-local)", "OpenFOAM tree and the decomposed case on every node; all solver file I/O", "No case I/O on Lustre while the solver runs"],
+    ]
+    table(output, "tab05_environment", ["Item", "What we use", "Why"], environment_rows, [0.18, 0.44, 0.38])
+    profiling_rows = [
+        ["Official metric", "Every benchmark run; no profiler attached", "Average wall-clock time per step (steps 2 to N)", "The result; 3 or more runs per condition"],
+        ["CrayPAT 22.04, pat_run -g mpi", "Separate 4-node, 40-step diagnostic runs; simpleFoam only, after a warm-up step", "Time, calls and bytes of every MPI call, per rank", "MPI is about 19 % of the time, mostly waiting in Allreduce and Waitall"],
+        ["eu-stack call stacks", "The same diagnostic runs, 48 ranks (slow, median, one per NUMA domain)", "Which solver phase each rank is in, and whether it is inside MPI", "Phase shares; found the copies (0001) and discarded exchanges (0003)"],
+        ["AMD uProf 5.3, timer hotspots", "Separate profile runs, one rank per NUMA domain", "CPU time per function", "Copies and zero-fills were large in September (18.8 %)"],
+        ["/proc sampler in the job", "Diagnostic jobs", "CPU affinity, NUMA page placement, I/O bytes and waits per rank", "Binding lost during MPI_Init; solver I/O negligible"],
+        ["IMB-MPI1", "After the solver in every benchmark run", "Ping-pong bandwidth and Allreduce latency", "A network baseline for each job"],
+    ]
+    table(output, "tab06_profiling", ["Tool", "When", "What it collects", "What it showed"], profiling_rows, [0.2, 0.28, 0.26, 0.26])
+
+
 def table(output, name, header, rows, widths, fontsize=12):
     width_in = 12.8
     wraps = [max(8, int(width * width_in * 72 / (fontsize * 0.62)) - 3) for width in widths]
@@ -530,7 +578,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, node_layout, pipeline, solver_flow, tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
         make(output)
 
 

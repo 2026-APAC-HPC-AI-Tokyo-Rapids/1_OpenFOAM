@@ -5,14 +5,16 @@
 - スライドに載せる文は英語、話す内容（メモ）は日本語です。
 - 図と表は`figures/`にあります（`.png`は貼り付け用、`.svg`は編集用）。作り直すときは、リポジトリで`uv run presentation/openfoam/figures.py <出力先>`を実行します。
 - 数値はすべて公式指標`Average wall-clock time per time step`（2 step目以降の平均、秒/step）です。1点は1ジョブです。
-- 持ち時間（Qwenと合わせて発表15〜20分、質疑10分）の配分はチームで決めます。下の目安では、OpenFOAMの本編が約9分です。
+- 持ち時間（Qwenと合わせて発表15〜20分、質疑10分）の配分はチームで決めます。下の目安では、OpenFOAMの本編が約11分です。時間が足りなければ、2b・4b・10bを補足に回せます。
 
 | # | タイトル | 主な図 | 目安 |
 |---|---|---|---|
 | 1 | Task, metric and rules | ParaView（#39） | 1分 |
 | 2 | ASPIRE-2A node | `fig11_node_layout` | 0.5分 |
+| 2b | Build, storage and MPI | `fig15_storage_flow`、`tab05_environment` | 1分 |
 | 3 | What one step computes | `fig13_solver_flow` | 1分 |
 | 4 | Baseline: where the time goes | `fig09_mpi_breakdown`（Basicの行） | 1分 |
+| 4b | How we measured and profiled | `tab06_profiling` | 0.5分 |
 | 5 | Measuring honestly | `fig08_variability` | 0.5分 |
 | 6 | Basic 1: CPU and NUMA placement | `fig06_pinning` | 1分 |
 | 7 | Basic 2: decomposition | `fig05_decomposition_basic` | 0.5分 |
@@ -56,6 +58,24 @@
 - ASPIRE-2Aを選んだ理由はチームで書き足します。記録に残っていません（想定問答のQ1）。
 - この図の木構造が、BonusのmultiLevel分割`(4 2 4 16)`につながります（スライド8）。
 
+## 2b. Build, storage and MPI
+
+**Message:** We build OpenFOAM ourselves, keep all case I/O on node-local storage, and run Cray MPICH over UCX.
+
+- Build: official v2512 source, GCC 11.2 with `-O3`, AMD math library, in a 1-node PBS job (16 cores) with a compiler cache on `/scratch`. Every run records which build it used.
+- Storage:
+  - `/scratch` (Lustre, shared) holds the mesh, build archives, decomposed cases and run directories.
+  - At run time, every node unpacks OpenFOAM and copies the decomposed case into its own node-local `$TMPDIR`.
+  - The solver reads and writes only there (`-hostRoots`, `-ioRanks`). Measured file I/O in the timed steps is about 0.01 % of the run time.
+- MPI: Cray MPICH 8.1.15 over UCX. The site's default OFI provider died with SIGBUS at `MPI_Finalize` on 2 and 4 nodes in our tests, and UCX completed every run.
+
+図：`figures/fig15_storage_flow.png`、`figures/tab05_environment.png`
+
+メモ：
+- 「自分でビルドして、各ノードへ配って、走らせて、記録を回収する」流れを、ここで短く見せます。
+- 自動化の全体は補足S1（`fig12_pipeline`）にあります。
+- 主催者も最近、OFIのSIGBUSが環境変数1つで避けられることを見つけています（`FI_VERBS_PREFER_XRC=0`など）。私たちはその条件でOFIとUCXを比べていません（Q16）。
+
 ## 3. What one step computes
 
 **Message:** Each step assembles and solves the U, p and k-omega equations. The loops stream large arrays, and MPI is used for halo exchanges and global sums.
@@ -84,6 +104,21 @@
 メモ：
 - 「計算・メモリ・MPI・I/Oの円グラフ」にはしません（#52）。メモリ待ちは計算の中にあり、MPI待ちには他rankの計算待ちも入っています。
 - I/Oは計測区間の約0.01 %でした（#46）。
+
+## 4b. How we measured and profiled
+
+**Message:** Every performance number comes from runs with no profiler. Profilers run in separate short runs, and each one answers one question.
+
+- Benchmark runs: only the official metric. A network test (IMB) runs after the solver, outside the timed steps.
+- CrayPAT (`pat_run -g mpi`): 4-node, 40-step diagnostic runs with a warm-up step first. It records the time, calls and bytes of every MPI call on every rank.
+- Call-stack samples (eu-stack) on 48 ranks in the same runs show which phase of the step each rank is in.
+- AMD uProf (CPU hotspots), a `/proc` sampler (CPU binding, NUMA page placement, I/O) and partition statistics answered the remaining questions.
+
+図：`figures/tab06_profiling.png`
+
+メモ：
+- 「計装が測定を変えない」ように、計測runとプロファイルrunを分けたことを強調します（#52の注意点）。
+- プロファイルを流し直すスクリプトは、提出物の`analysis/profile-craypat-4node.pbs`です（未検証）。
 
 ## 5. Measuring honestly
 
@@ -302,6 +337,9 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 
 **Q15. Why is your run-to-run spread so much smaller than the organisers'?**
 - Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. We pin every rank and keep its memory on its NUMA domain, and we use UCX. We have not tested which of these narrows the spread, so we present it as an observation.
+
+**Q16. Why UCX and not the site's default OFI?**
+- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`. Fewer ranks per node and the documented workarounds did not help, while UCX completed every run. The organisers have since found that `FI_VERBS_PREFER_XRC=0` or `FI_OFI_RXM_USE_SRX=0` avoids the crash. We have not compared OFI with that setting against UCX under our placement.
 
 ## 根拠
 
