@@ -1,6 +1,6 @@
 # 大会公式ルールと本リポジトリ実装の対応関係
 
-確認日: 2026-09-07。公式正本ドキュメントは [`tasks/2. OpenFOAM HPC Task Rules.md`](../tasks/2.%20OpenFOAM%20HPC%20Task%20Rules.md) であり、取得可能な公式HEADコミットは `bc4e98fe6b96b6ed35120efe33a588ee441aae0b` である。本リポジトリでは `tasks` という実体サブモジュールを参照する（TASK.md内の `./task` 表記もこの参照を指すと解釈する）。なお、公式ソースリポジトリへの直接の書き込みは行わない。
+確認日: 2026-10-07。公式正本ドキュメントは [`tasks/2. OpenFOAM HPC Task Rules.md`](../tasks/2.%20OpenFOAM%20HPC%20Task%20Rules.md) と、2026-09-25の追補（`tasks/README.md`）である。参照している公式HEADコミットは `fb0378f`（2026-10-07）である。2026-10-06〜07に主催者の素の実行結果をまとめた [`4.2 OpenFOAM Application Notes - Gadi.md`](../tasks/4.2%20OpenFOAM%20Application%20Notes%20-%20Gadi.md) と [`4.3 OpenFOAM Application Notes - ASPIRE-2A.md`](../tasks/4.3%20OpenFOAM%20Application%20Notes%20-%20ASPIRE-2A.md) が追加されたが、ルール本文と追補は変わっていない。本リポジトリでは `tasks` という実体サブモジュールを参照する（TASK.md内の `./task` 表記もこの参照を指すと解釈する）。なお、公式ソースリポジトリへの直接の書き込みは行わない。
 
 2026年9月4日の運営事務局からの回答において、倍精度（DP）＋32ビットラベル（label32）のビルド構成および追加のI/Oフラグ（`-hostRoots`, `-ioRanks` 等）の利用が正式に許可され、また抗力係数（$C_d$）に対して公式の厳密な合否判定閾値は設けないことが確認された。チームDiscordの `現在のﾘﾎﾟｼﾞﾄﾘ` チャンネルにおける2026-09-04の記録にも同内容の回答とIssue #13および#26のクローズ経緯が記録されている。回答の全文はこれらの正本記録に保持する。
 
