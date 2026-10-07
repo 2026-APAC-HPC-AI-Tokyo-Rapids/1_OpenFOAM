@@ -316,6 +316,37 @@ def rank_compute(output):
     save(figure, output, "fig10_rank_compute")
 
 
+def reference_comparison(output):
+    ours = defaultdict(list)
+    for row in read("final_runs.csv"):
+        ours[(row["configuration"], int(row["nodes"]))].append(float(row["s_per_step"]))
+    theirs = defaultdict(list)
+    for row in read("organiser_reference_aspire2a.csv"):
+        if row["setting"] == "defaults":
+            theirs[(row["method"], int(row["nodes"]))].append(float(row["s_per_step"]))
+    groups = [("Organisers\nhierarchical", CONTROL, lambda n: theirs[("hierarchical", n)]), ("Organisers\nscotch", "#5f5f5f", lambda n: theirs[("scotch", n)]), ("Our Basic\n(scotch)", BASIC, lambda n: ours[("Basic", n)]), ("Our Bonus", BONUS, lambda n: ours[("Bonus", n)])]
+    figure, axes = plt.subplots(1, 3, figsize=WIDE)
+    for axis, nodes in zip(axes, (1, 2, 4)):
+        for position, (label, color, values_of) in enumerate(groups):
+            values = values_of(nodes)
+            axis.scatter(spread(values, position, 0.3), values, s=55, color=color, edgecolor="black", linewidth=0.5, zorder=3)
+            axis.hlines(statistics.fmean(values), position - 0.3, position + 0.3, color=color, linewidth=2.5)
+        reference = theirs[("scotch", nodes)]
+        for position, key in ((2, "Basic"), (3, "Bonus")):
+            values = ours[(key, nodes)]
+            axis.annotate(f"{change(values, reference):+.0f} %", (position, statistics.fmean(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, fontweight="bold", color=ACCENT)
+        axis.set_xticks(range(len(groups)), [label for label, _, _ in groups], fontsize=10)
+        axis.set_xlim(-0.6, len(groups) - 0.4)
+        axis.set_title(f"{nodes} node{'s' if nodes > 1 else ''}")
+        everything = [value for _, _, values_of in groups for value in values_of(nodes)]
+        span = max(everything) - min(everything)
+        axis.set_ylim(min(everything) - span * 0.18, max(everything) + span * 0.08)
+    axes[0].set_ylabel("s / step (each point is one job)")
+    figure.text(0.5, -0.06, "Organisers: ASPIRE-2A notes (tasks 4.3): site module, mpirun with no options, default MPI settings, no binding; full-chain, split and simpleFoam-only runs.\nRed: our mean against the organisers' scotch mean. Different builds, MPI transport and placement, so the gap has more than one cause. y-axes do not start at 0.", ha="center", fontsize=10.5)
+    figure.tight_layout()
+    save(figure, output, "fig14_vs_organiser_reference")
+
+
 def box(axis, x, y, width, height, text, color, size=12, weight="normal"):
     axis.add_patch(FancyBboxPatch((x, y), width, height, boxstyle="round,pad=0.01,rounding_size=0.015", facecolor=color, edgecolor="#333333", linewidth=1))
     axis.text(x + width / 2, y + height / 2, text, ha="center", va="center", fontsize=size, fontweight=weight, wrap=True)
@@ -499,7 +530,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, node_layout, pipeline, solver_flow, tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, node_layout, pipeline, solver_flow, tables):
         make(output)
 
 

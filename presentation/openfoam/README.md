@@ -17,4 +17,5 @@
 | `compiler_options.csv` | コンパイラとフラグの比較（4ノード、各3本） | #36 D |
 | `craypat_summary.csv` | CrayPATの3本（Basic、パッチ0002〜0004の前、最終Bonus）の時間 | 各runの`pat-report.txt`のTable 1、2、4 |
 | `rank_compute.csv` | rankごとの計算時間（process − MPI）、パッチの前と後 | 37261721692、37529785072のCrayPAT（pe別） |
+| `organiser_reference_aspire2a.csv` | 主催者のASPIRE-2Aの参照run（既定の設定と、MPIの環境変数を変えたrun） | `tasks/4.3-aspire2a-logs/`の`50_simpleFoam.*.log`と`coefficient.dat` |
 | `bench_runs_sep21_oct05.csv` | 2026-09-21〜10-05のASPIRE-2Aの通常計測run（開始時刻はUTC） | 保管済みバンドルの記録（#47） |

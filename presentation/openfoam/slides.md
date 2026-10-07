@@ -19,6 +19,7 @@
 | 8 | Bonus: move less data | `fig03_changes_4node`、`tab03_bonus_changes` | 1.5分 |
 | 9 | Same math: F3 | `tab02_f3_check` | 0.5分 |
 | 10 | Final performance and scaling | `fig01_final_runs`、`fig02_scaling` | 1分 |
+| 10b | Against the organisers' reference | `fig14_vs_organiser_reference` | 0.5分 |
 | 11 | What did not work | `fig07_compiler_options`、`tab04_not_adopted` | 0.5分 |
 | 12 | Summary | なし | 0.5分 |
 | S1〜S5 | Supporting | 下に記載 | 質疑用 |
@@ -180,6 +181,28 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - 効率が1を超える理由は、rankあたりのデータがキャッシュに入りやすくなるためという仮説です。counterでは確かめていません。
 - Bonusは1ノードの方が改善が大きいので、Bonusの効率はBasicよりわずかに低くなります。
 
+## 10b. Against the organisers' reference
+
+**Message:** On 4 nodes our Basic is 11 % faster than the organisers' vanilla `scotch` runs, and its run-to-run spread is 0.35 % instead of 12 %.
+
+| 4 nodes | s/step |
+|---|---:|
+| Organisers, `hierarchical` (1 run) | 3.415 |
+| Organisers, `scotch` (5 runs) | 3.191–3.576, mean 3.296 |
+| Our Basic, `scotch` (5 runs) | 2.916–2.926, mean 2.920 |
+| Our Bonus (3 runs) | 2.597–2.602, mean 2.599 |
+
+- Organisers' setup (ASPIRE-2A notes, tasks 4.3): site module, `mpirun` with no options, default MPI settings, no binding.
+- Ours: the same unmodified v2512 source rebuilt, Cray MPICH over UCX, ranks pinned with local memory.
+- Against their `scotch` mean: Basic −8 / −13 / −11 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
+
+図：`figures/fig14_vs_organiser_reference.png`
+
+メモ：
+- 条件がまとめて違うので、差の原因を1つに断定しません。私たちの側で切り分けて測ったのは、CPU/NUMA固定（スライド6）と分割（スライド7）です。
+- 主催者のscotchの5本は、1ジョブのrun、分割したrun、simpleFoamだけのrunを含みます。同じ分割で、`coefficient.dat`はすべて同じです。
+- 主催者のrunでは2/4ノードで`MPI_Finalize`のときにSIGBUSが出ます（既定のOFI）。私たちはUCXなので出ていません（Q14）。
+
 ## 11. What did not work
 
 **Message:** Compiler flags, communication switches and smarter partition weights did not help. The limits are data movement and load balance.
@@ -271,8 +294,17 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 **Q12. Why is the 80-step Cd below the reference?**
 - Our Basic run with plain `scotch` gives 0.327 and the Bonus 0.323, against about 0.34 in the reference table. The Bonus value is identical to its unmodified baseline, so the gap does not come from our changes.
 
+**Q13. Why is your Cd different from the organisers' reference?**
+- Our Basic Cd at 150 steps is 0.284049, against 0.283983 in the organisers' `scotch` runs (a relative 2.3e-4). When we ran the site module once with our own scripts and decomposition, we got their value exactly (0.28398300763231610). So the difference comes from our build (for example, we link AMD's math library), not from the decomposition or the method.
+
+**Q14. The organisers saw a signal 7 (SIGBUS) at the end of 2- and 4-node runs. Did you?**
+- No. That comes from the default OFI provider at `MPI_Finalize`. Our job scripts use Cray MPICH over UCX, and every step of every run returned 0.
+
+**Q15. Why is your run-to-run spread so much smaller than the organisers'?**
+- Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. We pin every rank and keep its memory on its NUMA domain, and we use UCX. We have not tested which of these narrows the spread, so we present it as an observation.
+
 ## 根拠
 
-- 図の元データ：リポジトリの`presentation/openfoam/data/`。
+- 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
 - 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。
