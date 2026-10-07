@@ -1,0 +1,14 @@
+configuration,pinned_during_solve,local_pages_median,actions_run,s_per_step
+LD_PRELOAD interposer (pins right after MPI_Init),128/128,0.51,37133683583,2.9154
+LD_PRELOAD interposer (pins right after MPI_Init),128/128,,37128819151,2.9228
+numactl --membind + taskset keeper (adopted for Basic),128/128,0.58,37133158165,2.9191
+numactl --membind + taskset keeper (adopted for Basic),128/128,,37135716945,2.9123
+numactl --membind + taskset keeper (adopted for Basic),128/128,,37136333280,2.9189
+PALS --mem-bind local + taskset keeper,128/128,0.40,37131382899,3.4498
+PALS --mem-bind local + taskset keeper,128/128,,37132444869,3.4875
+taskset keeper only (re-pins 12-16 s after start),128/128,,37127003025,3.5488
+taskset keeper only (re-pins 12-16 s after start),128/128,,37127540803,3.4098
+taskset keeper only (re-pins 12-16 s after start),128/128,,37128534595,3.4629
+PALS --cpu-bind and --mem-bind only,0/128,0.07,37131371136,3.3763
+PALS --cpu-bind and --mem-bind only,0/128,,37131937125,3.4137
+numactl --membind only,0/128,0.57,37133155192,4.3796
