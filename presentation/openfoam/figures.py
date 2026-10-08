@@ -372,6 +372,24 @@ def counters(output):
     save(figure, output, "fig17_counters")
 
 
+def step_breakdown(output):
+    rows = read("step_regions_4node.csv")
+    figure, axis = plt.subplots(figsize=WIDE)
+    for index, row in enumerate(rows):
+        median, low, high = (float(row[key]) / 40 for key in ("median_s_40_steps", "min_s", "max_s"))
+        color = BASIC if index < len(rows) - 1 else CONTROL
+        axis.barh(index, median, color=color, height=0.6)
+        axis.errorbar(median, index, xerr=[[median - low], [high - median]], color="black", capsize=4, linewidth=1)
+        axis.text(high + 0.02, index, f"{float(row['share_of_step']) * 100:.1f} %", va="center", fontsize=13, fontweight="bold")
+    axis.set_yticks(range(len(rows)), [row["region"].replace(" (", "\n(") for row in rows], fontsize=12)
+    axis.invert_yaxis()
+    axis.set_xlabel("s per step (median rank); whiskers: fastest and slowest of the 512 ranks")
+    axis.set_xlim(0, 1.45)
+    figure.text(0.5, -0.06, "OpenFOAM's built-in profiling, Basic, 4 nodes, 512 ranks, a 40-step diagnostic run (Issue #57). Times are wall clock and include the MPI\nwaiting inside each region: a rank that finishes its earlier work sooner waits longer at the start of the next solve (omega: 0.12-0.22 s).\nMPI as a whole (parProfiling): 19 % of the step for the median rank.", ha="center", fontsize=10.5)
+    figure.tight_layout()
+    save(figure, output, "fig18_step_breakdown")
+
+
 def journey(output):
     methods = defaultdict(list)
     for row in read("decomposition_basic.csv"):
@@ -636,7 +654,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
         make(output)
 
 

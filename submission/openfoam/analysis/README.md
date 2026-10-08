@@ -29,6 +29,12 @@ Each of these ran only in diagnostic runs or outside the timed steps. None of th
   the run time.
 - **IMB-MPI1** after the solver in every benchmark run: ping-pong bandwidth and `MPI_Allreduce` latency, as a network baseline
   for each job.
+- **OpenFOAM's built-in profiling** (`profiling {}` and the `parProfiling` function object) in a 4-node, 40-step diagnostic run
+  of the Basic configuration, with the result of every rank. Wall-clock share of a step for the median rank: p solve (GAMG)
+  26 %, U solve 22 %, omega 5 %, k 4 %, function objects 2 %, everything outside the solvers (assembly, gradients, turbulence
+  model) 41 %. The computation per rank varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain
+  it (r = +0.06); the wall faces of a rank explain a little (r = +0.43, 2.8 % of the work); nodes and NUMA domains show no
+  systematic difference.
 
 ## Reproducing a profile
 

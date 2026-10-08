@@ -46,7 +46,7 @@
 |---|---|---|---|---|
 | 1 | Same math, faster on 4 nodes | ParaView（#39）、大きな数字 | 1:00 | 結論と3本柱 |
 | 2 | One node has 8 NUMA domains; this is how we run on it | `fig11_node_layout` | 1:00 | 機械の理解 |
-| 3 | Where the time goes | `fig09_mpi_breakdown`（Basicの行）、`fig13_solver_flow`（小） | 1:00 | ボトルネックの特定 |
+| 3 | Where the time goes | `fig18_step_breakdown`、`fig09_mpi_breakdown`（Basicの行） | 1:00 | ボトルネックの特定 |
 | 4 | Basic 1: the launcher's pinning disappears at MPI_Init | `fig06_pinning` | 1:30 | Basic（見せ場） |
 | 5 | Basic 2: scotch splits the mesh better | `fig05_decomposition_basic` | 1:00 | Basic |
 | 6 | Bonus: the same arithmetic, fewer bytes moved | `fig03_changes_4node`、R3の4マス、`fig17_counters` | 1:30 | Bonus |
@@ -90,16 +90,18 @@
 
 **Title:** Where the time goes: memory-bound loops, and ranks waiting for the slowest one
 
+- A step on 4 nodes (OpenFOAM's own profiling, every rank): p solve (GAMG) 26 %, U solve 22 %, k and omega 9 %, function objects 2 %, and 41 % outside the solvers (assembly, gradients, turbulence model).
 - CrayPAT on 4 nodes, 512 ranks (a separate 40-step run): MPI is 19.4 % of the time; the rest is computation.
 - The MPI time is mostly `MPI_Allreduce` (global sums) and `MPI_Waitall` (halo exchange), and it ranges from 20 s to 37 s per rank: early ranks wait for the slowest.
 - The computation is bound by memory traffic: one core per L3 already saturates a node's memory bandwidth (STREAM, about 94 % of peak), and compiler flags change nothing (within 0.13 %).
 - So: (1) keep each rank's memory next to its core, (2) give every rank the same work, (3) move fewer bytes per step.
 
-図：`figures/fig09_mpi_breakdown.png`（Basicの行だけ）と、`figures/fig13_solver_flow.png`を小さく（1 stepの中身）。
+図：`figures/fig18_step_breakdown.png`（1 stepの内訳）と`figures/fig09_mpi_breakdown.png`（Basicの行だけ）。`fig13_solver_flow`は補足に回すか、小さく添えます。
 
 メモ（1分）：
 - 「計算・メモリ・MPI・I/Oの円グラフ」にはしません。メモリ待ちは計算の中にあり、MPI待ちには他rankの計算待ちも入っているからです。
 - I/Oは計測区間の約0.01 %（#46）。
+- 内訳はOpenFOAM組み込みのprofilingで、4ノードの40 stepの診断runで測りました（#57）。区間の時間は経過時間で、区間内のMPIの待ちを含みます。
 - 「memory-bound」の根拠は3つ：STREAMでL3あたり1 coreでもノードの帯域が飽和すること（#36、STREAMの数え方で290 GB/s、書き込み時の読み込みを含めると約387 GB/sでカタログ値409.6 GB/sの約94 %）、コンパイラやフラグを変えても0.13 %以内しか変わらないこと（#36 D）、計算部分のIPCが0.36と低いこと（#55のuProf、1ノード）。
 
 ### 4. Basic 1: the launcher's pinning disappears at MPI_Init
@@ -311,6 +313,15 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Computation only (MPI, UCX and Pstream left out), mean of 7 ranks: cycles −10.8 %, instructions −4.1 %, L1 data accesses −5.8 %, L1 refills from DRAM −17.2 %, from L2 −0.2 %, L2 accesses including prefetches −9.6 %; IPC 0.360 → 0.388.
 - Two runs of the same side agree within about 4 % on every counter. Both sides give the same `coefficient.dat` (Cd 0.43827636195043501).
 
+### S10. Where a step goes, and where the imbalance is（#57）
+
+図：`figures/fig18_step_breakdown.png`
+
+- OpenFOAM's built-in profiling (`profiling {}` and the `parProfiling` function object), Basic, 4 nodes, a 40-step diagnostic run with every rank's results.
+- Computation per rank (loop time minus Pstream time): median 97.95 s, max 104.17 s (max/median 1.063) over 40 steps.
+- Correlation with the computation: cell count r = +0.06 (balanced within 1 %), wall faces r = +0.43, processor faces r = −0.16; both together explain 27 %.
+- Ranks with fewer wall faces wait longer at the start of the next solve (U r = −0.72, omega r = −0.60); the wall shear stress function object grows with the wall faces (r = +0.76).
+
 ### S9. OFI against UCX under our placement（#56）
 
 - Basic configuration on 4 nodes, only the MPI transport changed; 3 runs each, alternated in the same period (2026-10-07).
@@ -387,7 +398,10 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5 % faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
 
 **Q20. What would you do next?**
-- The remaining imbalance between ranks (max/median 1.07) and the global sums in GAMG. Both need changes in how the work is split, not in MPI settings.
+- The global sums: about half of the MPI time is `MPI_Allreduce`, mostly the global sums of the linear solvers. And the remaining imbalance between ranks, whose cause we have only narrowed down (Q21).
+
+**Q21. Do you know where the imbalance between ranks comes from?**
+- Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions, and most of it is still unexplained.
 
 ---
 

@@ -1,0 +1,8 @@
+region,median_s_40_steps,min_s,max_s,share_of_step
+p solve (GAMG),32.358,32.343,32.407,0.2607
+U solve,27.599,27.506,27.717,0.2223
+omega solve,5.787,4.888,8.746,0.0466
+k solve,5.272,5.040,5.637,0.0425
+fvOptions,0.597,0.161,1.687,0.0048
+function objects,2.289,2.168,2.384,0.0184
+"rest of the step (assembly, gradients, turbulence model)",50.227,46.679,51.592,0.4046
