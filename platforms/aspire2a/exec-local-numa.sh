@@ -5,4 +5,6 @@
 # 外からのCPU affinityの書き換えでは変わらない。
 set -euo pipefail
 
+# Issue #59 A：PGOの学習はsimpleFoamだけで行う。simpleFoamのrankは、実行回数を別のdirectoryへ書く。
+if [[ "${1##*/}" == simpleFoam ]]; then export GCOV_PREFIX="${TMPDIR}/pgo/simpleFoam"; fi
 exec numactl --membind="$(( PMI_LOCAL_RANK / 16 ))" "$@"

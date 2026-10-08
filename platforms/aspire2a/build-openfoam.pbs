@@ -2,7 +2,7 @@
 #PBS -P 59000014
 #PBS -q normal
 #PBS -l select=1:ncpus=16:mpiprocs=1:mem=120gb
-#PBS -l walltime=02:00:00
+#PBS -l walltime=03:00:00
 #PBS -N openfoam_build
 #PBS -j oe
 

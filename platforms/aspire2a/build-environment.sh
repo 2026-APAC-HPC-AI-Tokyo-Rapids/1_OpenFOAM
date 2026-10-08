@@ -18,9 +18,11 @@ test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRD
 test "$(sha256sum "${IMB_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${IMB_SOURCE_ARCHIVE_SHA256}"
 build_parallelism=16
 build_directory_mode=0750
-build_extra_cxxflags="${build_tuning_flags}"
-build_compile_control=+ccache
-build_use_ccache=true
+# Issue #59 A：PGOの学習用に計装する。各オブジェクトの実行回数は、オブジェクトと同じパスの.gcdaへ書かれる。
+# flagが新しくcacheには当たらないので、ccacheを使わない。
+build_extra_cxxflags="${build_tuning_flags} -fprofile-generate"
+build_compile_control=
+build_use_ccache=false
 openfoam_source_oid="${OPENFOAM_SOURCE_OID}"
 thirdparty_source_oid="${THIRDPARTY_SOURCE_OID}"
 openfoam_source_algorithm=sha1
