@@ -84,7 +84,7 @@
 メモ（1分）：
 - この木構造（ノード → ソケット → NUMA → コア）が、Basicの固定（スライド4）とBonusのmultiLevel `(4 2 4 16)`（スライド6）の両方につながる、と予告します。
 - UCXを選んだ理由は1文だけ：既定のOFIは2/4ノードの`MPI_Finalize`でSIGBUSになり、UCXは全runが完走した。主催者の回避策（`FI_OFI_RXM_USE_SRX=0`）を入れたOFIも、同じ配置で0.77 %遅かった（Q16、#56）。
-- ASPIRE-2Aを選んだ理由はチームで書き足します（Q1）。
+- ASPIRE-2Aを選んだ理由は聞かれたら答えます（Q1：去年はGadiだったこと、ファイル数と容量の上限）。
 
 ### 3. Where the time goes
 
@@ -325,7 +325,9 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 英語の回答は、質疑で言う形の下書きです。
 
 **Q1. Why ASPIRE-2A?**
-- （チームで記入）採点対象はGadiかASPIRE-2Aです。最終の計測はすべてASPIRE-2Aで行いました。選んだ理由は記録にないので、チームで決めて書き足します。
+- Last year we competed on Gadi, so this year we wanted to learn the other contest machine.
+- Storage. OpenFOAM works with very many files: one unpacked OpenFOAM tree is about 36,000 files, and every decomposed 65M case adds thousands of `processor*` files. Our Gadi project has 1 TiB and about 212,000 files on `/scratch`; in August, three runs setting up at the same time already hit that file limit. On ASPIRE-2A we have 100 TB and 200 million files, so we could keep the builds, the decomposed cases and the raw records of every run.
+- （メモ）Gadiの利用停止のことは自分からは言いません。「ノードが空いていた」は言いません（今回、4ノードは4時間以上、qdevの1ノードは3時間以上待った記録があります）。数字の出典は`platforms/gadi/README.md`（inode上限212,100、2026-08-17の3件同時の`Disk quota exceeded`）と、ASPIRE-2Aの`lfs quota`（100 TB、2億inode、2026-10-07）です。
 
 **Q2. MPI waiting is large. Why didn't MPI tuning help?**
 - Most of the MPI time is waiting: ranks that finish early wait at the next exchange or global sum. Per-rank MPI time ranges from 20 to 37 s. Library or switch tuning cannot remove that wait; only less work or better balance can. The OpenFOAM communication switches we tried gave no gain.
