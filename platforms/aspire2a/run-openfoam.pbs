@@ -14,6 +14,8 @@ set -euo pipefail
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
+# Issue #58：ノード間の通信を、UCXが512 rankで選ぶud_verbsではなくrc_verbsで送る。ノード内（sm）とselfは既定と同じ。
+export UCX_TLS=rc,sm,self
 test "${OMP_NUM_THREADS:?PBS OpenMP thread count is required}" = 1
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"
