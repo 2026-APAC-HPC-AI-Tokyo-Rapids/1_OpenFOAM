@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PBS -l walltime=01:30:00
+#PBS -l walltime=00:40:00
 
 set -euo pipefail
 
@@ -15,10 +15,6 @@ source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
 test "${OMP_NUM_THREADS:?PBS OpenMP thread count is required}" = 1
-# Issue #59 A：計装したbuildの実行回数は、各ノードのTMPDIRへ書かせる。STRIPはビルドツリーのパス
-# （/var/tmp/pbs.<id>/openfoam-build/tree）の5段。simpleFoamのrankだけはexec-local-numa.shが
-# pgo/simpleFoamへ分け、準備工程などの回数は学習に使わない。
-export GCOV_PREFIX="${TMPDIR}/pgo/other" GCOV_PREFIX_STRIP=5
 if [[ "${OPENFOAM_RUN_PURPOSE}" == profile ]]; then
   : "${OPENFOAM_PROFILE_TOOL:?profile tool is required}"
   case "${OPENFOAM_PROFILE_TOOL}" in
@@ -96,14 +92,4 @@ run_status=0
 "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --bind-rank-placement --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --solver-launch-arg --cpu-bind --solver-launch-arg depth --solver-launch-arg -d --solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1 || run_status=$?
 kill "${keeper_pid}"
 wait "${keeper_pid}" || true
-# Issue #59 A：1ノードの128 rankがgcovのファイルロックで足し合わせたsimpleFoamのプロファイルを、
-# PGOビルドの入力として保存する。
-if [[ "${run_status}" -eq 0 ]]; then
-  pgo_archive="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/pgo-profiles/${RUN_ID}.tar.zst"
-  install -d -m 0750 "${pgo_archive%/*}"
-  printf 'pgo_profile_files=%s\n' "$(find "${TMPDIR}/pgo/simpleFoam/OpenFOAM" -type f -name '*.gcda' | wc -l)"
-  tar -C "${TMPDIR}/pgo/simpleFoam" -I 'zstd -T0' -cf "${pgo_archive}.tmp" OpenFOAM
-  mv -- "${pgo_archive}.tmp" "${pgo_archive}"
-  printf 'pgo_profile=%s\npgo_profile_sha256=%s\n' "${pgo_archive}" "$(sha256sum "${pgo_archive}" | awk '{print $1}')"
-fi
 exit "${run_status}"

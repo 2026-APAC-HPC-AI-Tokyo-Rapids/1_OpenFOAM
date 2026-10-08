@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PBS -l walltime=01:00:00
+#PBS -l walltime=00:30:00
 
 set -euo pipefail
 
@@ -13,9 +13,6 @@ set -euo pipefail
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.conf"
 source "${PROVISION_DIR}/platforms/aspire2a/toolchain.sh"
 aspire2a_load_toolchain "${aspire2a_toolchain}"
-# Issue #59 A：計装したdecomposePar・checkMeshの実行回数は学習に使わず、ジョブのTMPDIRへ捨てる。
-# STRIPはビルドツリーのパス（/var/tmp/pbs.<id>/openfoam-build/tree）の5段。
-export GCOV_PREFIX="${TMPDIR}/pgo-discard" GCOV_PREFIX_STRIP=5
 
 runtime_root="${TMPDIR}/openfoam-runtime"
 "${PROVISION_DIR}/platforms/aspire2a/stage-openfoam-runtime.sh" "${PROVISION_DIR}/runtime.tar.zst" "${PROVISION_DIR}/control/build-sidecar.json" "${runtime_root}"

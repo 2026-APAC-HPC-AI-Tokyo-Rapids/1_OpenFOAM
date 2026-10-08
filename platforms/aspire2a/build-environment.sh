@@ -18,9 +18,13 @@ test "$(sha256sum "${THIRDPARTY_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${THIRD
 test "$(sha256sum "${IMB_SOURCE_ARCHIVE}" | awk '{print $1}')" = "${IMB_SOURCE_ARCHIVE_SHA256}"
 build_parallelism=16
 build_directory_mode=0750
-# Issue #59 A：PGOの学習用に計装する。各オブジェクトの実行回数は、オブジェクトと同じパスの.gcdaへ書かれる。
-# flagが新しくcacheには当たらないので、ccacheを使わない。
-build_extra_cxxflags="${build_tuning_flags} -fprofile-generate"
+# Issue #59 B：Aの学習run（Actions 37800942854・PBS 25731598、1ノード128 rank・40 step）で、simpleFoamだけから集めた
+# プロファイルでビルドする。学習で一度も実行されなかった関数は、-fprofile-partial-trainingで
+# プロファイルなしと同じ最適化にする。ビルドツリーの絶対パスはPBSジョブごとに変わり、GCCはヘッダーの
+# 関数の照合値にそのパスを含めるので、-Wno-coverage-mismatchでパスの違いを許す（制御フローの照合値が
+# 合えば、実行回数はそのまま使われる）。ccacheのkeyにはプロファイルの中身が入らないので、ccacheを使わない。
+pgo_profile_archive=/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/pgo-profiles/r-84cdc5050e3c5c09f688f6022a076206.tar.zst
+build_extra_cxxflags="${build_tuning_flags} -fprofile-use -fprofile-partial-training -Wno-coverage-mismatch"
 build_compile_control=
 build_use_ccache=false
 openfoam_source_oid="${OPENFOAM_SOURCE_OID}"
@@ -49,12 +53,14 @@ build_wm_mplib=${aspire2a_wm_mplib}
 prepare_build_sources() {
   install -d -m 0750 "${build_tree}/OpenFOAM" "${build_tree}/ThirdParty" "${build_tree}/IMB"
   tar -xzf "${OPENFOAM_SOURCE_ARCHIVE}" -C "${build_tree}/OpenFOAM" --strip-components=1
+  # Issue #59 B：プロファイルの.gcdaを、各オブジェクトと同じパス（OpenFOAM/build/<WM_OPTIONS>/…）へ置く。
+  tar -I zstd -xf "${pgo_profile_archive}" -C "${build_tree}"
   tar -xzf "${THIRDPARTY_SOURCE_ARCHIVE}" -C "${build_tree}/ThirdParty" --strip-components=1
   tar -xzf "${IMB_SOURCE_ARCHIVE}" -C "${build_tree}/IMB" --strip-components=1
   install -d "${build_tree}/ThirdParty/sources/scotch"
   cp -a /app/apps/openfoam/2512/ThirdParty-v2512/sources/scotch/scotch_6.1.0 "${build_tree}/ThirdParty/sources/scotch/"
   scotch_source_identity=$("${GITHUB_WORKSPACE}/scripts/source-tree-identity.sh" "${build_tree}/ThirdParty/sources/scotch/scotch_6.1.0")
-  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" --compile-flag "CRAYPE_NETWORK_TARGET=${CRAYPE_NETWORK_TARGET}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "CRAY_MPICH_MODULE=${aspire2a_mpi_module}" --compile-flag "MPI_TRANSPORT=${aspire2a_mpi_transport}" --compile-flag "UCX_VERSION=${aspire2a_ucx_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}")
+  cluster_compile_flags=(--compile-flag "SCOTCH_SOURCE_IDENTITY=${scotch_source_identity}" --compile-flag "IMB_SOURCE_OID=${IMB_SOURCE_OID}" --compile-flag "ASPIRE2A_TOOLCHAIN=${aspire2a_toolchain}" --compile-flag "AOCL_MODULE=${aspire2a_aocl_module}" --compile-flag "AOCL_ROOT=${AOCL_ROOT}" --compile-flag "AOCL_LIBM=${aspire2a_aocl_libm}" --compile-flag "AOCL_LIBMEM=${aspire2a_aocl_libmem}" --compile-flag "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" --compile-flag "CRAYPE_NETWORK_TARGET=${CRAYPE_NETWORK_TARGET}" --compile-flag "CRAY_MPICH_VERSION=${CRAY_MPICH_VERSION}" --compile-flag "CRAY_MPICH_MODULE=${aspire2a_mpi_module}" --compile-flag "MPI_TRANSPORT=${aspire2a_mpi_transport}" --compile-flag "UCX_VERSION=${aspire2a_ucx_version}" --compile-flag "PRGENV=${PE_ENV}" --compile-flag "CCACHE=${aspire2a_ccache}" --compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}" --compile-flag "CCACHE_NAMESPACE=${build_ccache_namespace}" --compile-flag "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}" --compile-flag "PGO_PROFILE=${pgo_profile_archive}" --compile-flag "PGO_PROFILE_SHA256=$(sha256sum "${pgo_profile_archive}" | awk '{print $1}')")
 }
 
 finish_cluster_build() {
