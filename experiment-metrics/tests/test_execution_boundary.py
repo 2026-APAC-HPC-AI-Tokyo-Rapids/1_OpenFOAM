@@ -562,7 +562,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
     assert "aspire2a_ucx_version=" in toolchain
-    assert "build_use_ccache=true" in build
+    # Issue #59のPGO実験branchでは、計装・プロファイル付きのビルドにccacheを使わない。
+    assert "build_use_ccache=false" in build
     assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}-${aspire2a_mpi_transport}"' in build
     assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}/${aspire2a_mpi_transport}"' in build
     assert '--compile-flag "CCACHE_VERSION=${aspire2a_ccache_version}"' in build
