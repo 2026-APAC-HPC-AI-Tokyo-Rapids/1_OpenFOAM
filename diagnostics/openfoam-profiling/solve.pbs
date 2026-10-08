@@ -7,9 +7,9 @@
 # Diagnostic run for Issue #57, not a benchmark: submission/openfoam/run/solve.pbs with OpenFOAM's built-in profiling.
 # It replaces run/solve.pbs in a copy of the submission scripts, so that run/submit.sh starts it after prepare.pbs.
 # Differences from solve.pbs:
-#   - controlDict: endTime and writeInterval 40, so that every rank writes <case>/processor*/40/uniform/profilingInfo once;
+#   - controlDict: endTime and writeInterval 40, so that every rank writes <case>/processor*/40/uniform/profiling once;
 #     `profiling {}`; the parProfiling function object (Pstream times of every rank, reported once at the end).
-#   - Afterwards every node copies the profilingInfo of its ranks back to CASE_DIR.
+#   - Afterwards every node copies the profiling file of each of its ranks back to CASE_DIR.
 set -euo pipefail
 source "${SCRIPT_DIR}/environment.sh"
 ranks=$(( NODES * 128 ))
@@ -38,6 +38,6 @@ kill "${keeper}"
 wait "${keeper}" || true
 
 cp -a postProcessing "${CASE_DIR}/"
-mpiexec -n "${NODES}" -ppn 1 /usr/bin/bash -c 'cd "$1" && find . -path "./processor*/40/uniform/profilingInfo" -print0 | tar --null -T - -cf - | tar -xf - -C "$2"' collect "${local_case}" "${CASE_DIR}"
-find "${CASE_DIR}" -path "*/processor*/40/uniform/profilingInfo" | wc -l
+mpiexec -n "${NODES}" -ppn 1 /usr/bin/bash -c 'cd "$1" && find . -path "./processor*/40/uniform/profiling" -print0 | tar --null -T - -cf - | tar -xf - -C "$2"' collect "${local_case}" "${CASE_DIR}"
+find "${CASE_DIR}" -path "*/processor*/40/uniform/profiling" | wc -l
 grep 'Average wall-clock time per time step' "${CASE_DIR}/logFiles/50_simpleFoam.log"
