@@ -24,7 +24,7 @@ cp system/fvSolution.fixedIter system/fvSolution
 cp "${SURFACES_DICT}" system/decompositionSurfaces
 cp system/decomposeParDict system/decomposeParDict.shipped
 sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1512;/" system/include/caseDefinition
-restore0Dir
+cp -a 0.orig 0
 
 time_dir=0
 for method in hierarchical scotch multiLevel; do
