@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PJM -L elapse=01:00:00
+#PJM -L elapse=00:30:00
 #
 # Flow visualization run on Genkai (Issue #39), for when ASPIRE-2A has no free nodes. The official case with the
 # flowVisualization function objects added to controlDict.noWrite, 150 iterations on 4 nodes with 112 ranks each (scotch,
