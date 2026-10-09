@@ -83,7 +83,7 @@
 
 メモ（1分）：
 - この木構造（ノード → ソケット → NUMA → コア）が、Basicの固定（スライド4）とBonusのmultiLevel `(4 2 4 16)`（スライド6）の両方につながる、と予告します。
-- UCXを選んだ理由は1文だけ：既定のOFIは2/4ノードの`MPI_Finalize`でSIGBUSになり、UCXは全runが完走した。主催者の回避策（`FI_OFI_RXM_USE_SRX=0`）を入れたOFIも、同じ配置で0.77 %遅かった（Q16、#56）。
+- UCXを選んだ理由は1文だけ：既定のOFIは2/4ノードの`MPI_Finalize`でSIGBUSになり、UCXは全runが完走した。主催者の2つの回避策を入れたOFIも、同じ配置で遅かった（`FI_OFI_RXM_USE_SRX=0`は0.77 %、`FI_VERBS_PREFER_XRC=0`は0.50 %。Q16、#56、#60）。
 - ASPIRE-2Aを選んだ理由は聞かれたら答えます（Q1：去年はGadiだったこと、ファイル数と容量の上限）。
 
 ### 3. Where the time goes
@@ -322,12 +322,13 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Correlation with the computation: cell count r = +0.06 (balanced within 1 %), wall faces r = +0.43, processor faces r = −0.16; both together explain 27 %.
 - Ranks with fewer wall faces wait longer at the start of the next solve (U r = −0.72, omega r = −0.60); the wall shear stress function object grows with the wall faces (r = +0.76).
 
-### S9. OFI against UCX under our placement（#56）
+### S9. OFI against UCX under our placement（#56、#60）
 
 - Basic configuration on 4 nodes, only the MPI transport changed; 3 runs each, alternated in the same period (2026-10-07).
 - UCX (main): 2.9176, 2.9168, 2.9246 s/step, mean 2.9197. OFI with `FI_OFI_RXM_USE_SRX=0`: 2.9452, 2.9374, 2.9438, mean 2.9421 (+0.77 %).
 - All 6 runs VALID, every step returned 0 (no SIGBUS), the same `coefficient.dat` Cd (0.28404934573921931).
 - OFI's own spread is also 0.26 %, so the narrow spread of our runs does not come from UCX (Q15).
+- The organisers' other workaround, `FI_VERBS_PREFER_XRC=0` (2026-10-09, one run each beside a UCX run): 2.9338 against 2.9192 s/step (+0.50 %), the same Cd, no SIGBUS.
 
 ---
 
@@ -386,7 +387,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. It is not UCX: our runs with the organisers' transport (OFI with `FI_OFI_RXM_USE_SRX=0`) also lie within 0.26 %. The main remaining difference is the placement — every rank pinned with its memory on its NUMA domain — which also removed the random slow ranks we saw before pinning.
 
 **Q16. Why UCX and not the site's default OFI?**
-- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` avoids the crash, so we compared again with everything else as in Basic: 3 alternated 4-node runs each, OFI 2.942 against UCX 2.920 s/step (+0.77 %, ranges not overlapping), the same Cd, no crash. So UCX stays.
+- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` avoids the crash, so we compared again with everything else as in Basic: 3 alternated 4-node runs each, OFI 2.942 against UCX 2.920 s/step (+0.77 %, ranges not overlapping), the same Cd, no crash. Their other workaround, `FI_VERBS_PREFER_XRC=0`, was +0.50 % (one run each), also with the same Cd. So UCX stays.
 
 **Q17. Is the pinning fix allowed in Basic?**
 - Yes. It is job-script placement: `numactl` sets the memory policy before each rank starts, and `taskset` sets the CPU affinity from outside. F1 lists job scripts, rank placement and affinity as Basic. We did not use `LD_PRELOAD`, which would be Bonus work.
@@ -419,5 +420,5 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 ## 根拠
 
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
-- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56（OFIとUCX）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）。
+- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。

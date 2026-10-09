@@ -643,7 +643,7 @@ def tables(output):
         ["Weighted multiLevel cells (Bonus)", "+2.2 % (weight ×2), +6.1 % (×12)", "Static weights unbalance the cell counts; even cell counts matter most"],
         ["METIS two-constraint partition (Bonus)", "+1.46 %", "Better face balance, but 18 % more processor faces"],
         ["OpenFOAM comm switches (Basic)", "No gain; commsType scheduled crashed in GAMG", "MPI time is mostly waiting for slower ranks"],
-        ["OFI with FI_OFI_RXM_USE_SRX=0 instead of UCX (Basic)", "+0.77 % (3 v 3, alternated)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
+        ["OFI instead of UCX, with FI_OFI_RXM_USE_SRX=0 or FI_VERBS_PREFER_XRC=0 (Basic)", "SRX=0: +0.77 % (3 v 3); XRC=0: +0.50 % (1 v 1)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
         ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01 % Basic, −0.16 % Bonus (4 v 4 each)", "IMB bandwidth +55 %, yet a step does not wait on inter-node transfer"],
         ["GAMG coarsest level on fewer ranks (Bonus)", "One master: +4.95 % (40 steps); per node +1.02 %, per NUMA −0.25 % (1 v 1)", "It issues 81 % of the Allreduce calls, but the wait is for slower ranks"],
         ["SMT, 2 ranks per core (Basic)", "About 5.7 × slower (stopped after 22 steps)", "More ranks on the same cores do not help this solver"],

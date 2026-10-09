@@ -129,9 +129,10 @@ MPI launch and placement:
 - qsub resources: `-q normal -l select=<nodes>:ncpus=128:mpiprocs=128:ompthreads=1:mem=400gb -l place=excl`, 40 minutes.
 - MPI is Cray MPICH 8.1.15 over UCX (`craype-network-ucx`, `cray-mpich-ucx/8.1.15`), not the default OFI provider. The signal 7
   (SIGBUS) at `MPI_Finalize` that the organisers' ASPIRE-2A notes describe for 2 and 4 nodes does not occur. Every step of
-  every run returned 0. We also tried the default OFI provider with `FI_OFI_RXM_USE_SRX=0`, the fix in those notes, with
-  everything else as in Basic: it completed without the signal, but on 4 nodes it was 0.77 % slower (2.9421 against 2.9197
-  s/step, 3 alternated runs each, ranges not overlapping), so Basic stays on UCX.
+  every run returned 0. We also tried the default OFI provider with each of the two workarounds in those notes, with
+  everything else as in Basic. Both completed without the signal and gave the same Cd, but were slower on 4 nodes:
+  `FI_OFI_RXM_USE_SRX=0` by 0.77 % (2.9421 against 2.9197 s/step, 3 alternated runs each, ranges not overlapping) and
+  `FI_VERBS_PREFER_XRC=0` by 0.50 % (2.9338 against 2.9192 s/step, one run each). Basic stays on UCX.
 
 ### Results (`results/<n>node/`)
 
