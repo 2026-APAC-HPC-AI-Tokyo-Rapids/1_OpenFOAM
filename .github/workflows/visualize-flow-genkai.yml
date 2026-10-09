@@ -47,6 +47,8 @@ jobs:
 
       - name: 4ノードのrunを投入
         run: |
+          # PJMはジョブを投入したディレクトリで始めるので、計算ノードから見える/fastの作業ディレクトリから投入する。
+          cd "${WORK}"
           submitted=$(pjsub -L rscgrp=a-batch -L node=4 --mpi proc=448 -x "BUILD_DIR=${WORK}/build,CASE_CACHE=${CASE_CACHE},WORK=${WORK}" -o "${WORK}/logs/%j.pjm.log" -j -N flow_visualization "${WORK}/visualize-genkai.pjm")
           printf '%s\n' "${submitted}" | tee "${WORK}/collect/pjsub.txt"
           job_id=$(grep -o 'Job [0-9]*' <<< "${submitted}" | awk '{print $2}')
