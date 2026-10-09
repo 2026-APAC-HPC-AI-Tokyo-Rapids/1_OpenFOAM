@@ -63,12 +63,12 @@
 - Bonus (multiLevel split + 4 source patches): **2.599 s/step**, −11.0 % against our Basic, `coefficient.dat` bit-identical.
 - Three levers: where memory lives, how the mesh is split, how many bytes the loops move.
 
-図：ParaViewの画像か動画（#39、Ackvyさん）と、大きな数字3つ（3.296 → 2.920 → 2.599）。
+図：流れの動画（Boxの`presentation/openfoam/flow/flow-streamlines.mp4`、静止画は`flow/stills/`）と、大きな数字3つ（3.296 → 2.920 → 2.599）。メッシュ分割の図は#39でAckvyさんが作っています。
 
 メモ（1分）：
 - 最初の10秒で数字を言います：「主催者の参照3.30秒に対して、Basicは2.92秒、Bonusは2.60秒です」。
 - 「同じ計算のまま速くした」ことを強調します。コンテストの標語（Make the same math faster）と同じ言葉を使います。
-- ParaViewの図は、場を書き出すための別runで作ったものだと一言添えます。
+- 流れの動画は、場を書き出すための別runで作ったものだと一言添えます。同じ公式ケースを玄界で流し、出力だけを足したrunです（`presentation/openfoam/flow/README.md`、Q22）。
 - 「以降は、どう見つけたかを3本柱の順に話します」で次へ。
 
 ### 2. One node has 8 NUMA domains; this is how we run on it
@@ -402,6 +402,9 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 
 **Q21. Do you know where the imbalance between ranks comes from?**
 - Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions, and most of it is still unexplained.
+
+**Q22. Is the flow video from your scored run?**
+- No. Benchmark runs write no flow fields (`controlDict.noWrite`), so we ran the same official case once more with output function objects added: on Genkai, 4 nodes, 150 iterations, because ASPIRE-2A had no free nodes that day. The added outputs do not change the computation: its Cd after 150 iterations, 0.28455000886604298, is identical to every digit with Genkai's official 4-node run.
 
 ---
 

@@ -3,6 +3,7 @@
 - `slides.md`：スライドの構成と、載せる文（英語）・話す内容（日本語）・想定問答。
 - `figures.py`：`data/`のCSVから図と表の画像を作ります。`uv run presentation/openfoam/figures.py <出力先>`で、`<名前>.png`（貼り付け用）と`<名前>.svg`（編集用）を出力します。
 - 出力した画像は、提出用Boxの`Tokyo_Rapids_with_RIKEN_Submission/presentation/openfoam/figures/`に置きます。画像はリポジトリには入れません。
+- `flow/`：流れの動画と画像（ParaView）を作る可視化用runの設定と描画スクリプト。`flow/README.md`を参照してください。動画と画像はBoxの`presentation/openfoam/flow/`に置きます。
 
 ## data/
 
