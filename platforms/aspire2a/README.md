@@ -95,6 +95,8 @@ NSCCのFAQとworkshop資料が推奨する標準構成は`cray-mpich/8.1.15`とO
 
 transportはベンダーやコミュニティの所属、NICのブランドだけでは決めず、公式workloadの数値正当性と安定完走、実際のlinkとrank配置、同一条件の複数runによる性能の順で判断する。OFIは上記SIGBUSによりmulti-nodeの受入条件を満たさない一方、`craype-network-ucx`と`cray-mpich-ucx/8.1.15`を揃えたUCX構成は2/4ノードの公式workloadを完走したため、現環境の標準構成にはUCXを採用する。OFIが将来正常化した場合だけ、同一source、toolchain、rank配置、node数、workloadで複数回比較し、双方が成立すれば高速な方、一方だけ成立すれば成立する方を選ぶ。
 
+2026-10-07の主催者のノート（tasks 4.3）で、既定のOFIのSIGBUSは`FI_OFI_RXM_USE_SRX=0`または`FI_VERBS_PREFER_XRC=0`で避けられると分かった。この方針どおり、Basic（scotch、CPU固定、4ノード、150 step）のままtransportだけを替えて比べた。どちらもSIGBUSなしで完走し、最終のCdはUCXと同じだったが、UCXより遅かった。`FI_OFI_RXM_USE_SRX=0`は交互に3本ずつで+0.77%（Issue #56）、`FI_VERBS_PREFER_XRC=0`は1本ずつで+0.50%（Issue #60、`coefficient.dat`もUCXとビット一致）。標準はUCXのままとする。
+
 UCX実行ではAOCL LibMをlinkするが、AOCL LibMemはpreloadしない。2ノード診断PBS `24882460.pbs101`でLibMemなしのMPI初期化・通信・終了はexit 0、LibMemありではUCX endpoint作成中に`amd_memset`からexit 139となったためである。buildと実行時にはCray MPICH UCX、`libucp`、`libucs`、`libuct`の実linkとlibfabric不在を検査する。
 
 受入証拠はActions `35604759236` / PBS `24972410.pbs101`の2ノード256 ranksと、Actions `35617874675` / PBS `24980854.pbs101`の4ノード512 ranksである。後者は公式parserで149/150 measured iterationsを`VALID`、平均2.909178287342284秒/iteration、標準偏差0.01537712155181442、Cd 0.28404934573921931となり、全4ノードで各128 ranksがlocal rankと同じ一意なCPUへ固定された。IMB 3種は4 MiBまで完走し、4 MiB PingPongは9920.53 MB/s、Allreduceは9.23234 msだった。`gdr_copy`のbuild時v2.3とload時v2.5の不一致、および未使用の`UCX_IB_REG_METHODS`警告は残るが、正当性や完走を損なう事象としては観測されていないためsite stackの警告として追跡する。
