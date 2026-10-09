@@ -506,9 +506,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "trap " in keeper
     assert "--bind-local-rank" in runner
     assert "--solver-launch-arg --depth" not in wrapper
-    assert 'grep -Fq "${aspire2a_mpi_library_root}/libmpi_"' in wrapper
-    assert "libucp.so libucs.so libuct.so" in wrapper
-    assert "if grep -q 'libfabric[.]so'" in wrapper
+    assert 'aspire2a_check_mpi_link "${RUN_DIR}/logs/imb-mpi1-ldd.log"' in wrapper
+    assert 'aspire2a_check_mpi_link "${RUN_DIR}/logs/aocl-runtime-link.log"' in wrapper
+    assert 'if [[ "${aspire2a_mpi_transport}" == ofi ]]; then export FI_VERBS_PREFER_XRC=0; fi' in wrapper
     assert "grep -q '/oneapi/'" in wrapper
     assert "uses: ./.github/workflows/aspire2a.yml" in entry
     assert "contains(github.event.head_commit.message, '[cluster:aspire2a]')" in entry
@@ -525,8 +525,8 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     shared_build = (ROOT / "scripts/build-openfoam.sh").read_text(encoding="utf-8")
     runtime = (ROOT / "platforms/aspire2a/run-openfoam.pbs").read_text(encoding="utf-8")
     assert "aspire2a_toolchain=gnu" in selection
-    assert "aspire2a_network_module=craype-network-ucx" in selection
-    assert "aspire2a_mpi_module=cray-mpich-ucx/8.1.15" in selection
+    assert "aspire2a_network_module=craype-network-ofi" in selection
+    assert "aspire2a_mpi_module=cray-mpich/8.1.15" in selection
     assert "PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2" in toolchain
     assert "aocc/5.0 PrgEnv-aocc/8.3.3 craype-x86-milan aocl/5.1.0-aocc5.0" in toolchain
     assert "aspire2a_cc=gcc" in toolchain
@@ -537,8 +537,11 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert "aspire2a_mpi_launcher=mpiexec" in toolchain
     assert 'module swap craype-network-ofi "${aspire2a_network_module' in toolchain
     assert 'module swap cray-mpich "${aspire2a_mpi_module' in toolchain
-    assert "aspire2a_mpi_transport=ucx" in toolchain
-    assert 'test "${CRAYPE_NETWORK_TARGET:' in toolchain
+    assert "aspire2a_mpi_transport=${CRAYPE_NETWORK_TARGET:" in toolchain
+    assert 'test "${aspire2a_network_module}" = "craype-network-${aspire2a_mpi_transport}"' in toolchain
+    assert 'grep -Fq "${aspire2a_mpi_library_root}/libmpi_" "${listing}"' in toolchain
+    assert "for ucx_library in libucp.so libucs.so libuct.so" in toolchain
+    assert "grep -q 'libfabric[.]so' \"${listing}\"" in toolchain
     assert "intel" not in toolchain.lower()
     assert "mkl" not in toolchain.lower()
     assert "AOCL_MODULE=" in build
@@ -553,15 +556,16 @@ def test_aspire2a_toolchains_use_cray_mpich_and_aocl() -> None:
     assert 'if grep -Fq "${aspire2a_aocl_libmem}" "${RUN_DIR}/logs/aocl-runtime-link.log"' in runtime
     assert "CRAYPE_NETWORK_MODULE=${aspire2a_network_module}" in build
     assert "MPI_TRANSPORT=${aspire2a_mpi_transport}" in build
-    assert "UCX_VERSION=${aspire2a_ucx_version}" in build
-    assert "LIBFABRIC_VERSION=" not in build
+    assert '--compile-flag "${aspire2a_transport_version}"' in build
+    assert 'aspire2a_check_mpi_link "${BUILD_DIR}/logs/simplefoam-ldd.log"' in build
+    assert 'aspire2a_check_mpi_link "${BUILD_DIR}/logs/imb-mpi1-ldd.log"' in build
     assert "IMB_SOURCE_OID=${IMB_SOURCE_OID}" in build
     assert 'make -C "${build_tree}/IMB" CC=cc CXX=CC IMB-MPI1' in build
     assert 'grep -Fq "${FOAM_LIBBIN}/libscotchDecomp.so"' in build
     assert 'ldd -r "${FOAM_LIBBIN}/libfieldFunctionObjects.so"' in build
     assert 'install -m 0755 "${build_tree}/IMB/IMB-MPI1" "${FOAM_APPBIN}/IMB-MPI1"' in build
     assert "module load git/2.39.2" in build
-    assert "aspire2a_ucx_version=" in toolchain
+    assert 'ofi) aspire2a_transport_version="LIBFABRIC_VERSION=$(fi_info --version' in toolchain
     assert "build_use_ccache=true" in build
     assert 'build_ccache_namespace="aspire2a-${aspire2a_toolchain}-${aspire2a_mpi_transport}"' in build
     assert 'CCACHE_REMOTE_STORAGE="file:/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/build-cache/ccache/${aspire2a_toolchain}/${aspire2a_mpi_transport}"' in build
