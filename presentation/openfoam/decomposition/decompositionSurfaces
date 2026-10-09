@@ -1,0 +1,74 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  Decomposition visualization (Issue #39), read by simpleFoam -postProcess -dict system/decompositionSurfaces.
+  Each of the time directories 1, 2 and 3 holds the cellDist (subdomain of each cell) of one decomposition; the
+  surfaces are written once as collated EnSight geometry, with one cellDist per time. interpolate false keeps the
+  value of each cell, so the subdomain borders stay sharp.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      decompositionSurfaces;
+}
+
+#include "include/caseDefinition"
+
+functions
+{
+    readCellDist
+    {
+        type            readFields;
+        libs            (fieldFunctionObjects);
+        fields          (cellDist);
+    }
+
+    decomposition
+    {
+        type            surfaces;
+        libs            (sampling);
+        surfaceFormat   ensight;
+        formatOptions
+        {
+            ensight
+            {
+                format          binary;
+                collateTimes    true;
+            }
+        }
+        fields          (cellDist);
+        surfaces
+        {
+            // The car (the patches of the forces).
+            car
+            {
+                type        patch;
+                patches     ($forcesWallPatches);
+                interpolate false;
+            }
+            // The whole domain cut along the car's centre line, and at the height of the wheel axles.
+            centrePlane
+            {
+                type        cuttingPlane;
+                point       (0 0 0);
+                normal      (0 1 0);
+                interpolate false;
+            }
+            wheelPlane
+            {
+                type        cuttingPlane;
+                point       (0 0 0);
+                normal      (0 0 1);
+                interpolate false;
+            }
+            // Across the car at the middle of the wheelbase.
+            crossPlane
+            {
+                type        cuttingPlane;
+                point       (1.40009 0 0);
+                normal      (1 0 0);
+                interpolate false;
+            }
+        }
+    }
+}

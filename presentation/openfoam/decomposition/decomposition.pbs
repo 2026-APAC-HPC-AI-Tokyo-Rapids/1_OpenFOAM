@@ -1,0 +1,44 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -l select=1:ncpus=4:mem=240gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#
+# Decomposition visualization (Issue #39), on one shared node of ASPIRE-2A with the Basic build. Splits the official 65M mesh
+# into the 512 subdomains of the 4-node runs three times: the case default hierarchical (16 8 4), Basic's scotch, and the
+# final Bonus' multiLevel (4 2 4 16). decomposePar -cellDist writes the subdomain of every cell; the three cellDist fields go to
+# time directories 1, 2 and 3, and one simpleFoam -postProcess pass samples them on the car surface and two planes
+# (decompositionSurfaces).
+#
+#   qsub -P <project> -v SCRIPT_DIR=<submission/openfoam/run>,OPENFOAM_DIR=<build>,CASE_SOURCE=<case>,MESH_ARCHIVE=<mesh>,CASE_DIR=<new dir>,SURFACES_DICT=<decompositionSurfaces> decomposition.pbs
+set -euo pipefail
+source "${SCRIPT_DIR}/environment.sh"
+
+# The case as in run/prepare.pbs, with 512 subdomains.
+mkdir -p "${CASE_DIR}/logFiles"
+cp -a "${CASE_SOURCE}/." "${CASE_DIR}/"
+cd "${CASE_DIR}"
+tar -xzf "${MESH_ARCHIVE}" -C constant
+cp system/controlDict.noWrite system/controlDict
+cp system/fvSolution.fixedIter system/fvSolution
+cp "${SURFACES_DICT}" system/decompositionSurfaces
+cp system/decomposeParDict system/decomposeParDict.shipped
+sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1512;/" system/include/caseDefinition
+restore0Dir
+
+time_dir=0
+for method in hierarchical scotch multiLevel; do
+  time_dir=$(( time_dir + 1 ))
+  sed -i -E "s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${method};/" system/include/caseDefinition
+  cp system/decomposeParDict.shipped system/decomposeParDict
+  if [[ "${method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains (4 2 4 16);\n}\n' >> system/decomposeParDict; fi
+  decomposePar -constant -cellDist -force -fileHandler uncollated > "logFiles/decomposePar-${method}.log" 2>&1
+  rm -rf processor*
+  mkdir "${time_dir}"
+  cell_dist=$(find 0 constant -maxdepth 1 -name cellDist)
+  mv "${cell_dist}" "${time_dir}/cellDist"
+  cp 0/U 0/p 0/k 0/omega 0/nut 0/nuTilda "${time_dir}/"
+done
+
+simpleFoam -postProcess -dict system/decompositionSurfaces -time '1:3' -fileHandler uncollated > logFiles/postProcess.log 2>&1
+grep -c 'Time = ' logFiles/postProcess.log
