@@ -131,7 +131,7 @@
 - Not why: fewer faces between nodes. Re-ordering ranks to cut those faces by 92 % changed nothing.
 - One single slow run (5.03 s, 2026-09-27) first made us drop scotch. Since then: 3 or more runs per side, alternated, one condition per commit.
 
-図：`figures/fig05_decomposition_basic.png`
+図：`figures/fig05_decomposition_basic.png`。分割そのものの絵は`decomposition/decomposition-subdomains.png`（Box。hierarchicalは座標軸に沿った薄い板、scotchは塊。サブ領域間の面は431万対293万）。
 
 メモ（1分）：
 - 不均衡と境界面数の相関（hierarchicalでr = −0.37）、Waitallの減少は、CrayPATのrank別の値です（#38）。rankの並べ替え（`MPICH_RANK_REORDER_METHOD=3`）でノード間の面を92 %減らしても速さが変わらなかったので、ノード間の通信は律速ではありません（#36 B）。
@@ -151,7 +151,7 @@
 
 - Hardware counters (1 node, AMD uProf): with the patches, L1 refills from DRAM fall 17 % while instructions fall only 4 % — the same math with less data moved.
 
-図：`figures/fig03_changes_4node.png`（変更ごとの前後、同時期の対照）。表は`tab03_bonus_changes`。
+図：`figures/fig03_changes_4node.png`（変更ごとの前後、同時期の対照）。表は`tab03_bonus_changes`。multiLevelの分割は`decomposition/decomposition-numa-basic-vs-bonus.png`（Box。ノードとNUMA領域ごとの塊）。
 
 メモ（1分30秒）：
 - 方針：「メモリを速くする」のではなく「運ぶデータを減らす」。スライド3の memory-bound という診断から来ています。
