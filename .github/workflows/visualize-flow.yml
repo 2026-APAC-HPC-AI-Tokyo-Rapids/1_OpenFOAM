@@ -1,0 +1,93 @@
+name: ASPIRE-2A flow visualization run
+
+# 一時的な可視化用run（Issue #39）。発表で流れを見せるため、Basicの4ノード（512 rank、scotch、150反復）を提出用の単独スクリプト
+# （submission/openfoam/run）でそのまま流す。ケースのcontrolDict.noWriteへpresentation/openfoam/flow/flowVisualizationの
+# function objectだけを足し、断面・車体表面・全圧ゼロ面・流線をpostProcessing/へ書き出す。計測runではないので、時間は比較に
+# 使わない。ビルドは、mainのBasic runが再利用している未改変v2512のビルドを使う。出力はhome-labの成果物保管庫へ置き、作業
+# ディレクトリを削除する。動画を作り終えたら、このworkflowは削除する。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aspire2a-flow-visualization
+
+jobs:
+  visualize:
+    name: 可視化用の出力を足したBasicの4ノードrun
+    runs-on: [self-hosted, home-lab]
+    timeout-minutes: 1440
+    defaults:
+      run:
+        shell: aspire2a-shell --github-shell {0}
+    env:
+      # OpenFOAM-v2512（5a55da3f）とThirdParty v2512（1eb94326）の未改変ビルド。UCX、GCC 11.2、AOCL-LibM。
+      # mainのBasic run（例：Actions 37888149985、#60の対照）が再利用しているもの。
+      BUILD_ARCHIVE: /scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/builds/37888149985.tar.zst
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+    steps:
+      - name: スクリプトとケースを取得
+        uses: actions/checkout@v7
+
+      - name: スクリプト、ケース、ビルドを作業ディレクトリへ置く
+        run: |
+          work="/scratch/users/industry/ai-hpc/apacsc14/openfoam/flow-visualization/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "WORK=${work}" >> "${GITHUB_ENV}"
+          mkdir -p "${work}/runs" "${work}/collect"
+          cp -a submission/openfoam/run benchmark/occDrivAerStaticMesh "${work}/"
+          cp presentation/openfoam/flow/flowVisualization "${work}/occDrivAerStaticMesh/system/"
+          sed -i 's|^    #include "wallShearStress"$|&\n    #include "flowVisualization"|' "${work}/occDrivAerStaticMesh/system/controlDict.noWrite"
+          grep -A1 '^    #include "wallShearStress"$' "${work}/occDrivAerStaticMesh/system/controlDict.noWrite" | grep -qx '    #include "flowVisualization"'
+          platforms/aspire2a/stage-openfoam-runtime.sh "${BUILD_ARCHIVE}" "${BUILD_ARCHIVE%.tar.zst}.build-sidecar.json" "${work}/build-basic"
+          cp "${BUILD_ARCHIVE%.tar.zst}.build-sidecar.json" "${work}/collect/build-sidecar.json"
+
+      - name: 4ノードのrunを投入
+        run: |
+          submitted=$(OPENFOAM_DIR="${WORK}/build-basic" CASE_SOURCE="${WORK}/occDrivAerStaticMesh" WORK_ROOT="${WORK}/runs" "${WORK}/run/submit.sh" 4 basic)
+          printf '%s\n' "${submitted}" | tee "${WORK}/collect/jobs.txt"
+          echo "CASE_DIR=$(sed -n 's/^case=//p' <<< "${submitted}")" >> "${GITHUB_ENV}"
+          echo "WAIT_JOBS=$(sed -n 's/^prepare=//p' <<< "${submitted}") $(sed -n 's/^solve=//p' <<< "${submitted}")" >> "${GITHUB_ENV}"
+
+      - name: 実行の終了を待つ
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
+          while true; do
+            if accounting=$(aspire2a-shell qstat -fx ${WAIT_JOBS}); then failures=0; else failures=$((failures + 1)); [[ "${failures}" -lt 12 ]] || exit 1; sleep 60; continue; fi
+            states=$(awk '/^Job Id:/ {id=$3} /job_state = / {print id, $3}' <<< "${accounting}")
+            printf '%s\n' "${states}" | tr '\n' ' '
+            echo
+            if ! grep -qv ' F$' <<< "${states}"; then break; fi
+            sleep 120
+          done
+          awk '/^Job Id:/ {id=$3} /Exit_status = / {print id, $3}' <<< "${accounting}" | tee /dev/stderr | awk '$2 != 0 {bad=1} END {exit bad}'
+
+      - name: 出力とログをまとめる
+        if: always() && env.CASE_DIR != ''
+        run: |
+          collect="${WORK}/collect"
+          for job in ${WAIT_JOBS}; do qstat -fx "${job}" > "${collect}/pbs-${job}.txt" 2>&1 || true; done
+          cp -a "${CASE_DIR}/logFiles" "${CASE_DIR}/postProcessing" "${CASE_DIR}/system/controlDict" "${CASE_DIR}/system/flowVisualization" "${CASE_DIR}.prepare.log" "${CASE_DIR}.solve.log" "${collect}/" || true
+          tar -C "${collect}" -cf - . | zstd -q -T4 -o "${WORK}/flow-visualization.tar.zst"
+          ls -la "${WORK}/flow-visualization.tar.zst"
+          du -sh "${collect}"/postProcessing/* || true
+          grep 'Average wall-clock time per time step' "${collect}/logFiles/50_simpleFoam.log" || true
+
+      - name: 出力をhome-labの成果物保管庫へ置く
+        if: always() && env.CASE_DIR != ''
+        shell: home-lab-shell {0}
+        run: |
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/aspire2a/flow-visualization"
+          install -d -m 0750 "${destination}"
+          aspire2a-shell --pull "${WORK}/flow-visualization.tar.zst" "${destination}"
+          ls -la "${destination}"
+          printf '### Flow visualization outputs\n\n- https://mizuha-dev.com/files/openfoam-artifacts/%s/aspire2a/flow-visualization/flow-visualization.tar.zst\n' "${GITHUB_RUN_ID}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 作業ディレクトリを削除
+        if: always() && env.WORK != ''
+        run: |
+          if [[ -n "${WAIT_JOBS:-}" ]]; then qdel ${WAIT_JOBS} 2>/dev/null || true; fi
+          rm -rf -- "${WORK:?}"

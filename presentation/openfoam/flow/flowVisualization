@@ -1,0 +1,166 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  Visualization outputs for the presentation (Issue #39). Not part of any measured run.
+
+  Included from the functions dictionary of controlDict, after the case's own function objects, so that cp and
+  wallShearStress are already updated when these sample them. Everything is written by the master rank under
+  postProcessing/, which run/solve.pbs copies back from node-local storage.
+
+  - flowPlanes: the centre plane (y = 0) and a horizontal plane through the wheels (z = 0) around the car and its wake,
+    every 5 iterations, to show how the 150 iterations develop the flow.
+  - flowCar: the car's surface (the patches of the forces) at iteration 150.
+  - flowTotalPressure, flowWake: the surface where the total pressure coefficient is 0 (where the flow has lost its
+    energy: the boundary layer and the wake) at iteration 150.
+  - flowStreamLines: streamlines from a rake 0.7 m in front of the car at iteration 150.
+
+  Car: nose at x = -0.8 m, rear at x = 3.8 m, |y| < 0.9 m, ground at z = -0.3176 m, roof at about z = 1.1 m.
+\*---------------------------------------------------------------------------*/
+
+flowPlanes
+{
+    type            surfaces;
+    libs            (sampling);
+    writeControl    timeStep;
+    writeInterval   5;
+    surfaceFormat   ensight;
+    formatOptions
+    {
+        ensight
+        {
+            format          binary;
+            collateTimes    true;
+        }
+    }
+    fields          (U p);
+    interpolationScheme cellPoint;
+    surfaces
+    {
+        centrePlane
+        {
+            type        cuttingPlane;
+            point       (0 0 0);
+            normal      (0 1 0);
+            bounds      (-3 -0.5 -0.32) (15 0.5 3.5);
+            interpolate true;
+        }
+        wheelPlane
+        {
+            type        cuttingPlane;
+            point       (0 0 0);
+            normal      (0 0 1);
+            bounds      (-3 -3.5 -0.5) (15 3.5 0.5);
+            interpolate true;
+        }
+    }
+}
+
+flowCar
+{
+    type            surfaces;
+    libs            (sampling);
+    writeControl    timeStep;
+    writeInterval   150;
+    surfaceFormat   vtk;
+    formatOptions
+    {
+        vtk
+        {
+            format          binary;
+        }
+    }
+    fields          (p cp wallShearStress);
+    surfaces
+    {
+        car
+        {
+            type        patch;
+            patches     ($forcesWallPatches);
+            interpolate false;
+        }
+    }
+}
+
+flowTotalPressure
+{
+    type            pressure;
+    libs            (fieldFunctionObjects);
+    mode            totalCoeff;
+    result          CpTotal;
+    p               p;
+    U               U;
+    rho             rhoInf;
+    rhoInf          1;
+    pInf            $pref;
+    UInf            $Uinf;
+    executeControl  timeStep;
+    executeInterval 150;
+    writeControl    writeTime;
+}
+
+flowWake
+{
+    type            surfaces;
+    libs            (sampling);
+    writeControl    timeStep;
+    writeInterval   150;
+    surfaceFormat   vtk;
+    formatOptions
+    {
+        vtk
+        {
+            format          binary;
+        }
+    }
+    fields          (U CpTotal);
+    interpolationScheme cellPoint;
+    surfaces
+    {
+        totalPressureZero
+        {
+            type        isoSurface;
+            isoField    CpTotal;
+            isoValue    0;
+            bounds      (-1.5 -1.5 -0.32) (10 1.5 2);
+            interpolate true;
+        }
+    }
+}
+
+flowStreamLines
+{
+    type            streamLine;
+    libs            (fieldFunctionObjects);
+    writeControl    timeStep;
+    writeInterval   150;
+    setFormat       vtk;
+    U               U;
+    fields          (U p);
+    direction       forward;
+    lifeTime        5000;
+    trackLength     0.01;
+    bounds          (-3 -3 -0.32) (12 3 3);
+    cloud           flowParticleTracks;
+    seedSampleSet
+    {
+        type        cloud;
+        axis        xyz;
+        points
+        (
+            (-1.5 -1.05 -0.27) (-1.5 -0.9 -0.27) (-1.5 -0.75 -0.27) (-1.5 -0.6 -0.27) (-1.5 -0.45 -0.27) (-1.5 -0.3 -0.27) (-1.5 -0.15 -0.27) (-1.5 0.0 -0.27) (-1.5 0.15 -0.27) (-1.5 0.3 -0.27) (-1.5 0.45 -0.27) (-1.5 0.6 -0.27) (-1.5 0.75 -0.27) (-1.5 0.9 -0.27) (-1.5 1.05 -0.27)
+            (-1.5 -1.05 -0.17) (-1.5 -0.9 -0.17) (-1.5 -0.75 -0.17) (-1.5 -0.6 -0.17) (-1.5 -0.45 -0.17) (-1.5 -0.3 -0.17) (-1.5 -0.15 -0.17) (-1.5 0.0 -0.17) (-1.5 0.15 -0.17) (-1.5 0.3 -0.17) (-1.5 0.45 -0.17) (-1.5 0.6 -0.17) (-1.5 0.75 -0.17) (-1.5 0.9 -0.17) (-1.5 1.05 -0.17)
+            (-1.5 -1.05 -0.07) (-1.5 -0.9 -0.07) (-1.5 -0.75 -0.07) (-1.5 -0.6 -0.07) (-1.5 -0.45 -0.07) (-1.5 -0.3 -0.07) (-1.5 -0.15 -0.07) (-1.5 0.0 -0.07) (-1.5 0.15 -0.07) (-1.5 0.3 -0.07) (-1.5 0.45 -0.07) (-1.5 0.6 -0.07) (-1.5 0.75 -0.07) (-1.5 0.9 -0.07) (-1.5 1.05 -0.07)
+            (-1.5 -1.05 0.03) (-1.5 -0.9 0.03) (-1.5 -0.75 0.03) (-1.5 -0.6 0.03) (-1.5 -0.45 0.03) (-1.5 -0.3 0.03) (-1.5 -0.15 0.03) (-1.5 0.0 0.03) (-1.5 0.15 0.03) (-1.5 0.3 0.03) (-1.5 0.45 0.03) (-1.5 0.6 0.03) (-1.5 0.75 0.03) (-1.5 0.9 0.03) (-1.5 1.05 0.03)
+            (-1.5 -1.05 0.13) (-1.5 -0.9 0.13) (-1.5 -0.75 0.13) (-1.5 -0.6 0.13) (-1.5 -0.45 0.13) (-1.5 -0.3 0.13) (-1.5 -0.15 0.13) (-1.5 0.0 0.13) (-1.5 0.15 0.13) (-1.5 0.3 0.13) (-1.5 0.45 0.13) (-1.5 0.6 0.13) (-1.5 0.75 0.13) (-1.5 0.9 0.13) (-1.5 1.05 0.13)
+            (-1.5 -1.05 0.23) (-1.5 -0.9 0.23) (-1.5 -0.75 0.23) (-1.5 -0.6 0.23) (-1.5 -0.45 0.23) (-1.5 -0.3 0.23) (-1.5 -0.15 0.23) (-1.5 0.0 0.23) (-1.5 0.15 0.23) (-1.5 0.3 0.23) (-1.5 0.45 0.23) (-1.5 0.6 0.23) (-1.5 0.75 0.23) (-1.5 0.9 0.23) (-1.5 1.05 0.23)
+            (-1.5 -1.05 0.33) (-1.5 -0.9 0.33) (-1.5 -0.75 0.33) (-1.5 -0.6 0.33) (-1.5 -0.45 0.33) (-1.5 -0.3 0.33) (-1.5 -0.15 0.33) (-1.5 0.0 0.33) (-1.5 0.15 0.33) (-1.5 0.3 0.33) (-1.5 0.45 0.33) (-1.5 0.6 0.33) (-1.5 0.75 0.33) (-1.5 0.9 0.33) (-1.5 1.05 0.33)
+            (-1.5 -1.05 0.43) (-1.5 -0.9 0.43) (-1.5 -0.75 0.43) (-1.5 -0.6 0.43) (-1.5 -0.45 0.43) (-1.5 -0.3 0.43) (-1.5 -0.15 0.43) (-1.5 0.0 0.43) (-1.5 0.15 0.43) (-1.5 0.3 0.43) (-1.5 0.45 0.43) (-1.5 0.6 0.43) (-1.5 0.75 0.43) (-1.5 0.9 0.43) (-1.5 1.05 0.43)
+            (-1.5 -1.05 0.53) (-1.5 -0.9 0.53) (-1.5 -0.75 0.53) (-1.5 -0.6 0.53) (-1.5 -0.45 0.53) (-1.5 -0.3 0.53) (-1.5 -0.15 0.53) (-1.5 0.0 0.53) (-1.5 0.15 0.53) (-1.5 0.3 0.53) (-1.5 0.45 0.53) (-1.5 0.6 0.53) (-1.5 0.75 0.53) (-1.5 0.9 0.53) (-1.5 1.05 0.53)
+            (-1.5 -1.05 0.63) (-1.5 -0.9 0.63) (-1.5 -0.75 0.63) (-1.5 -0.6 0.63) (-1.5 -0.45 0.63) (-1.5 -0.3 0.63) (-1.5 -0.15 0.63) (-1.5 0.0 0.63) (-1.5 0.15 0.63) (-1.5 0.3 0.63) (-1.5 0.45 0.63) (-1.5 0.6 0.63) (-1.5 0.75 0.63) (-1.5 0.9 0.63) (-1.5 1.05 0.63)
+            (-1.5 -1.05 0.73) (-1.5 -0.9 0.73) (-1.5 -0.75 0.73) (-1.5 -0.6 0.73) (-1.5 -0.45 0.73) (-1.5 -0.3 0.73) (-1.5 -0.15 0.73) (-1.5 0.0 0.73) (-1.5 0.15 0.73) (-1.5 0.3 0.73) (-1.5 0.45 0.73) (-1.5 0.6 0.73) (-1.5 0.75 0.73) (-1.5 0.9 0.73) (-1.5 1.05 0.73)
+            (-1.5 -1.05 0.83) (-1.5 -0.9 0.83) (-1.5 -0.75 0.83) (-1.5 -0.6 0.83) (-1.5 -0.45 0.83) (-1.5 -0.3 0.83) (-1.5 -0.15 0.83) (-1.5 0.0 0.83) (-1.5 0.15 0.83) (-1.5 0.3 0.83) (-1.5 0.45 0.83) (-1.5 0.6 0.83) (-1.5 0.75 0.83) (-1.5 0.9 0.83) (-1.5 1.05 0.83)
+            (-1.5 -1.05 0.93) (-1.5 -0.9 0.93) (-1.5 -0.75 0.93) (-1.5 -0.6 0.93) (-1.5 -0.45 0.93) (-1.5 -0.3 0.93) (-1.5 -0.15 0.93) (-1.5 0.0 0.93) (-1.5 0.15 0.93) (-1.5 0.3 0.93) (-1.5 0.45 0.93) (-1.5 0.6 0.93) (-1.5 0.75 0.93) (-1.5 0.9 0.93) (-1.5 1.05 0.93)
+            (-1.5 -1.05 1.03) (-1.5 -0.9 1.03) (-1.5 -0.75 1.03) (-1.5 -0.6 1.03) (-1.5 -0.45 1.03) (-1.5 -0.3 1.03) (-1.5 -0.15 1.03) (-1.5 0.0 1.03) (-1.5 0.15 1.03) (-1.5 0.3 1.03) (-1.5 0.45 1.03) (-1.5 0.6 1.03) (-1.5 0.75 1.03) (-1.5 0.9 1.03) (-1.5 1.05 1.03)
+            (-1.5 -1.05 1.13) (-1.5 -0.9 1.13) (-1.5 -0.75 1.13) (-1.5 -0.6 1.13) (-1.5 -0.45 1.13) (-1.5 -0.3 1.13) (-1.5 -0.15 1.13) (-1.5 0.0 1.13) (-1.5 0.15 1.13) (-1.5 0.3 1.13) (-1.5 0.45 1.13) (-1.5 0.6 1.13) (-1.5 0.75 1.13) (-1.5 0.9 1.13) (-1.5 1.05 1.13)
+            (-1.5 -1.05 1.23) (-1.5 -0.9 1.23) (-1.5 -0.75 1.23) (-1.5 -0.6 1.23) (-1.5 -0.45 1.23) (-1.5 -0.3 1.23) (-1.5 -0.15 1.23) (-1.5 0.0 1.23) (-1.5 0.15 1.23) (-1.5 0.3 1.23) (-1.5 0.45 1.23) (-1.5 0.6 1.23) (-1.5 0.75 1.23) (-1.5 0.9 1.23) (-1.5 1.05 1.23)
+        );
+    }
+}
