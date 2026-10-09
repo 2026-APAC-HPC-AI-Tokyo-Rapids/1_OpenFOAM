@@ -209,7 +209,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 
 **Title:** What did not work, what we learned, and how to reproduce it
 
-- Did not help (3 runs each): `-march=znver3`, AOCC 5.0, `-O2`, LTO (all within 0.13 %); OpenFOAM communication switches; weighted or METIS partitions (+1.5 % to +6 %); SMT (5.7× slower).
+- Did not help: `-march=znver3`, AOCC 5.0, `-O2`, LTO (3 runs each, all within 0.13 %); GCC PGO (+0.13 %); OpenFOAM communication switches; OFI (+0.77 %) or UCX over RC (−0.01 %) instead of UCX over UD; the GAMG coarsest level on fewer ranks (−0.25 % to +4.95 %); weighted or METIS partitions (+1.5 % to +6 %); SMT (5.7× slower).
 - Learned: measure what actually runs, not what was requested; one job is one data point; prove "same math" bit for bit.
 - Reproduce: `build/build.pbs` and `run/submit.sh 1|2|4` with plain `qsub`; checked by re-running them on 2026-10-07.
 
@@ -341,7 +341,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - （メモ）Gadiの利用停止のことは自分からは言いません。「ノードが空いていた」は言いません（今回、4ノードは4時間以上、qdevの1ノードは3時間以上待った記録があります）。数字の出典は`platforms/gadi/README.md`（inode上限212,100、2026-08-17の3件同時の`Disk quota exceeded`）と、ASPIRE-2Aの`lfs quota`（100 TB、2億inode、2026-10-07）です。
 
 **Q2. MPI waiting is large. Why didn't MPI tuning help?**
-- Most of the MPI time is waiting: ranks that finish early wait at the next exchange or global sum. Per-rank MPI time ranges from 20 to 37 s. Library or switch tuning cannot remove that wait; only less work or better balance can. The OpenFOAM communication switches we tried gave no gain.
+- Most of the MPI time is waiting: ranks that finish early wait at the next exchange or global sum. Per-rank MPI time ranges from 20 to 37 s. Library or switch tuning cannot remove that wait; only less work or better balance can. The OpenFOAM communication switches we tried gave no gain. Two later checks agree: UCX over RC raised the IMB bandwidth between nodes by 55 % but changed a step by −0.01 % (Basic) and −0.16 % (Bonus), and moving the GAMG coarsest level, which issues 81 % of the `MPI_Allreduce` calls, from 512 ranks to 32 changed it by −0.25 %.
 
 **Q3. Why did you first reject scotch and then adopt it?**
 - One run on 2026-09-27 took 5.03 s/step, an outlier from a slow period. When we alternated three runs of each in the same period, scotch was 10.5 % faster. Since then we never decide from a single run.
@@ -398,7 +398,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5 % faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
 
 **Q20. What would you do next?**
-- The global sums: about half of the MPI time is `MPI_Allreduce`, mostly the global sums of the linear solvers. And the remaining imbalance between ranks, whose cause we have only narrowed down (Q21).
+- The remaining imbalance between ranks, whose cause we have only narrowed down (Q21): balance each stage of a step, for example with weights from measured per-rank times. Making the global sums cheaper (the GAMG coarsest level on fewer ranks) or the network faster (UCX over RC) did not help (Q2).
 
 **Q21. Do you know where the imbalance between ranks comes from?**
 - Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions, and most of it is still unexplained.
@@ -416,5 +416,5 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 ## 根拠
 
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
-- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56（OFIとUCX）。
+- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56（OFIとUCX）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。

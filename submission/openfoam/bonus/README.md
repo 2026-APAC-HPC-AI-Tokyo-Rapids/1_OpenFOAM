@@ -92,9 +92,26 @@ rank's arrays fit less well in cache, so reading the matrix once instead of thre
 counters on 1 node support this for the four patches together: the demand refills from DRAM fall by 17 % while the instructions
 fall by 4 % (`../analysis/README.md`, "Hardware counters"). We have not measured each patch, or 4 nodes, with counters.
 
+## Tried and not adopted
+
+Each candidate was compared with the configuration it would have changed, on 4 nodes. We adopt a change only if it is at
+least 1 % faster than its control.
+
+| Candidate | Result | What we learned |
+|---|---|---|
+| `multiLevel` with cell weights (1 + the cell's share of its points) | +2.2 % (weight × 2), +6.1 % (× 12) | Static weights unbalance the cell counts; even cell counts matter most. |
+| METIS with two constraints (cells and faces) | +1.46 % | Better face balance, but 18 % more processor faces. |
+| GAMG coarsest level gathered on one master for all 512 ranks (`processorAgglomerator masterCoarsest`) | +4.95 % (40 steps) | Gathering to one rank and solving there costs more than the global sums it saves. |
+| The same with one master per node (`nProcessorsPerMaster 128`) or per NUMA domain (`16`) | +1.02 %, −0.25 % (single runs; Cd within 0.002 % of the control) | The coarsest level issues 81 % of the `MPI_Allreduce` calls, but moving it changes little: the MPI time is mostly waiting for slower ranks. |
+| UCX over RC between nodes instead of UD | −0.16 % (4 runs each, ranges overlapping) | Below our threshold; the same check on Basic gave −0.01 %. |
+
 ## Files
 
 - `patches/`: the four source patches.
 - `dicts/`: `caseDefinition` and `decomposeParDict` of the 4-node run.
-- `results/<n>node/`: `simpleFoam.log` and `coefficient.dat` of the fastest Bonus run.
+- `results/<n>node/`: the fastest Bonus run of each node count: `simpleFoam.log`, `coefficient.dat`, the logs of the
+  preparation steps (`decomposePar.log`, `renumberMesh.log`, `potentialFoam.log`, `applyBoundaryLayer.log`) and the PBS
+  output (`job-output.log`). `1node/` and `2node/` also hold the `caseDefinition`, `controlDict` and `decomposeParDict` of
+  that run; this `decomposeParDict` is the copy our scripts recorded, with `$nCores` and `$decompositionMethod` replaced by
+  their values.
 - `f3-baseline/<n>node/`: `simpleFoam.log` and `coefficient.dat` of the pre-change baseline.

@@ -98,7 +98,8 @@ These are the files OpenFOAM read in the 4-node run. Only the edits that Basic (
   Everything else is as shipped.
 - `controlDict`: the shipped `controlDict.noWrite` with `endTime 150`. All function objects are kept.
 - `decomposeParDict`: the shipped file, unchanged. It takes `numberOfSubdomains` and `method` from `caseDefinition`.
-- The 1- and 2-node runs differ only in `nCores` (128, 256) and `endTime` (40, 80).
+- The 1- and 2-node runs differ only in `nCores` (128, 256) and `endTime` (40, 80). Their `caseDefinition` and
+  `controlDict` are in `results/1node/` and `results/2node/`.
 - As in `Allrun`: `fvSolution` is the shipped `fvSolution.fixedIter`, and `0/` comes from `0.orig/`. `fvSchemes` and the mesh
   are unchanged.
 
@@ -139,6 +140,8 @@ One run per node count, the fastest of the repeated runs. The files are:
 - `simpleFoam.log` and `coefficient.dat` (copied from `postProcessing/forceCoeffsAll/0/`).
 - `decomposePar.log`, `renumberMesh.log`, `potentialFoam.log` and `applyBoundaryLayer.log`.
 - `job-output.log`: the PBS job output.
+- `caseDefinition` and `controlDict` (1 and 2 nodes): the files that run read. The 4-node ones are in `dicts/`, and
+  `decomposeParDict` is the shipped file at every node count.
 
 `scaling/scaling.txt` lists every run with its PBS job ID.
 
@@ -201,6 +204,13 @@ Each comparison ran on 4 nodes with 150 steps, with 3 runs per side in the same 
   - No gain: the OpenFOAM communication switches we tried (`topoControl`, `nbx.tuning`, `pbufs.tuning`). `commsType scheduled`
     stopped with a floating-point exception in GAMG, so we could not use it.
   - SMT with 2 ranks per core (1024 ranks) was about 5.7 times slower. We stopped that run after 22 steps.
+- **Checked later, each against Basic runs in the same period** (not adopted):
+  - GCC profile-guided optimisation (`-fprofile-generate` on the official 1-node run, then `-fprofile-use`): 2.917802 against
+    2.913900 s/step on 4 nodes (+0.13 %), 13.334152 against 13.324118 on 1 node (+0.08 %), one run each.
+    `coefficient.dat` bit-identical.
+  - UCX over RC between nodes (`UCX_TLS=rc,sm,self`) instead of the default UD: 2.9192 against 2.9194 s/step (−0.01 %,
+    4 alternated runs each). The IMB bandwidth rose (1 MiB Sendrecv, 6.7 to 10.4 GB/s), so the transfer between nodes is not
+    what a step waits for.
 
 ## Scaling (`scaling/scaling.txt`)
 

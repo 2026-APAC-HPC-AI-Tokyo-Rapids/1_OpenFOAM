@@ -638,10 +638,14 @@ def tables(output):
     table(output, "tab03_bonus_changes", ["Change", "What it removes", "Why the result is the same", "4 nodes (runs before v after)"], change_rows, [0.19, 0.33, 0.31, 0.17])
     rejected_rows = [
         ["Compiler: -march=znver3, AOCC 5.0, -O2, LTO (Basic)", "Within ±0.1 % of the control", "Code generation does not limit the run time"],
+        ["GCC profile-guided optimisation (Basic)", "+0.13 % (1 v 1, same period), +0.08 % at 1 node; Cd bit-identical", "The hot loops wait on memory and on other ranks"],
         ["Scotch tree coefficients domains / domainWeights (Basic)", "−0.82 % at 4 nodes, none at 1 and 2 nodes", "Fewer cross-node faces, more faces in total; below our 1 % threshold"],
         ["Weighted multiLevel cells (Bonus)", "+2.2 % (weight ×2), +6.1 % (×12)", "Static weights unbalance the cell counts; even cell counts matter most"],
         ["METIS two-constraint partition (Bonus)", "+1.46 %", "Better face balance, but 18 % more processor faces"],
         ["OpenFOAM comm switches (Basic)", "No gain; commsType scheduled crashed in GAMG", "MPI time is mostly waiting for slower ranks"],
+        ["OFI with FI_OFI_RXM_USE_SRX=0 instead of UCX (Basic)", "+0.77 % (3 v 3, alternated)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
+        ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01 % Basic, −0.16 % Bonus (4 v 4 each)", "IMB bandwidth +55 %, yet a step does not wait on inter-node transfer"],
+        ["GAMG coarsest level on fewer ranks (Bonus)", "One master: +4.95 % (40 steps); per node +1.02 %, per NUMA −0.25 % (1 v 1)", "It issues 81 % of the Allreduce calls, but the wait is for slower ranks"],
         ["SMT, 2 ranks per core (Basic)", "About 5.7 × slower (stopped after 22 steps)", "More ranks on the same cores do not help this solver"],
         ["Overlap of halo exchange and computation", "Under 1 % available (stack samples)", "Led to removing discarded exchanges instead (0003)"],
         ["File I/O in the timed steps", "About 0.01 % of the run time", "Not a factor"],
