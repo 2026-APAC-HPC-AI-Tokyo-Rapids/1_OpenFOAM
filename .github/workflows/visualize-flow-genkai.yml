@@ -1,0 +1,96 @@
+name: Genkai flow visualization run
+
+# 一時的な可視化用run（Issue #39）。ASPIRE-2Aの4ノードが空かないため、同じ公式ケースを玄界で流す。玄界のBasicと同じ4ノード
+# 448 rank（scotch）、150反復で、玄界のケースキャッシュにある分割済みのケースから始め、controlDict.noWriteへ
+# presentation/openfoam/flow/flowVisualizationのfunction objectだけを足す（presentation/openfoam/flow/visualize-genkai.pjm）。
+# 計測runではないので、時間は比較に使わない。出力はhome-labの成果物保管庫へ置き、作業ディレクトリを削除する。
+# 動画を作り終えたら、このworkflowは削除する。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: genkai-flow-visualization
+
+jobs:
+  visualize:
+    name: 可視化用の出力を足した玄界の4ノードrun
+    runs-on: [self-hosted, home-lab]
+    timeout-minutes: 1440
+    defaults:
+      run:
+        shell: genkai-shell --github-shell {0}
+    env:
+      # mainの玄界runが再利用している未改変v2512のビルド（Intel oneAPI 2025.1、Intel MPI、linux64IcxDPInt32Opt）。
+      BUILD_ARCHIVE: /home/pj26000080/share/openfoam-build/builds/35722802934.tar.zst
+      # 448分割（scotch）の分割済みケース。ケースのファイルとメッシュは今のものと同じ（case_identity e3db1aba…）。
+      CASE_CACHE: /home/pj26000080/share/openfoam-case-cache/4e2fa5a5a32a8d0685315e53c4ef5a05258f422fee06a0a91bbc7545140849a1
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+    steps:
+      - name: 設定を取得
+        uses: actions/checkout@v7
+
+      - name: ビルドと設定を作業ディレクトリへ置く
+        run: |
+          work="/fast/pj26000080/flow-visualization/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "WORK=${work}" >> "${GITHUB_ENV}"
+          echo "RUN_DIR=${work}" >> "${GITHUB_ENV}"
+          mkdir -p "${work}/build" "${work}/collect" "${work}/logs"
+          sidecar="${BUILD_ARCHIVE%.tar.zst}.build-sidecar.json"
+          jq -c '{source_commits, compile_flags}' "${sidecar}"
+          cp "${sidecar}" "${work}/collect/build-sidecar.json"
+          cp "${CASE_CACHE}/manifest.json" "${work}/collect/case-cache-manifest.json"
+          tar -I zstd -xf "${BUILD_ARCHIVE}" -C "${work}/build" --exclude='*.o' --exclude='./OpenFOAM/applications' --exclude='./ThirdParty/build' --exclude='./ThirdParty/sources' --exclude='*.cmake' --exclude='CMakeFiles' --exclude='CMakeCache.txt' --exclude='compile_commands.json' --exclude='install_manifest.txt' --exclude='Makefile'
+          cp presentation/openfoam/flow/flowVisualization presentation/openfoam/flow/visualize-genkai.pjm "${work}/"
+
+      - name: 4ノードのrunを投入
+        run: |
+          submitted=$(pjsub -L rscgrp=a-batch -L node=4 --mpi proc=448 -x "BUILD_DIR=${WORK}/build,CASE_CACHE=${CASE_CACHE},WORK=${WORK}" -o "${WORK}/logs/%j.pjm.log" -j -N flow_visualization "${WORK}/visualize-genkai.pjm")
+          printf '%s\n' "${submitted}" | tee "${WORK}/collect/pjsub.txt"
+          job_id=$(grep -o 'Job [0-9]*' <<< "${submitted}" | awk '{print $2}')
+          test -n "${job_id}"
+          echo "PJM_JOB_ID=${job_id}" >> "${GITHUB_ENV}"
+
+      - name: 実行の終了を待つ
+        shell: bash
+        run: |
+          while true; do
+            if /opt/actions-runner-shells/genkai-shell --github-shell "${GITHUB_WORKSPACE}/platforms/genkai/wait-openfoam-job.sh"; then
+              break
+            else
+              status=$?
+            fi
+            [[ "${status}" -eq 75 ]] || exit "${status}"
+          done
+
+      - name: 出力とログをまとめる
+        if: always() && env.PJM_JOB_ID != ''
+        run: |
+          collect="${WORK}/collect"
+          case_dir="${WORK}/occDrivAerStaticMesh"
+          pjstat -H -v "${PJM_JOB_ID}" > "${collect}/pjstat.txt" 2>&1 || true
+          cp -a "${WORK}/logs/." "${collect}/"
+          cp -a "${case_dir}/logs" "${collect}/logFiles" || true
+          cp -a "${case_dir}/postProcessing" "${case_dir}/system/controlDict" "${case_dir}/system/flowVisualization" "${collect}/" || true
+          tar -C "${collect}" -cf - . | zstd -q -T4 -o "${WORK}/flow-visualization.tar.zst"
+          ls -la "${WORK}/flow-visualization.tar.zst"
+          du -sh "${collect}"/postProcessing/* || true
+          grep 'Average wall-clock time per time step' "${collect}/logFiles/50_simpleFoam.log" || true
+
+      - name: 出力をhome-labの成果物保管庫へ置く
+        if: always() && env.PJM_JOB_ID != ''
+        shell: home-lab-shell {0}
+        run: |
+          destination="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${GITHUB_RUN_ID}/genkai/flow-visualization"
+          install -d -m 0750 "${destination}"
+          genkai-shell --pull "${WORK}/flow-visualization.tar.zst" "${destination}"
+          ls -la "${destination}"
+          printf '### Flow visualization outputs\n\n- https://mizuha-dev.com/files/openfoam-artifacts/%s/genkai/flow-visualization/flow-visualization.tar.zst\n' "${GITHUB_RUN_ID}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 作業ディレクトリを削除
+        if: always() && env.WORK != ''
+        run: |
+          if [[ -n "${PJM_JOB_ID:-}" ]]; then pjdel "${PJM_JOB_ID}" 2>/dev/null || true; fi
+          rm -rf -- "${WORK:?}"

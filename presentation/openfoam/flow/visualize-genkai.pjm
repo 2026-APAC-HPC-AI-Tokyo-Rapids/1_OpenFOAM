@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#PJM -L elapse=01:00:00
+#
+# Flow visualization run on Genkai (Issue #39), for when ASPIRE-2A has no free nodes. The official case with the
+# flowVisualization function objects added to controlDict.noWrite, 150 iterations on 4 nodes with 112 ranks each (scotch,
+# 448 subdomains), as the Genkai Basic runs. It starts from a decomposed case of the Genkai case cache, as those runs do, and
+# runs the rest of Allrun with Allrun's switches. Not a measured run.
+#
+#   pjsub -L rscgrp=a-batch -L node=4 --mpi proc=448 -x BUILD_DIR=<dir>,CASE_CACHE=<dir>,WORK=<dir> visualize-genkai.pjm
+set -euo pipefail
+: "${BUILD_DIR:?unpacked build is required}"
+: "${CASE_CACHE:?decomposed case cache is required}"
+: "${WORK:?work directory is required}"
+
+module purge
+module load intel/2025.1.3 impi
+# As platforms/genkai/run-openfoam.pjm: keep a user-installed GCC that has cpp but no cc1 off the PATH, so that the coded
+# function objects compile with the GCC tools of the OS.
+user_local_bin="${HOME}/.local/bin:"
+export PATH="${PATH//${user_local_bin}/}"
+# OpenFOAM's scripts use unset variables and return non-zero codes while they set up.
+set +eu
+source "${BUILD_DIR}/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+source "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
+set -eu
+export I_MPI_FABRICS=shm:ofi
+export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
+launch=(mpirun -np 448 -ppn 112 -genv PATH "${PATH}")
+
+case_dir="${WORK}/occDrivAerStaticMesh"
+cp -a --reflink=auto "${CASE_CACHE}/case" "${case_dir}"
+chmod -R u+w "${case_dir}"
+cd "${case_dir}"
+cp "${WORK}/flowVisualization" system/
+sed -i -E 's/^(endTime[[:space:]]+)[0-9]+;/\1150;/' system/controlDict
+sed -i 's|^    #include "wallShearStress"$|&\n    #include "flowVisualization"|' system/controlDict
+grep -A1 '^    #include "wallShearStress"$' system/controlDict | grep -qx '    #include "flowVisualization"'
+restore0Dir -processor
+"${launch[@]}" renumberMesh -constant -overwrite -parallel -fileHandler uncollated > logs/20_renumberMesh.log 2>&1
+"${launch[@]}" potentialFoam -initialiseUBCs -parallel -fileHandler uncollated > logs/30_potentialFoam.log 2>&1
+"${launch[@]}" applyBoundaryLayer -ybl 0.0450244 -parallel -fileHandler uncollated > logs/40_applyBoundaryLayer.log 2>&1
+"${launch[@]}" simpleFoam -parallel -fileHandler uncollated > logs/50_simpleFoam.log 2>&1
+grep 'Average wall-clock time per time step' logs/50_simpleFoam.log
+touch "${WORK}/run-success"
