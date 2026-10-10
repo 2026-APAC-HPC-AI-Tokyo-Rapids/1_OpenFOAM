@@ -98,7 +98,7 @@ def test_parse_pbs_accounting_rejects_wrong_cpu_count() -> None:
     raw = b"Job Id: 1.gadi-pbs\n    Resource_List.ncpus = 48\n"
     try:
         parse_pbs_accounting(
-            raw, expected_job_id="1.gadi-pbs", expected_nodes=1, expected_ranks=104
+            raw, expected_job_id="1.gadi-pbs", expected_nodes=1, expected_ncpus=104
         )
     except ValueError as error:
         assert "CPU allocation" in str(error)
@@ -272,3 +272,37 @@ def test_aspire2a_four_node_profile_exports_short_diagnostic(tmp_path: Path, ide
     assert "OPENFOAM_DIAGNOSTIC_ITERATIONS=40" in exported
     assert request["iterations"] == 150
     assert request["diagnostic_iterations"] == 40
+
+
+def test_aspire2a_half_node_placement_requests_64_ranks_and_accounts_whole_nodes(tmp_path: Path, identities: dict[str, object]) -> None:
+    """Four nodes with 64 ranks each (Issue #61): 64 MPI processes per 128-core chunk, accounted as 4 x 128 CPUs."""
+    protocol = ASPIRE2A_PROTOCOL.with_name("openfoam-v2-protocol-aspire2a-scotch-4n-256r.toml")
+    manifest = init_run(None, tmp_path, identities, registry_path=REGISTRY)
+    run_dir = manifest.parents[1]
+    provision = tmp_path / "provision"
+    (provision / "platforms/aspire2a").mkdir(parents=True)
+    execution = provision / "platforms/aspire2a/run-openfoam.pbs"
+    execution.write_bytes(b"#!/bin/sh\n")
+    launcher = tmp_path / "launcher"
+    launcher.write_bytes(b"fixture")
+    launcher.chmod(0o755)
+    outcome = submit_pbs_run(
+        manifest_path=manifest,
+        runtime_dir=run_dir,
+        protocol_path=protocol,
+        pbs_script_repository_path="platforms/aspire2a/run-openfoam.pbs",
+        execution_script=execution,
+        provision_dir=provision,
+        qsub_path=launcher,
+        execute=lambda argv: subprocess.CompletedProcess(argv, 0, b"25700000.pbs101\n", b""),
+    )
+    request = json.loads(outcome.request_path.read_text())
+    assert request["ranks"] == 256
+    assert "select=4:ncpus=128:mpiprocs=64:ompthreads=1:mem=400gb" in request["argv"]
+    (run_dir / "control/job-entry.json").write_text(json.dumps({"scheduler_job_id": outcome.job_id}) + "\n")
+    def accounting(ncpus: int) -> bytes:
+        return f"Job Id: {outcome.job_id}\n    job_state = F\n    Exit_status = 0\n    Resource_List.ncpus = {ncpus}\n    resources_used.walltime = 00:20:00\n".encode()
+    path = capture_pbs_terminal(manifest_path=manifest, runtime_dir=run_dir, protocol_path=protocol, job_id=outcome.job_id, qstat_path=launcher, execute=lambda argv: subprocess.CompletedProcess(argv, 0, accounting(512), b""))
+    assert json.loads(path.read_text())["nnumu"]["value"] == 4
+    with pytest.raises(ValueError, match="CPU allocation"):
+        parse_pbs_accounting(accounting(256), expected_job_id=outcome.job_id, expected_nodes=4, expected_ncpus=512)

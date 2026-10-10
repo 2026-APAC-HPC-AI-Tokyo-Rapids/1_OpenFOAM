@@ -16,6 +16,7 @@ def test_selected_decomposition_presets_are_self_consistent() -> None:
         "aspire2a-scotch-1n-128r": (1, 128, "cray-mpich-ucx"),
         "aspire2a-scotch-2n-256r": (2, 256, "cray-mpich-ucx"),
         "aspire2a-scotch-4n-512r": (4, 512, "cray-mpich-ucx"),
+        "aspire2a-scotch-4n-256r": (4, 256, "cray-mpich-ucx"),
         "aspire2a-multilevel-1n-128r": (1, 128, "cray-mpich-ucx"),
         "aspire2a-multilevel-2n-256r": (2, 256, "cray-mpich-ucx"),
         "aspire2a-multilevel-4n-512r": (4, 512, "cray-mpich-ucx"),
@@ -33,7 +34,7 @@ def test_selected_decomposition_presets_are_self_consistent() -> None:
             protocol = RunProtocol.load(path, purpose)
             assert protocol.nodes == nodes
             assert protocol.ranks == ranks
-            expected_ranks_per_node = 128 if preset.startswith("aspire2a-") else (104 if preset.startswith("gadi-") else (112 if ranks == 448 else 120))
+            expected_ranks_per_node = (64 if preset.endswith("-4n-256r") else 128) if preset.startswith("aspire2a-") else (104 if preset.startswith("gadi-") else (112 if ranks == 448 else 120))
             assert protocol.ranks_per_node == expected_ranks_per_node
             assert protocol.transport_policy == transport
             assert protocol.workload_id == "occDrivAerStaticMesh-65M"

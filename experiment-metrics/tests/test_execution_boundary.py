@@ -472,10 +472,12 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '--imb-bin "${imb_bin}"' in wrapper
     assert "cpu_bind_list=" not in wrapper
     assert "--solver-launch-arg --cpu-bind" in wrapper
-    assert "--solver-launch-arg depth" in wrapper
-    assert "--solver-launch-arg -d" in wrapper
+    assert 'solver_cpu_bind="list:' in wrapper
+    assert '"${PROVISION_DIR}/platforms/aspire2a/rank-cpus.txt"' in wrapper
+    assert "--solver-launch-arg depth" not in wrapper
+    assert "--solver-launch-arg -d" not in wrapper
     assert "LD_PRELOAD" not in wrapper
-    assert '--solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh"' in wrapper
+    assert '--solver-launch-arg "${solver_cpu_bind}" --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh"' in wrapper
     assert '-ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/keep-rank-affinity.sh" &' in wrapper
     assert 'kill "${keeper_pid}"' in wrapper
     assert "--multi-level-domains 4,2,4,16" in wrapper
@@ -484,7 +486,7 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "decomposition-4n.txt" in wrapper
     assert 'experiment_preset="aspire2a-${decomposition}-1n-128r"' in workflow
     assert 'experiment_preset="aspire2a-${decomposition}-2n-256r"' in workflow
-    assert 'experiment_preset="aspire2a-${decomposition}-4n-512r"' in workflow
+    assert 'experiment_preset="aspire2a-${decomposition}-4n-256r"' in workflow
     assert 'platforms/aspire2a/decomposition-1n.txt' in workflow
     assert 'platforms/aspire2a/decomposition-2n.txt' in workflow
     assert 'platforms/aspire2a/decomposition-4n.txt' in workflow
@@ -492,7 +494,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert '*-kahip-*) decomposition_method=kahip' in runner
     assert '*-metis-*) decomposition_method=metis' in runner
     assert '*-ptscotch-*) decomposition_method=ptscotch' in runner
-    assert "--bind-rank-placement" in wrapper
+    assert "--bind-rank-placement" not in wrapper
+    assert "platforms/aspire2a/rank-cpus.txt" in workflow
+    assert "platforms/aspire2a/measure-triad.sh" in workflow
     assert "platforms/aspire2a/exec-local-numa.sh" in workflow
     assert "platforms/aspire2a/keep-rank-affinity.sh" in workflow
     assert "mpi-rank-affinity" not in workflow
@@ -500,9 +504,9 @@ def test_aspire2a_uses_cray_pbs_and_separate_storage() -> None:
     assert "experiment-metrics/src/experiment_metrics/pbs_scheduler.py" in workflow
     assert "experiment-metrics/src/experiment_metrics/imb.py" in workflow
     assert "platforms/aspire2a/bind-local-rank.sh" not in workflow
-    assert 'exec numactl --membind="$(( PMI_LOCAL_RANK / 16 ))" "$@"' in numa_wrapper
+    assert 'exec numactl --membind="$(( rank_cpus[PMI_LOCAL_RANK] / 16 ))" "$@"' in numa_wrapper
     assert 'pgrep -u "${user}" -x simpleFoam' in keeper
-    assert 'taskset -pc "${local_rank_of[${pid}]}" "${pid}"' in keeper
+    assert 'taskset -pc "${cpu_of[${pid}]}" "${pid}"' in keeper
     assert "trap " in keeper
     assert "--bind-local-rank" in runner
     assert "--solver-launch-arg --depth" not in wrapper

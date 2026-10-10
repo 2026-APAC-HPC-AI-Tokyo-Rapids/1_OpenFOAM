@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#PBS -l walltime=00:40:00
+#PBS -l walltime=01:00:00
 
 set -euo pipefail
 
@@ -50,6 +50,9 @@ for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "
 if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
 if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
 ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
+read -r -a rank_cpus < "${PROVISION_DIR}/platforms/aspire2a/rank-cpus.txt"
+(( ${#rank_cpus[@]} == ranks_per_node ))
+solver_cpu_bind="list:$(IFS=:; printf '%s' "${rank_cpus[*]}")"
 solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
 case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
 case "${OPENFOAM_MPI_PROCS}" in
@@ -83,13 +86,15 @@ if (( OPENFOAM_NODES > 1 )); then
   io_ranks="${io_ranks% })"
   distributed_root_args=(--openfoam-arg -hostRoots --openfoam-arg "${host_roots}" --openfoam-arg -ioRanks --openfoam-arg "${io_ranks}")
 fi
-# 計算ノードでは、PALSのCPU固定とNUMA固定がMPI_Init中にプロセスの外から外される（Issue #36 A3）。各rankは
-# exec-local-numa.shのnumactl --membindでメモリを自身のNUMAノードへ固定し、各nodeのkeep-rank-affinity.shが
-# simpleFoamのmain threadをlocal rankと同じCPUへ固定し直す。
+# 計算ノードでは、PALSのCPU固定とNUMA固定がMPI_Init中にプロセスの外から外される（Issue #36 A3）。各rankのCPUは
+# rank-cpus.txtのlocal rank番目（Issue #61）で、PALSの--cpu-bind listで起動し、exec-local-numa.shのnumactl --membindで
+# メモリをそのCPUのNUMAノードへ固定し、各nodeのkeep-rank-affinity.shがsimpleFoamのmain threadを同じCPUへ固定し直す。
 "${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/keep-rank-affinity.sh" &
 keeper_pid=$!
 run_status=0
-"${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --bind-rank-placement --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --solver-launch-arg --cpu-bind --solver-launch-arg depth --solver-launch-arg -d --solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1 || run_status=$?
+"${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --solver-launch-arg --cpu-bind --solver-launch-arg "${solver_cpu_bind}" --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1 || run_status=$?
 kill "${keeper_pid}"
 wait "${keeper_pid}" || true
+# solverとIMBの後に、同じノードでDRAM帯域をtriadで測る（Issue #61）。計測区間の外で行い、失敗してもsolverの結果は有効。
+if (( run_status == 0 )); then cc -O3 -fopenmp -Wall -Wextra -Werror -std=c11 -o "${PROVISION_DIR}/platforms/aspire2a/triad" "${PROVISION_DIR}/platforms/aspire2a/triad.c" && "${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/measure-triad.sh" "${PROVISION_DIR}/platforms/aspire2a/triad" || printf '%s\n' 'triadの計測に失敗しました。solverの結果は有効です' >&2; fi
 exit "${run_status}"

@@ -106,7 +106,7 @@ def submit_pbs_run(
             "-q",
             protocol.resource_group,
             "-l",
-            f"select={protocol.nodes}:ncpus=128:mpiprocs=128:ompthreads=1:mem=400gb",
+            f"select={protocol.nodes}:ncpus=128:mpiprocs={protocol.ranks_per_node}:ompthreads=1:mem=400gb",
             "-l",
             "place=excl",
         ]
@@ -220,11 +220,13 @@ def capture_pbs_terminal(
     _atomic_json(run_dir / "control/scheduler-terminal.json", terminal)
     if completed.returncode != 0:
         raise ValueError("PBS accounting command failed")
+    request = _json(run_dir / "control/scheduler-request.json")
+    aspire2a = request["pbs_script"]["repository_path"].startswith("platforms/aspire2a/")
     accounting = parse_pbs_accounting(
         completed.stdout,
         expected_job_id=job_id,
         expected_nodes=protocol.nodes,
-        expected_ranks=protocol.ranks,
+        expected_ncpus=protocol.nodes * 128 if aspire2a else protocol.ranks,
     )
     path = run_dir / "control/scheduler-accounting.json"
     _atomic_json(path, accounting)
@@ -239,7 +241,7 @@ def capture_pbs_terminal(
 
 
 def parse_pbs_accounting(
-    raw: bytes, *, expected_job_id: str, expected_nodes: int, expected_ranks: int
+    raw: bytes, *, expected_job_id: str, expected_nodes: int, expected_ncpus: int
 ) -> dict[str, object]:
     try:
         text = raw.decode("utf-8")
@@ -253,7 +255,7 @@ def parse_pbs_accounting(
             r"^[ \t]+([A-Za-z_][A-Za-z0-9_.-]*) = ([^\r\n]*)$", text, flags=re.MULTILINE
         )
     )
-    if _integer(attributes.get("Resource_List.ncpus")) != expected_ranks:
+    if _integer(attributes.get("Resource_List.ncpus")) != expected_ncpus:
         raise ValueError("PBS accounting CPU allocation differs from protocol")
     walltime = attributes.get("resources_used.walltime", "")
     cpu_time = attributes.get("resources_used.cput", "")
