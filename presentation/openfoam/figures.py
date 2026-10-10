@@ -372,6 +372,70 @@ def counters(output):
     save(figure, output, "fig17_counters")
 
 
+PLACEMENT_CONFIGS = {"Basic": BASIC, "baseline": CONTROL, "Bonus": BONUS}
+PLACEMENT_NAMES = {"Basic": "Basic", "baseline": "Bonus without the patches", "Bonus": "Bonus"}
+
+
+def placement_runs():
+    times = defaultdict(list)
+    for row in read("memory_placement.csv"):
+        times[(row["configuration"], row["placement"])].append(float(row["s_per_step"]))
+    bandwidth = defaultdict(list)
+    for row in read("triad_placement.csv"):
+        bandwidth[row["layout"]].append(float(row["best_GBps"]))
+    return times, {layout: statistics.fmean(values) for layout, values in bandwidth.items()}
+
+
+def cores_or_memory(output):
+    times, bandwidth = placement_runs()
+    steps = [
+        ("Half the cores\n128 → 64 ranks per node\non the same 16 memory channels", "full128", "spread64", 2.0),
+        ("Half the memory channels and L3\nthe same 64 ranks per node\non 8 instead of 16 channels", "spread64", "packed64", 1.0),
+    ]
+    figure, axis = plt.subplots(figsize=WIDE)
+    axis.axhline(1, color="#cccccc", linewidth=1, zorder=1)
+    for index, (_, before, after, cores) in enumerate(steps):
+        memory = bandwidth[before] / bandwidth[after]
+        axis.scatter([index - 0.24], [cores], s=160, facecolor="white", edgecolor="#555555", linewidth=1.8, zorder=3, label="if the cores set the speed" if index == 0 else None)
+        axis.text(index - 0.18, cores, f"×{cores:.1f}", ha="left", va="center", fontsize=12, color="#555555")
+        axis.scatter([index + 0.24], [memory], s=160, marker="s", facecolor="white", edgecolor="#555555", linewidth=1.8, zorder=3, label="if memory bandwidth sets the speed\n(triad on the same nodes)" if index == 0 else None)
+        axis.text(index + 0.30, memory, f"×{memory:.2f}", ha="left", va="center", fontsize=12, color="#555555")
+        ratios = []
+        for offset, (config, color) in zip((-0.07, 0, 0.07), PLACEMENT_CONFIGS.items()):
+            ratio = statistics.fmean(times[(config, after)]) / statistics.fmean(times[(config, before)])
+            ratios.append(ratio)
+            axis.scatter([index + offset], [ratio], s=110, color=color, edgecolor="white", linewidth=2, zorder=4, label=PLACEMENT_NAMES[config] if index == 0 else None)
+        axis.text(index, max(ratios) + 0.15, f"measured ×{min(ratios):.2f}–{max(ratios):.2f}", ha="center", fontsize=13, fontweight="bold")
+    axis.set_xticks(range(len(steps)), [name for name, _, _, _ in steps], fontsize=12)
+    axis.set_xlim(-0.75, 1.75)
+    axis.set_ylim(0, 2.6)
+    axis.set_ylabel("4 nodes, step time after / before")
+    axis.legend(loc="lower right", frameon=False)
+    figure.text(0.5, -0.06, "Official metric, 150 steps, 2 runs per condition (ratio of the means). Bandwidth: triad (c = a + 3b) on the same nodes after the solver,\nfull128 / spread64 / packed64 = " + " / ".join(f"{bandwidth[name]:.0f}" for name in ("full128", "spread64", "packed64")) + " GB/s per node. Within each placement pair the decomposition is the same, except 512 → 256 subdomains for\n'half the cores'. Halving the cores changes nothing; halving the channels slows a step as much as the bandwidth drops.", ha="center", fontsize=10.5)
+    figure.tight_layout()
+    save(figure, output, "fig19_cores_or_memory")
+
+
+def memory_placement(output):
+    times, bandwidth = placement_runs()
+    placements = [("full128", "full128\n128 ranks per node\n16 L3, 16 channels"), ("spread64", "spread64\n64 ranks per node\n16 L3, 16 channels"), ("packed64", "packed64\n64 ranks per node\n8 L3, 8 channels")]
+    figure, axis = plt.subplots(figsize=WIDE)
+    for index, (placement, _) in enumerate(placements):
+        for offset, (config, color) in zip((-0.24, 0, 0.24), PLACEMENT_CONFIGS.items()):
+            values = times[(config, placement)]
+            axis.scatter(spread(values, index + offset, 0.08), values, s=60, color=color, edgecolor="white", linewidth=1.5, zorder=3, label=PLACEMENT_NAMES[config] if index == 0 else None)
+            axis.hlines(statistics.fmean(values), index + offset - 0.09, index + offset + 0.09, color=color, linewidth=2.5)
+        top = max(max(times[(config, placement)]) for config in PLACEMENT_CONFIGS)
+        axis.text(index, top + 0.35, f"patches {change(times[('Bonus', placement)], times[('baseline', placement)]):+.1f} %", ha="center", fontsize=13, color=ACCENT)
+    axis.set_xticks(range(len(placements)), [f"{label}\ntriad {bandwidth[placement]:.0f} GB/s" for placement, label in placements], fontsize=12)
+    axis.set_ylim(0, 7.4)
+    axis.set_ylabel("4 nodes, s / step")
+    axis.legend(loc="upper left", frameon=False)
+    figure.text(0.5, -0.05, "Official metric, 150 steps; each dot is one job, the bar its mean. 'Bonus without the patches': the final Bonus (same multiLevel split) with patches 0001-0004 removed.\n'patches': Bonus against that baseline at the same placement. coefficient.dat is bit-identical between spread64 and packed64 of each configuration,\nand between the baseline and the Bonus at each placement.", ha="center", fontsize=10.5)
+    figure.tight_layout()
+    save(figure, output, "fig20_memory_placement")
+
+
 def step_breakdown(output):
     rows = read("step_regions_4node.csv")
     figure, axis = plt.subplots(figsize=WIDE)
@@ -658,7 +722,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, cores_or_memory, memory_placement, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
         make(output)
 
 

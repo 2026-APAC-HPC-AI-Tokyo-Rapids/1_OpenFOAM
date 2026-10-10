@@ -18,6 +18,8 @@
 | `pinning.csv` | CPU/NUMA固定の切り分け（4ノード） | #36 A3 |
 | `step_regions_4node.csv` | 1 stepの区間ごとの経過時間（OpenFOAM組み込みのprofiling、4ノード40 stepの診断run、512 rankの中央値・最小・最大） | #57（Actions 37714968610）の`processor*/40/uniform/profiling` |
 | `counters_1node.csv` | パッチの有無（各2本）のuProf `data_access`のカウンタ。計算部分（MPI、UCX、Pstreamを除く）のrank 16〜112の平均 | #55（37580443881、37583693730、37580444029、37580455271）の`profile/raw/uprof/reports/` |
+| `memory_placement.csv` | 配置だけを変えた4ノードの16本（Basic、パッチを外したBonus、Bonus × full128・spread64・packed64）の公式値と`coefficient.dat`のハッシュ | #61の各runの`results/result.txt`と`results/coefficient.dat` |
+| `triad_placement.csv` | 同じrunのノードごとのtriadの帯域（solverの後に3つの配置で測った値） | #61の各runの`logs/pbs.log` |
 | `start_unpinned.csv` | 最初の状態（hierarchical、固定が外れたまま）の4ノード3本。`decomposition_basic.csv`の固定ありhierarchicalと同時期 | #36 A |
 | `compiler_options.csv` | コンパイラとフラグの比較（4ノード、各3本） | #36 D |
 | `craypat_summary.csv` | CrayPATの3本（Basic、パッチ0002〜0004の前、最終Bonus）の時間 | 各runの`pat-report.txt`のTable 1、2、4 |

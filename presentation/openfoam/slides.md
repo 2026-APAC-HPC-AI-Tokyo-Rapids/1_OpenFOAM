@@ -46,7 +46,7 @@
 |---|---|---|---|---|
 | 1 | Same math, faster on 4 nodes | ParaView（#39）、大きな数字 | 1:00 | 結論と3本柱 |
 | 2 | One node has 8 NUMA domains; this is how we run on it | `fig11_node_layout` | 1:00 | 機械の理解 |
-| 3 | Where the time goes | `fig18_step_breakdown`、`fig09_mpi_breakdown`（Basicの行） | 1:00 | ボトルネックの特定 |
+| 3 | Where the time goes | `fig18_step_breakdown`、`fig19_cores_or_memory` | 1:15 | ボトルネックの特定 |
 | 4 | Basic 1: the launcher's pinning disappears at MPI_Init | `fig06_pinning` | 1:30 | Basic（見せ場） |
 | 5 | Basic 2: scotch splits the mesh better | `fig05_decomposition_basic` | 1:00 | Basic |
 | 6 | Bonus: the same arithmetic, fewer bytes moved | `fig03_changes_4node`、R3の4マス、`fig17_counters` | 1:30 | Bonus |
@@ -93,16 +93,20 @@
 - A step on 4 nodes (OpenFOAM's own profiling, every rank): p solve (GAMG) 26 %, U solve 22 %, k and omega 9 %, function objects 2 %, and 41 % outside the solvers (assembly, gradients, turbulence model).
 - CrayPAT on 4 nodes, 512 ranks (a separate 40-step run): MPI is 19.4 % of the time; the rest is computation.
 - The MPI time is mostly `MPI_Allreduce` (global sums) and `MPI_Waitall` (halo exchange), and it ranges from 20 s to 37 s per rank: early ranks wait for the slowest.
-- The computation is bound by memory traffic: one core per L3 already saturates a node's memory bandwidth (STREAM, about 94 % of peak), and compiler flags change nothing (within 0.13 %).
+- The computation is bound by memory bandwidth, not by the cores. On 4 nodes, 64 ranks per node on all memory channels are as fast as 128 (−1 % to +2 %); the same 64 ranks on half of the channels take 2.1–2.2× as long — as much as the measured bandwidth drops (2.22×).
 - So: (1) keep each rank's memory next to its core, (2) give every rank the same work, (3) move fewer bytes per step.
 
-図：`figures/fig18_step_breakdown.png`（1 stepの内訳）と`figures/fig09_mpi_breakdown.png`（Basicの行だけ）。`fig13_solver_flow`は補足に回すか、小さく添えます。
+図：`figures/fig18_step_breakdown.png`（1 stepの内訳）と`figures/fig19_cores_or_memory.png`（コアを半分にしたときと、メモリチャネルを半分にしたときの時間の倍率）。`fig09_mpi_breakdown`は補足S2で見せます。`fig13_solver_flow`は補足に回すか、小さく添えます。
 
-メモ（1分）：
+メモ（1分15秒）：
 - 「計算・メモリ・MPI・I/Oの円グラフ」にはしません。メモリ待ちは計算の中にあり、MPI待ちには他rankの計算待ちも入っているからです。
 - I/Oは計測区間の約0.01 %（#46）。
 - 内訳はOpenFOAM組み込みのprofilingで、4ノードの40 stepの診断runで測りました（#57）。区間の時間は経過時間で、区間内のMPIの待ちを含みます。
-- 「memory-bound」の根拠は3つ：STREAMでL3あたり1 coreでもノードの帯域が飽和すること（#36、STREAMの数え方で290 GB/s、書き込み時の読み込みを含めると約387 GB/sでカタログ値409.6 GB/sの約94 %）、コンパイラやフラグを変えても0.13 %以内しか変わらないこと（#36 D）、計算部分のIPCが0.36と低いこと（#55のuProf、1ノード）。
+- 最初に制約を1文で言います：ASPIRE-2Aでは利用者がメモリコントローラのカウンタ（DRAM帯域）とIBSを読めません（`perf_event_paranoid=2`）。そこで、ランクの置き場所だけを変える実験で確かめました（#61）。
+- 実験（4ノード、150 step、各2本）：(a) 1ノード128 rankを64 rankにし、16本のメモリチャネルと16個のL3はそのまま使う（コアだけ半分）。(b) 同じ64 rank・同じ分割のまま、使うチャネルとL3を半分（8本・8個）にする。(a)は−1 %〜+2 %でほぼ変わらず、(b)は2.11〜2.20倍。同じノードで測ったtriadの帯域は、(b)で1/2.22でした（274、279、125 GB/s/ノード）。
+- 解釈：演算や、コアごとのメモリ要求の待ち時間（レイテンシ）で決まるなら、(a)で約2倍遅くなるはずです。そうならず、(b)で帯域と同じだけ遅くなったので、時間を決めているのはメモリ帯域です。(b)はL3も半分にしているので、DRAMの帯域とL3の容量の寄与は分けられません（どちらもメモリ側の資源）。
+- 補足の根拠：STREAMではL3あたり1 core（ノード16 core）で帯域が飽和します（#36、290 GB/s）。94 %という数字はSTREAMとカタログ値の比で、solverの使用率ではないので言いません。コンパイラ・フラグ・PGOは±0.13 %以内（#36 D、#59）。
+- 聞かれたら：2つの比較から、1 stepのうち帯域に比例する部分は約95 %、そうでない部分（通信の遅延など）は約0.1 sと見積もれます（L3の寄与も含むので、DRAMだけなら上限側）。
 
 ### 4. Basic 1: the launcher's pinning disappears at MPI_Init
 
@@ -164,7 +168,8 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 
 - 効果はノード数が少ないほど大きい（0002：1ノード−6.4 %、4ノード−2.3 %）。rankあたりのデータが多いほどDRAMから来る量が多いからだ、と説明します。
 - カウンタ（#55、`fig17_counters`）：1ノードでパッチの有無を2本ずつ測り、計算部分（MPIを除く）で比べました。cycles −10.8 %、命令数 −4.1 %、L1アクセス −5.8 %、DRAMからのL1 refill −17.2 %、L2へのアクセス（prefetch込み）−9.6 %、IPC 0.36 → 0.39。L2からのrefillは変わりません。「計算は同じで、DRAMから運ぶデータが減った」ことの直接の根拠です。
-- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではありません（uncoreの計測は権限がなく使えません）。4ノードでは測っていません。
+- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではありません（uncoreの計測は権限がなく使えません）。カウンタは1ノードだけです。
+- 4ノードでは、カウンタの代わりに配置の実験で確かめました（#61、`fig20_memory_placement`）。同じ分割・同じ64 rank/ノードで、全チャネルを使うとパッチは−7.9 %、半分のチャネルでは−11.4 %でした（現行の128 rank/ノードでは−9.5 %。パッチを外したbaselineとの比、各2本）。1コアあたりのメモリが少ないほど効くので、効果は運ぶデータを減らしたことによるものです。
 - 各%は別々の実験で、足し合わせません。
 
 ### 7. Same math, proven
@@ -179,6 +184,7 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 
 メモ（30秒）：
 - なぜビット一致するか：浮動小数点の演算そのものと順番を変えていないからです。変えたのはメモリの持ち方と、捨てられていた仕事だけ。
+- 4ノード512 rankでは、4つのパッチをすべて外したbaseline（同じmultiLevel分割、2本）とも、最終Bonusの`coefficient.dat`がビット一致しました（#61、`8952a056c8de917d`）。64 rank/ノードの配置でも、baselineとBonusは2つの配置の4本すべてで一致しています。
 - multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.32〜0.33で目安より少し低いですが、Basic（scotch）も同じです（Q12）。
 
 ### 8. From 3.67 to 2.60 s/step
@@ -330,6 +336,24 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - OFI's own spread is also 0.26 %, so the narrow spread of our runs does not come from UCX (Q15).
 - The organisers' other workaround, `FI_VERBS_PREFER_XRC=0` (2026-10-09, one run each beside a UCX run): 2.9338 against 2.9192 s/step (+0.50 %), the same Cd, no SIGBUS.
 
+### S11. Cores or memory? We moved the ranks, not the code（#61）
+
+図：`figures/fig19_cores_or_memory.png`、`figures/fig20_memory_placement.png`
+
+- ASPIRE-2A users cannot read the memory-controller counters or IBS (`perf_event_paranoid=2`), so we changed only where the ranks run. 4 nodes, 150 steps, 2 runs per condition (2026-10-10), every rank pinned to its CPU with its memory on that CPU's NUMA domain.
+- full128: 128 ranks per node (the submitted placement). spread64: 64 ranks per node, 4 per L3, on all 16 L3s and 16 memory channels. packed64: the same 64 ranks and decomposition, 8 per L3, on 8 L3s and 8 channels.
+- Triad on the same nodes after the solver: 274 / 279 / 125 GB/s per node.
+
+| s / step | full128 | spread64 | packed64 | spread64 / full128 | packed64 / spread64 |
+|---|---:|---:|---:|---:|---:|
+| Basic | 2.920 | 2.887 | 6.347 | 0.99 | 2.20 |
+| Bonus without the patches | 2.869 | 2.874 | 6.321 | 1.00 | 2.20 |
+| Bonus | 2.595 | 2.649 | 5.598 | 1.02 | 2.11 |
+| patches (Bonus against the line above) | −9.5 % | −7.9 % | −11.4 % | | |
+
+- Halving the cores changes nothing; halving the channels slows a step as much as the bandwidth drops (2.22×). The patches gain the most where each core has the least memory.
+- `coefficient.dat` is bit-identical between spread64 and packed64 of each configuration, and between the baseline and the Bonus at every placement. Every rank stayed on its CPU (keeper 64/64 or 128/128 on every node).
+
 ---
 
 ## 想定問答
@@ -354,12 +378,13 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 - Static weights moved cells away from an even split: the cell-count imbalance grew to 1.073 with weight ×2. With ×12, the top-level split broke down and the faces between nodes grew five times.
 
 **Q6. Why are the effects different on 1, 2 and 4 nodes?**
-- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (0002: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. The same reasoning fits the super-linear scaling, but we have not measured counters across node counts.
+- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (0002: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. On 4 nodes we tested the same idea by giving each core less memory: with 64 ranks per node the patches gain 7.9 % on all memory channels and 11.4 % on half of them. The same reasoning fits the super-linear scaling, but we have not measured counters across node counts.
 
 **Q7. What is proven and what is not?**
 - Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat`, and the pinning problem (seen in `/proc` during the solve).
+- Shown by experiment on 4 nodes: the step time follows the memory bandwidth, not the number of cores (half the cores: −1 % to +2 %; half the memory channels: 2.1–2.2× slower, as the bandwidth drops 2.22×), and the patches gain more when each core has less memory.
 - Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
-- Not proven: the DRAM traffic in bytes (we cannot read the memory-controller counters), the effect on 4 nodes, and the cache explanation of the super-linear scaling. We present those as hypotheses.
+- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), how much of the memory effect is DRAM bandwidth and how much is L3 capacity, and the cache explanation of the super-linear scaling. We present those as hypotheses.
 
 **Q8. Why rebuild OpenFOAM instead of using the site module?**
 - A single run with the site module gave the same speed (−0.08 %). Our own build records exactly what ran, and the Bonus patches need a build anyway.
@@ -407,6 +432,20 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 **Q22. Is the flow video from your scored run?**
 - No. Benchmark runs write no flow fields (`controlDict.noWrite`), so we ran the same official case once more with output function objects added: on Genkai, 4 nodes, 150 iterations, because ASPIRE-2A had no free nodes that day. The added outputs do not change the computation: its Cd after 150 iterations, 0.28455000886604298, is identical to every digit with Genkai's official 4-node run.
 
+**Q23. How do you know it is memory-bound if you could not read the memory counters?**
+- On ASPIRE-2A users cannot read the memory-controller counters, so we tested it by moving the ranks. On 4 nodes, 64 ranks per node are as fast as 128 when they keep all memory channels, and 2.1–2.2× slower when the same 64 ranks share half of the channels — as much as the measured bandwidth drops. Compiler flags and PGO change nothing (within 0.13 %), and our patches, which keep every operation, gain the most where memory is scarcest.
+- （メモ）コアを半分にした比較は、分割が512から256に変わります。ただ、帯域に比例しない部分は1 stepあたり約0.1 sしかないので、分割の違いで「コアが半分でも同じ速さ」を説明することはできません。チャネルを半分にした比較は、分割もrankも同じです（#61）。
+
+**Q24. Bandwidth or latency?**
+- Bandwidth. If the latency of each core's memory requests set the speed, halving the cores would halve the throughput; it changed by −1 % to +2 %. Halving the memory channels slowed a step 2.1–2.2×, in line with the bandwidth (2.22×).
+- （メモ）1コア2 rankのSMT（#43）では5.7倍遅くなり、どちらとも決められませんでした。今回の配置の実験で決まりました。
+
+**Q25. Most demand refills come from L2. Isn't the data in cache?**
+- Demand refills do not count hardware prefetches. The arrays we stream are brought from DRAM into L2 by the prefetcher, so their loads show up as L2 hits. With the patches, L2 accesses including prefetches fall 10 % and DRAM refills 17 %.
+
+**Q26. MPI is 19 % of a step. How can the step follow the bandwidth?**
+- Most of the MPI time is waiting for the slowest rank, and that rank's computation is bandwidth-bound, so the wait grows and shrinks with it. When we halved the memory channels, the whole step slowed with the bandwidth; only about 0.1 s per step does not scale with it.
+
 ---
 
 ## 発表の準備
@@ -420,5 +459,5 @@ after:  for each cell: read lower/upper/diag/addressing once; update U_x, U_y, U
 ## 根拠
 
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
-- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）。
+- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。
