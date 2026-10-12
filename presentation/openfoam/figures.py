@@ -28,6 +28,7 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle  # noq
 DATA = Path(__file__).resolve().parent / "data"
 BASIC = "#3b6ea8"
 BONUS = "#d9822b"
+BASELINE = "#a23b72"
 CONTROL = "#8c8c8c"
 CANDIDATE = "#2e8b57"
 ACCENT = "#c0392b"
@@ -628,6 +629,118 @@ def storage_flow(output):
     save(figure, output, "fig15_storage_flow")
 
 
+def baseline_runs():
+    runs = defaultdict(list)
+    for row in read("baseline_runs.csv"):
+        if row["configuration"].startswith("baseline"):
+            runs[int(row["nodes"])].append(float(row["s_per_step"]))
+    return runs
+
+
+def baseline_results(output):
+    ours = baseline_runs()
+    theirs = defaultdict(list)
+    for row in read("organiser_reference_aspire2a.csv"):
+        if row["method"] == "hierarchical" and row["setting"] == "defaults":
+            theirs[int(row["nodes"])].append(float(row["s_per_step"]))
+    steps = {1: 40, 2: 80, 4: 150}
+    groups = [("Organisers\nhierarchical", theirs, CONTROL, "white"), ("Our baseline\nhierarchical", ours, BASELINE, BASELINE)]
+    figure, axes = plt.subplots(1, 3, figsize=WIDE)
+    for axis, nodes in zip(axes, (1, 2, 4)):
+        everything = []
+        for position, (_, data, color, face) in enumerate(groups):
+            values = data[nodes]
+            everything += values
+            mean = statistics.fmean(values)
+            axis.scatter(spread(values, position, 0.3), values, s=70, facecolor=face, edgecolor=color if face == "white" else "black", linewidth=1.5 if face == "white" else 0.5, zorder=3)
+            axis.hlines(mean, position - 0.3, position + 0.3, color=color, linewidth=2.5, zorder=2)
+            text = f"{mean:.3f}" if len(values) == 1 else f"{mean:.3f}\n(n = {len(values)}, {min(values):.2f}–{max(values):.2f})"
+            axis.annotate(text, (position, min(values)), textcoords="offset points", xytext=(0, -14), ha="center", va="top", fontsize=11, color="#333333", fontweight="bold" if position == 1 else "normal")
+        axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups], fontsize=11)
+        axis.set_xlim(-0.6, len(groups) - 0.4)
+        axis.set_title(f"{nodes} node{'s' if nodes > 1 else ''} · {steps[nodes]} steps")
+        span = max(max(everything) - min(everything), 0.04 * max(everything))
+        axis.set_ylim(min(everything) - span * 0.6, max(everything) + span * 0.25)
+        axis.grid(axis="y", color="#e6e6e6", linewidth=0.8)
+        axis.set_axisbelow(True)
+    axes[0].set_ylabel("s / step (each point is one job)")
+    one = statistics.fmean(ours[1])
+    efficiency = ", ".join(f"{one / (nodes * statistics.fmean(ours[nodes])):.2f} ({nodes} nodes)" for nodes in (2, 4))
+    figure.text(0.5, -0.1, "Our baseline: our build of v2512 (GCC -O3, Cray MPICH over UCX), the case-default hierarchical split, 128 ranks per node with only the launcher's CPU binding.\n" f"Organisers: ASPIRE-2A notes (tasks 4.3), site module, mpirun with no options, one job each. Splits: ours (16 8 1) / (16 8 2) / (16 8 4); the organisers' 1-node job used (16 4 2).\nParallel efficiency of our baseline against 1 node: {efficiency}. The y-axes do not start at 0.", ha="center", fontsize=10.5, color="#333333")
+    figure.tight_layout()
+    save(figure, output, "fig21_baseline_results")
+
+
+def before_after_scaling(output):
+    runs = defaultdict(list)
+    for nodes, values in baseline_runs().items():
+        runs[("Baseline", nodes)] = values
+    for row in read("final_runs.csv"):
+        runs[(row["configuration"], int(row["nodes"]))].append(float(row["s_per_step"]))
+    nodes = [1, 2, 4]
+    series = [("Baseline", BASELINE, "o"), ("Basic", BASIC, "s"), ("Bonus", BONUS, "D")]
+    figure, (left, right) = plt.subplots(1, 2, figsize=WIDE, gridspec_kw={"width_ratios": [1.2, 1]})
+    for name, color, marker in series:
+        means = [statistics.fmean(runs[(name, n)]) for n in nodes]
+        left.plot(nodes, means, marker=marker, linestyle="-", color=color, linewidth=2.5, markersize=9, label=name)
+        left.annotate(f"{means[0]:.2f}", (nodes[0], means[0]), textcoords="offset points", xytext=(-10, 0), ha="right", va="center", fontsize=11, color="#333333")
+        left.annotate(f"{means[-1]:.2f}", (nodes[-1], means[-1]), textcoords="offset points", xytext=(10, 0), ha="left", va="center", fontsize=11, color="#333333")
+    left.set_xscale("log", base=2)
+    left.set_yscale("log")
+    left.set_xticks(nodes, ["1", "2", "4"])
+    left.set_yticks([2.5, 3, 4, 6, 8, 10, 15], ["2.5", "3", "4", "6", "8", "10", "15"])
+    left.set_ylim(2.25, 17)
+    left.set_xlim(0.62, 5.4)
+    left.minorticks_off()
+    left.set_xlabel("Nodes (128 ranks per node)")
+    left.set_ylabel("s / step (mean of runs)")
+    left.legend(frameon=False, fontsize=11)
+    width = 0.36
+    for offset, (name, color) in zip((-width / 2, width / 2), (("Basic", BASIC), ("Bonus", BONUS))):
+        reduction = [change(runs[(name, n)], runs[("Baseline", n)]) for n in nodes]
+        bars = right.bar([index + offset for index in range(3)], reduction, width, color=color, label=name)
+        right.bar_label(bars, labels=[f"{value:.0f} %" for value in reduction], fontsize=11, padding=2)
+    right.axhline(0, color="black", linewidth=1)
+    right.set_xticks(range(3), ["1", "2", "4"])
+    right.set_xlabel("Nodes")
+    right.set_ylabel("s / step against our baseline (%)")
+    right.set_ylim(-36, 0)
+    right.legend(frameon=False, loc="lower left")
+    efficiency = {name: statistics.fmean(runs[(name, 1)]) / (4 * statistics.fmean(runs[(name, 4)])) for name, _, _ in series}
+    counts = {name: "/".join(str(len(runs[(name, n)])) for n in nodes) for name, _, _ in series}
+    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline measured 2026-10-12 (Issue #62); Basic and Bonus 2026-10-05/06. Basic controls run on 2026-10-12 next to the baseline are within 0.2 % of those means.", ha="center", fontsize=10.5, color="#333333")
+    figure.tight_layout()
+    save(figure, output, "fig22_before_after_scaling")
+
+
+def baseline_profile_tables(output):
+    profile = {(row["tool"], row["metric"]): row["value"] for row in read("baseline_profile_4node.csv")}
+
+    def value(tool, metric):
+        return float(profile[(tool, metric)])
+
+    process = value("CrayPAT", "process time per rank (mean)")
+    mpi = value("CrayPAT", "MPI time per rank (mean)")
+    mpi_range = f"{value('CrayPAT', 'MPI time per rank (min)'):.0f}–{value('CrayPAT', 'MPI time per rank (max)'):.0f} s"
+    by_calls = sorted(((name, value("CrayPAT", f"calls {name}")) for name in ("MPI_Isend", "MPI_Irecv", "MPI_Test", "MPI_Allreduce", "MPI_Waitall", "MPI_Bcast")), key=lambda item: -item[1])[:3]
+    by_time = sorted(((name, value("CrayPAT", f"time {name}")) for name in ("MPI_Waitall", "MPI_Allreduce", "MPI_Bcast", "MPI_Comm_dup", "MPI_Isend")), key=lambda item: -item[1])[:3]
+    rows = [[str(index + 1), f"{calls[0]}   {calls[1]:,.0f}", f"{times[0]}   {times[1]:.1f} s ({100 * times[1] / mpi:.0f} % of MPI)"] for index, (calls, times) in enumerate(zip(by_calls, by_time))]
+    rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s = {100 * mpi / process:.0f} % of {process:.1f} s; per rank {mpi_range}"])
+    table(output, "tab07_baseline_mpi_calls", ["", "Most calls (per rank)", "Most time in MPI (per rank)"], rows, [0.12, 0.36, 0.52], fontsize=14)
+    shares = {row["region"]: 100 * float(row["share_of_step"]) for row in read("baseline_step_regions_4node.csv")}
+    stages = f"p {shares['p solve (GAMG)']:.0f} %, U {shares['U solve']:.0f} %, ω {shares['omega solve']:.0f} %, k {shares['k solve']:.0f} %, function objects {shares['function objects']:.0f} %, rest (assembly, gradients, turbulence model) {shares['rest of the step (assembly, gradients, turbulence model)']:.0f} %"
+    low, median, high = (value("OpenFOAM profiling", f"computation per rank ({which})") for which in ("min", "time.run() minus Pstream; median", "max"))
+    pinned = f"{profile[('/proc', 'ranks pinned to their own core')]} of {profile[('/proc', 'ranks observed during the solve')]} ranks pinned (all allowed on CPUs {profile[('/proc', 'CPUs allowed to every rank')]})"
+    home = 100 * value("/proc", "share of a rank's pages on its home NUMA domain (median)")
+    rows = [
+        ["CrayPAT", "Time and number of every MPI call, per rank", f"MPI {100 * mpi / process:.0f} % of the time, mostly waiting (Waitall, Allreduce); per-rank MPI time {mpi_range}"],
+        ["OpenFOAM profiling", "Time of each solver stage, every rank", f"{stages}; computation per rank {low:.0f}–{high:.0f} s, max / median {high / median:.2f}"],
+        ["AMD uProf", "CPU time per function, one rank per NUMA domain", "Hottest OpenFOAM functions: Gauss–Seidel smoother, residual, A·x (sparse-matrix sweeps)"],
+        ["/proc", "CPU binding and NUMA pages of each rank during the solve", f"{pinned}; median {home:.0f} % of a rank's pages on its own NUMA domain"],
+    ]
+    table(output, "tab08_baseline_profile", ["Tool", "What we measured", "Baseline, 4 nodes, 40-step diagnostic runs"], rows, [0.17, 0.3, 0.53], fontsize=13)
+
+
 def environment_tables(output):
     environment_rows = [
         ["OpenFOAM", "v2512 rebuilt from the official source: GCC 11.2, -O3, AOCL-LibM, label 32, double precision. PBS build job, 16 cores, compiler cache on /scratch", "Same speed as the site module; we know exactly what ran; the Bonus patches need a build anyway"],
@@ -722,7 +835,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, cores_or_memory, memory_placement, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, cores_or_memory, memory_placement, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, baseline_results, before_after_scaling, baseline_profile_tables, tables, environment_tables):
         make(output)
 
 

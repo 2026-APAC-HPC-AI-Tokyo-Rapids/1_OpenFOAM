@@ -1,0 +1,17 @@
+configuration,nodes,actions_run,s_per_step,cd,hosts,source
+"baseline: hierarchical, launcher binding only",1,38219646351,14.5888,0.43305408931961498,x1003c2s2b0n1,#62
+"baseline: hierarchical, launcher binding only",1,38219715650,14.5206,0.43305408931961498,x1003c2s2b0n1,#62
+"baseline: hierarchical, launcher binding only",1,38219739523,14.9595,0.43305408931961498,x1003c2s2b0n1,#62
+"baseline: hierarchical, launcher binding only",1,38226624886,14.3747,0.43305408931961498,x1001c4s0b1n1,#62
+"baseline: hierarchical, launcher binding only",1,38227753979,14.7990,0.43305408931961498,x1002c7s7b1n0,#62
+"baseline: hierarchical, launcher binding only",1,38228886309,14.1587,0.43305408931961498,x1003c5s3b1n1,#62
+"baseline: hierarchical, launcher binding only",2,38219684791,7.4210,0.33732808147340321,x1003c5s4b0n1 x1003c5s6b1n1,#62
+"baseline: hierarchical, launcher binding only",2,38219723942,7.5783,0.33732808147340321,x1001c1s5b1n0 x1001c6s2b0n0,#62
+"baseline: hierarchical, launcher binding only",2,38219746581,7.2829,0.33732808147340321,x1003c0s4b0n1 x1003c2s2b0n1,#62
+"baseline: hierarchical, launcher binding only",4,38218885545,3.6003,0.27356199554825078,x1003c5s4b0n1 x1001c6s2b0n0 x1001c1s5b1n0 x1003c5s6b1n1,#62
+"baseline: hierarchical, launcher binding only",4,38219700707,3.5313,0.27356199554825078,x1002c5s6b0n1 x1002c3s2b0n1 x1002c5s2b1n0 x1001c3s4b1n0,#62
+"baseline: hierarchical, launcher binding only",4,38219731754,3.8170,0.27356199554825078,x1001c5s3b0n1 x1002c5s2b0n1 x1001c4s4b1n0 x1003c2s2b1n0,#62
+"Basic control: scotch, numactl + taskset",1,38219676431,13.3476,0.43598848994661615,x1003c2s2b0n1,#62
+"Basic control: scotch, numactl + taskset",1,38226629068,13.3499,0.43598848994661615,x1002c7s7b1n0,#62
+"Basic control: scotch, numactl + taskset",2,38219692240,6.3574,0.32713924728038718,x1001c2s6b0n1 x1002c3s6b0n1,#62
+"Basic control: scotch, numactl + taskset",4,38219708634,2.9212,0.28404934573921931,x1002c5s2b0n1 x1003c2s2b1n0 x1001c5s3b0n1 x1001c4s4b1n0,#62

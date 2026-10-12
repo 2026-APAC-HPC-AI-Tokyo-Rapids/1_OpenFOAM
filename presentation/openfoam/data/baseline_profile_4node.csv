@@ -1,0 +1,42 @@
+tool,metric,value,unit,actions_run
+CrayPAT,s per step under the profiler (40 steps),3.8496,s,38219766511
+CrayPAT,process time per rank (mean),169.57,s,38219766511
+CrayPAT,MPI time per rank (mean),78.26,s,38219766511
+CrayPAT,calls all MPI,1815335.7,calls per rank,38219766511
+CrayPAT,MPI time per rank (max),112.09,s,38219766511
+CrayPAT,MPI time per rank (median),81.19,s,38219766511
+CrayPAT,MPI time per rank (min),34.80,s,38219766511
+CrayPAT,calls MPI_Isend,566107.3,calls per rank,38219766511
+CrayPAT,calls MPI_Irecv,566107.3,calls per rank,38219766511
+CrayPAT,calls MPI_Test,563645.5,calls per rank,38219766511
+CrayPAT,calls MPI_Allreduce,63085.0,calls per rank,38219766511
+CrayPAT,calls MPI_Waitall,52933.0,calls per rank,38219766511
+CrayPAT,calls MPI_Bcast,1219.0,calls per rank,38219766511
+CrayPAT,time MPI_Waitall,43.103,s per rank,38219766511
+CrayPAT,time MPI_Allreduce,27.617,s per rank,38219766511
+CrayPAT,time MPI_Bcast,2.518,s per rank,38219766511
+CrayPAT,time MPI_Comm_dup,1.796,s per rank,38219766511
+CrayPAT,time MPI_Isend,1.639,s per rank,38219766511
+OpenFOAM profiling,s per step (40 steps; step 40 writes the fields),3.6091,s,38219862855
+OpenFOAM profiling,Pstream time per rank (median),63.41,s,38219862855
+OpenFOAM profiling,Pstream time per rank (min),26.74,s,38219862855
+OpenFOAM profiling,Pstream time per rank (max),88.54,s,38219862855
+OpenFOAM profiling,Pstream reduce per rank (median),23.28,s,38219862855
+OpenFOAM profiling,Pstream wait per rank (median),36.79,s,38219862855
+OpenFOAM profiling,computation per rank (time.run() minus Pstream; median),78.56,s,38219862855
+OpenFOAM profiling,computation per rank (min),53.63,s,38219862855
+OpenFOAM profiling,computation per rank (max),115.02,s,38219862855
+/proc,ranks observed during the solve,512,ranks,38219862855
+/proc,ranks pinned to their own core,0,ranks,38219862855
+/proc,CPUs allowed to every rank,0-255,list,38219862855
+/proc,NUMA nodes allowed to every rank,0-7,list,38219862855
+/proc,share of a rank's pages on its home NUMA domain (median),0.087,fraction,38219862855
+/proc,share of a rank's pages on its home NUMA domain (min),0.029,fraction,38219862855
+/proc,share of a rank's pages on its home NUMA domain (max),0.785,fraction,38219862855
+AMD uProf,s per step under the profiler (40 steps),3.6466,s,38219770656
+AMD uProf,self CPU time GaussSeidelSmoother::smooth (32 sampled ranks),394.57,s,38219770656
+AMD uProf,self CPU time lduMatrix::residual (32 sampled ranks),228.86,s,38219770656
+AMD uProf,self CPU time lduMatrix::Amul (32 sampled ranks),53.05,s,38219770656
+AMD uProf,self CPU time multiply (32 sampled ranks),30.55,s,38219770656
+AMD uProf,self CPU time fv::gaussGrad::gradf (32 sampled ranks),29.22,s,38219770656
+AMD uProf,self CPU time surfaceInterpolationScheme::dotInterpolate (32 sampled ranks),27.73,s,38219770656
