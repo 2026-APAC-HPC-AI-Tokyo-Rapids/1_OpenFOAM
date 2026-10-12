@@ -757,20 +757,23 @@ def baseline_profile_tables(output):
     by_calls = sorted(((name, value("CrayPAT", f"calls {name}")) for name in ("MPI_Isend", "MPI_Irecv", "MPI_Test", "MPI_Allreduce", "MPI_Waitall", "MPI_Bcast")), key=lambda item: -item[1])[:3]
     by_time = sorted(((name, value("CrayPAT", f"time {name}")) for name in ("MPI_Waitall", "MPI_Allreduce", "MPI_Bcast", "MPI_Comm_dup", "MPI_Isend")), key=lambda item: -item[1])[:3]
     rows = [[str(index + 1), f"{calls[0]}   {calls[1]:,.0f}", f"{times[0]}   {times[1]:.1f} s ({100 * times[1] / mpi:.0f} % of MPI)"] for index, (calls, times) in enumerate(zip(by_calls, by_time))]
-    rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s = {100 * mpi / process:.0f} % of {process:.1f} s; per rank {mpi_range}"])
+    rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s, {100 * mpi / process:.0f} % of {process:.1f} s ({mpi_range} per rank)"])
     table(output, "tab07_baseline_mpi_calls", ["4 nodes", "Most calls (per rank, 40-step run)", "Most time in MPI (per rank, 40-step run)"], rows, [0.12, 0.36, 0.52], fontsize=14)
     shares = {row["region"]: 100 * float(row["share_of_step"]) for row in read("baseline_step_regions_4node.csv")}
-    stages = f"p {shares['p solve (GAMG)']:.0f} %, U {shares['U solve']:.0f} %, ω {shares['omega solve']:.0f} %, k {shares['k solve']:.0f} %, function objects {shares['function objects']:.0f} %, rest (assembly, gradients, turbulence model) {shares['rest of the step (assembly, gradients, turbulence model)']:.0f} %"
-    low, median, high = (value("OpenFOAM profiling", f"computation per rank ({which})") for which in ("min", "time.run() minus Pstream; median", "max"))
-    pinned = f"{profile[('/proc', 'ranks pinned to their own core')]} of {profile[('/proc', 'ranks observed during the solve')]} ranks pinned (all allowed on CPUs {profile[('/proc', 'CPUs allowed to every rank')]})"
+    turbulence = shares["omega solve"] + shares["k solve"]
+    outside = shares["rest of the step (assembly, gradients, turbulence model)"]
+    low, high = (value("OpenFOAM profiling", f"computation per rank ({which})") for which in ("min", "max"))
+    pinned = int(profile[("/proc", "ranks pinned to their own core")])
     home = 100 * value("/proc", "share of a rank's pages on its home NUMA domain (median)")
     rows = [
-        ["MPI (CrayPAT)", "Time and number of every MPI call, per rank", f"MPI {100 * mpi / process:.0f} % of the time, mostly waiting (Waitall, Allreduce); per-rank MPI time {mpi_range}"],
-        ["Solver stages (OpenFOAM profiling)", "Time of each solver stage, every rank", f"{stages}; computation per rank {low:.0f}–{high:.0f} s, max / median {high / median:.2f}"],
-        ["Functions (AMD uProf)", "CPU time per function, one rank per NUMA domain", "Hottest OpenFOAM functions: Gauss–Seidel smoother, residual, A·x (sparse-matrix sweeps)"],
-        ["Memory and CPU placement (/proc)", "CPU binding and NUMA pages of each rank during the solve", f"{pinned}; median {home:.0f} % of a rank's pages on its own NUMA domain"],
+        ["MPI (CrayPAT)", "Every MPI call per rank", f"{100 * mpi / process:.0f} % of the time, mostly waiting ({mpi_range} per rank)"],
+        ["Solver stages (OpenFOAM profiling)", "Time per solver stage, every rank", f"p {shares['p solve (GAMG)']:.0f} %, U {shares['U solve']:.0f} %, ω and k {turbulence:.0f} %, outside the solvers {outside:.0f} %. Computation per rank {low:.0f}–{high:.0f} s"],
+        ["Functions (AMD uProf)", "CPU time per function", "Gauss–Seidel, residual and A·x lead (sparse-matrix sweeps)"],
+        ["Memory and CPU placement (/proc)", "CPU binding and NUMA pages per rank", f"{'No rank' if pinned == 0 else f'{pinned} ranks'} pinned, {home:.0f} % of memory on its own NUMA domain (median)"],
     ]
-    table(output, "tab08_baseline_profile", ["Profile (tool)", "What we measured", "Baseline, 4 nodes, 40-step diagnostic runs"], rows, [0.2, 0.27, 0.53], fontsize=13)
+    # A no-break space keeps every number next to its % when a cell wraps.
+    rows = [[cell.replace(" %", " %") for cell in row] for row in rows]
+    table(output, "tab08_baseline_profile", ["Profile (tool)", "What we measured", "Baseline (4 nodes, 40-step runs)"], rows, [0.22, 0.25, 0.53], fontsize=14)
 
 
 def environment_tables(output):
