@@ -758,7 +758,7 @@ def baseline_profile_tables(output):
     by_time = sorted(((name, value("CrayPAT", f"time {name}")) for name in ("MPI_Waitall", "MPI_Allreduce", "MPI_Bcast", "MPI_Comm_dup", "MPI_Isend")), key=lambda item: -item[1])[:3]
     rows = [[str(index + 1), f"{calls[0]}   {calls[1]:,.0f}", f"{times[0]}   {times[1]:.1f} s ({100 * times[1] / mpi:.0f} % of MPI)"] for index, (calls, times) in enumerate(zip(by_calls, by_time))]
     rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s = {100 * mpi / process:.0f} % of {process:.1f} s; per rank {mpi_range}"])
-    table(output, "tab07_baseline_mpi_calls", ["", "Most calls (per rank)", "Most time in MPI (per rank)"], rows, [0.12, 0.36, 0.52], fontsize=14)
+    table(output, "tab07_baseline_mpi_calls", ["4 nodes", "Most calls (per rank, 40-step run)", "Most time in MPI (per rank, 40-step run)"], rows, [0.12, 0.36, 0.52], fontsize=14)
     shares = {row["region"]: 100 * float(row["share_of_step"]) for row in read("baseline_step_regions_4node.csv")}
     stages = f"p {shares['p solve (GAMG)']:.0f} %, U {shares['U solve']:.0f} %, ω {shares['omega solve']:.0f} %, k {shares['k solve']:.0f} %, function objects {shares['function objects']:.0f} %, rest (assembly, gradients, turbulence model) {shares['rest of the step (assembly, gradients, turbulence model)']:.0f} %"
     low, median, high = (value("OpenFOAM profiling", f"computation per rank ({which})") for which in ("min", "time.run() minus Pstream; median", "max"))
