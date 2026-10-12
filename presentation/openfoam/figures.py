@@ -765,12 +765,12 @@ def baseline_profile_tables(output):
     pinned = f"{profile[('/proc', 'ranks pinned to their own core')]} of {profile[('/proc', 'ranks observed during the solve')]} ranks pinned (all allowed on CPUs {profile[('/proc', 'CPUs allowed to every rank')]})"
     home = 100 * value("/proc", "share of a rank's pages on its home NUMA domain (median)")
     rows = [
-        ["CrayPAT", "Time and number of every MPI call, per rank", f"MPI {100 * mpi / process:.0f} % of the time, mostly waiting (Waitall, Allreduce); per-rank MPI time {mpi_range}"],
-        ["OpenFOAM profiling", "Time of each solver stage, every rank", f"{stages}; computation per rank {low:.0f}–{high:.0f} s, max / median {high / median:.2f}"],
-        ["AMD uProf", "CPU time per function, one rank per NUMA domain", "Hottest OpenFOAM functions: Gauss–Seidel smoother, residual, A·x (sparse-matrix sweeps)"],
-        ["/proc", "CPU binding and NUMA pages of each rank during the solve", f"{pinned}; median {home:.0f} % of a rank's pages on its own NUMA domain"],
+        ["MPI (CrayPAT)", "Time and number of every MPI call, per rank", f"MPI {100 * mpi / process:.0f} % of the time, mostly waiting (Waitall, Allreduce); per-rank MPI time {mpi_range}"],
+        ["Solver stages (OpenFOAM profiling)", "Time of each solver stage, every rank", f"{stages}; computation per rank {low:.0f}–{high:.0f} s, max / median {high / median:.2f}"],
+        ["Functions (AMD uProf)", "CPU time per function, one rank per NUMA domain", "Hottest OpenFOAM functions: Gauss–Seidel smoother, residual, A·x (sparse-matrix sweeps)"],
+        ["Memory and CPU placement (/proc)", "CPU binding and NUMA pages of each rank during the solve", f"{pinned}; median {home:.0f} % of a rank's pages on its own NUMA domain"],
     ]
-    table(output, "tab08_baseline_profile", ["Tool", "What we measured", "Baseline, 4 nodes, 40-step diagnostic runs"], rows, [0.17, 0.3, 0.53], fontsize=13)
+    table(output, "tab08_baseline_profile", ["Profile (tool)", "What we measured", "Baseline, 4 nodes, 40-step diagnostic runs"], rows, [0.2, 0.27, 0.53], fontsize=13)
 
 
 def environment_tables(output):
