@@ -671,6 +671,38 @@ def baseline_results(output):
     save(figure, output, "fig21_baseline_results")
 
 
+def baseline_scaling(output):
+    ours = baseline_runs()
+    theirs = defaultdict(list)
+    for row in read("organiser_reference_aspire2a.csv"):
+        if row["method"] == "hierarchical" and row["setting"] == "defaults":
+            theirs[int(row["nodes"])].append(float(row["s_per_step"]))
+    nodes = [1, 2, 4]
+    one = statistics.fmean(ours[1])
+    figure, axis = plt.subplots(figsize=WIDE)
+    ideal = [1 + index * 0.05 for index in range(61)]
+    axis.plot(ideal, [one / n for n in ideal], "--", color="#555555", linewidth=1.3, label="ideal: our 1-node mean / nodes")
+    for n in nodes:
+        axis.scatter(spread(theirs[n], n - 0.12, 0.1), theirs[n], s=80, facecolor="white", edgecolor=CONTROL, linewidth=1.8, zorder=3, label="organisers' hierarchical (one job)" if n == 1 else None)
+        axis.scatter(spread(ours[n], n + 0.12, 0.16), ours[n], s=70, color=BASELINE, edgecolor="black", linewidth=0.5, zorder=3, label="our baseline (each job; bar = mean)" if n == 1 else None)
+        mean = statistics.fmean(ours[n])
+        axis.hlines(mean, n + 0.02, n + 0.22, color=BASELINE, linewidth=2.5, zorder=2)
+        axis.annotate(f"{mean:.2f}", (n + 0.22, mean), textcoords="offset points", xytext=(8, 0), va="center", fontsize=12, fontweight="bold", color="#333333")
+    axis.set_xticks(nodes, ["1", "2", "4"])
+    axis.set_xlim(0.6, 4.7)
+    axis.set_ylim(0, 16)
+    axis.set_yticks([0, 3, 6, 9, 12, 15])
+    axis.set_xlabel("Nodes (128 ranks per node)")
+    axis.set_ylabel("s / step (each point is one job)")
+    axis.grid(axis="y", color="#e6e6e6", linewidth=0.8)
+    axis.set_axisbelow(True)
+    axis.legend(frameon=False, loc="upper right")
+    efficiency = ", ".join(f"{one / (n * statistics.fmean(ours[n])):.2f} on {n} nodes" for n in (2, 4))
+    figure.text(0.5, -0.04, f"Our baseline: case-default hierarchical, launcher's CPU binding only; {'/'.join(str(len(ours[n])) for n in nodes)} jobs on 1/2/4 nodes. Parallel efficiency against 1 node: {efficiency}.", ha="center", fontsize=11, color="#333333")
+    figure.tight_layout()
+    save(figure, output, "fig23_baseline_scaling")
+
+
 def before_after_scaling(output):
     runs = defaultdict(list)
     for nodes, values in baseline_runs().items():
@@ -835,7 +867,7 @@ def main():
         raise SystemExit("usage: figures.py OUTPUT_DIR")
     output = Path(sys.argv[1])
     output.mkdir(parents=True, exist_ok=True)
-    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, cores_or_memory, memory_placement, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, baseline_results, before_after_scaling, baseline_profile_tables, tables, environment_tables):
+    for make in (final_runs, scaling, changes_4node, changes_by_nodes, decomposition, pinning, compiler, variability, mpi_breakdown, rank_compute, reference_comparison, journey, counters, cores_or_memory, memory_placement, step_breakdown, node_layout, pipeline, solver_flow, storage_flow, baseline_results, baseline_scaling, before_after_scaling, baseline_profile_tables, tables, environment_tables):
         make(output)
 
 
