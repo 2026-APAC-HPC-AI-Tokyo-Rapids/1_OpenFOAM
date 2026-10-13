@@ -1,0 +1,4 @@
+tool,metric,value,unit,actions_run
+OpenFOAM profiling,computation per rank (time.run() minus Pstream; median),97.95,s,37714968610
+OpenFOAM profiling,computation per rank (min),89.32,s,37714968610
+OpenFOAM profiling,computation per rank (max),104.17,s,37714968610

@@ -7,9 +7,10 @@
     uv run presentation/openfoam/decomposition/compose.py OUT_DIR
 
 OUT_DIR is the output directory of render.py (panels/ and stats.json). For each colouring (subdomains, numa) it writes one
-sheet with the case default hierarchical, Basic's scotch and the final Bonus' multiLevel (decomposition-<colouring>.png) and
-one with scotch and multiLevel only (decomposition-<colouring>-basic-vs-bonus.png). Each column has the car surface, the
-centre plane and the cross-section, with the numbers of its decomposePar log under its name and a key to the colours.
+sheet with the case default hierarchical, Basic's scotch and the final Bonus' multiLevel (decomposition-<colouring>.png),
+one with hierarchical and scotch only (decomposition-<colouring>-baseline-vs-basic.png) and one with scotch and multiLevel
+only (decomposition-<colouring>-basic-vs-bonus.png). Each column has the car surface, the centre plane and the
+cross-section, with the numbers of its decomposePar log under its name and a key to the colours.
 """
 import json
 import sys
@@ -80,4 +81,5 @@ def compose(methods, colouring, name, column_width):
 
 for colouring in ("subdomains", "numa"):
     compose(["hierarchical", "scotch", "multiLevel"], colouring, f"decomposition-{colouring}.png", 1280)
+    compose(["hierarchical", "scotch"], colouring, f"decomposition-{colouring}-baseline-vs-basic.png", 1920)
     compose(["scotch", "multiLevel"], colouring, f"decomposition-{colouring}-basic-vs-bonus.png", 1920)

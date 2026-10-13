@@ -33,6 +33,7 @@
 |---|---|
 | `decomposition-subdomains.png` | 3つの分割（列）を、車体表面、中心断面（横から）、ホイールベース中央の横断面（後ろから前を見る）の3段で、サブ領域ごとの色で描いたもの（3840×2220）。見出しに`decomposePar.log`の数値 |
 | `decomposition-numa.png` | 同じ並びを、ノードとNUMA領域の色で |
+| `decomposition-subdomains-baseline-vs-basic.png`、`decomposition-numa-baseline-vs-basic.png` | ケース既定のhierarchical（baseline）とBasic（scotch）の2列だけ（3840×3330） |
 | `decomposition-subdomains-basic-vs-bonus.png`、`decomposition-numa-basic-vs-bonus.png` | Basic（scotch）と最終Bonus（multiLevel）の2列だけ（3840×3330） |
 | `panels/<手法>-<視点>-<色分け>.png` | 1枚ずつの画像（車体は1920×1080、断面は1920×840）。スライドに1枚ずつ貼る用 |
 
