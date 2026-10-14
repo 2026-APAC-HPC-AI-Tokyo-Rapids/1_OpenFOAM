@@ -16,6 +16,7 @@
 - 「効かなかったこと」に理由の列を付けました。全部の一覧は補足に置きます。
 - Bonusのソース変更は、番号（0001〜0004）ではなく、何をするかの名前で呼びます（no copies in the solvers、U components in one pass、no unused boundary updates、fused face loops）。番号は、提出物のpatchのファイル名として補足S4にだけ残します。
 - ネットワーク側を確かめた結果を、補足S16と想定問答Q31にまとめました。
+- 「同じ計算」の証拠を足しました。14枚目のメモとQ7に提出物のログの比較（残差などが全行一致）を書き、Q12に主催者の値を足し、想定問答にQ32（境界の更新を省くのは禁止事項か）とQ33（命令数が減ったのは仕事を減らしたからか）を足しました。
 
 ---
 
@@ -331,7 +332,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - R3の4点のうち、「証拠」と「Basicに対する速度向上」がこの1枚です（「何を変えたか」「なぜ同じ計算か」は13枚目）。
 - ビット一致する理由：浮動小数点の演算そのものと順番を変えていないからです。変えたのは、メモリの持ち方と、捨てられていた仕事だけです。
 - 4ノード512 rankでは、4つの変更をすべて外したbaselineと、最終Bonusの`coefficient.dat`がビット一致しました（SHA-256 `8952a056…`）。
-- multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.32〜0.33で目安より少し低いですが、Basic（scotch）も同じです（Q12）。
+- ログも同じです。反復回数が固定（`tolerance 0`、`relTol 0`）なので、U・k・omegaの残差と連続の式の誤差は解に戻らず、`coefficient.dat`の比較では見えません。ソースの変更のうちno copies in the solvers、U components in one pass、no unused boundary updatesの3つは、ちょうどそこを触ります。そこで提出物の`simpleFoam.log`（`bonus/f3-baseline/`と`bonus/results/`）を比べました。全stepの残差（16桁）、反復回数、連続の式の誤差、kとomegaのboundingの値が、1/2/4ノードとも全行一致しました（371、771、1,475行）。違うのは、ホスト名、パス、日時と時間の行だけです。
+- multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.32〜0.33で目安より少し低いですが、Basic（scotch）も主催者のscotchも同じです（Q12）。
 - 変更ごとの効果を聞かれたら補足S3を出します。4ノードで、multiLevel −1.5 %、ソースの変更が順に−3.4 %、−2.3 %、−1.3 %、−2.8 %です（どれも直前の構成を対照に、同じ時期に3〜4本ずつ）。別々の実験なので足し合わせません。合計の効果は、上の表で直接測っています。
 
 ### 15. BONUS ANALYSIS（0:35）
@@ -586,7 +588,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (reading the U matrix once instead of three times: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. On 4 nodes we tested the same idea by giving each core less memory: with 64 ranks per node the patches gain 7.9 % on all memory channels and 11.4 % on half of them. The same reasoning fits the super-linear scaling, but we have not measured counters across node counts.
 
 **Q7. What is proven and what is not?**
-- Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat`, and the pinning problem (seen in `/proc` during the solve).
+- Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat` and identical solver logs (every residual, to 16 digits), and the pinning problem (seen in `/proc` during the solve).
 - Shown by experiment on 4 nodes: the step time follows the memory bandwidth, not the number of cores (half the cores: −1 % to +2 %; half the memory channels: 2.1–2.2× slower, as the bandwidth drops 2.22×), and the patches gain more when each core has less memory.
 - Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
 - Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), how much of the memory effect is DRAM bandwidth and how much is L3 capacity, and the cache explanation of the super-linear scaling. We present those as hypotheses.
@@ -605,7 +607,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - No. Profiles come from separate diagnostic runs. Benchmark runs have no profiler.
 
 **Q12. Why is the 80-step Cd below the reference?**
-- Our Basic run with plain `scotch` gives 0.327 and the Bonus 0.323, against about 0.34 in the reference table. The Bonus value is identical to its unmodified baseline, so the gap does not come from our changes.
+- Cd after 80 steps depends on the decomposition. The organisers' own `scotch` run on ASPIRE-2A also gives 0.327 at 80 steps, and their notes say that `hierarchical` and `scotch` differ by 0.7 %, 3.0 % and 3.5 % at 40, 80 and 150 steps. Our Basic (`scotch`) gives 0.327 and the Bonus (`multiLevel`) 0.323. `multiLevel` differs from `scotch` by +0.5 %, −1.3 % and +2.6 %, less than the organisers' two methods differ from each other. The Bonus value is identical to its unmodified baseline, so the gap does not come from our source changes.
+- （メモ）主催者の値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`の表と「What Cd tells you」です（2ノード80 stepでhierarchical 0.336869、scotch 0.327130）。目安の0.34は、OHC-1の別の機械での値（0.334〜0.345）です。
 
 **Q13. Why is your Cd different from the organisers' reference?**
 - Our Basic Cd at 150 steps is 0.284049, against 0.283983 in the organisers' `scotch` runs (a relative 2.3e-4). When we ran the site module once with our own scripts and decomposition, we got their value exactly (0.28398300763231610). So the difference comes from our build (for example, we link AMD's math library), not from the decomposition or the method.
@@ -665,6 +668,14 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 **Q30. Why does the Basic gain grow with the node count?**
 - Mostly through the decomposition: scotch gains 1.3 %, 2.5 % and 10.5 % on 1, 2 and 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
+
+**Q32. Your third change skips boundary updates. Isn't skipping boundary checks prohibited?**
+- It skips no check. At six places the code formed a surface integral (a divergence), built its boundary values, exchanged them across processor boundaries, and then used only the cell values. We form the same cell values with the same loop and skip only the boundary values that nobody reads. The boundary conditions of the solved fields, every exchange the solution uses, and the bounding of k and omega are unchanged; the bounding appears in our logs as often and with the same values as in the baseline.
+- （メモ）R2の禁止事項は「skipping boundary or validity checks」です。no unused boundary updatesは、内部の値しか使わない6か所（ラプラシアンの非直交補正、bounded対流項の`fvm::Sp`、補正付き対流項、連続の式の誤差、`pEqn.H`の右辺、kOmegaSSTの`divU`）で、`fvc::div`と`fvc::surfaceIntegrate`を`fvc::surfaceIntegrateInternal`に置き換えるだけです。中身は同じ`surfaceIntegrate`のループで、境界値を作って評価する処理（coupled境界の交換を含む）だけを省きます。
+
+**Q33. Instructions fell 4 %. Did you reduce the work per step?**
+- Not the numerical work. Every solve does the same sweeps, residuals and norms as before: in the logs of the baseline and the Bonus, every solve of every step has the same iteration count and the same residuals, to 16 digits. The instructions we removed are copies, allocations and temporary face fields, the second and third pass over the same matrix arrays, and boundary values that nobody reads.
+- （メモ）命令数−4.1 %に対して、DRAMからのrefillは−17.2 %、cyclesは−10.8 %です（S6）。ログの比較は14枚目のメモにあります（1/2/4ノードで371、771、1,475行が全行一致）。
 
 ---
 
