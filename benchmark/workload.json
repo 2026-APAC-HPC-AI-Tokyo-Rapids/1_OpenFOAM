@@ -8,7 +8,7 @@
     "repository": "https://develop.openfoam.com/committees/hpc.git",
     "commit": "84c262431117f5c921db8335e368a12d0e9fa3f0",
     "path": "incompressible/simpleFoam/occDrivAerStaticMesh",
-    "identity_sha256": "4537762f7a0be22fb78503e7e32604589a269746afc4baa064129fce1913c3fc",
+    "identity_sha256": "e290b974f8a31099c918298096ffaec1b47705c4f6cf944624c96ed88d902244",
     "members": [
       "0.orig/U",
       "0.orig/k",
