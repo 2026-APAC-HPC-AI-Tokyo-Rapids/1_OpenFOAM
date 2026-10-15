@@ -1,5 +1,5 @@
 {
   "schema_version": "openfoam-profile-condition/v1",
-  "analysis": "hotspots",
+  "analysis": "data_access",
   "rank": 0
 }
