@@ -1,0 +1,293 @@
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+index a431613..015d2d7 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+@@ -138,6 +138,12 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+             );
+         }
+ 
++        // When checkConvergence cannot change the iteration count (minIter
++        // not below maxIter, or tolerance and relTol both zero), the residual
++        // norm is used only after the last iteration
++        const bool fixedIter =
++            (tolerance_ <= 0 && relTol_ <= 0) || minIter_ >= maxIter_;
++
+         // --- Solver iteration
+         do
+         {
+@@ -187,18 +193,37 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                 rAPtr[cell] -= alpha*wAPtr[cell];
+             }
+ 
+-            solverPerf.finalResidual() =
+-                gSumMag(rA, matrix().mesh().comm())
+-               /normFactor;
++            if (!fixedIter)
++            {
++                solverPerf.finalResidual() =
++                    gSumMag(rA, matrix().mesh().comm())
++                   /normFactor;
++            }
+ 
+         } while
+         (
+-            (
+-              ++solverPerf.nIterations() < maxIter_
+-            && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
++            fixedIter
++          ? (
++                ++solverPerf.nIterations() < maxIter_
++             || solverPerf.nIterations() < minIter_
++            )
++          : (
++                (
++                  ++solverPerf.nIterations() < maxIter_
++                && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
++                )
++             || solverPerf.nIterations() < minIter_
+             )
+-         || solverPerf.nIterations() < minIter_
+         );
++
++        if (fixedIter)
++        {
++            // The residual of the last iteration (or of the one before a
++            // singularity break), which the loop above would have left
++            solverPerf.finalResidual() =
++                gSumMag(rA, matrix().mesh().comm())
++               /normFactor;
++        }
+     }
+ 
+     if (preconPtr_)
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+index c8f9bdf..955895b 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -163,6 +163,22 @@ void internalResidual
+     }
+ }
+ 
++
++// True when checkConvergence cannot change the iteration count: with
++// tolerance and relTol both zero it never succeeds (the residual is not
++// negative), and with minIter not below maxIter the count is fixed anyway.
++// The residual is then used only after the last iteration.
++bool fixedIterations
++(
++    const Foam::scalar tolerance,
++    const Foam::scalar relTol,
++    const Foam::label minIter,
++    const Foam::label maxIter
++)
++{
++    return (tolerance <= 0 && relTol <= 0) || minIter >= maxIter;
++}
++
+ } // End anonymous namespace
+ 
+ 
+@@ -297,19 +313,26 @@ Foam::solverPerformance Foam::smoothSolver::solve
+                 controlDict_
+             );
+ 
+-            // Smoothing loop
+-            do
++            if (fixedIterations(tolerance_, relTol_, minIter_, maxIter_))
+             {
+-                smootherPtr->smooth
++                // The iteration count alone ends the loop and the residual
++                // of the last sweep is the only one used: evaluate it once
++                // after the loop
++                do
++                {
++                    smootherPtr->smooth
++                    (
++                        psi,
++                        source,
++                        cmpt,
++                        nSweeps_
++                    );
++                } while
+                 (
+-                    psi,
+-                    source,
+-                    cmpt,
+-                    nSweeps_
++                    (solverPerf.nIterations() += nSweeps_) < maxIter_
++                 || solverPerf.nIterations() < minIter_
+                 );
+ 
+-                // Evaluate in place: the tmp-returning overload allocates a
+-                // new field and the assignment then copies it into residual
+                 matrix_.residual
+                 (
+                     residual,
+@@ -320,17 +343,47 @@ Foam::solverPerformance Foam::smoothSolver::solve
+                     cmpt
+                 );
+ 
+-                // Calculate the residual to check convergence
+                 solverPerf.finalResidual() =
+                     gSumMag(residual, matrix().mesh().comm())/normFactor;
+-            } while
+-            (
++            }
++            else
++            {
++                // Smoothing loop
++                do
++                {
++                    smootherPtr->smooth
++                    (
++                        psi,
++                        source,
++                        cmpt,
++                        nSweeps_
++                    );
++
++                    // Evaluate in place: the tmp-returning overload allocates
++                    // a new field and the assignment then copies it into
++                    // residual
++                    matrix_.residual
++                    (
++                        residual,
++                        psi,
++                        source,
++                        interfaceBouCoeffs_,
++                        interfaces_,
++                        cmpt
++                    );
++
++                    // Calculate the residual to check convergence
++                    solverPerf.finalResidual() =
++                        gSumMag(residual, matrix().mesh().comm())/normFactor;
++                } while
+                 (
+-                    (solverPerf.nIterations() += nSweeps_) < maxIter_
+-                && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
+-                )
+-             || solverPerf.nIterations() < minIter_
+-            );
++                    (
++                        (solverPerf.nIterations() += nSweeps_) < maxIter_
++                    && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
++                    )
++                 || solverPerf.nIterations() < minIter_
++                );
++            }
+         }
+ 
+         matrix().setResidualField
+@@ -423,14 +476,18 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+     matrixDiag = saveDiag;
+ 
+-    // Components that still smooth, decided as in solve()
++    // Components that still smooth, decided as in solve(), and those whose
++    // iteration count cannot depend on the convergence test
+     List<bool> active(nCmpt);
++    List<bool> fixedIter(nCmpt);
+     for (label k=0; k<nCmpt; k++)
+     {
+         const smoothSolver& s = *solvers[k];
+         active[k] =
+             s.minIter_ > 0
+          || !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_);
++        fixedIter[k] =
++            fixedIterations(s.tolerance_, s.relTol_, s.minIter_, s.maxIter_);
+     }
+ 
+     // Coefficients and addressing through the const matrix, as the smoother
+@@ -451,6 +508,8 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+         bPrime.set(k, new solveScalarField(nCells));
+     }
+ 
++    List<bool> needResidual(nCmpt);
++
+     while (active[0] || active[1] || active[2])
+     {
+         // All three components share one pass while all of them smooth; once
+@@ -511,9 +570,23 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+             }
+         }
+ 
+-        // Residuals: internal part for all active components, then the
+-        // interface contributions of each component in turn
+-        if (together)
++        // Residuals of the active components whose value is used: after every
++        // sweep set when convergence is tested, otherwise only after the last
++        for (label k=0; k<nCmpt; k++)
++        {
++            const smoothSolver& s = *solvers[k];
++            const label nIter = solverPerf[k].nIterations() + nSweeps;
++            needResidual[k] =
++                active[k]
++             && (
++                    !fixedIter[k]
++                 || !(nIter < s.maxIter_ || nIter < s.minIter_)
++                );
++        }
++
++        // Internal part for all those components, then the interface
++        // contributions of each component in turn
++        if (needResidual[0] && needResidual[1] && needResidual[2])
+         {
+             const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
+             const solveScalar* p[3] = {psi[0]->cdata(), psi[1]->cdata(), psi[2]->cdata()};
+@@ -525,7 +598,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+         {
+             for (label k=0; k<nCmpt; k++)
+             {
+-                if (!active[k]) continue;
++                if (!needResidual[k]) continue;
+                 const scalar* d[1] = {diag[k]->cdata()};
+                 const solveScalar* p[1] = {psi[k]->cdata()};
+                 const solveScalar* b[1] = {source[k]->cdata()};
+@@ -536,7 +609,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+         for (label k=0; k<nCmpt; k++)
+         {
+-            if (!active[k]) continue;
++            if (!needResidual[k]) continue;
+ 
+             const smoothSolver& s = *solvers[k];
+             const label startRequest = UPstream::nRequests();
+@@ -569,16 +642,28 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+             const smoothSolver& s = *solvers[k];
+ 
+-            // Calculate the residual to check convergence
+-            solverPerf[k].finalResidual() =
+-                gSumMag(residual[k], comm)/normFactor[k];
++            if (needResidual[k])
++            {
++                // Calculate the residual to check convergence
++                solverPerf[k].finalResidual() =
++                    gSumMag(residual[k], comm)/normFactor[k];
++            }
+ 
+-            active[k] =
+-            (
+-                (solverPerf[k].nIterations() += nSweeps) < s.maxIter_
+-             && !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_)
+-            )
+-         || solverPerf[k].nIterations() < s.minIter_;
++            if (fixedIter[k])
++            {
++                active[k] =
++                    (solverPerf[k].nIterations() += nSweeps) < s.maxIter_
++                 || solverPerf[k].nIterations() < s.minIter_;
++            }
++            else
++            {
++                active[k] =
++                (
++                    (solverPerf[k].nIterations() += nSweeps) < s.maxIter_
++                 && !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_)
++                )
++             || solverPerf[k].nIterations() < s.minIter_;
++            }
+         }
+     }
+ 
