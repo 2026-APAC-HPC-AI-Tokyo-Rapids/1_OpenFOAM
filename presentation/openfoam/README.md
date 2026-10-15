@@ -22,6 +22,8 @@
 | `baseline_step_regions_4node.csv` | baselineの1 stepの区間ごとの経過時間（OpenFOAM組み込みのprofiling、4ノード40 step） | #62（Actions 38219862855） |
 | `baseline_profile_4node.csv` | baselineのCrayPAT、OpenFOAM組み込みのprofiling、`/proc`、uProfの値（4ノード40 step） | #62（38219766511、38219862855、38219770656） |
 | `counters_1node.csv` | パッチの有無（各2本）のuProf `data_access`のカウンタ。計算部分（MPI、UCX、Pstreamを除く）のrank 16〜112の平均 | #55（37580443881、37583693730、37580444029、37580455271）の`profile/raw/uprof/reports/` |
+| `uprof_scaling_by_function.csv` | Basicの1/2/4ノードのuProf `data_access`。上位30アドレスを関数ごとに合計した値と全体の値を、測ったrank数・step数・rankあたりのセル数で割ったもの（1セル・1 stepあたり）。アドレスは、同じビルド（`builds/37175425892.tar.zst`）のライブラリの`nm`で関数に対応づけた | #66（38752334516、38754565482、38756818916）の`uprof-summary.json` |
+| `uprof_rank_4node.csv` | 同じ4ノードのrunの32 rank（各NUMAの先頭）ごとの、MPI以外のモジュールのサイクル・命令・L1 demand refill（DRAM、L2、L3から）と、MPIのモジュールのサイクル、セル数 | #66（38756818916）の`profile/raw/uprof/reports/`、セル数は同じ分割の`decomposePar`のログ |
 | `memory_placement.csv` | 配置だけを変えた4ノードの16本（Basic、パッチを外したBonus、Bonus × full128・spread64・packed64）の公式値と`coefficient.dat`のハッシュ | #61の各runの`results/result.txt`と`results/coefficient.dat` |
 | `triad_placement.csv` | 同じrunのノードごとのtriadの帯域（solverの後に3つの配置で測った値） | #61の各runの`logs/pbs.log` |
 | `start_unpinned.csv` | 最初の状態（hierarchical、固定が外れたまま）の4ノード3本。`decomposition_basic.csv`の固定ありhierarchicalと同時期 | #36 A |
