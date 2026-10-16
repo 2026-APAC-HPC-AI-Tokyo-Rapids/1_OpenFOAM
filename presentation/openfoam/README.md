@@ -12,8 +12,8 @@
 
 | ファイル | 中身 | 出典 |
 |---|---|---|
-| `final_runs.csv` | 最終構成（Basic 6396eeb、Bonus fa4f5b0）の全20本 | 保管済みバンドルの`results/result.txt`（公式parser） |
-| `changes_ab.csv` | Bonusの変更ごとの、同時期の対照と候補 | #42、#44、#50、#51の表 |
+| `final_runs.csv` | 最終構成（Basic 16c62ac、Bonus fa4f5b0）の全20本。Basicは2026-10-15（4ノード）と10-16（1/2ノード）、Bonusは10-06 | 保管済みバンドルの`results/result.txt`（公式parser） |
+| `changes_ab.csv` | Bonusの変更ごとの、同時期の対照と候補。`mapping`はBasicのscotchをノードの木に対応付けた変更（4ノード、交互に5本ずつ） | #42、#44、#50、#51、#63の表 |
 | `decomposition_basic.csv` | scotchとhierarchicalの交互測定（1/2/4ノード、各3本） | #36（4ノード）、#38（1/2ノード） |
 | `pinning.csv` | CPU/NUMA固定の切り分け（4ノード） | #36 A3 |
 | `step_regions_4node.csv` | 1 stepの区間ごとの経過時間（OpenFOAM組み込みのprofiling、4ノード40 stepの診断run、512 rankの中央値・最小・最大） | #57（Actions 37714968610）の`processor*/40/uniform/profiling` |

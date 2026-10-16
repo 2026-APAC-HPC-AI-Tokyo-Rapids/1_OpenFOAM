@@ -80,7 +80,7 @@ def final_runs(output):
         high = max(runs[("Basic", nodes)])
         axis.set_ylim(low - (high - low) * 0.15, high + (high - low) * 0.15)
     axes[0].set_ylabel("Average wall-clock time per time step (s)")
-    figure.text(0.5, -0.04, "Each point is one job (official metric, steps 2 to N). Lines are means; y-axes do not start at 0. ASPIRE-2A, Basic 2026-10-04/05, Bonus 2026-10-06.", ha="center", fontsize=11)
+    figure.text(0.5, -0.04, "Each point is one job (official metric, steps 2 to N). Lines are means; y-axes do not start at 0. ASPIRE-2A, Basic 2026-10-15/16, Bonus 2026-10-06.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig01_final_runs")
 
@@ -124,7 +124,7 @@ def scaling(output):
 
 
 # The data files keep the patch numbers of the submission (0001-0004); the slides name each source change by what it does.
-CHANGES = [("multiLevel", "multiLevel split\nvs Basic scotch"), ("0001", "+ no copies\nin the solvers"), ("0002", "+ U components\nin one pass"), ("0003", "+ no unused\nboundary updates"), ("0004", "+ fused face\nloops")]
+CHANGES = [("multiLevel", "multiLevel split\nvs plain scotch"), ("0001", "+ no copies\nin the solvers"), ("0002", "+ U components\nin one pass"), ("0003", "+ no unused\nboundary updates"), ("0004", "+ fused face\nloops")]
 
 
 def changes_by_role():
@@ -466,7 +466,7 @@ def journey(output):
     changes = changes_by_role()
     organisers = [float(row["s_per_step"]) for row in read("organiser_reference_aspire2a.csv") if row["method"] == "scotch" and row["nodes"] == "4" and row["setting"] == "defaults"]
     start = [float(row["s_per_step"]) for row in read("start_unpinned.csv")]
-    steps = [("Start:\nhierarchical,\nbinding lost", start, CONTROL, None), ("+ CPU and\nNUMA pinning", methods[(4, "hierarchical")], BASIC, change(methods[(4, "hierarchical")], start)), ("+ scotch\n= Basic", final[("Basic", 4)], BASIC, change(methods[(4, "scotch")], methods[(4, "hierarchical")]))]
+    steps = [("Start:\nhierarchical,\nbinding lost", start, CONTROL, None), ("+ CPU and\nNUMA pinning", methods[(4, "hierarchical")], BASIC, change(methods[(4, "hierarchical")], start)), ("+ scotch", methods[(4, "scotch")], BASIC, change(methods[(4, "scotch")], methods[(4, "hierarchical")])), ("+ mapped onto\nthe node\n= Basic", final[("Basic", 4)], BASIC, change(changes[("mapping", 4, "candidate")], changes[("mapping", 4, "control")]))]
     for key, label in (("multiLevel", "+ multiLevel\n(4 2 4 16)"), ("0001", "+ no copies\nin the solvers"), ("0002", "+ U components\nin one pass"), ("0003", "+ no unused\nboundary updates"), ("0004", "+ fused face loops\n= Bonus")):
         steps.append((label, changes[(key, 4, "candidate")], BONUS, change(changes[(key, 4, "candidate")], changes[(key, 4, "control")])))
     figure, axis = plt.subplots(figsize=WIDE)
@@ -480,11 +480,11 @@ def journey(output):
         axis.annotate(f"{means[index]:.3f}", (index, min(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, color=color, fontweight="bold")
         if percent is not None:
             axis.text(index - 0.45, (means[index - 1] + means[index]) / 2 + 0.035, f"{percent:+.1f} %", ha="left", fontsize=13, fontweight="bold", color=ACCENT)
-    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=11)
+    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=10)
     axis.set_xlim(-0.5, len(steps) - 0.4)
     axis.set_ylim(2.5, 3.78)
     axis.set_ylabel("4 nodes, s / step (each point is one job)")
-    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[2][1], start):+.1f} %. Basic {means[2]:.3f} (n = {len(steps[2][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[2][1]):+.1f} %. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
+    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[3][1], start):+.1f} %. Basic {means[3]:.3f} (n = {len(steps[3][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[3][1]):+.1f} %. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig16_journey")
 
@@ -742,7 +742,7 @@ def before_after_scaling(output):
     right.legend(frameon=False, loc="lower left")
     efficiency = {name: statistics.fmean(runs[(name, 1)]) / (4 * statistics.fmean(runs[(name, 4)])) for name, _, _ in series}
     counts = {name: "/".join(str(len(runs[(name, n)])) for n in nodes) for name, _, _ in series}
-    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline measured 2026-10-12 (Issue #62); Basic and Bonus 2026-10-05/06. Basic controls run on 2026-10-12 next to the baseline are within 0.2 % of those means.", ha="center", fontsize=10.5, color="#333333")
+    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline 2026-10-12 (Issue #62), Basic 2026-10-15/16 (Issue #63), Bonus 2026-10-06; controls repeated on 10-12 and 10-15 agree within 0.2 %.", ha="center", fontsize=10.5, color="#333333")
     figure.tight_layout()
     save(figure, output, "fig22_before_after_scaling")
 
@@ -900,8 +900,8 @@ def deck_tables(output):
         ["Spread between jobs", spread_of(baseline), spread_of(basic)],
         ["Ranks on their own core during the solve (/proc)", f"{pinned:.0f} of {observed:.0f}", f"{adopted['pinned_during_solve'].replace('/', ' of ')} per node"],
         ["Memory on the rank's own NUMA domain, median (/proc)", f"{100 * home:.0f} %", f"{100 * float(adopted['local_pages_median']):.0f} %"],
-        ["Computation per rank, slowest / median (OpenFOAM profiling)", f"{imbalance(before):.2f}", f"{imbalance(after):.2f}"],
-        ["MPI share of the time (CrayPAT)", f"{100 * mpi_share:.0f} %", f"{100 * float(craypat['mpi_s']) / float(craypat['process_s']):.0f} %"],
+        ["Computation per rank, slowest / median (OpenFOAM profiling; Basic before the mapping)", f"{imbalance(before):.2f}", f"{imbalance(after):.2f}"],
+        ["MPI share of the time (CrayPAT; Basic before the mapping)", f"{100 * mpi_share:.0f} %", f"{100 * float(craypat['mpi_s']) / float(craypat['process_s']):.0f} %"],
     ]
     table(output, "tab10_basic_before_after", ["4 nodes", "Baseline", "Basic"], keep_percent(basic_rows), [0.52, 0.2, 0.28], fontsize=14)
 
@@ -917,7 +917,7 @@ def deck_tables(output):
         ["Rank reordering (92 % fewer faces between nodes)", "+0.1 %", "Fewer bytes between nodes do not shorten the wait"],
         ["GAMG coarsest level on fewer ranks", "−0.25 % to +4.95 %", "81 % of the global sums, but about 0.6 % of the time"],
         ["Weighted cells (×2, ×12), METIS with two constraints", "+1.5 % to +6.1 %", "Uneven cell counts, or more processor faces"],
-        ["scotch coefficients, malloc thresholds", "−0.8 %, −0.4 %", "Below our 1 % threshold"],
+        ["malloc thresholds", "−0.4 %", "Below our 1 % threshold"],
         ["SMT (2 ranks per core)", "5.7× slower", "Stalls of minutes; cause not isolated"],
     ]
     table(output, "tab12_not_worked", ["Idea", "Result (4 nodes)", "Why it did not help"], keep_percent(not_worked_rows), [0.43, 0.19, 0.38], fontsize=14)
@@ -986,7 +986,6 @@ def tables(output):
     rejected_rows = [
         ["Compiler: -march=znver3, AOCC 5.0, -O2, LTO (Basic)", "Within ±0.1 % of the control", "Code generation does not limit the run time"],
         ["GCC profile-guided optimisation (Basic)", "+0.13 % (1 v 1, same period), +0.08 % at 1 node; Cd bit-identical", "The hot loops wait on memory and on other ranks"],
-        ["Scotch tree coefficients domains / domainWeights (Basic)", "−0.82 % at 4 nodes, none at 1 and 2 nodes", "Fewer cross-node faces, more faces in total; below our 1 % threshold"],
         ["Weighted multiLevel cells (Bonus)", "+2.2 % (weight ×2), +6.1 % (×12)", "Static weights unbalance the cell counts; even cell counts matter most"],
         ["METIS two-constraint partition (Bonus)", "+1.46 %", "Better face balance, but 18 % more processor faces"],
         ["OpenFOAM comm switches (Basic)", "No gain; commsType scheduled crashed in GAMG", "MPI time is mostly waiting for slower ranks"],

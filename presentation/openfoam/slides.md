@@ -39,7 +39,7 @@
 3. **測り方は1枚にまとめる（6枚目）。** 以降のスライドでは、道具の名前を括弧で添えるだけにします。
 4. **BasicとBonusは同じ順で話す。** 何を変えたか → 結果 → プロファイルで確かめた理由。
 5. **測ったことと仮説を分ける。** 並列効率が1を超える理由（キャッシュ）と、DRAMの転送バイト数は、仮説・未測定として話します。
-6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.92（−20 %）、Bonus 2.60（−29 %、1.40×）。BonusはBasicから−11.0 %。並列効率（1→4ノード）はbaseline 1.00、Basic 1.14、Bonus 1.12。主催者のhierarchicalは3.415、scotchは5本の平均3.296。
+6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.90（−21 %）、Bonus 2.60（−29 %、1.40×）。BonusはBasicから−10.3 %。並列効率（1→4ノード）はbaseline 1.00、Basic 1.15、Bonus 1.12。主催者のhierarchicalは3.415、scotchは5本の平均3.296。
 7. **y軸が0から始まらない図**（`fig03`、`fig05`、`fig06`）は、その旨を図の下に書いてあります。
 
 ### 時間配分
@@ -63,13 +63,13 @@
 | 7 | BASELINE ANALYSIS | The binding is lost at MPI_Init, so ranks compute unevenly and wait | `fig24_baseline_chain` | 0:50 | 6枚目の表を図にする |
 | 8 | OPTIMIZATION STRATEGY | Keep memory near each core, give every rank the same work, move fewer bytes | 7行の表（3行を強調） | 0:35 | 7枚目 |
 | 9 | BASIC OPTIMIZATION (1/2) | Putting the lost binding back: 3.65 → 3.26 s/step (−11 %) | `fig06_pinning` | 0:50 | 8枚目 |
-| 10 | BASIC OPTIMIZATION (2/2) | scotch cuts compact blocks: 3.26 → 2.92 s/step (−10.5 %) | `decomposition-subdomains-baseline-vs-basic` | 0:40 | 新規 |
-| 11 | BASIC RESULTS | −20 % on 4 nodes, and the profile shows why | `tab10_basic_before_after` | 0:35 | 9枚目 |
+| 10 | BASIC OPTIMIZATION (2/2) | scotch cuts compact blocks: 3.26 → 2.92 s/step (−10.5 %); mapped onto the node, 2.90 (−0.7 %) | `decomposition-subdomains-baseline-vs-basic` | 0:40 | 新規 |
+| 11 | BASIC RESULTS | −21 % on 4 nodes, and the profile shows why | `tab10_basic_before_after` | 0:35 | 9枚目 |
 | 12 | MEMORY BANDWIDTH SETS THE SPEED | Half the memory channels: 2.2× slower. Half the cores: no change | `fig19_cores_or_memory` | 0:45 | 12枚目をここへ移す |
 | 13 | BONUS OPTIMIZATION | The same arithmetic with fewer bytes moved | `fig25_u_in_one_pass` | 0:50 | 10枚目 |
-| 14 | BONUS RESULTS | Bit-identical Cd, 11 % faster than our Basic | `tab11_bonus_results` | 0:35 | 新規 |
+| 14 | BONUS RESULTS | Bit-identical Cd, 10 % faster than our Basic | `tab11_bonus_results` | 0:35 | 新規 |
 | 15 | BONUS ANALYSIS | 4 % fewer instructions, 17 % fewer refills from DRAM | `fig17_counters` | 0:35 | 11枚目 |
-| 16 | SCALING ANALYSIS | Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.14 | `fig22_before_after_scaling` | 0:40 | 13枚目 |
+| 16 | SCALING ANALYSIS | Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15 | `fig22_before_after_scaling` | 0:40 | 13枚目 |
 | 17 | OPTIMIZATION IDEAS (NOT WORKED) | What did not help, and why | `tab12_not_worked` | 0:40 | 14枚目 |
 | 18 | CONCLUSION | 1.40× faster on 4 nodes with the same math | 表 | 0:40 | 15枚目 |
 
@@ -87,7 +87,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Mesh: `occDrivAerStaticMesh`, 65.3 M cells, finest near the car
 - Step: fixed solver iterations → the same work every step
 - Metric: average time per step (steps 2 to N) on 4 nodes; scaling on 1 / 2 / 4 nodes (40 / 80 / 150 steps)
-- （足す1行）Our result on 4 nodes: 3.65 → 2.92 s/step (Basic) → 2.60 s/step (Bonus)
+- （足す1行）Our result on 4 nodes: 3.65 → 2.90 s/step (Basic) → 2.60 s/step (Bonus)
 
 図：流れの動画（Boxの`flow/flow-iterations.mp4`）と、メッシュの図（今の2枚目のまま）。
 
@@ -95,7 +95,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 車の周りの空気の流れを計算するケースを、同じ計算のまま速くする課題です。メッシュは固定で、車の近くほど細かく、車輪は回りません。
 - 反復の回数が固定です（`fvSolution.fixedIter`：pはGAMGで12サイクル、Uは3成分それぞれGauss-Seidelで15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均時間で比べられます。
 - 動画は、場を書き出すための別runです。同じ公式ケースを玄界の4ノードで流し、出力だけを足しました。Cdは公式runと全桁一致です（Q22）。
-- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.92秒、Bonusで2.60秒になりました」。
+- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.60秒になりました」。
 
 ### 3. ASPIRE-2A（0:35）
 
@@ -169,7 +169,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 道具は、それぞれ1つの問いに答えます。CrayPATはMPIの関数ごとの時間と回数、OpenFOAM組み込みのprofilingは区間ごとの時間を全512 rankで、uProfは関数ごとのCPU時間とハードウェアカウンタ、`/proc`は実行中のCPUの固定とメモリのページの置き場所です。
 - ネットワークは、毎回のrunでsolverの後にIMB（MPIのベンチマーク）を流し、そのノードどうしの帯域と大域和の時間を記録しています。ネットワーク側だけを変える比較もしました（補足S16、Q31）。NICやスイッチのハードウェアカウンタは読んでいません。
 - メモリコントローラのカウンタは、利用者には読めません（`perf_event_paranoid=2`）。そこで帯域は、rankの置き場所を変える実験で確かめました（12枚目）。
-- 採用基準の1 %：最終runのばらつきは0.35 %以下なので、1 %の差はノイズと区別できます。
+- 採用基準の1 %：最終runのばらつきは0.2 %以下なので、1 %の差はノイズと区別できます。採点されるBasicの4ノードに効く変更（scotchの対応付け、−0.69 %）だけは、交互に5本ずつ流し、全runが対照より速いことを確かめて採用しました。
 
 ### 7. BASELINE ANALYSIS（0:50）
 
@@ -238,11 +238,12 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 ### 10. BASIC OPTIMIZATION (2/2): DECOMPOSITION（0:40、新規）
 
-**Message:** scotch cuts the mesh into compact blocks: 3.26 → 2.92 s/step (−10.5 %)
+**Message:** scotch cuts the mesh into compact blocks: 3.26 → 2.92 s/step (−10.5 %); mapped onto the node, 2.90 (−0.7 %)
 
 - hierarchical cuts thin slabs along the axes; some ranks near the car get many wall faces and more work (imbalance 1.16).
 - scotch cuts compact blocks: 32 % fewer faces between subdomains (4.31 M → 2.93 M), imbalance 1.06.
 - 3 jobs each, alternated: −10.5 % on 4 nodes, −2.5 % on 2, −1.3 % on 1.
+- Mapped onto the node (`scotchCoeffs`: 2 sockets, 4 NUMA domains, 16 cores): 23 % / 21 % / 10 % fewer faces between nodes / sockets / NUMA domains; 2.918 → 2.898 s/step on 4 nodes (−0.69 %, 5 jobs each, alternated). No change on 1 and 2 nodes.
 
 図：`decomposition/decomposition-subdomains-baseline-vs-basic.png`（hierarchicalとscotchを左右に並べ、車体表面、中心断面、横断面の3段。見出しにサブ領域間の面の数とセル数の偏り）。縦に長いので、上の2段だけ切り取って使ってもかまいません。時間の数字は`fig05_decomposition_basic`のものです。
 
@@ -251,26 +252,27 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - scotchにすると、中央値のrankの`MPI_Waitall`は18.7秒から9.4〜10.8秒に半減しました。
 - ノード間の通信が理由ではありません。rankの並べ替え（`MPICH_RANK_REORDER_METHOD=3`）でノード間の面を92 %減らしても、変わりませんでした（+0.1 %）。
 - 測り方の教訓をここで1つ話します：9/27の1本（5.03秒）が遅く、一度はscotchを捨てました。同じ時期に交互に3本ずつ流すと10.5 %速く、判断を覆しました。以来、1本では決めません（Q3）。
-- ノード数が多いほど効く理由は確かめていません（Q30）。scotchの係数の調整は−0.82 %で、1 %の基準に届かず不採用です。
+- ノード数が多いほど効く理由は確かめていません（Q30）。
+- scotchの係数（`domains`、`domainWeights`、`strategy`）で、分割をノードの木（ソケット、NUMA領域、コア）に対応付けました。サブ領域間の面の総数は3 %増えますが、ノード・ソケット・NUMA領域をまたぐ面は23 %・21 %・10 %減ります。10/05の3本ずつの比較では−0.82 %で、当時の1 %の基準に届かず見送りました。採点はBasicの4ノードの再実行なので、10/15に交互に5本ずつ測り直し、全runが対照より速い−0.69 %で採用しました（#63）。1・2ノードではほぼ変わりません。絵は対応付けの前のscotchです。
 
 ### 11. BASIC RESULTS（0:35）
 
-**Message:** −20 % on 4 nodes, and the profile shows why
+**Message:** −21 % on 4 nodes, and the profile shows why
 
 | 4 nodes | Baseline | Basic |
 |---|---:|---:|
-| s / step (jobs) | 3.65 (3) | **2.92 (5): −20 %** |
-| Spread between jobs | 8 % | 0.35 % |
+| s / step (jobs) | 3.65 (3) | **2.90 (5): −21 %** |
+| Spread between jobs | 8 % | 0.18 % |
 | Ranks on their own core (`/proc`) | 0 / 512 | 512 / 512 |
 | Memory on its own NUMA domain (median, `/proc`) | 9 % | 58 % |
-| Computation per rank, max / median (OpenFOAM profiling) | 1.46 | 1.06 |
-| MPI share of the time (CrayPAT) | 46 % | 19 % |
+| Computation per rank, max / median (OpenFOAM profiling; Basic before the mapping) | 1.46 | 1.06 |
+| MPI share of the time (CrayPAT; Basic before the mapping) | 46 % | 19 % |
 
 図：`figures/tab10_basic_before_after.png`（上の表）。1・2ノードの−8 %、−14 %は16枚目で見せます。
 
 メモ（35秒）：
-- 固定と分割で、遅いrankがいなくなり（最大/中央値1.46 → 1.06）、待ち（MPI 46 % → 19 %）とrunごとのばらつき（8 % → 0.35 %）が減りました。
-- 出典：s/stepはbaselineが#62、Basicは10/04〜05の5本。`/proc`はbaselineが全512 rank（#62）、Basicはノード0の128 rank（#36 A3）。OpenFOAM profilingはbaselineが#62、Basicが#57。CrayPATはbaselineが#62、Basicが37176272426（#36 A4）。
+- 固定と分割で、遅いrankがいなくなり（最大/中央値1.46 → 1.06）、待ち（MPI 46 % → 19 %）とrunごとのばらつき（8 % → 0.18 %）が減りました。
+- 出典：s/stepはbaselineが#62、Basicは10/15の5本（#63）。プロファイルの2行は、対応付けの前のBasic（scotchの既定）のrunです。対応付けで4ノードのstepは0.7 %しか変わらないので、そのまま使います。`/proc`はbaselineが全512 rank（#62）、Basicはノード0の128 rank（#36 A3）。OpenFOAM profilingはbaselineが#62、Basicが#57。CrayPATはbaselineが#62、Basicが37176272426（#36 A4）。
 - 固定後も自分の領域にあるページが58 %なのは、共有ライブラリやMPIの共有バッファのように、複数のrankが使う部分は1つの領域にしか置けないためと考えていますが、確かめていません。「各rankのデータ（メッシュと場）を自分の領域に置いた」と言います。
 - 残った19 %のMPIも、多くは遅いrankを待つ時間です（Q2、Q21）。
 
@@ -309,20 +311,20 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 メモ（50秒）：
 - 12枚目の「帯域が律速」から来た方針です。メモリを速くするのではなく、運ぶデータを減らします。
 - Bonusになる理由：hierarchical・scotch以外の分割方法と、ソースの変更はBonusです（F2）。
-- multiLevelは、ノード → ソケット → NUMA領域 → コアの順に、各段をscotchで分けます。ノードとNUMA領域ごとにまとまった塊になり、サブ領域間の面は2.93 Mから2.81 Mに減ります（絵は`decomposition/decomposition-numa-basic-vs-bonus.png`）。
+- multiLevelは、ノード → ソケット → NUMA領域 → コアの順に、各段をscotchで分けます。ノードとNUMA領域ごとにまとまった塊になり、サブ領域間の面は2.81 Mで、scotchの既定の2.93 M、Basic（対応付けたscotch）の3.02 Mより少なくなります（絵は`decomposition/decomposition-numa-basic-vs-bonus.png`）。
 - 例は図の1つだけ話します。速度Uの3成分は、同じ行列（面ごとの係数と、どのセルどうしをつなぐかの番地）を使います。元のコードは成分ごとに行列を読み直していたので、1回読んで3成分を更新するようにしました。各成分の演算と順番は同じです。
 - ほかの3つも同じ考え方です。線形ソルバーが毎回作っていた一時的な配列とそのコピーをやめた。結果を捨てていた境界の値の計算と交換をやめた。面の値を一時的な配列に作ってから足すのをやめ、足すループの中で作るようにした。
 - 変更の中身の全文は、提出物の`bonus/README.md`とpatchにあります（補足S4。提出物ではpatchに0001〜0004の番号が付いています）。
 
 ### 14. BONUS RESULTS（0:35、新規）
 
-**Message:** Bit-identical Cd, and 11 % faster than our Basic
+**Message:** Bit-identical Cd, and 10 % faster than our Basic
 
 | Nodes (steps) | Basic s / step | Bonus s / step | Bonus vs Basic | `coefficient.dat` vs the pre-change baseline |
 |---|---:|---:|---:|---|
-| 1 (40) | 13.364 (3 jobs) | 11.668 (3 jobs) | −12.7 % | bit-identical |
-| 2 (80) | 6.367 (3 jobs) | 5.641 (3 jobs) | −11.4 % | bit-identical |
-| 4 (150) | 2.920 (5 jobs) | 2.599 (3 jobs) | −11.0 % | bit-identical |
+| 1 (40) | 13.365 (3 jobs) | 11.668 (3 jobs) | −12.7 % | bit-identical |
+| 2 (80) | 6.372 (3 jobs) | 5.641 (3 jobs) | −11.5 % | bit-identical |
+| 4 (150) | 2.898 (5 jobs) | 2.599 (3 jobs) | −10.3 % | bit-identical |
 
 - Pre-change baseline: the same multiLevel split and rank counts, with the source changes removed. Each change was also checked on its own.
 
@@ -333,8 +335,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - ビット一致する理由：浮動小数点の演算そのものと順番を変えていないからです。変えたのは、メモリの持ち方と、捨てられていた仕事だけです。
 - 4ノード512 rankでは、4つの変更をすべて外したbaselineと、最終Bonusの`coefficient.dat`がビット一致しました（SHA-256 `8952a056…`）。
 - ログも同じです。反復回数が固定（`tolerance 0`、`relTol 0`）なので、U・k・omegaの残差と連続の式の誤差は解に戻らず、`coefficient.dat`の比較では見えません。ソースの変更のうちno copies in the solvers、U components in one pass、no unused boundary updatesの3つは、ちょうどそこを触ります。そこで提出物の`simpleFoam.log`（`bonus/f3-baseline/`と`bonus/results/`）を比べました。全stepの残差（16桁）、反復回数、連続の式の誤差、kとomegaのboundingの値が、1/2/4ノードとも全行一致しました（371、771、1,475行）。違うのは、ホスト名、パス、日時と時間の行だけです。
-- multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.32〜0.33で目安より少し低いですが、Basic（scotch）も主催者のscotchも同じです（Q12）。
-- 変更ごとの効果を聞かれたら補足S3を出します。4ノードで、multiLevel −1.5 %、ソースの変更が順に−3.4 %、−2.3 %、−1.3 %、−2.8 %です（どれも直前の構成を対照に、同じ時期に3〜4本ずつ）。別々の実験なので足し合わせません。合計の効果は、上の表で直接測っています。
+- multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.323で目安より少し低いですが、scotchの既定（0.327）も主催者のscotchも同じです。Basic（対応付けたscotch）は0.334です（Q12）。
+- 変更ごとの効果を聞かれたら補足S3を出します。4ノードで、multiLevel −1.5 %（scotchの既定に対して）、ソースの変更が順に−3.4 %、−2.3 %、−1.3 %、−2.8 %です（どれも直前の構成を対照に、同じ時期に3〜4本ずつ）。別々の実験なので足し合わせません。合計の効果は、上の表で直接測っています。
 
 ### 15. BONUS ANALYSIS（0:35）
 
@@ -354,10 +356,10 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 ### 16. SCALING ANALYSIS（0:40）
 
-**Message:** Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.14
+**Message:** Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15
 
-- Against our baseline: Basic −8 / −14 / −20 %, Bonus −20 / −24 / −29 % on 1 / 2 / 4 nodes.
-- Parallel efficiency, 1 → 4 nodes: baseline 1.00, Basic 1.14, Bonus 1.12.
+- Against our baseline: Basic −8 / −14 / −21 %, Bonus −20 / −24 / −29 % on 1 / 2 / 4 nodes.
+- Parallel efficiency, 1 → 4 nodes: baseline 1.00, Basic 1.15, Bonus 1.12.
 - Basic gains most on 4 nodes (scotch: −1.3 / −2.5 / −10.5 %); the source changes gain most on 1 node, where each rank holds 4× more data (U in one pass: −6.4 % on 1 node, −2.3 % on 4).
 
 図：`figures/fig22_before_after_scaling.png`
@@ -366,7 +368,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - ルールが求める「1/2/4ノードのscaling」と「4ノードのbefore/after」を、この1枚で見せます。
 - Basicの効果がノード数とともに大きくなるのは、主に分割の効果です（scotchが1/2/4ノードで−1.3/−2.5/−10.5 %）。理由は確かめていません（Q30）。
 - ソースの変更の効果が1ノードで大きいのは、rankあたりのデータが4倍あり、DRAMから来る量が多いからだと説明します。15枚目の「1コアあたりの帯域が少ないほど効く」と同じ向きです。
-- 効率が1を超える理由は、rankあたりのデータがキャッシュに入りやすくなるためという仮説です。ノード数ごとのカウンタは測っていません。
+- 効率が1を超える理由は、カウンタで確かめました（#66、対応付けの前のBasic、uProf、1/2/4ノード）。1セル・1 stepあたりのサイクルは、4ノードで1ノードの0.84倍、DRAMからのL1 refillは0.70倍です。減ったのは、面の番地を通してセルの配列を飛び飛びに読み書きする疎行列の計算（平滑化、残差、行列とベクトルの積）で、DRAMからのrefillが60〜70 %減ります。この配列はrankあたり1ノードで4 MB、4ノードで1 MBになり、コアあたり4 MBのL3に収まります。
 - 1・2ノードの変更ごとの値の多くは1本どうしの比較なので、本編では傾向だけ言います（補足S3）。
 
 ### 17. OPTIMIZATION IDEAS (NOT WORKED)（0:40）
@@ -380,7 +382,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 | Rank reordering (92 % fewer inter-node faces) | +0.1 % | The same: fewer bytes between nodes do not shorten the wait |
 | GAMG coarsest level on fewer ranks | −0.25 % to +4.95 % | 81 % of the global sums, but about 0.6 % of the time |
 | Weighted cells (×2, ×12), METIS with two constraints | +1.5 % to +6.1 % | Uneven cell counts, or more processor faces |
-| scotch coefficients, malloc thresholds | −0.8 %, −0.4 % | Below our 1 % threshold |
+| malloc thresholds | −0.4 % | Below our 1 % threshold |
 | SMT (2 ranks per core) | 5.7× slower | Stalls of minutes; cause not isolated |
 
 下に2行：
@@ -393,7 +395,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 一覧を指して、理由は2つにまとまると言います。1つはどれも運ぶデータを減らさないこと（速さを決めているのはメモリ帯域）。もう1つは、MPIの時間の多くが遅いrankを待つ時間で、通信を速くしても待ちは減らないことです。
 - UCXのRCはIMBの帯域を55 %上げましたが、1 stepは−0.01 %（Basic）でした。GAMGの最も粗い段は`MPI_Allreduce`の呼び出しの81 %を出しますが、時間はstepの約0.6 %です。
 - 重み付けは、セル数を崩してかえって遅くなりました（Q4、Q5）。
-- 小さな改善を組み合わせない理由：1 %未満の改善はrun間のばらつきに埋もれます。確かめないまま積み重ねると、たまたま速かったrunに合わせることになります。3回以上流して1 %以上速いものだけを採用しました。
+- 小さな改善を組み合わせない理由：1 %未満の改善は、3本ずつの比較ではrun間のばらつき（4ノードで約0.2 %）と区別しにくく、確かめないまま積み重ねると、たまたま速かったrunに合わせることになります。3回以上流して1 %以上速いものだけを採用しました。例外はscotchの対応付け（−0.69 %）で、採点される4ノードのBasicに効くので、交互に5本ずつ流して全runが対照より速いことを確かめてから採用しました。
+- （注）下の2行目「Gains below 1 % are within the noise」は、ばらつきの実測（約0.2 %）と合いません。言い直す案：「With 3 runs per side we trusted only gains above 1 %. The one smaller change that affects the scored Basic run we re-tested 5 against 5 and adopted.」
 
 ### 18. CONCLUSION（0:40）
 
@@ -402,10 +405,10 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 | s / step | 1 node | 2 nodes | 4 nodes |
 |---|---:|---:|---:|
 | Baseline | 14.57 | 7.43 | 3.65 |
-| Basic | 13.36 (−8 %) | 6.37 (−14 %) | **2.92 (−20 %)** |
+| Basic | 13.36 (−8 %) | 6.37 (−14 %) | **2.90 (−21 %)** |
 | Bonus | 11.67 (−20 %) | 5.64 (−24 %) | **2.60 (−29 %)** |
 
-- What worked: memory next to each core (pinning, −11 %), the same work for every rank (scotch, −10.5 %), fewer bytes per step (4 source changes −9.5 %, multiLevel −1.5 %); each against its own control.
+- What worked: memory next to each core (pinning, −11 %), the same work for every rank (scotch, −10.5 %; mapped onto the node, −0.7 %), fewer bytes per step (4 source changes −9.5 %, multiLevel −1.5 %); each against its own control.
 - What remains: memory bandwidth still sets the speed (half the channels: 2.1× slower even with the Bonus); MPI is 19 % of a step, mostly waiting, because ranks still differ by 6 % in computation.
 
 図：上の表。分割の絵を添えるなら`decomposition/decomposition-subdomains.png`（hierarchical → scotch → multiLevel）にし、キャプションで固定とソースの変更にも触れます。
@@ -414,7 +417,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 最初と最後で同じ数字を言います：「同じ計算のまま、4ノードで3.65秒から2.60秒、1.40倍です」。
 - 効いたことの%は、それぞれ同時期の対照に対する値で、足し合わせません。
 - 残る律速：配置の実験では、Bonusでもチャネル半分で2.11倍遅く、速さを決めているのは最適化の前後でメモリ帯域です。rankの計算時間の差（最大/中央値1.06）は、セル数では説明できず、壁の面で一部だけ説明できます（Q21）。
-- 最後の一言：「Basicで置き場所と仕事の均等さを直して20 %、Bonusで運ぶデータを減らしてさらに11 %」。
+- 最後の一言：「Basicで置き場所と仕事の均等さを直して21 %、Bonusで運ぶデータを減らしてさらに10 %」。
 
 ---
 
@@ -487,7 +490,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 | s / step | full128 | spread64 | packed64 | spread64 / full128 | packed64 / spread64 |
 |---|---:|---:|---:|---:|---:|
-| Basic | 2.920 | 2.887 | 6.347 | 0.99 | 2.20 |
+| Basic (before the mapping) | 2.920 | 2.887 | 6.347 | 0.99 | 2.20 |
 | Bonus without the patches | 2.869 | 2.874 | 6.321 | 1.00 | 2.20 |
 | Bonus | 2.595 | 2.649 | 5.598 | 1.02 | 2.11 |
 | patches (Bonus against the line above) | −9.5 % | −7.9 % | −11.4 % | | |
@@ -503,7 +506,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 図：`figures/fig14_vs_organiser_reference.png`
 
 - Organisers' setup (ASPIRE-2A notes, tasks 4.3): site module, `mpirun` with no options, default MPI settings, no binding.
-- Against their `scotch` mean: Basic −8 / −13 / −11 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
+- Against their `scotch` mean: Basic −8 / −13 / −12 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
 
 ### S10. The submitted scripts reproduce the results（#54）
 
@@ -518,7 +521,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 ### S11. OFI against UCX under our placement（#56、#60）
 
-- Basic configuration on 4 nodes, only the MPI transport changed; 3 runs each, alternated in the same period (2026-10-07).
+- Basic configuration (before the mapping) on 4 nodes, only the MPI transport changed; 3 runs each, alternated in the same period (2026-10-07).
 - UCX (main): 2.9176, 2.9168, 2.9246 s/step, mean 2.9197. OFI with `FI_OFI_RXM_USE_SRX=0`: 2.9452, 2.9374, 2.9438, mean 2.9421 (+0.77 %).
 - All 6 runs VALID, every step returned 0 (no SIGBUS), the same `coefficient.dat` Cd (0.28404934573921931).
 - OFI's own spread is also 0.26 %, so the narrow spread of our runs does not come from UCX (Q15).
@@ -536,7 +539,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 図：`figures/fig16_journey.png`
 
-- start (case-default split, binding lost) 3.670 → pinning 3.257 → scotch = Basic 2.920 → Bonus 2.599. Each step was measured against its own control in the same period.
+- start (case-default split, binding lost) 3.670 → pinning 3.257 → scotch 2.915 → mapped onto the node = Basic 2.898 → Bonus 2.599. Each step was measured against its own control in the same period.
 - 始点は#36の3本（10/02〜03）で、本編のbaseline 3.65（#62、10/12）と同じ構成です。
 
 ### S14. Build, storage and MPI
@@ -585,13 +588,13 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Static weights moved cells away from an even split: the cell-count imbalance grew to 1.073 with weight ×2. With ×12, the top-level split broke down and the faces between nodes grew five times.
 
 **Q6. Why are the effects different on 1, 2 and 4 nodes?**
-- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (reading the U matrix once instead of three times: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. On 4 nodes we tested the same idea by giving each core less memory: with 64 ranks per node the patches gain 7.9 % on all memory channels and 11.4 % on half of them. The same reasoning fits the super-linear scaling, but we have not measured counters across node counts.
+- On 1 node each rank holds four times more data than on 4 nodes, so more of it comes from DRAM. Removing array passes therefore saves more on 1 node (reading the U matrix once instead of three times: −6.4 % against −2.3 %). On 1 node we measured it: with the patches, L1 refills from DRAM fall 17 % while instructions fall 4 %. On 4 nodes we tested the same idea by giving each core less memory: with 64 ranks per node the patches gain 7.9 % on all memory channels and 11.4 % on half of them. The same reasoning explains the super-linear scaling, and there we measured counters at 1, 2 and 4 nodes: per cell and step, the L1 refills from DRAM fall by 30 % from 1 to 4 nodes, almost all in the sparse-matrix kernels, whose scattered cell arrays shrink to 1 MB per rank and fit in L3.
 
 **Q7. What is proven and what is not?**
 - Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat` and identical solver logs (every residual, to 16 digits), and the pinning problem (seen in `/proc` during the solve).
 - Shown by experiment on 4 nodes: the step time follows the memory bandwidth, not the number of cores (half the cores: −1 % to +2 %; half the memory channels: 2.1–2.2× slower, as the bandwidth drops 2.22×), and the patches gain more when each core has less memory.
 - Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
-- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), how much of the memory effect is DRAM bandwidth and how much is L3 capacity, and the cache explanation of the super-linear scaling. We present those as hypotheses.
+- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), and how much of the memory effect is DRAM bandwidth and how much is L3 capacity. We present those as hypotheses. (The cache explanation of the super-linear scaling is now measured with counters at 1, 2 and 4 nodes; see Q6.)
 
 **Q8. Why rebuild OpenFOAM instead of using the site module?**
 - A single run with the site module gave the same speed (−0.08 %). Our own build records exactly what ran, and the Bonus patches need a build anyway.
@@ -601,26 +604,26 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - （メモ）関数によっては最後の桁がglibcと違い得ます。Basicの範囲かを聞かれたら、ビルド設定（F1）の範囲と考えていると答えます。
 
 **Q10. Is multiLevel used in Basic?**
-- No. Basic uses `scotch`. `multiLevel` is a different decomposition method, so it is part of the Bonus.
+- No. Basic uses `scotch`, mapped onto the node's sockets and NUMA domains through the method's own settings (`scotchCoeffs`), which F1 leaves free in Basic. `multiLevel` is a different decomposition method, so it is part of the Bonus.
 
 **Q11. Did profiling affect the benchmark numbers?**
 - No. Profiles come from separate diagnostic runs. Benchmark runs have no profiler.
 
 **Q12. Why is the 80-step Cd below the reference?**
-- Cd after 80 steps depends on the decomposition. The organisers' own `scotch` run on ASPIRE-2A also gives 0.327 at 80 steps, and their notes say that `hierarchical` and `scotch` differ by 0.7 %, 3.0 % and 3.5 % at 40, 80 and 150 steps. Our Basic (`scotch`) gives 0.327 and the Bonus (`multiLevel`) 0.323. `multiLevel` differs from `scotch` by +0.5 %, −1.3 % and +2.6 %, less than the organisers' two methods differ from each other. The Bonus value is identical to its unmodified baseline, so the gap does not come from our source changes.
+- Cd after 80 steps depends on the decomposition. The organisers' own `scotch` run on ASPIRE-2A also gives 0.327 at 80 steps, and their notes say that `hierarchical` and `scotch` differ by 0.7 %, 3.0 % and 3.5 % at 40, 80 and 150 steps. Our Basic (`scotch` mapped onto the node) gives 0.334, `scotch` with its defaults 0.327, and the Bonus (`multiLevel`) 0.323. Against `scotch` with its defaults, the mapping moves Cd by +0.8 %, +2.1 % and +3.2 % and `multiLevel` by +0.5 %, −1.3 % and +2.6 %, no more than the organisers' two methods differ from each other. The Bonus value is identical to its unmodified baseline, so the gap does not come from our source changes.
 - （メモ）主催者の値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`の表と「What Cd tells you」です（2ノード80 stepでhierarchical 0.336869、scotch 0.327130）。目安の0.34は、OHC-1の別の機械での値（0.334〜0.345）です。
 
 **Q13. Why is your Cd different from the organisers' reference?**
-- Our Basic Cd at 150 steps is 0.284049, against 0.283983 in the organisers' `scotch` runs (a relative 2.3e-4). When we ran the site module once with our own scripts and decomposition, we got their value exactly (0.28398300763231610). So the difference comes from our build (for example, we link AMD's math library), not from the decomposition or the method.
+- With `scotch` and its defaults our Cd at 150 steps was 0.284049, against 0.283983 in the organisers' `scotch` runs (a relative 2.3e-4). When we ran the site module once with our own scripts and decomposition, we got their value exactly (0.28398300763231610). So that difference comes from our build (for example, we link AMD's math library), not from the decomposition or the method. Our final Basic maps the decomposition onto the node, and a different decomposition moves Cd at 150 steps: 0.293016 (+3.2 %).
 
 **Q14. The organisers saw a signal 7 (SIGBUS) at the end of 2- and 4-node runs. Did you?**
 - No. That comes from the default OFI provider at `MPI_Finalize`. Our job scripts use Cray MPICH over UCX, and every step of every run returned 0.
 
 **Q15. Why is your run-to-run spread so much smaller than the organisers'?**
-- Our 5 Basic runs on 4 nodes lie within 0.35 %; the organisers' 5 `scotch` runs spread over 12 %. It is not UCX: our runs with the organisers' transport (OFI with `FI_OFI_RXM_USE_SRX=0`) also lie within 0.26 %. The main remaining difference is the placement — every rank pinned with its memory on its NUMA domain. Our own baseline without working pinning varied by 8 % (3.53–3.82 s/step).
+- Our 5 Basic runs on 4 nodes lie within 0.18 %; the organisers' 5 `scotch` runs spread over 12 %. It is not UCX: our runs with the organisers' transport (OFI with `FI_OFI_RXM_USE_SRX=0`) also lie within 0.26 %. The main remaining difference is the placement — every rank pinned with its memory on its NUMA domain. Our own baseline without working pinning varied by 8 % (3.53–3.82 s/step).
 
 **Q16. Why UCX and not the site's default OFI?**
-- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` avoids the crash, so we compared again with everything else as in Basic: 3 alternated 4-node runs each, OFI 2.942 against UCX 2.920 s/step (+0.77 %, ranges not overlapping), the same Cd, no crash. Their other workaround, `FI_VERBS_PREFER_XRC=0`, was +0.50 % (one run each), also with the same Cd. So UCX stays.
+- In September, every 2- and 4-node run with the default OFI provider died with SIGBUS at `MPI_Finalize`, while UCX completed every run. The organisers have since found that `FI_OFI_RXM_USE_SRX=0` avoids the crash, so we compared again with everything else as in Basic (then without the mapping): 3 alternated 4-node runs each, OFI 2.942 against UCX 2.920 s/step (+0.77 %, ranges not overlapping), the same Cd, no crash. Their other workaround, `FI_VERBS_PREFER_XRC=0`, was +0.50 % (one run each), also with the same Cd. So UCX stays.
 
 **Q17. Is the pinning fix allowed in Basic?**
 - Yes. It is job-script placement: `numactl` sets the memory policy before each rank starts, and `taskset` sets the CPU affinity from outside. F1 lists job scripts, rank placement and affinity as Basic. We did not use `LD_PRELOAD`, which would be Bonus work.
@@ -667,7 +670,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Yes, at three levels. Every benchmark run ends with an MPI benchmark (IMB) on the same nodes, so we know the bandwidth and the global-sum time of each job. CrayPAT gave the time and count of every MPI call on every rank, and each rank's message count matches its number of neighbours in the decomposition exactly. Then we changed only the network side: 55 % more bandwidth (UCX over RC), 92 % fewer faces between nodes, another transport (OFI). None made a step more than 0.25 % faster. A rank's wait follows its own computation (R² 0.77), not its neighbours. We did not read NIC or switch counters.
 
 **Q30. Why does the Basic gain grow with the node count?**
-- Mostly through the decomposition: scotch gains 1.3 %, 2.5 % and 10.5 % on 1, 2 and 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
+- Mostly through the decomposition: scotch gains 1.3 %, 2.5 % and 10.5 % on 1, 2 and 4 nodes, and mapping it onto the node gains only on 4 nodes (0.7 %). We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
 **Q32. Your third change skips boundary updates. Isn't skipping boundary checks prohibited?**
 - It skips no check. At six places the code formed a surface integral (a divergence), built its boundary values, exchanged them across processor boundaries, and then used only the cell values. We form the same cell values with the same loop and skip only the boundary values that nobody reads. The boundary conditions of the solved fields, every exchange the solution uses, and the bounding of k and omega are unchanged; the bounding appears in our logs as often and with the same values as in the baseline.
@@ -689,7 +692,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 新しい図はBoxに置いてあります。`figures/`の`tab09`〜`tab13`、`fig24`、`fig25`、`fig19`、`fig20`と、`decomposition/`の`decomposition-subdomains-baseline-vs-basic.png`（NUMAで色分けした版も）です。パッチ番号を消した版で、`fig03`、`fig04`、`fig09`、`fig10`、`fig13`、`fig16`、`fig17`、`fig20`、`tab03`〜`tab06`も置き換えました。
 - 本編18枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。
 - 話す人と交代の位置を決めます（Qwenとの切り替えも）。
-- 数値は提出物の`README.md`と同じものを使います（2.920 / 2.599 / −11.0 %、3.296）。baselineは3.65です。
+- 数値は提出物の`README.md`と同じものを使います（2.898 / 2.599 / −10.3 %、3.296）。baselineは3.65です。
 - 補足スライド（S1〜S16）は本編の後ろに置き、質疑ですぐ出せるようにします。
 - 図の文字が小さければ、`.svg`を開いて拡大するか、pptxの側で注記を大きく書き直します。
 

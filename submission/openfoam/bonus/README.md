@@ -10,7 +10,8 @@ things differ, and nothing else.
    - 4 nodes: `domains (4 2 4 16)`
 
    `caseDefinition` sets `decompositionMethod multiLevel`, and the `multiLevelCoeffs` block is appended to the shipped
-   `decomposeParDict`. `dicts/` has both files of the 4-node run. `controlDict` is the same as in Basic.
+   `decomposeParDict` (Basic's `scotchCoeffs` is not added). `dicts/` has both files of the 4-node run. `controlDict` is the
+   same as in Basic.
 2. **Source** (Bonus F2, "changes to v2512 source"): the patches in `patches/` are applied in name order to the official v2512
    source before the build (`patch -p1`). The compile flags and toolchain are the same as for the Basic build.
 
@@ -52,23 +53,24 @@ coefficients, the same rank and node counts, and unmodified v2512. It ran with e
 - The decomposition change alone does not change the source. The rules check it with the Sanity check table, which gives about
   0.43 / 0.34 / 0.28 – 0.29 at 40 / 80 / 150 steps.
 
-| Steps | Sanity reference | Basic (scotch) | multiLevel (baseline and Bonus) |
-|---:|---:|---:|---:|
-| 40 | ~0.43 | 0.43598848994661615 | 0.43827636195043501 |
-| 80 | ~0.34 | 0.32713924728038718 | 0.32285935413723610 |
-| 150 | ~0.28 – 0.29 | 0.28404934573921931 | 0.29138777754153217 |
+| Steps | Sanity reference | `scotch` with its defaults | Basic: `scotch` mapped onto the node | multiLevel (baseline and Bonus) |
+|---:|---:|---:|---:|---:|
+| 40 | ~0.43 | 0.43598848994661615 | 0.43957921531324928 | 0.43827636195043501 |
+| 80 | ~0.34 | 0.32713924728038718 | 0.33409590047442955 | 0.32285935413723610 |
+| 150 | ~0.28 – 0.29 | 0.28404934573921931 | 0.29301591596528520 | 0.29138777754153217 |
 
-- At 80 steps, both decompositions give 0.32 – 0.33. That is a little below the reference values (0.334 – 0.345 in the table).
-  Basic (`scotch`, unmodified source) shows the same gap, so it does not come from `multiLevel`.
-- At 40 and 150 steps, both are close to the reference.
+- All three ran unmodified source; only the decomposition differs. At these step counts the decomposition moves Cd by a few
+  per cent (the organisers' notes give 0.7 %, 3.0 % and 3.5 % between `hierarchical` and `scotch`).
+- At 80 steps, `multiLevel` gives 0.323 and `scotch` with its defaults 0.327, a little below the reference values (0.334 –
+  0.345 in the table); Basic gives 0.334. At 40 and 150 steps, all three are close to the reference.
 
 ## Speedup against our Basic result (same machine)
 
 | Nodes (ranks, steps) | Basic mean s/step | Bonus mean s/step | Change | Speedup |
 |---|---:|---:|---:|---:|
-| 1 (128, 40) | 13.364347 (3 runs) | 11.668460 (3 runs) | −12.69 % | 1.145 × |
-| 2 (256, 80) | 6.366659 (3 runs) | 5.640683 (3 runs) | −11.40 % | 1.129 × |
-| 4 (512, 150) | 2.919579 (5 runs) | 2.599353 (3 runs) | −10.97 % | 1.123 × |
+| 1 (128, 40) | 13.364504 (3 runs) | 11.668460 (3 runs) | −12.69 % | 1.145 × |
+| 2 (256, 80) | 6.371748 (3 runs) | 5.640683 (3 runs) | −11.47 % | 1.130 × |
+| 4 (512, 150) | 2.897638 (5 runs) | 2.599353 (3 runs) | −10.29 % | 1.115 × |
 
 Every run with its PBS job ID is in `../scaling/scaling.txt`. `results/<n>node/` holds the fastest Bonus run of each node count.
 The range across the repeated Bonus runs is 0.05 % (1 node), 0.20 % (2 nodes) and 0.18 % (4 nodes).
@@ -81,7 +83,7 @@ cumulative effect is the measured Bonus against Basic above.
 
 | Change (commit) | Compared with | 1 node | 2 nodes | 4 nodes |
 |---|---|---:|---:|---:|
-| multiLevel decomposition, unmodified source (`2eacff5`) | Basic, scotch | −0.45 % | −0.38 % | −1.54 % |
+| multiLevel decomposition, unmodified source (`2eacff5`) | `scotch` with its defaults (Basic before the mapping) | −0.45 % | −0.38 % | −1.54 % |
 | + 0001 (`e2730db`) | multiLevel, unmodified | −2.19 % | −2.94 % | −3.39 % |
 | + 0002 (`57b6567`) | `e2730db` | −6.39 % | −4.13 % | −2.29 % |
 | + 0003 (`20d285b`) | `57b6567` | −1.40 % | −1.88 % | −1.31 % |

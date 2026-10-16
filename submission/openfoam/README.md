@@ -7,12 +7,13 @@
 
 | Nodes (ranks, steps) | Basic: s/step, mean of runs | Bonus: s/step, mean of runs | Bonus vs Basic |
 |---|---:|---:|---:|
-| 1 (128, 40) | 13.364347 (3 runs) | 11.668460 (3 runs) | −12.69 % |
-| 2 (256, 80) | 6.366659 (3 runs) | 5.640683 (3 runs) | −11.40 % |
-| **4 (512, 150)** | **2.919579** (5 runs) | **2.599353** (3 runs) | **−10.97 %** |
+| 1 (128, 40) | 13.364504 (3 runs) | 11.668460 (3 runs) | −12.69 % |
+| 2 (256, 80) | 6.371748 (3 runs) | 5.640683 (3 runs) | −11.47 % |
+| **4 (512, 150)** | **2.897638** (5 runs) | **2.599353** (3 runs) | **−10.29 %** |
 
-- **Basic** (this folder): unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A, `scotch` decomposition, MPI ranks pinned to cores
-  and their memory to the local NUMA domain. This is the result for the organisers' re-run.
+- **Basic** (this folder): unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A, `scotch` decomposition mapped onto the sockets and
+  NUMA domains of the nodes (`scotchCoeffs`), MPI ranks pinned to cores and their memory to the local NUMA domain. This is the
+  result for the organisers' re-run.
 - **Bonus** (`bonus/`): the same build and runtime setup with a NUMA-aware `multiLevel` decomposition and four source patches
   that remove redundant memory traffic. `coefficient.dat` is bit-identical to the pre-change baseline at 1, 2 and 4 nodes (F3).
   See `bonus/README.md`.
@@ -94,12 +95,19 @@ We rebuild the official source rather than use the site module.
 
 These are the files OpenFOAM read in the 4-node run. Only the edits that Basic (F1) allows were made:
 
-- `caseDefinition`: `nCores 512`, `decompositionMethod scotch`. There is no `scotchCoeffs`, so scotch runs with its defaults.
-  Everything else is as shipped.
+- `caseDefinition`: `nCores 512`, `decompositionMethod scotch`. Everything else is as shipped.
 - `controlDict`: the shipped `controlDict.noWrite` with `endTime 150`. All function objects are kept.
-- `decomposeParDict`: the shipped file, unchanged. It takes `numberOfSubdomains` and `method` from `caseDefinition`.
-- The 1- and 2-node runs differ only in `nCores` (128, 256) and `endTime` (40, 80). Their `caseDefinition` and
-  `controlDict` are in `results/1node/` and `results/2node/`.
+- `decomposeParDict`: the shipped file with one added `scotchCoeffs` block, the settings of the `scotch` method. It still takes
+  `numberOfSubdomains` and `method` from `caseDefinition`.
+  - `domains (2 4 16)` and `domainWeights (0.125 0.0625 0.015625)` make Scotch map the subdomains onto the tree of a node
+    (Scotch's tree-leaf target) instead of onto a flat set of parts: 2 sockets, 4 NUMA domains per socket and 16 cores per
+    NUMA domain, with the relative cost of a link at each level. On 2 and 4 nodes OpenFOAM's `scotchDecomp` adds the nodes as
+    the top level, with weight 1.
+  - `strategy` is Scotch 6.1's default mapping strategy for 512 parts with imbalance 0.01, plus the terms Scotch adds when
+    balance is enforced (`SCOTCH_STRATBALANCE`), which end with an exact balancing pass `x{bal=0.01}`.
+  - `run/prepare.pbs` appends the same three entries to the shipped file.
+- The 1- and 2-node runs differ only in `nCores` (128, 256) and `endTime` (40, 80). They read the same `decomposeParDict`.
+  Their `caseDefinition` and `controlDict` are in `results/1node/` and `results/2node/`.
 - As in `Allrun`: `fvSolution` is the shipped `fvSolution.fixedIter`, and `0/` comes from `0.orig/`. `fvSchemes` and the mesh
   are unchanged.
 
@@ -130,9 +138,9 @@ MPI launch and placement:
 - MPI is Cray MPICH 8.1.15 over UCX (`craype-network-ucx`, `cray-mpich-ucx/8.1.15`), not the default OFI provider. The signal 7
   (SIGBUS) at `MPI_Finalize` that the organisers' ASPIRE-2A notes describe for 2 and 4 nodes does not occur. Every step of
   every run returned 0. We also tried the default OFI provider with each of the two workarounds in those notes, with
-  everything else as in Basic. Both completed without the signal and gave the same Cd, but were slower on 4 nodes:
-  `FI_OFI_RXM_USE_SRX=0` by 0.77 % (2.9421 against 2.9197 s/step, 3 alternated runs each, ranges not overlapping) and
-  `FI_VERBS_PREFER_XRC=0` by 0.50 % (2.9338 against 2.9192 s/step, one run each). Basic stays on UCX.
+  everything else as in Basic (then still without the mapping). Both completed without the signal and gave the same Cd, but
+  were slower on 4 nodes: `FI_OFI_RXM_USE_SRX=0` by 0.77 % (2.9421 against 2.9197 s/step, 3 alternated runs each, ranges not
+  overlapping) and `FI_VERBS_PREFER_XRC=0` by 0.50 % (2.9338 against 2.9192 s/step, one run each). Basic stays on UCX.
 
 ### Results (`results/<n>node/`)
 
@@ -142,22 +150,25 @@ One run per node count, the fastest of the repeated runs. The files are:
 - `decomposePar.log`, `renumberMesh.log`, `potentialFoam.log` and `applyBoundaryLayer.log`.
 - `job-output.log`: the PBS job output.
 - `caseDefinition` and `controlDict` (1 and 2 nodes): the files that run read. The 4-node ones are in `dicts/`, and
-  `decomposeParDict` is the shipped file at every node count.
+  `decomposeParDict` is the same at every node count (`dicts/`).
 
 `scaling/scaling.txt` lists every run with its PBS job ID.
 
 | Nodes | Runs (PBS job IDs, `.pbs101`; first = in `results/`) | Mean s/step | Min – max (range) | Cd at last step |
 |---|---|---:|---|---|
-| 1 | 25681549, 25688005, 25688040 | 13.364347 | 13.343864 – 13.390329 (0.35 %) | 0.43598848994661615 |
-| 2 | 25688187, 25681550, 25688036 | 6.366659 | 6.353589 – 6.377541 (0.38 %) | 0.32713924728038718 |
-| 4 | 25681428, 25681323, 25681500, 25682005, 25691889 | 2.919579 | 2.915547 – 2.925664 (0.35 %) | 0.28404934573921931 |
+| 1 | 25837534, 25836835, 25837254 | 13.364504 | 13.362568 – 13.367984 (0.04 %) | 0.43957921531324928 |
+| 2 | 25837416, 25836889, 25837681 | 6.371748 | 6.365990 – 6.376214 (0.16 %) | 0.33409590047442955 |
+| 4 | 25827680, 25827199, 25827285, 25827343, 25827444 | 2.897638 | 2.894442 – 2.899615 (0.18 %) | 0.29301591596528520 |
 
-- The runs were made on 2026-10-04 and 2026-10-05 (UTC).
+- The 4-node runs were made on 2026-10-15, the 1- and 2-node runs on 2026-10-16 (UTC), all from one commit and one build.
 - `coefficient.dat` is identical across all runs of the same node count.
-- Sanity check of Cd (reference about 0.43 / 0.34 / 0.28 – 0.29 at 40 / 80 / 150 steps):
-  - 40 and 150 steps: close to the reference.
-  - 80 steps: 0.327, a little below the reference values (0.334 – 0.345).
-- The range across repeated runs (0.35 – 0.38 %) is the run-to-run variability. It is a different quantity from the
+- Sanity check of Cd (OHC-1 values 0.433 – 0.436, 0.334 – 0.345 and 0.284 – 0.292 at 40 / 80 / 150 steps):
+  - 80 steps: 0.3341, within the OHC-1 values.
+  - 40 and 150 steps: 0.4396 and 0.2930, just above them.
+  - At these step counts the decomposition moves Cd: the organisers' notes give 0.7 %, 3.0 % and 3.5 % between
+    `hierarchical` and `scotch`. Our mapping moves it by +0.8 %, +2.1 % and +3.2 % from `scotch` with its defaults
+    (0.4360, 0.3271, 0.2840).
+- The range across repeated runs (0.04 – 0.18 %) is the run-to-run variability. It is a different quantity from the
   step-to-step variation within one run.
 - For comparison, the organisers' vanilla reference runs on ASPIRE-2A with `scotch` (site module, default MPI settings, no
   binding; tasks 4.3) gave 3.191 – 3.576 s/step on 4 nodes, 7.196 – 7.423 on 2 nodes and 14.049 – 14.808 on 1 node.
@@ -197,6 +208,17 @@ Each comparison ran on 4 nodes with 150 steps, with 3 runs per side in the same 
 
 - **Decomposition**: `scotch` (2.9145 s/step) against the case default `hierarchical (16 8 4)` (3.2574): −10.5 %. On 2 nodes,
   6.3679 against 6.5282 (−2.5 %); on 1 node, 13.3459 against 13.5229 (−1.3 %).
+- **Mapping the decomposition onto the node** (`scotchCoeffs`; 2026-10-15, 5 alternated runs per side): 2.897638 s/step
+  (2.894442 – 2.899615) against `scotch` with its defaults, 2.917726 (2.911949 – 2.925723): −0.69 %. Every run with the
+  mapping was faster than every run without it, and the runs varied less (standard deviation 0.0019 against 0.0065 s/step).
+  - In `decomposePar`, the subdomains share 3.3 % more faces in total (3.02 against 2.93 million), but 23 % fewer between
+    nodes, 21 % fewer between sockets and 10 % fewer between NUMA domains. A subdomain has at most 40 neighbours instead of
+    66, and the largest has 1.00 % more cells than the average instead of 1.07 %.
+  - We first measured it on 2026-10-05 (2.8942 against 2.9181 on 4 nodes, 3 runs each) and did not adopt it then, because
+    we kept only changes above 1 %. The organisers rank the 4-node re-run of Basic, so we measured it again with 5 runs
+    per side and adopted it.
+  - On 1 and 2 nodes it changes little: 13.364504 and 6.371748 s/step against 13.364347 and 6.366659 for the earlier
+    Basic runs (+0.00 % and +0.08 %). Alternated with controls on 2026-10-05 it was +0.29 % and +0.07 %.
 - **CPU and NUMA placement**: without the fix above, the memory of unpinned ranks spreads to remote NUMA domains, and runs were
   16 – 19 % slower (4 nodes, scotch: 3.40 – 3.47 against 2.917 s/step). An `LD_PRELOAD` interposer that pins after `MPI_Init` gave the same speed as `numactl` + `taskset`. Basic does
   not allow `LD_PRELOAD`, so Basic uses `numactl` + `taskset`.
@@ -205,7 +227,7 @@ Each comparison ran on 4 nodes with 150 steps, with 3 runs per side in the same 
   - No gain: the OpenFOAM communication switches we tried (`topoControl`, `nbx.tuning`, `pbufs.tuning`). `commsType scheduled`
     stopped with a floating-point exception in GAMG, so we could not use it.
   - SMT with 2 ranks per core (1024 ranks) was about 5.7 times slower. We stopped that run after 22 steps.
-- **Checked later, each against Basic runs in the same period** (not adopted):
+- **Checked later, each against Basic runs in the same period, before the mapping** (not adopted):
   - GCC profile-guided optimisation (`-fprofile-generate` on the official 1-node run, then `-fprofile-use`): 2.917802 against
     2.913900 s/step on 4 nodes (+0.13 %), 13.334152 against 13.324118 on 1 node (+0.08 %), one run each.
     `coefficient.dat` bit-identical.
@@ -217,13 +239,15 @@ Each comparison ran on 4 nodes with 150 steps, with 3 runs per side in the same 
 
 | Nodes | Basic s/step | Speedup | Efficiency | Bonus s/step | Speedup | Efficiency |
 |---|---:|---:|---:|---:|---:|---:|
-| 1 | 13.364347 | 1.000 | 1.000 | 11.668460 | 1.000 | 1.000 |
-| 2 | 6.366659 | 2.099 | 1.050 | 5.640683 | 2.069 | 1.034 |
-| 4 | 2.919579 | 4.577 | 1.144 | 2.599353 | 4.489 | 1.122 |
+| 1 | 13.364504 | 1.000 | 1.000 | 11.668460 | 1.000 | 1.000 |
+| 2 | 6.371748 | 2.097 | 1.049 | 5.640683 | 2.069 | 1.034 |
+| 4 | 2.897638 | 4.612 | 1.153 | 2.599353 | 4.489 | 1.122 |
 
-The efficiency is above 1 for both. This fits the per-rank data fitting better in cache as the node count grows. We have not
-measured that with hardware counters. The Bonus patches cut memory traffic (on 1 node, 17 % fewer demand refills from DRAM with
-4 % fewer instructions; `analysis/README.md`), and they gain most on 1 node (see `bonus/README.md`).
+The efficiency is above 1 for both, because the data each rank reads fits better in cache as the node count grows. We
+measured it with hardware counters on Basic before the mapping, at 1, 2 and 4 nodes (`analysis/README.md`): per cell and
+step, a rank needs 16 % fewer cycles on 4 nodes than on 1 node and 30 % fewer L1 refills from DRAM. The Bonus patches cut
+memory traffic (on 1 node, 17 % fewer demand refills from DRAM with 4 % fewer instructions; `analysis/README.md`), and they
+gain most on 1 node (see `bonus/README.md`).
 
 ## Analysis (`analysis/`)
 
@@ -233,7 +257,9 @@ reading of them. `run/submit.sh 4 basic craypat` reruns such a profile. See `ana
 ## Provenance
 
 - Repository: `2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM` (private).
-  - Basic commit `6396eeb619048e90f48ae79ff12f6bdd79defe02` (tag `issue38-basic-final-20261005`).
+  - Basic commit `16c62ac1e809a5baed755002d79525dcbc3f330b` (tag `issue63-basic-final-20261016`).
+  - The Basic before the mapping, which the profiles in `analysis/` and the comparisons in "How we arrived" use: commit
+    `6396eeb619048e90f48ae79ff12f6bdd79defe02` (tag `issue38-basic-final-20261005`).
   - Bonus commit `fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892` (tag `issue51-bonus-fused-gradient-20261006`).
   - The scripts in `build/` and `run/`: directory `submission/openfoam/` of the repository.
 - Every run was started by GitHub Actions. The complete raw records of each run are in our artifact archive.

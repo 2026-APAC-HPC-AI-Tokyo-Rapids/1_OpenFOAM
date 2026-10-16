@@ -10,7 +10,7 @@
 
 | Report | Configuration | Commit (profiling run) | Actions run | s/step under CrayPAT |
 |---|---|---|---|---:|
-| `pat-report-basic.txt` | Basic: scotch, unmodified v2512 | `718acb3` | 37176272426 | 3.063 |
+| `pat-report-basic.txt` | Basic before the mapping: `scotch` with its defaults, unmodified v2512 | `718acb3` | 37176272426 | 3.063 |
 | `pat-report-bonus-before.txt` | multiLevel + patch 0001 | `e2730db` + profiling changes (`34f4c5d`) | 37261721692 | 2.874 |
 | `pat-report-bonus-final.txt` | final Bonus: multiLevel + patches 0001 – 0004 | `fa4f5b0` + profiling changes (`ba5ba1b`) | 37529785072 | 2.712 |
 
@@ -22,8 +22,8 @@ Each of these ran only in diagnostic runs or outside the timed steps. None of th
   which phase of the step each rank is in, and whether it is inside MPI. They pointed to the residual copy in `smoothSolver`
   (patch 0001) and to boundary exchanges whose result is discarded (patch 0003).
 - **AMD uProf 5.3** (timer-based hotspots): one rank per NUMA domain, CPU time per function.
-- **AMD uProf 5.3, `data_access`** (core hardware counters): the Bonus patches against the same build without them, on 1 node.
-  See "Hardware counters" below.
+- **AMD uProf 5.3, `data_access`** (core hardware counters): the Bonus patches against the same build without them, on 1 node,
+  and Basic at 1, 2 and 4 nodes. See the two "Hardware counters" sections below.
 - **`/proc` sampler inside the job**: CPU affinity, NUMA page placement, I/O bytes and context switches per rank. It showed that
   the launcher's CPU binding is removed during `MPI_Init`. It also showed that file I/O in the timed steps is about 0.01 % of
   the run time.
@@ -41,7 +41,7 @@ Each of these ran only in diagnostic runs or outside the timed steps. None of th
 A profile run is a mode of the normal job scripts (`../README.md`, "How to run it"):
 
 ```bash
-../run/submit.sh 4 basic craypat    # like pat-report-basic.txt: scotch, Basic build
+../run/submit.sh 4 basic craypat    # the current Basic (pat-report-basic.txt was made before the mapping), Basic build
 ../run/submit.sh 4 bonus craypat    # like pat-report-bonus-final.txt: multiLevel, Bonus build
 ```
 
@@ -68,8 +68,8 @@ The three reports here were made through our CI. Its profile runs also recorded 
 the final Bonus run sampled the call stacks of 48 ranks with `eu-stack`. None of these change the solver run that CrayPAT
 measures.
 
-We ran both profile modes with these scripts on 2026-10-07 (PBS 25714173 and 25714174 for Basic, 25714181 and 25714182 for
-the final Bonus), and made the reports with the `pat_report` command above:
+We ran both profile modes with these scripts on 2026-10-07 (PBS 25714173 and 25714174 for Basic, then still without the
+mapping, and 25714181 and 25714182 for the final Bonus), and made the reports with the `pat_report` command above:
 
 | Per rank | Basic: report here | Basic: re-run | Final Bonus: report here | Final Bonus: re-run |
 |---|---:|---:|---:|---:|
@@ -116,7 +116,8 @@ the mesh read and solver set-up.
 - **Why we treat the solver as memory-bound.** The patches that remove array passes gain most on 1 node and least on 4 nodes. For
   example, 0002 gives −6.4 % on 1 node and −2.3 % on 4 nodes (see `../bonus/README.md`). With fewer nodes, more data per rank has
   to come from DRAM. On 1 node the hardware counters confirm it (below): with the patches, the demand refills from DRAM fall
-  by 17 % while the instruction count falls by only 4 %. We have not measured the counters on 4 nodes.
+  by 17 % while the instruction count falls by only 4 %. Across node counts the counters show the same thing from the other
+  side: on 4 nodes, the refills from DRAM per cell and step are 30 % fewer than on 1 node (below).
 
 ## Hardware counters (AMD uProf, 1 node)
 
@@ -145,3 +146,40 @@ over the 7 ranks and the 2 runs.
   bring in are only in the L2 accesses. The memory-controller counters, which would give DRAM bytes, are not available to users
   on ASPIRE-2A.
 - Runs: Actions 37580443881 and 37583693730 (without the patches), 37580444029 and 37580455271 (with them).
+
+## Hardware counters across node counts (AMD uProf, Basic, 1 / 2 / 4 nodes)
+
+Why is the parallel efficiency above 1? We profiled Basic before the mapping (`scotch` with its defaults) at 1, 2 and 4 nodes,
+40 steps, with AMD uProf 5.3 `data_access` on one rank per NUMA domain (8, 16 and 32 ranks). Each value is the sum over the
+profiled ranks divided by the number of ranks, the steps and the cells per rank.
+
+| Per cell and step | 1 node | 2 nodes | 4 nodes | 4 nodes / 1 node |
+|---|---:|---:|---:|---:|
+| Cycles | 24,235 | 22,860 | 20,418 | 0.843 |
+| L1 demand refills from DRAM | 24.6 | 20.7 | 17.1 | 0.697 |
+| L1 demand refills from L3 (same CCX) | 5.4 | 6.3 | 9.4 | 1.75 |
+| IPC | 0.528 | 0.583 | 0.666 | |
+
+- The cycles per cell and step fall to 0.843 on 4 nodes. The time per cell and step falls to 0.873 (parallel efficiency 1.145),
+  the same direction and size.
+- By function (the top 30 sampled addresses, 46 – 52 % of the cycles), 4 nodes against 1 node:
+
+  | Function | Cycles | Refills from DRAM |
+  |---|---:|---:|
+  | `GaussSeidelSmoother::smooth` | 0.715 | 0.301 |
+  | `lduMatrix::residual` | 0.687 | 0.404 |
+  | `lduMatrix::Amul` | 0.616 | 0.419 |
+  | cell-field `multiply` (streaming) | 0.797 | 0.948 |
+
+- Only the sparse-matrix kernels gain. They read and write cell arrays (`psi`, the source, the diagonal) in the order of the
+  face addressing. Per rank these arrays are about 4 MB on 1 node, 2 MB on 2 nodes and 1 MB on 4 nodes, against 4 MB of L3
+  per core. The face arrays (coefficients and addressing) are about 16 MB per rank even on 4 nodes and fit at no node count.
+  Our reading: on 4 nodes the scattered reads of cell arrays come from L3 instead of DRAM. Loops that stream through cell
+  fields gain nothing.
+- The same 4-node data show where the remaining imbalance between ranks comes from. The computation cycles of the 32 ranks
+  follow their refills from DRAM (r = +0.69) and from L2 (r = +0.76), not their instructions (r = −0.09) or their cells
+  (r = +0.24). The slowest and the fastest rank execute about the same number of instructions; the slowest reads more than
+  twice as many lines from DRAM. Refills from remote DRAM are 0.3 % of all refills.
+- uProf wrote the reports on the login node after the job, when the node-local OpenFOAM libraries were gone. We mapped their
+  addresses to functions with `nm` of the same libraries from the build that the runs used.
+- Runs: Actions 38752334516, 38754565482 and 38756818916.
