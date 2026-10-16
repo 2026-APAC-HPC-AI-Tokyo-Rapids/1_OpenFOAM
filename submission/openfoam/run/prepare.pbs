@@ -17,12 +17,16 @@ case "${NODES}" in
   4) steps=150; levels="4 2 4 16" ;;
 esac
 if [[ "${PROFILE:-}" == craypat ]]; then steps=40; fi
-# Basic: scotch with its defaults. Bonus: multiLevel with scotch on every level: nodes, the 2 sockets of a node, the 4 NUMA
-# domains of a socket, the 16 cores of a NUMA domain. On 1 node there is no node level.
+# Basic: scotch, mapped onto the cores of a node as a tree (scotchCoeffs below): the 2 sockets, the 4 NUMA domains of a socket
+# and the 16 cores of a NUMA domain. On 2 and 4 nodes scotchDecomp adds the node level above them. The strategy is Scotch 6.1's
+# default mapping strategy for imbalance 0.01, with its final exact balancing x{bal=0.01}.
+# Bonus: multiLevel with scotch on every level: nodes, the 2 sockets of a node, the 4 NUMA domains of a socket, the 16 cores of
+# a NUMA domain. On 1 node there is no node level.
 case "${CONFIGURATION}" in
   basic) method=scotch ;;
   bonus) method=multiLevel ;;
 esac
+strategy='m{vert=10240,low=r{job=t,map=t,poli=S,bal=0.010000,sep=m{vert=120,low=h{pass=10}f{bal=0.010000,move=120},asc=b{bnd=f{bal=0.010000,move=120},org=f{bal=0.010000,move=120}}}|m{vert=120,low=h{pass=10}f{bal=0.010000,move=120},asc=b{bnd=f{bal=0.010000,move=120},org=f{bal=0.010000,move=120}}}f{bal=0.010000}},asc=b{bnd=d{pass=40}f{bal=0.010000,move=80},org=f{bal=0.010000,move=80}}}x{bal=0.010000}f{bal=0.010000,move=80}'
 
 mkdir -p "${CASE_DIR}/logFiles"
 cp -a "${CASE_SOURCE}/." "${CASE_DIR}/"
@@ -32,6 +36,7 @@ cp system/controlDict.noWrite system/controlDict
 cp system/fvSolution.fixedIter system/fvSolution
 sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\1${steps};/" system/controlDict
 sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1$(( NODES * 128 ));/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1${method};/" system/include/caseDefinition
+if [[ "${method}" == scotch ]]; then printf '\nscotchCoeffs\n{\n    domains (2 4 16);\n    domainWeights (0.125 0.0625 0.015625);\n    strategy "%s";\n}\n' "${strategy}" >> system/decomposeParDict; fi
 if [[ "${method}" == multiLevel ]]; then printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains (%s);\n}\n' "${levels}" >> system/decomposeParDict; fi
 
 decomposePar -constant -fileHandler uncollated > logFiles/10_decomposePar.log 2>&1

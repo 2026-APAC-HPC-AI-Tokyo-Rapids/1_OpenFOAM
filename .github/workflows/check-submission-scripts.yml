@@ -1,0 +1,121 @@
+name: ASPIRE-2A submission scripts check
+
+# 一時的な確認用（Issue #63）。Basicの分割にscotchCoeffsを足した提出物の単独スクリプト（submission/openfoam/build、run）を、
+# 主催者が使うのと同じ手順でそのままqsubする。公開URLから取得したソースでBasicをビルドし、1/2/4ノードの計測runを同時に投入する。
+# ケースはこのcommitの`benchmark/occDrivAerStaticMesh`（公式のまま）を使い、scotchCoeffsは`run/prepare.pbs`が足す。
+# ログ、coefficient.dat、PBSの記録をartifactへ回収し、作業ディレクトリを削除する。記録済みrunとの照合はartifactを取得して行う。
+# 確認が終わったら削除する。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aspire2a-submission-scripts-check
+
+jobs:
+  check:
+    name: 単独スクリプトでBasicをビルドして1/2/4ノードを実行
+    runs-on: [self-hosted, home-lab]
+    timeout-minutes: 1440
+    defaults:
+      run:
+        shell: aspire2a-shell --github-shell {0}
+    steps:
+      - name: 提出物を取得
+        uses: actions/checkout@v7
+
+      - name: 提出物、ソース、ケースを作業ディレクトリへ置く
+        run: |
+          work="/scratch/users/industry/ai-hpc/apacsc14/openfoam/submission/check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "WORK=${work}" >> "${GITHUB_ENV}"
+          mkdir -p "${work}/sources" "${work}/openfoam" "${work}/runs" "${work}/collect"
+          cp -a submission/openfoam/build submission/openfoam/run "${work}/openfoam/"
+          cp -a benchmark/occDrivAerStaticMesh "${work}/"
+          curl -sSfL -o "${work}/sources/OpenFOAM-v2512.tgz" https://dl.openfoam.com/source/v2512/OpenFOAM-v2512.tgz
+          curl -sSfL -o "${work}/sources/thirdparty-common-v2512.tar.gz" https://gitlab.com/openfoam/core/thirdparty-common/-/archive/v2512/thirdparty-common-v2512.tar.gz
+          (cd "${work}" && sha256sum sources/* | tee collect/inputs.sha256)
+
+      - name: Basicのビルドを投入
+        run: |
+          basic=$(qsub -P 59000014 -N build-basic -o "${WORK}/collect/build-basic.log" -v "SOURCE_DIR=${WORK}/sources,OPENFOAM_DIR=${WORK}/build-basic" "${WORK}/openfoam/build/build.pbs")
+          printf 'build-basic %s\n' "${basic}" | tee "${WORK}/collect/jobs.txt"
+          echo "WAIT_JOBS=${basic}" >> "${GITHUB_ENV}"
+
+      - name: ビルドの終了を待つ
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
+          while true; do
+            if accounting=$(aspire2a-shell qstat -fx ${WAIT_JOBS}); then failures=0; else failures=$((failures + 1)); [[ "${failures}" -lt 12 ]] || exit 1; sleep 60; continue; fi
+            states=$(awk '/^Job Id:/ {id=$3} /job_state = / {print id, $3}' <<< "${accounting}")
+            printf '%s\n' "${states}"
+            if ! grep -qv ' F$' <<< "${states}"; then break; fi
+            sleep 60
+          done
+          awk '/^Job Id:/ {id=$3} /Exit_status = / {print id, $3}' <<< "${accounting}" | tee /dev/stderr | awk '$2 != 0 {bad=1} END {exit bad}'
+
+      - name: 1/2/4ノードの計測runを投入
+        run: |
+          jobs=
+          for nodes in 1 2 4; do
+            submitted=$(OPENFOAM_DIR="${WORK}/build-basic" CASE_SOURCE="${WORK}/occDrivAerStaticMesh" WORK_ROOT="${WORK}/runs" "${WORK}/openfoam/run/submit.sh" "${nodes}" basic)
+            printf '%s\n' "${submitted}"
+            case_dir=$(sed -n 's/^case=//p' <<< "${submitted}")
+            prepare=$(sed -n 's/^prepare=//p' <<< "${submitted}")
+            solve=$(sed -n 's/^solve=//p' <<< "${submitted}")
+            printf '%s %s\n%s %s\n' "$(basename "${case_dir}").prepare" "${prepare}" "$(basename "${case_dir}").solve" "${solve}" >> "${WORK}/collect/jobs.txt"
+            jobs+=" ${prepare} ${solve}"
+            sleep 1
+          done
+          echo "WAIT_JOBS=${jobs# }" >> "${GITHUB_ENV}"
+
+      - name: 実行の終了を待つ
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
+          while true; do
+            if accounting=$(aspire2a-shell qstat -fx ${WAIT_JOBS}); then failures=0; else failures=$((failures + 1)); [[ "${failures}" -lt 12 ]] || exit 1; sleep 60; continue; fi
+            states=$(awk '/^Job Id:/ {id=$3} /job_state = / {print id, $3}' <<< "${accounting}")
+            awk '{print $2}' <<< "${states}" | sort | uniq -c | tr '\n' ' '
+            echo
+            if ! grep -qv ' F$' <<< "${states}"; then break; fi
+            sleep 120
+          done
+          awk '/^Job Id:/ {id=$3} /Exit_status = / {print id, $3}' <<< "${accounting}" | tee /dev/stderr | awk '$2 != 0 {bad=1} END {exit bad}'
+
+      - name: ログと結果を集める
+        if: always() && env.WORK != ''
+        run: |
+          cd "${WORK}"
+          while read -r name job; do qstat -fx "${job}" > "collect/pbs-${name}.txt" 2>&1 || true; done < collect/jobs.txt
+          for case_dir in runs/*/; do
+            name=$(basename "${case_dir}")
+            mkdir -p "collect/${name}"
+            cp -a "${case_dir}logFiles" "${case_dir}system/controlDict" "${case_dir}system/decomposeParDict" "${case_dir}system/include/caseDefinition" "collect/${name}/" || true
+            cp "${case_dir}postProcessing/forceCoeffsAll/0/coefficient.dat" "collect/${name}/" || true
+            cp "runs/${name}.prepare.log" "runs/${name}.solve.log" "collect/${name}/" || true
+          done
+          ls -R collect | head -100
+
+      - name: ログと結果をrunnerへ回収
+        if: always() && env.WORK != ''
+        shell: home-lab-shell {0}
+        run: aspire2a-shell --pull "${WORK}/collect" "${RUNNER_TEMP}/submission-check"
+
+      - name: ログと結果を保存
+        if: always() && env.WORK != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: submission-scripts-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/submission-check
+          if-no-files-found: warn
+
+      - name: 作業ディレクトリを削除
+        if: always() && env.WORK != ''
+        run: |
+          if [[ -n "${WAIT_JOBS:-}" ]]; then qdel ${WAIT_JOBS} 2>/dev/null || true; fi
+          rm -rf -- "${WORK:?}"
