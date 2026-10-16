@@ -29,6 +29,19 @@ hierarchicalCoeffs
     order           xyz;
 }
 
+// Map the subdomains onto the ASPIRE-2A node tree (scotch tree-leaf target).
+// scotchDecomp adds the node level with weight 1 when nCores exceeds 128;
+// below it come 2 sockets, 4 NUMA domains per socket and 16 cores per domain.
+scotchCoeffs
+{
+    domains         (2 4 16);
+    domainWeights   (0.125 0.0625 0.015625);
+    // Scotch 6.1 default mapping strategy for 512 parts with imbalance 0.01
+    // (SCOTCH_stratGraphMapBuild) plus its SCOTCH_STRATBALANCE terms, i.e.
+    // the final exact balancing x{bal=0.01}.
+    strategy        "m{vert=10240,low=r{job=t,map=t,poli=S,bal=0.010000,sep=m{vert=120,low=h{pass=10}f{bal=0.010000,move=120},asc=b{bnd=f{bal=0.010000,move=120},org=f{bal=0.010000,move=120}}}|m{vert=120,low=h{pass=10}f{bal=0.010000,move=120},asc=b{bnd=f{bal=0.010000,move=120},org=f{bal=0.010000,move=120}}}f{bal=0.010000}},asc=b{bnd=d{pass=40}f{bal=0.010000,move=80},org=f{bal=0.010000,move=80}}}x{bal=0.010000}f{bal=0.010000,move=80}";
+}
+
 kahipCoeffs
 {
     config          fast; // fast | eco | strong
