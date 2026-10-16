@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -q normal
 #PBS -l select=1:ncpus=16:mem=120gb
-#PBS -l walltime=02:00:00
+#PBS -l walltime=04:00:00
 #PBS -j oe
 #
 # Builds the OpenFOAM v2512 that our runs used: GCC 11.2 (PrgEnv-gnu/8.3.3), Cray MPICH 8.1.15 over UCX, double precision,

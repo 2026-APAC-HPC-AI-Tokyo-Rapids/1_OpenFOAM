@@ -41,7 +41,8 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
    curl -L -o sources/thirdparty-common-v2512.tar.gz https://gitlab.com/openfoam/core/thirdparty-common/-/archive/v2512/thirdparty-common-v2512.tar.gz
    ```
 
-2. Build (one 16-core job; 53 and 70 minutes in our re-run). `OPENFOAM_DIR` is a new directory on `/scratch`:
+2. Build (one 16-core job; 53 and 70 minutes in our re-run on 2026-10-07, 101 minutes on 2026-10-16 on a busier shared node;
+   the job asks for 4 hours). `OPENFOAM_DIR` is a new directory on `/scratch`:
 
    ```bash
    qsub -P <project> -v SOURCE_DIR=$PWD/sources,OPENFOAM_DIR=<dir>/build-basic build/build.pbs
@@ -63,7 +64,7 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
    ```
 
    Each call submits two jobs and prints the new case directory under `WORK_ROOT`. The second job starts when the first has
-   succeeded. In our re-run the first job (4 cores) took 10 – 14 minutes and the second 11 – 13 minutes.
+   succeeded. In our re-runs the first job (4 cores) took 9 – 14 minutes and the second 11 – 14 minutes.
 5. The case directory then holds `logFiles/` (`10_decomposePar.log` … `50_simpleFoam.log`, with the `Average` line at the end
    of `50_simpleFoam.log`) and `postProcessing/forceCoeffsAll/0/coefficient.dat`. The PBS outputs are next to it.
 
@@ -184,15 +185,16 @@ those runs did to the case and to the processes, in the same order and with the 
 - the reuse of a decomposed case between runs (every run here makes its own);
 - a node-local copy of the build in each job (the timed steps do not read the build), and `ccache` in the build.
 
-We re-ran `build/` and `run/` on 2026-10-07 exactly as "How to run it" describes: the sources downloaded from the URLs above,
-both builds with `build/build.pbs`, and every run with `run/submit.sh`. A GitHub Actions job (run 37584763848) only called them
-and collected the logs.
+We re-ran `build/` and `run/` exactly as "How to run it" describes: the sources downloaded from the URLs above, the builds with
+`build/build.pbs`, and every run with `run/submit.sh`. A GitHub Actions job only called them and collected the logs. Bonus was
+re-run on 2026-10-07 (run 37584763848). Basic was re-run on 2026-10-16 (run 38843636251), after `run/prepare.pbs` got the
+`scotchCoeffs` entries.
 
 | Configuration | Nodes | PBS jobs (prepare, solve) | s/step | Recorded runs: mean (min – max) | Change | `coefficient.dat` |
 |---|---:|---|---:|---|---:|---|
-| Basic | 1 | 25714167, 25714168 | 13.332891 | 13.364347 (13.343864 – 13.390329) | −0.24 % | identical |
-| Basic | 2 | 25714169, 25714170 | 6.371243 | 6.366659 (6.353589 – 6.377541) | +0.07 % | identical |
-| Basic | 4 | 25714171, 25714172 | 2.919982 | 2.919579 (2.915547 – 2.925664) | +0.01 % | identical |
+| Basic | 1 | 25838142, 25838143 | 13.413150 | 13.364504 (13.362568 – 13.367984) | +0.36 % | identical |
+| Basic | 2 | 25838144, 25838145 | 6.390324 | 6.371748 (6.365990 – 6.376214) | +0.29 % | identical |
+| Basic | 4 | 25838146, 25838147 | 2.904620 | 2.897638 (2.894442 – 2.899615) | +0.24 % | identical |
 | Bonus | 1 | 25714175, 25714176 | 11.644042 | 11.668460 (11.665328 – 11.670959) | −0.21 % | identical |
 | Bonus | 2 | 25714177, 25714178 | 5.649779 | 5.640683 (5.633468 – 5.644714) | +0.16 % | identical |
 | Bonus | 4 | 25714179, 25714180 | 2.600607 | 2.599353 (2.597249 – 2.601808) | +0.05 % | identical |
@@ -200,7 +202,10 @@ and collected the logs.
 - "identical": byte for byte the same file as every recorded run of that configuration and node count.
 - Every step of every job ended with `End` and returned 0. In every solve job the watcher re-pinned each of the 128 ranks of
   every node once.
-- The profile mode ran too (`analysis/README.md`).
+- The Basic re-run was 0.24 – 0.36 % slower than the recorded means, on other hosts on another day. Of our 81 October runs in
+  repeated configurations, 72 lie within ±0.5 % of their configuration's median (Issue #47). The 2026-10-07 re-run of the
+  Basic before the mapping was within ±0.24 %.
+- The profile mode ran on 2026-10-07 (`analysis/README.md`).
 
 ### How we arrived at the Basic setup
 

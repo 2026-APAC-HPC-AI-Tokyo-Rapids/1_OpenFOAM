@@ -508,15 +508,15 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Organisers' setup (ASPIRE-2A notes, tasks 4.3): site module, `mpirun` with no options, default MPI settings, no binding.
 - Against their `scotch` mean: Basic −8 / −13 / −12 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
 
-### S10. The submitted scripts reproduce the results（#54）
+### S10. The submitted scripts reproduce the results（#54、#63）
 
-- 2026-10-07, Actions 37584763848: the official sources downloaded from their public URLs, built with `build/build.pbs`, every run started with `run/submit.sh`.
-- Basic and Bonus at 1, 2 and 4 nodes: `coefficient.dat` bit-identical to the recorded runs; s/step within 0.24 % of the recorded means (Basic 4 nodes: 2.9200 against 2.9196).
-- Both CrayPAT profiles: 3.065 and 2.701 s/step under CrayPAT against 3.063 and 2.712; the same number of MPI calls per rank.
+- The official sources downloaded from their public URLs, built with `build/build.pbs`, every run started with `run/submit.sh`: Bonus on 2026-10-07 (Actions 37584763848), Basic again on 2026-10-16 after the mapping was added (Actions 38843636251).
+- At 1, 2 and 4 nodes `coefficient.dat` is bit-identical to the recorded runs. s/step: Bonus within 0.21 % of the recorded means; Basic 0.24 – 0.36 % slower, on other hosts on another day (4 nodes: 2.9046 against 2.8976).
+- Both CrayPAT profiles (2026-10-07; Basic before the mapping, final Bonus): 3.065 and 2.701 s/step under CrayPAT against 3.063 and 2.712; the same number of MPI calls per rank.
 
 | | 1 node | 2 nodes | 4 nodes |
 |---|---:|---:|---:|
-| Basic, re-run (recorded mean) | 13.333 (13.364) | 6.371 (6.367) | 2.920 (2.920) |
+| Basic, re-run (recorded mean) | 13.413 (13.365) | 6.390 (6.372) | 2.905 (2.898) |
 | Bonus, re-run (recorded mean) | 11.644 (11.668) | 5.650 (5.641) | 2.601 (2.599) |
 
 ### S11. OFI against UCX under our placement（#56、#60）
@@ -629,7 +629,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Yes. It is job-script placement: `numactl` sets the memory policy before each rank starts, and `taskset` sets the CPU affinity from outside. F1 lists job scripts, rank placement and affinity as Basic. We did not use `LD_PRELOAD`, which would be Bonus work.
 
 **Q18. Can the organisers reproduce your Basic number?**
-- Yes. `build/build.pbs` builds from the official public sources, and `run/submit.sh 1|2|4` runs the whole Allrun chain with plain `qsub`. We re-ran them ourselves on 2026-10-07: at every node count `coefficient.dat` was bit-identical and the time within 0.24 % of our recorded mean; on 4 nodes 2.9200 against 2.9196 s/step.
+- Yes. `build/build.pbs` builds from the official public sources, and `run/submit.sh 1|2|4` runs the whole Allrun chain with plain `qsub`. We re-ran them ourselves (Bonus on 2026-10-07, the final Basic on 2026-10-16): at every node count `coefficient.dat` was bit-identical to our recorded runs, and the time within 0.4 % of our recorded means (Basic on 4 nodes: 2.9046 against 2.8976 s/step).
 
 **Q19. Why did you not tune the hierarchical coefficients instead?**
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5 % faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
