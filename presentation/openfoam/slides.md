@@ -18,6 +18,13 @@
 - ネットワーク側を確かめた結果を、補足S16と想定問答Q31にまとめました。
 - 「同じ計算」の証拠を足しました。14枚目のメモとQ7に提出物のログの比較（残差などが全行一致）を書き、Q12に主催者の値を足し、想定問答にQ32（境界の更新を省くのは禁止事項か）とQ33（命令数が減ったのは仕事を減らしたからか）を足しました。
 
+### 10/16の更新
+
+- Basicに、scotchの分割をノードの木（ソケット、NUMA領域、コア）に対応付ける`scotchCoeffs`を足しました（#63）。4ノードは2.92 → 2.90 s/step（−0.69 %）です。本編と補足の数値と図を、すべて新しいBasicにそろえました。
+- 「1 %以上速いものだけ採用」という言い方をやめ、実際に使った採否の決め方（同じ時期に交互に流し、候補の全runが対照の全runより速い）で書きました（6枚目、17枚目）。run間のばらつきは約0.2 %で、「1 %未満はノイズ」とは言えないためです。
+- 「もう10 %速くならないのか」「rooflineは」に答えるQ34、Q35と、12枚目の演算密度の1行を足しました。#66のカウンタで、超線形（Q6）とrank間の不均衡（Q21）の説明も更新しました。
+- 固定反復のときだけ効く#68の結果を、数えなかった結果として補足S17に置きました。本編の最後に見せるかは、チームで決めます。
+
 ---
 
 ## 方針
@@ -159,7 +166,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 | AMD uProf | Separate profile runs | Which functions use the CPU? Hardware counters |
 | `/proc` in the job | Separate profile runs | Is each rank on its own core? Where is its memory? |
 
-下に1行：A change is kept only if it is at least 1 % faster than its control.
+下に1行：A change is kept only if every run with it beats every run without it, alternated in the same period.
 
 図：`figures/tab09_how_we_measure.png`（上の表）。`tab06_profiling`は古い結果が入っているので使いません。
 
@@ -169,7 +176,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 道具は、それぞれ1つの問いに答えます。CrayPATはMPIの関数ごとの時間と回数、OpenFOAM組み込みのprofilingは区間ごとの時間を全512 rankで、uProfは関数ごとのCPU時間とハードウェアカウンタ、`/proc`は実行中のCPUの固定とメモリのページの置き場所です。
 - ネットワークは、毎回のrunでsolverの後にIMB（MPIのベンチマーク）を流し、そのノードどうしの帯域と大域和の時間を記録しています。ネットワーク側だけを変える比較もしました（補足S16、Q31）。NICやスイッチのハードウェアカウンタは読んでいません。
 - メモリコントローラのカウンタは、利用者には読めません（`perf_event_paranoid=2`）。そこで帯域は、rankの置き場所を変える実験で確かめました（12枚目）。
-- 採用基準の1 %：最終runのばらつきは0.2 %以下なので、1 %の差はノイズと区別できます。採点されるBasicの4ノードに効く変更（scotchの対応付け、−0.69 %）だけは、交互に5本ずつ流し、全runが対照より速いことを確かめて採用しました。
+- 採否の決め方：候補と対照を同じ時期に交互に流し（4ノードで3本以上ずつ）、候補の全runが対照の全runより速いものだけを採用しました。採用した変更は、4ノードではどれもこれを満たします。run間のばらつきは4ノードで約0.2 %なので、0.7 %の差（scotchの対応付け、5本ずつ）でも区別できます。最初は「1 %以上」も条件にしていましたが、ばらつきが小さいとわかってから外しました。
 
 ### 7. BASELINE ANALYSIS（0:50）
 
@@ -283,6 +290,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Memory-controller counters are not readable, so we moved the ranks instead (4 nodes, every rank pinned).
 - Half the cores, on all 16 memory channels: × 0.99–1.02.
 - Half the channels and L3, the same ranks and split: × 2.11–2.20, as much as the measured bandwidth drops (× 2.22).
+- The sparse-matrix sweeps do about 0.1 flop per byte, about 1/100 of what would keep the cores busy (4.1 TFLOP/s ÷ 290 GB/s ≈ 14 flop/byte).
 
 図：`figures/fig19_cores_or_memory.png`
 
@@ -292,6 +300,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 実験（4ノード、150 step、各2本）：(a) 1ノード128 rankを64 rankにし、16本のメモリチャネルと16個のL3はそのまま使う（コアだけ半分）。(b) 同じ64 rank・同じ分割のまま、使うチャネルとL3を半分（8本・8個）にする。(a)は−1 %〜+2 %でほぼ変わらず、(b)は2.11〜2.20倍でした。同じノードで測ったtriadの帯域は、(b)で1/2.22です（274、279、125 GB/s/ノード）。
 - 解釈：演算や、コアごとのメモリ要求の待ち時間（レイテンシ）で決まるなら、(a)で約2倍遅くなるはずです。そうならず、(b)で帯域と同じだけ遅くなったので、時間を決めているのはメモリ帯域です。
 - 限界：(b)はL3も半分にしているので、DRAMの帯域とL3の容量の寄与は分けられません（どちらもメモリ側の資源です）。
+- 演算密度（3行目、Q35）：Gauss-Seidel、残差、Amulは、内部の面1つにつき約4 flopの計算に、係数2つ（16 B）と番地（4 B）とセルの値を合わせて30〜40 Bを読みます。約0.1 flop/Bです。ノードの倍精度ピーク（128コア × 2.0 GHz × 16 flop ≈ 4.1 TFLOP/s）をSTREAM（約290 GB/s）で割った境目は約14 flop/Bなので、その約1/100です。演算器はほとんど待っていて、IPCは0.4〜0.7です。
+- 別の機械での裏付け（Q35）：玄界（Intel、VTuneでDRAMの帯域を読めます）で同じ公式ケースを4ノードで測ると、DRAMの帯域は測った時間の99.8 %で高利用率、平均約400 GB/sでした（8月、448 rank）。機械が違うので、数字はASPIRE-2Aには当てはめません。
 - だから次の一手は「運ぶデータを減らす」です。コンパイラやフラグ、PGOが±0.13 %以内しか変えなかったこととも合います（17枚目）。
 
 ### 13. BONUS OPTIMIZATION（0:50）
@@ -382,12 +392,12 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 | Rank reordering (92 % fewer inter-node faces) | +0.1 % | The same: fewer bytes between nodes do not shorten the wait |
 | GAMG coarsest level on fewer ranks | −0.25 % to +4.95 % | 81 % of the global sums, but about 0.6 % of the time |
 | Weighted cells (×2, ×12), METIS with two constraints | +1.5 % to +6.1 % | Uneven cell counts, or more processor faces |
-| malloc thresholds | −0.4 % | Below our 1 % threshold |
+| malloc thresholds | −0.4 % (3 runs) | Too small to separate with 3 runs; not re-tested |
 | SMT (2 ranks per core) | 5.7× slower | Stalls of minutes; cause not isolated |
 
 下に2行：
 - Why no gain? None of them moves fewer bytes, and memory bandwidth sets the speed.
-- Why not combine them? Gains below 1 % are within the noise; stacking them would tune us to lucky runs.
+- Why not combine them? Gains we cannot separate from the run-to-run spread may be luck; stacking them would be overfitting.
 
 図：`figures/tab12_not_worked.png`（上の表）。全部の一覧（`tab04_not_adopted`）は補足S8です。
 
@@ -395,8 +405,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 一覧を指して、理由は2つにまとまると言います。1つはどれも運ぶデータを減らさないこと（速さを決めているのはメモリ帯域）。もう1つは、MPIの時間の多くが遅いrankを待つ時間で、通信を速くしても待ちは減らないことです。
 - UCXのRCはIMBの帯域を55 %上げましたが、1 stepは−0.01 %（Basic）でした。GAMGの最も粗い段は`MPI_Allreduce`の呼び出しの81 %を出しますが、時間はstepの約0.6 %です。
 - 重み付けは、セル数を崩してかえって遅くなりました（Q4、Q5）。
-- 小さな改善を組み合わせない理由：1 %未満の改善は、3本ずつの比較ではrun間のばらつき（4ノードで約0.2 %）と区別しにくく、確かめないまま積み重ねると、たまたま速かったrunに合わせることになります。3回以上流して1 %以上速いものだけを採用しました。例外はscotchの対応付け（−0.69 %）で、採点される4ノードのBasicに効くので、交互に5本ずつ流して全runが対照より速いことを確かめてから採用しました。
-- （注）下の2行目「Gains below 1 % are within the noise」は、ばらつきの実測（約0.2 %）と合いません。言い直す案：「With 3 runs per side we trusted only gains above 1 %. The one smaller change that affects the scored Basic run we re-tested 5 against 5 and adopted.」
+- 小さな改善を組み合わせない理由：run間のばらつき（4ノードで約0.2 %）と区別できない改善は、たまたま速かったrunかもしれません。確かめないまま積み重ねると、そのrunに合わせることになります（過学習）。採用したのは、同じ時期に交互に流して全runが対照より速かったものだけです（6枚目）。0.7 %のscotchの対応付けも、5本ずつ流して確かめてから採用しました（10枚目）。mallocの閾値（−0.4 %、3本）は、測り直していません。
 
 ### 18. CONCLUSION（0:40）
 
@@ -431,6 +440,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 - 4ノードで1つずつ足した経路（`fig16_journey`、補足S13）：どの順で何をして、いくつ速くなったかを1枚で見せます。始点は#36の3.670です。
 - 測り方の教訓（`fig08_variability`、補足S12）：同じ構成のrunの多くは中央値から±0.4 %に入りますが、9月には84 %、91 %遅い単発のrunがありました。
+- 数えなかった高速化（補足S17）：固定反復のときだけ効く−13 %です。結論の後に「おまけ」として見せられます。
 
 ---
 
@@ -564,6 +574,26 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Not measured: NIC and switch counters.
 - （メモ）rankごとの`MPI_Isend`の回数は、分割から数えた隣のrankの数と相関+1.000で、1つの隣に1 stepあたり約1,324通を送っています。メッセージの数は分割で決まり、待ちは計算の不均衡で決まります（#48）。
 
+### S17. Found but not claimed: residual norms that the fixed iterations never use（#68）
+
+本編の最後に「おまけ」として見せるかは、チームで決めます。
+
+**Message:** −13 % on 4 nodes and bit-identical, but only because the benchmark fixes the iterations, so it is not part of our Bonus
+
+- `fvSolution.fixedIter` sets `tolerance 0` and `relTol 0` for U, k and omega, and `minIter = maxIter = 35` for the coarsest-level PCG. The convergence check can never stop a solve early, so the residual norm computed after every sweep (a residual pass and a global sum) is only used after the last one.
+- A patch computes it once, after the last iteration: 2.250 against 2.595 s/step on 4 nodes (−13.3 %, 3 runs each, ranges not overlapping). `coefficient.dat` is bit-identical at 1, 2 and 4 nodes, and all 1,323 solver log lines (every residual and iteration count) are identical.
+- Why we do not count it: it helps only the benchmark's fixed-iteration setting. The case's other dictionary, `fvSolution.fixedTol` (the production-like setting), runs the original code. The rules also prohibit "less work per step", and the skipped norms could be read as work.
+
+図：なし（数値だけ）。
+
+メモ：
+- 固定反復はベンチマークの取り決めです。ケースのREADME（OpenFOAM HPC Challenge OHC-1）は、hardware trackでは`fvSolution.fixedIter`を使い、software trackは`fvSolution.fixedTol`（pはtolerance 1e-7・relTol 0.01、U・k・ωは1e-8・0.1、普通の運用値）から始めるように書いています。
+- 考え方自体はOpenFOAMにもあります。v2512の`smoothSolver`は、`nSweeps`が負のときは決まった回数だけ回し、残差を計算しません。このパッチは、ベンチマークの書き方（tolerance 0、relTol 0、maxIter）で同じことをし、ログに出る最初と最後の残差は残します。
+- 言い方：「過学習」というより「計測の取り決めにだけ効く高速化」（Goodhartの法則の例）です。ほかの設定で遅くなることはなく、条件を満たせばどの入力でもビット一致しますが、普通の運用では効きません。Bonusの4つの変更は、どの収束設定でも捨てられる計算を省いたもので、`fixedTol`でも効きます。この線引きを言えるのが、この1枚の価値です。
+- わかったこと：512 rankでは、毎回の収束判定（残差の計算とその大域和）だけで、Bonusの1 stepの約13 %を使っています。
+- 数値：1ノード10.29 s/step（Bonusの11.67から−11.8 %）、2ノード4.93（5.64から−12.7 %）、各1本。今のBasic（2.898）からは、4ノードで−22.3 %です。
+- 出典：#68、branch `experiment/issue68-skip-unused-residuals`（e2e2ae8、最終Bonus fa4f5b0の上）、patch `0005-skip-unused-convergence-residuals.patch`。
+
 ---
 
 ## 想定問答
@@ -594,7 +624,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat` and identical solver logs (every residual, to 16 digits), and the pinning problem (seen in `/proc` during the solve).
 - Shown by experiment on 4 nodes: the step time follows the memory bandwidth, not the number of cores (half the cores: −1 % to +2 %; half the memory channels: 2.1–2.2× slower, as the bandwidth drops 2.22×), and the patches gain more when each core has less memory.
 - Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
-- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), and how much of the memory effect is DRAM bandwidth and how much is L3 capacity. We present those as hypotheses. (The cache explanation of the super-linear scaling is now measured with counters at 1, 2 and 4 nodes; see Q6.)
+- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth on ASPIRE-2A (we cannot read the memory-controller counters there; on Genkai the same case kept DRAM bandwidth highly utilised, Q35), and how much of the memory effect is DRAM bandwidth and how much is L3 capacity. We present those as hypotheses. (The cache explanation of the super-linear scaling is now measured with counters at 1, 2 and 4 nodes; see Q6.)
 
 **Q8. Why rebuild OpenFOAM instead of using the site module?**
 - A single run with the site module gave the same speed (−0.08 %). Our own build records exactly what ran, and the Bonus patches need a build anyway.
@@ -635,10 +665,11 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5 % faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
 
 **Q20. What would you do next?**
-- The remaining imbalance between ranks, whose cause we have only narrowed down (Q21): balance each stage of a step, for example with weights from measured per-rank times. Making the global sums cheaper (the GAMG coarsest level on fewer ranks) or the network faster (UCX over RC) did not help (Q2).
+- The remaining imbalance between ranks (Q21): balance each stage of a step, for example with weights from measured per-rank times. Making the global sums cheaper (the GAMG coarsest level on fewer ranks) or the network faster (UCX over RC) did not help (Q2).
+- Moving fewer bytes, the other lever: fusing the assembly of U, k and omega across terms, or the GAMG residual with its restriction. We expect a few per cent from these, not another 10 % (Q34).
 
 **Q21. Do you know where the imbalance between ranks comes from?**
-- Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions, and most of it is still unexplained.
+- Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions. Hardware counters on 32 ranks of 4 nodes (#66) show what it is: the slowest and the fastest rank execute about the same number of instructions, but the slowest reads more than twice as many lines from DRAM. A rank's computation follows its DRAM refills (r = +0.69), not its instructions (r = −0.09) or its cells (r = +0.24): it depends on how well each subdomain's data fits in cache.
 
 **Q22. Is the flow video from your scored run?**
 - No. Benchmark runs write no flow fields (`controlDict.noWrite`), so we ran the same official case once more with output function objects added: on Genkai, 4 nodes, 150 iterations, because ASPIRE-2A had no free nodes that day. The added outputs do not change the computation: its Cd after 150 iterations, 0.28455000886604298, is identical to every digit with Genkai's official 4-node run.
@@ -680,6 +711,14 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Not the numerical work. Every solve does the same sweeps, residuals and norms as before: in the logs of the baseline and the Bonus, every solve of every step has the same iteration count and the same residuals, to 16 digits. The instructions we removed are copies, allocations and temporary face fields, the second and third pass over the same matrix arrays, and boundary values that nobody reads.
 - （メモ）命令数−4.1 %に対して、DRAMからのrefillは−17.2 %、cyclesは−10.8 %です（S6）。ログの比較は14枚目のメモにあります（1/2/4ノードで371、771、1,475行が全行一致）。
 
+**Q34. Is another 10 % possible?**
+- Not with the same math and the same work per step, we think. A step follows the memory bandwidth (12th slide), so only moving fewer bytes or reusing more data from cache can help. Our remaining ideas — fusing the assembly of U, k and omega across terms, the GAMG residual with its restriction, the Laplacian coefficients with the diagonal — each remove a pass or two over the face arrays: a few per cent together. Gains of 10 % need a different computation (fewer iterations, lower precision), which the rules prohibit, or a change that only the benchmark's fixed iterations allow (S17).
+- （メモ）Basicでは、#61でノードあたり64 rank（全チャネル）が128 rankより1.1 %速かった（対応付けの前、各2本）程度です。Gauss-Seidelの複数sweepを、更新の順序を保ったままキャッシュの中で回す（temporal blocking）なら大きく減らせる可能性はありますが、非構造メッシュではまだ研究の段階です。
+
+**Q35. Can you show a roofline?**
+- Not a measured one on ASPIRE-2A. The DRAM bytes need the memory-controller counters, which users cannot read, and the core counters miss the lines that the prefetchers bring in. What we can say: the sparse-matrix sweeps do about 0.1 flop per byte, about 1/100 of the ridge point of a node (4.1 TFLOP/s ÷ 290 GB/s ≈ 14 flop/byte), so they sit far under the bandwidth roof, and halving the bandwidth makes a step 2.2× slower. On Genkai, where VTune reads the memory controllers, the same official case kept DRAM bandwidth highly utilised for 99.8 % of the measured time, at about 400 GB/s.
+- （メモ）玄界の値は8月22日の測定です（v2512、4ノード448 rank、VTuneのHPC Performance Characterization、60秒の区間。`research/runtime-optimization-experiments.md`のIssue #14の節）。機械が違うので、ASPIRE-2Aの数値には当てはめません。rooflineの図を描くなら、帯域の屋根（290 GB/s）と、0.1 flop/Bの縦線までです。達成した性能の点は、FLOPを数えていないので置けません。
+
 ---
 
 ## 発表の準備
@@ -689,15 +728,17 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
   - 4枚目：図をhierarchicalの絵だけにします（3列の絵は18枚目へ）。
   - 6枚目（新規）と10枚目（新規）、14枚目（新規）を作ります。
   - 今の12枚目（HOW DID WE IDENTIFY MEMORY BOUND）をBasic RESULTSの後ろへ移します。
+  - 今の14枚目（効かなかったこと）：mallocの行を「−0.4% (3 runs, not re-tested)」に、下の行を「Gains we cannot separate from the run-to-run spread may be luck. Stacking them would be overfitting」に直します（6枚目と17枚目の言い方と同じ）。
+  - 補足S17（#68）を入れるなら、結論の後に置きます。
 - 新しい図はBoxに置いてあります。`figures/`の`tab09`〜`tab13`、`fig24`、`fig25`、`fig19`、`fig20`と、`decomposition/`の`decomposition-subdomains-baseline-vs-basic.png`（NUMAで色分けした版も）です。パッチ番号を消した版で、`fig03`、`fig04`、`fig09`、`fig10`、`fig13`、`fig16`、`fig17`、`fig20`、`tab03`〜`tab06`も置き換えました。
 - 本編18枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。
 - 話す人と交代の位置を決めます（Qwenとの切り替えも）。
 - 数値は提出物の`README.md`と同じものを使います（2.898 / 2.599 / −10.3 %、3.296）。baselineは3.65です。
-- 補足スライド（S1〜S16）は本編の後ろに置き、質疑ですぐ出せるようにします。
+- 補足スライド（S1〜S17）は本編の後ろに置き、質疑ですぐ出せるようにします。
 - 図の文字が小さければ、`.svg`を開いて拡大するか、pptxの側で注記を大きく書き直します。
 
 ## 根拠
 
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
-- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）。
+- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#68（固定反復で使われない残差）。玄界のVTuneは`research/runtime-optimization-experiments.md`。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。

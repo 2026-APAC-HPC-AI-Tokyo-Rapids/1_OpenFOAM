@@ -917,7 +917,7 @@ def deck_tables(output):
         ["Rank reordering (92 % fewer faces between nodes)", "+0.1 %", "Fewer bytes between nodes do not shorten the wait"],
         ["GAMG coarsest level on fewer ranks", "−0.25 % to +4.95 %", "81 % of the global sums, but about 0.6 % of the time"],
         ["Weighted cells (×2, ×12), METIS with two constraints", "+1.5 % to +6.1 %", "Uneven cell counts, or more processor faces"],
-        ["malloc thresholds", "−0.4 %", "Below our 1 % threshold"],
+        ["malloc thresholds", "−0.4 % (3 runs)", "Too small to separate with 3 runs; not re-tested"],
         ["SMT (2 ranks per core)", "5.7× slower", "Stalls of minutes; cause not isolated"],
     ]
     table(output, "tab12_not_worked", ["Idea", "Result (4 nodes)", "Why it did not help"], keep_percent(not_worked_rows), [0.43, 0.19, 0.38], fontsize=14)
