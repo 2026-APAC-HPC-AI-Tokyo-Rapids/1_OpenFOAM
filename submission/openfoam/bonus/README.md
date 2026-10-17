@@ -1,7 +1,7 @@
 # Bonus: NUMA-aware multiLevel decomposition and four source patches
 
-The Bonus runs use the same machine, modules, compiler flags, MPI launch and CPU/NUMA placement as Basic (`../README.md`). Two
-things differ, and nothing else.
+The Bonus runs use the same machine, modules, compiler flags, MPI launch and CPU/NUMA placement as Basic (`../README.md`,
+`../REPORT.md`). Two things differ, and nothing else.
 
 1. **Decomposition** (Bonus F2, "other decomposition methods"): `multiLevel` with `scotch` at every level. The levels follow
    the machine: nodes, 2 sockets per node, 4 NUMA domains per socket, 16 cores per NUMA domain.

@@ -18,8 +18,10 @@ report() {
   printf 'affinity-keeper host=%s done rebinds=%d last_rebind_after_s=%s\n' "${host}" "${rebinds}" "${last_rebind:-none}"
 }
 trap 'if [[ -n "${seen_at}" ]]; then report; fi; exit 0' TERM INT
+# Look at the node's simpleFoam processes every 0.1 s for the first minute of a run, then every 2 s.
 while :; do
   mapfile -t pids < <(pgrep -u "${user}" -x simpleFoam)
+  # No simpleFoam running: report the run that just ended, if any, and wait for the next one.
   if (( ${#pids[@]} == 0 )); then
     if [[ -n "${seen_at}" ]]; then
       report
@@ -33,6 +35,8 @@ while :; do
     continue
   fi
   [[ -n "${seen_at}" ]] || seen_at=${SECONDS}
+  # Read each new process's local rank once from its environment. Re-pin the process whenever the CPUs it may use are not
+  # exactly the core of that rank.
   bound=0
   for pid in "${pids[@]}"; do
     if [[ -z "${local_rank_of[${pid}]:-}" ]]; then
@@ -50,6 +54,7 @@ while :; do
       last_rebind=$(( SECONDS - seen_at ))
     fi
   done
+  # One line per run, a minute after it starts: how many ranks are on their own core.
   if [[ "${checked}" == false ]] && (( SECONDS - seen_at >= 60 )); then
     printf 'affinity-keeper host=%s after_60s bound=%d/%d rebinds=%d\n' "${host}" "${bound}" "${#pids[@]}" "${rebinds}"
     checked=true
