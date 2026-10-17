@@ -739,6 +739,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
   - 今の12枚目（HOW DID WE IDENTIFY MEMORY BOUND）をBasic RESULTSの後ろへ移します。
   - 今の14枚目（効かなかったこと）：mallocの行を「−0.4% (3 runs, not re-tested)」に、下の行を「Gains we cannot separate from the run-to-run spread may be luck. Stacking them would be overfitting」に直します（6枚目と17枚目の言い方と同じ）。
   - 補足S17（#68）を入れるなら、結論の後に置きます。
+  - 2枚目の結果の1行と、今の15枚目（結論）に、主催者の参照（同じ機械のscotch、平均3.30 s/step）との比較を足します（本編の2枚目と18枚目）。
 - 新しい図はBoxに置いてあります。`figures/`の`tab09`〜`tab13`、`fig24`、`fig25`、`fig19`、`fig20`と、`decomposition/`の`decomposition-subdomains-baseline-vs-basic.png`（NUMAで色分けした版も）です。パッチ番号を消した版で、`fig03`、`fig04`、`fig09`、`fig10`、`fig13`、`fig16`、`fig17`、`fig20`、`tab03`〜`tab06`も置き換えました。
 - 本編18枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。
 - 話す人と交代の位置を決めます（Qwenとの切り替えも）。
