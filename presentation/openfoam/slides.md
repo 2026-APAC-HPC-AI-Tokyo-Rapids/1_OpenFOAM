@@ -101,7 +101,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 メモ（45秒）：
 - 車の周りの空気の流れを計算するケースを、同じ計算のまま速くする課題です。メッシュは固定で、車の近くほど細かく、車輪は回りません。
 - 反復の回数が固定です（`fvSolution.fixedIter`：pはGAMGで12サイクル、Uは3成分それぞれGauss-Seidelで15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均時間で比べられます。
-- 動画は、場を書き出すための別runです。同じ公式ケースを玄界の4ノードで流し、出力だけを足しました。Cdは公式runと全桁一致です（Q22）。
+- 動画は、場を書き出すための別runです。計測runは場を書き出さないので、同じ公式ケースに出力だけを足して流しました（Q22）。
 - 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.60秒になりました」。
 
 ### 3. ASPIRE-2A（0:35）
@@ -301,7 +301,6 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 解釈：演算や、コアごとのメモリ要求の待ち時間（レイテンシ）で決まるなら、(a)で約2倍遅くなるはずです。そうならず、(b)で帯域と同じだけ遅くなったので、時間を決めているのはメモリ帯域です。
 - 限界：(b)はL3も半分にしているので、DRAMの帯域とL3の容量の寄与は分けられません（どちらもメモリ側の資源です）。
 - 演算密度（3行目、Q35）：Gauss-Seidel、残差、Amulは、内部の面1つにつき約4 flopの計算に、係数2つ（16 B）と番地（4 B）とセルの値を合わせて30〜40 Bを読みます。約0.1 flop/Bです。ノードの倍精度ピーク（128コア × 2.0 GHz × 16 flop ≈ 4.1 TFLOP/s）をSTREAM（約290 GB/s）で割った境目は約14 flop/Bなので、その約1/100です。演算器はほとんど待っていて、IPCは0.4〜0.7です。
-- 別の機械での裏付け（Q35）：玄界（Intel、VTuneでDRAMの帯域を読めます）で同じ公式ケースを4ノードで測ると、DRAMの帯域は測った時間の99.8 %で高利用率、平均約400 GB/sでした（8月、448 rank）。機械が違うので、数字はASPIRE-2Aには当てはめません。
 - だから次の一手は「運ぶデータを減らす」です。コンパイラやフラグ、PGOが±0.13 %以内しか変えなかったこととも合います（17枚目）。
 
 ### 13. BONUS OPTIMIZATION（0:50）
@@ -624,7 +623,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Proven: the timings (same-period controls, 3 or more runs on 4 nodes), bit-identical `coefficient.dat` and identical solver logs (every residual, to 16 digits), and the pinning problem (seen in `/proc` during the solve).
 - Shown by experiment on 4 nodes: the step time follows the memory bandwidth, not the number of cores (half the cores: −1 % to +2 %; half the memory channels: 2.1–2.2× slower, as the bandwidth drops 2.22×), and the patches gain more when each core has less memory.
 - Measured with hardware counters (1 node): the patches cut L1 refills from DRAM by 17 % with 4 % fewer instructions.
-- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth on ASPIRE-2A (we cannot read the memory-controller counters there; on Genkai the same case kept DRAM bandwidth highly utilised, Q35), and how much of the memory effect is DRAM bandwidth and how much is L3 capacity. We present those as hypotheses. (The cache explanation of the super-linear scaling is now measured with counters at 1, 2 and 4 nodes; see Q6.)
+- Not proven: the DRAM traffic in bytes and the share of the peak bandwidth (we cannot read the memory-controller counters), and how much of the memory effect is DRAM bandwidth and how much is L3 capacity. We present those as hypotheses. (The cache explanation of the super-linear scaling is now measured with counters at 1, 2 and 4 nodes; see Q6.)
 
 **Q8. Why rebuild OpenFOAM instead of using the site module?**
 - A single run with the site module gave the same speed (−0.08 %). Our own build records exactly what ran, and the Bonus patches need a build anyway.
@@ -672,7 +671,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Partly. With OpenFOAM's own profiling on all 512 ranks, the computation per rank still varies by 6 % (max/median 1.063). Cell counts are balanced within 1 % and do not explain it; wall faces explain a little (r = 0.43, 2.8 % of the work). Balancing the wall part perfectly would only take it to 1.056, so a wall-weighted split is not worth it. Nodes and NUMA domains show no systematic difference; the variation follows groups of neighbouring subdomains, so it is a property of the mesh regions. Hardware counters on 32 ranks of 4 nodes (#66) show what it is: the slowest and the fastest rank execute about the same number of instructions, but the slowest reads more than twice as many lines from DRAM. A rank's computation follows its DRAM refills (r = +0.69), not its instructions (r = −0.09) or its cells (r = +0.24): it depends on how well each subdomain's data fits in cache.
 
 **Q22. Is the flow video from your scored run?**
-- No. Benchmark runs write no flow fields (`controlDict.noWrite`), so we ran the same official case once more with output function objects added: on Genkai, 4 nodes, 150 iterations, because ASPIRE-2A had no free nodes that day. The added outputs do not change the computation: its Cd after 150 iterations, 0.28455000886604298, is identical to every digit with Genkai's official 4-node run.
+- No. Benchmark runs write no flow fields (`controlDict.noWrite`), so the video comes from a separate run of the same official case with output function objects added. Only the outputs were added; the case, the mesh and the solver settings are the official ones.
 
 **Q23. How do you know it is memory-bound if you could not read the memory counters?**
 - On ASPIRE-2A users cannot read the memory-controller counters, so we tested it by moving the ranks. On 4 nodes, 64 ranks per node are as fast as 128 when they keep all memory channels, and 2.1–2.2× slower when the same 64 ranks share half of the channels — as much as the measured bandwidth drops. Compiler flags and PGO change nothing (within 0.13 %), and our patches, which keep every operation, gain the most where memory is scarcest.
@@ -716,8 +715,8 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - （メモ）Basicでは、#61でノードあたり64 rank（全チャネル）が128 rankより1.1 %速かった（対応付けの前、各2本）程度です。Gauss-Seidelの複数sweepを、更新の順序を保ったままキャッシュの中で回す（temporal blocking）なら大きく減らせる可能性はありますが、非構造メッシュではまだ研究の段階です。
 
 **Q35. Can you show a roofline?**
-- Not a measured one on ASPIRE-2A. The DRAM bytes need the memory-controller counters, which users cannot read, and the core counters miss the lines that the prefetchers bring in. What we can say: the sparse-matrix sweeps do about 0.1 flop per byte, about 1/100 of the ridge point of a node (4.1 TFLOP/s ÷ 290 GB/s ≈ 14 flop/byte), so they sit far under the bandwidth roof, and halving the bandwidth makes a step 2.2× slower. On Genkai, where VTune reads the memory controllers, the same official case kept DRAM bandwidth highly utilised for 99.8 % of the measured time, at about 400 GB/s.
-- （メモ）玄界の値は8月22日の測定です（v2512、4ノード448 rank、VTuneのHPC Performance Characterization、60秒の区間。`research/runtime-optimization-experiments.md`のIssue #14の節）。機械が違うので、ASPIRE-2Aの数値には当てはめません。rooflineの図を描くなら、帯域の屋根（290 GB/s）と、0.1 flop/Bの縦線までです。達成した性能の点は、FLOPを数えていないので置けません。
+- Not a measured one on ASPIRE-2A. The DRAM bytes need the memory-controller counters, which users cannot read, and the core counters miss the lines that the prefetchers bring in. What we can say: the sparse-matrix sweeps do about 0.1 flop per byte, about 1/100 of the ridge point of a node (4.1 TFLOP/s ÷ 290 GB/s ≈ 14 flop/byte), so they sit far under the bandwidth roof, and halving the bandwidth makes a step 2.2× slower.
+- （メモ）rooflineの図を描くなら、帯域の屋根（290 GB/s）と、0.1 flop/Bの縦線までです。達成した性能の点は、FLOPを数えていないので置けません。
 
 ---
 
@@ -740,5 +739,5 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 ## 根拠
 
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
-- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#68（固定反復で使われない残差）。玄界のVTuneは`research/runtime-optimization-experiments.md`。
+- 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#68（固定反復で使われない残差）。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。
