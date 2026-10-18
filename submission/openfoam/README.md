@@ -8,17 +8,18 @@ changing what it computes. This file says what is in the folder, how to run it a
 
 The metric is `Average wall-clock time per time step` at the end of `simpleFoam.log` (steps 2 to N). Lower is better.
 
-| 4 nodes, 512 ranks, 150 steps | s/step | Against the organisers' reference |
-|---|---:|---:|
-| Organisers' reference on ASPIRE-2A (vanilla `scotch`, 5 jobs, tasks 4.3) | 3.296 (3.191 – 3.576) | — |
-| **Basic** (this folder; the result for the organisers' re-run) | **2.897638** (5 jobs, 2.894442 – 2.899615) | **−12.1 %** |
-| Bonus (`bonus/`) | 2.599353 (3 jobs, 2.597249 – 2.601808) | −21.1 % |
+The baseline is the same build, scripts and measurement with the case's own settings (the `hierarchical` split and the
+launcher's binding only), so the change against it is what our optimisations did. Means of the repeated jobs (number of jobs):
 
-| Nodes (ranks, steps) | Basic, mean of jobs | Bonus, mean of jobs | Bonus against Basic |
-|---|---:|---:|---:|
-| 1 (128, 40) | 13.364504 (3) | 11.668460 (3) | −12.69 % |
-| 2 (256, 80) | 6.371748 (3) | 5.640683 (3) | −11.47 % |
-| 4 (512, 150) | 2.897638 (5) | 2.599353 (3) | −10.29 % |
+| Nodes (ranks, steps) | Baseline | **Basic** | Bonus | Basic against baseline | Bonus against Basic |
+|---|---:|---:|---:|---:|---:|
+| 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 11.668460 (3) | −8.3 % | −12.69 % |
+| 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 5.640683 (3) | −14.2 % | −11.47 % |
+| **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.599353 (3)** | **−20.6 %** | **−10.29 %** |
+
+For reference only: the organisers' vanilla runs on ASPIRE-2A (tasks 4.3) took 3.296 s/step on 4 nodes with `scotch`
+(5 jobs, 3.191 – 3.576) and 3.415 with `hierarchical`. They use the site module, the default MPI transport and no binding,
+so they differ from our runs in more than our optimisations.
 
 - **Basic**: unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A; `scotch` decomposition mapped onto the sockets and NUMA domains
   of each node; every MPI rank pinned to its core, with its memory on that core's NUMA domain.

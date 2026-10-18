@@ -8,18 +8,20 @@ The figures are in `figures/`; the raw logs are in `results/`, `scaling/`, `anal
 
 ## 1. Summary
 
-On 4 ASPIRE-2A nodes, the official case takes 3.65 s per step with the case defaults on our own build of v2512, and 3.30 s in
-the organisers' vanilla reference runs. Our **Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**: 12 %
-less than the organisers' reference and 21 % less than our baseline. Our **Bonus**, which adds four source changes that keep
-every arithmetic operation, takes **2.599 s**: 21 % and 29 % less, with a `coefficient.dat` bit-identical to the unpatched
-run. The spread between repeated jobs falls from 8 – 12 % to 0.2 %.
+On 4 ASPIRE-2A nodes, the official case takes 3.65 s per step with the case defaults on our own build of v2512. Our
+**Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**, 21 % less. Our **Bonus**, which adds four
+source changes that keep every arithmetic operation, takes **2.599 s**, 29 % less, with a `coefficient.dat` bit-identical to
+the unpatched run. All three use the same build, scripts and measurement, so the differences are our optimisations. The
+spread between repeated jobs falls from 8 % to 0.2 %.
 
-| 4 nodes, 150 steps | s/step | Against our baseline | Against the organisers' reference |
-|---|---:|---:|---:|
-| Our baseline (case-default `hierarchical`, launcher binding only) | 3.650 | — | +10.7 % |
-| Organisers' reference (vanilla `scotch`, 5 jobs) | 3.296 | −9.7 % | — |
-| **Basic** | **2.898** | **−20.6 %** | **−12.1 %** |
-| **Bonus** | **2.599** | **−28.8 %** | **−21.1 %** |
+| 4 nodes, 150 steps | s/step | Against our baseline |
+|---|---:|---:|
+| Our baseline (case-default `hierarchical`, launcher binding only) | 3.650 | — |
+| **Basic** | **2.898** | **−20.6 %** |
+| **Bonus** | **2.599** | **−28.8 %** |
+
+For reference, the organisers' vanilla runs on the same machine took 3.30 s per step with `scotch`. They use the site build,
+the default MPI transport and no binding, so we show them as context, not as the comparison (section 5).
 
 What we found and did:
 
@@ -102,7 +104,10 @@ than usual — so we never decide from one job.
 ## 5. The baseline, and what slows it down
 
 The baseline is our own build of v2512 with the case's defaults: the `hierarchical` split (16 8 1) / (16 8 2) / (16 8 4) on
-1 / 2 / 4 nodes, 128 ranks per node, and the launcher's binding (`mpiexec --cpu-bind depth`), as the site recommends.
+1 / 2 / 4 nodes, 128 ranks per node, and the launcher's binding (`mpiexec --cpu-bind depth`), as the site recommends. It uses
+the same build, scripts and measurement as everything after it, so every later change is measured against it. The
+organisers' reference runs, in the last two columns, are context only: they use the site module, the default MPI transport
+and no binding.
 
 | Nodes (steps) | Baseline s/step (jobs) | Spread | Organisers, `hierarchical` | Organisers, `scotch` (mean) |
 |---|---:|---:|---:|---:|
@@ -112,8 +117,9 @@ The baseline is our own build of v2512 with the case's defaults: the `hierarchic
 
 ![Baseline scaling against the organisers' reference](figures/fig23_baseline_scaling.png)
 
-*Figure 1. Baseline: linear scaling from 1 to 4 nodes (efficiency 1.00), but 7 % slower than the organisers' `hierarchical`
-run on 4 nodes, and up to 8 % apart between jobs of the same setup.*
+*Figure 1. Baseline: linear scaling from 1 to 4 nodes (efficiency 1.00), but up to 8 % apart between jobs of the same setup.
+It is 7 % slower than the organisers' `hierarchical` run on 4 nodes. We think the lost binding (below) is why, but the build
+and the MPI transport also differ, so we have not isolated it.*
 
 The profiles of the 4-node baseline show one chain of causes (Figure 2):
 
@@ -229,11 +235,11 @@ On 4 nodes, five alternated jobs on each side gave 2.897638 s/step (2.894442 –
 After pinning, 58 % rather than 100 % of a rank's pages are local. We think the rest are pages that several ranks share, such
 as shared libraries and MPI's shared buffers, which can live on only one domain; we have not verified this.
 
-| Nodes (steps) | Basic s/step (jobs) | Spread | Cd at the last step | Against the organisers' `scotch` |
+| Nodes (steps) | Basic s/step (jobs) | Spread | Cd at the last step | Against our baseline |
 |---|---:|---:|---|---:|
-| 1 (40) | 13.364504 (3) | 0.04 % | 0.43957921531324928 | −7.8 % |
-| 2 (80) | 6.371748 (3) | 0.16 % | 0.33409590047442955 | −12.8 % |
-| 4 (150) | 2.897638 (5) | 0.18 % | 0.29301591596528520 | −12.1 % |
+| 1 (40) | 13.364504 (3) | 0.04 % | 0.43957921531324928 | −8.3 % |
+| 2 (80) | 6.371748 (3) | 0.16 % | 0.33409590047442955 | −14.2 % |
+| 4 (150) | 2.897638 (5) | 0.18 % | 0.29301591596528520 | −20.6 % |
 
 ![The path on 4 nodes](figures/fig16_journey.png)
 
@@ -471,7 +477,7 @@ our October jobs lie. Every recorded job, with its PBS job ID, is listed in `sca
 Within the rules — the same case, the same math, the same work per step — the speed on ASPIRE-2A was set by two things in
 turn. First by placement and balance: the launcher's binding is lost at `MPI_Init`, and the case-default split gives the ranks
 near the car more work. Putting the binding back and using a `scotch` split mapped onto the node made Basic 2.898 s per step,
-12 % below the organisers' reference and with a 0.2 % spread between jobs. Then by memory bandwidth, shown by moving ranks
+21 % below our baseline, with a 0.2 % spread between jobs. Then by memory bandwidth, shown by moving ranks
 rather than by counters we cannot read: the Bonus moves fewer bytes for the same arithmetic and reaches 2.599 s, bit-identical
 to its unmodified baseline. Every number here comes from alternated, repeated benchmark jobs, and the submitted scripts
 reproduce them from public sources.

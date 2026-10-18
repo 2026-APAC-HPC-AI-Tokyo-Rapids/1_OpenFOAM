@@ -27,7 +27,7 @@
 
 ### 10/17の更新
 
-- 「本当に優れているか」を他チームの数字なしで言えるように、主催者が同じASPIRE-2Aで流した参照（scotch 5本、平均3.30 s/step、ばらつき12 %）との比較を、2枚目と18枚目に入れました。Basicは−12 %、Bonusは−21 %で、ばらつきは0.2 %です。
+- 比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaselineにそろえます。主催者の参照（scotch 5本、平均3.30 s/step、ばらつき12 %）は、ビルド、MPIの転送方式、配置が違うので、5枚目と補足S9で参考として見せるだけにします（主催者のscotchに対してBasicは−12 %、Bonusは−21 %）。
 - 固定が`MPI_Init`で外れる問題は、主催者のASPIRE-2Aのノートに書かれておらず、主催者の参照runも固定していません。同じ機械を使うチームとの一番の差なので、9枚目のメモで、そう言うようにしました。
 - 玄界の測定値は使いません。公式のクラスタはGadiとASPIRE-2Aだけで、ほかの機械の結果は私たちのASPIRE-2Aの結果の証拠になりません。流れの動画は計測ではないので、そのまま使います（Q22）。
 
@@ -52,7 +52,7 @@
 3. **測り方は1枚にまとめる（6枚目）。** 以降のスライドでは、道具の名前を括弧で添えるだけにします。
 4. **BasicとBonusは同じ順で話す。** 何を変えたか → 結果 → プロファイルで確かめた理由。
 5. **測ったことと仮説を分ける。** 並列効率が1を超える理由（セルの配列がL3に収まる）は、ノード数ごとのカウンタで確かめました（#66）。DRAMの転送バイト数と、ピーク帯域に対する割合は測れないので、未測定として話します。
-6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.90（−21 %）、Bonus 2.60（−29 %、1.40×）。BonusはBasicから−10.3 %。並列効率（1→4ノード）はbaseline 1.00、Basic 1.15、Bonus 1.12。主催者のhierarchicalは3.415、scotchは5本の平均3.296（3.19〜3.58）。主催者のscotchに対して、Basicは−12 %、Bonusは−21 %。
+6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.90（−21 %）、Bonus 2.60（−29 %、1.40×）。BonusはBasicから−10.3 %。並列効率（1→4ノード）はbaseline 1.00、Basic 1.15、Bonus 1.12。参考：主催者のhierarchicalは3.415、scotchは5本の平均3.296（3.19〜3.58）。主催者のscotchに対して、Basicは−12 %、Bonusは−21 %。ただし主催者のrunはビルド、MPI、配置が違うので、本編の比較は自分たちのbaselineに対して行います。
 7. **y軸が0から始まらない図**（`fig03`、`fig05`、`fig06`）は、その旨を図の下に書いてあります。
 
 ### 時間配分
@@ -100,7 +100,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - Mesh: `occDrivAerStaticMesh`, 65.3 M cells, finest near the car
 - Step: fixed solver iterations → the same work every step
 - Metric: average time per step (steps 2 to N) on 4 nodes; scaling on 1 / 2 / 4 nodes (40 / 80 / 150 steps)
-- （足す1行）Our result on 4 nodes: 3.65 → 2.90 s/step (Basic) → 2.60 s/step (Bonus); the organisers' reference on the same machine takes 3.30
+- （足す1行）Our result on 4 nodes: 3.65 → 2.90 s/step (Basic) → 2.60 s/step (Bonus)
 
 図：流れの動画（Boxの`flow/flow-iterations.mp4`）と、メッシュの図（今の2枚目のまま）。
 
@@ -108,7 +108,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 - 車の周りの空気の流れを計算するケースを、同じ計算のまま速くする課題です。メッシュは固定で、車の近くほど細かく、車輪は回りません。
 - 反復の回数が固定です（`fvSolution.fixedIter`：pはGAMGで12サイクル、Uは3成分それぞれGauss-Seidelで15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均時間で比べられます。
 - 動画は、場を書き出すための別runです。計測runは場を書き出さないので、同じ公式ケースに出力だけを足して流しました（Q22）。
-- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.60秒になりました。主催者が同じ機械で流した参照は3.30秒です」。自分たちのbaselineは主催者より遅いので（5枚目）、主催者の値も最初に言っておきます。
+- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.60秒になりました」。比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaselineです。主催者の値は、ビルド、MPI、配置が違うので、5枚目で参考として見せます。
 
 ### 3. ASPIRE-2A（0:35）
 
@@ -424,14 +424,14 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 | Bonus | 11.67 (−20 %) | 5.64 (−24 %) | **2.60 (−29 %)** |
 
 - What worked: memory next to each core (pinning, −11 %), the same work for every rank (scotch, −10.5 %; mapped onto the node, −0.7 %), fewer bytes per step (4 source changes −9.5 %, multiLevel −1.5 %); each against its own control.
-- Against the organisers' own reference on ASPIRE-2A (vanilla `scotch`, mean of 5 jobs, 3.30 s/step): Basic −12 %, Bonus −21 %, with a run-to-run spread of 0.2 % instead of 12 %.
 - What remains: memory bandwidth still sets the speed (half the channels: 2.1× slower even with the Bonus); MPI is 19 % of a step, mostly waiting, because ranks still differ by 6 % in computation.
 
 図：上の表。分割の絵を添えるなら`decomposition/decomposition-subdomains.png`（hierarchical → scotch → multiLevel）にし、キャプションで固定とソースの変更にも触れます。
 
 メモ（40秒）：
 - 最初と最後で同じ数字を言います：「同じ計算のまま、4ノードで3.65秒から2.60秒、1.40倍です」。
-- 主催者の参照との比較（2行目）は、他チームの数字を知らなくても言える比較です。同じ機械で主催者自身が流した値に対して、Basicで12 %、Bonusで21 %速く、run間のばらつきは12 %から0.2 %になりました。再実行で採点される以上、ばらつきが小さいことも強みです（提出スクリプトでの再実行は2.905 s/step、補足S10）。
+- run間のばらつきは8 %から0.2 %になりました。再実行で採点される以上、ばらつきが小さいことも強みです（提出スクリプトでの再実行は2.905 s/step、補足S10）。
+- （参考、聞かれたら）主催者の参照runは、scotchで3.30秒、ばらつき12 %です。サイトのビルド、既定のMPI、固定なしと条件が違うので、直接の比較にはしません（補足S9）。
 - 効いたことの%は、それぞれ同時期の対照に対する値で、足し合わせません。
 - 残る律速：配置の実験では、Bonusでもチャネル半分で2.11倍遅く、速さを決めているのは最適化の前後でメモリ帯域です。rankの計算時間の差（最大/中央値1.06）は、セル数では説明できず、壁の面で一部だけ説明できます（Q21）。
 - 最後の一言：「Basicで置き場所と仕事の均等さを直して21 %、Bonusで運ぶデータを減らしてさらに10 %」。
@@ -525,6 +525,7 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
 
 - Organisers' setup (ASPIRE-2A notes, tasks 4.3): site module, `mpirun` with no options, default MPI settings, no binding.
 - Against their `scotch` mean: Basic −8 / −13 / −12 %, Bonus −19 / −23 / −21 % on 1 / 2 / 4 nodes.
+- A reference, not a controlled comparison: the build, the MPI transport and the placement all differ from ours, so the gap has more than one cause. Our own comparisons use our baseline, with the same build, scripts and measurement.
 
 ### S10. The submitted scripts reproduce the results（#54、#63）
 
@@ -739,7 +740,6 @@ pptxの18〜24枚目（10/08版の旧スライド）は、20・21枚目（パッ
   - 今の12枚目（HOW DID WE IDENTIFY MEMORY BOUND）をBasic RESULTSの後ろへ移します。
   - 今の14枚目（効かなかったこと）：mallocの行を「−0.4% (3 runs, not re-tested)」に、下の行を「Gains we cannot separate from the run-to-run spread may be luck. Stacking them would be overfitting」に直します（6枚目と17枚目の言い方と同じ）。
   - 補足S17（#68）を入れるなら、結論の後に置きます。
-  - 2枚目の結果の1行と、今の15枚目（結論）に、主催者の参照（同じ機械のscotch、平均3.30 s/step）との比較を足します（本編の2枚目と18枚目）。
 - 新しい図はBoxに置いてあります。`figures/`の`tab09`〜`tab13`、`fig24`、`fig25`、`fig19`、`fig20`と、`decomposition/`の`decomposition-subdomains-baseline-vs-basic.png`（NUMAで色分けした版も）です。パッチ番号を消した版で、`fig03`、`fig04`、`fig09`、`fig10`、`fig13`、`fig16`、`fig17`、`fig20`、`tab03`〜`tab06`も置き換えました。
 - 本編18枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。
 - 話す人と交代の位置を決めます（Qwenとの切り替えも）。
