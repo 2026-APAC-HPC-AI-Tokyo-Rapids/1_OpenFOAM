@@ -5,6 +5,7 @@
 - 出力した画像は、提出用Boxの`Tokyo_Rapids_with_RIKEN_Submission/presentation/openfoam/figures/`に置きます。画像はリポジトリには入れません。
 - `flow/`：流れの動画と画像（ParaView）を作る可視化用runの設定と描画スクリプト。`flow/README.md`を参照してください。動画と画像はBoxの`presentation/openfoam/flow/`に置きます。
 - `decomposition/`：4ノードの512分割（hierarchical、scotch、multiLevel）がメッシュをどう切っているかの画像を作るジョブと描画スクリプト。`decomposition/README.md`を参照してください。画像はBoxの`presentation/openfoam/decomposition/`に置きます。
+- `deck/`：チームのデッキ（10/15版）のOpenFOAMパートを、`slides.md`の構成どおりに作り直すスクリプト。`deck/build.sh`で、`figures.py`の図とデッキ内の分割の絵・動画を使ってpptxを作ります。`deck/README.md`を参照してください。
 
 ## data/
 
