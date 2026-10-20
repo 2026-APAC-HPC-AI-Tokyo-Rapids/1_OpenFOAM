@@ -35,7 +35,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [ASSETDIR]
   - 文字の色はプロジェクタで薄く見えないよう濃くしています。背景の塗り（カード、表）は薄いままです。
   - 1枚に使う色をしぼります。強調したいもの1つに色を付け、ほかは紺と黒（灰）で書きます。
 - baseline、Basic、Bonusの語は、本文、表、見出しのどこに出ても、自動でその段の色になります（`tier_runs()`）。凡例を置かなくても色が覚えられるようにするためです。白抜きの文字（表の見出し、札）と、「pre-change baseline」「its own baseline」（パッチを外したBonusのこと）、「the new baseline」は色を付けません。
-- 数値は `s/step` と書き、%の前に空白を入れません（「21%」）。`tidy()` は「21 %」を「21%」に直します。図も `deck_figures.py` が同じ書き方に直し、負の数にはマイナス記号（−）を使います。
+- 数値は `s/step` と書き、%の前に空白を入れません（「21%」）。`tidy()` は「21 %」を「21%」に直します。`figures.py` も同じ書き方で描きます。`deck_figures.py` は、図の負の数をマイナス記号（−）にします（「21 %」「s / step」が紛れ込んでも直します）。
 - 表とグラフは、PowerPointで編集できる表とグラフで作ります。各runの点を描く図（ばらつき、4ノードの道筋、コンパイラの比較、baselineのscaling）だけ、`figures.py` の画像を使います。
 - 分割の絵、流れの動画、メッシュの図は、入力のデッキに入っているものを使います。分割の絵は3列×3段の合成画像から列と段を切り出しています。14枚目のmultiLevelの絵だけは `ASSETDIR` から取ります。
 - 数値は [`../../../submission/openfoam/REPORT.md`](../../../submission/openfoam/REPORT.md) と `../data/*.csv` から取ります。数値を変えるときは、`slides.md`、`notes.py`、`build_deck.py` の3か所をそろえます。桁の決まりは `slides.md` の「数値の桁」にあります。

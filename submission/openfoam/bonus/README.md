@@ -60,7 +60,7 @@ coefficients, the same rank and node counts, and unmodified v2512. It ran with e
 | 150 | ~0.28 – 0.29 | 0.28404934573921931 | 0.29301591596528520 | 0.29138777754153217 |
 
 - All three ran unmodified source; only the decomposition differs. At these step counts the decomposition moves Cd by a few
-  per cent (the organisers' notes give 0.7 %, 3.0 % and 3.5 % between `hierarchical` and `scotch`).
+  per cent (the organisers' notes give 0.7%, 3.0% and 3.5% between `hierarchical` and `scotch`).
 - At 80 steps, `multiLevel` gives 0.323 and `scotch` with its defaults 0.327, a little below the reference values (0.334 –
   0.345 in the table); Basic gives 0.334. At 40 and 150 steps, all three are close to the reference.
 
@@ -68,12 +68,12 @@ coefficients, the same rank and node counts, and unmodified v2512. It ran with e
 
 | Nodes (ranks, steps) | Basic mean s/step | Bonus mean s/step | Change | Speedup |
 |---|---:|---:|---:|---:|
-| 1 (128, 40) | 13.364504 (3 runs) | 11.668460 (3 runs) | −12.69 % | 1.145 × |
-| 2 (256, 80) | 6.371748 (3 runs) | 5.640683 (3 runs) | −11.47 % | 1.130 × |
-| 4 (512, 150) | 2.897638 (5 runs) | 2.599353 (3 runs) | −10.29 % | 1.115 × |
+| 1 (128, 40) | 13.364504 (3 runs) | 11.668460 (3 runs) | −12.69% | 1.145 × |
+| 2 (256, 80) | 6.371748 (3 runs) | 5.640683 (3 runs) | −11.47% | 1.130 × |
+| 4 (512, 150) | 2.897638 (5 runs) | 2.599353 (3 runs) | −10.29% | 1.115 × |
 
 Every run with its PBS job ID is in `../scaling/scaling.txt`. `results/<n>node/` holds the fastest Bonus run of each node count.
-The range across the repeated Bonus runs is 0.05 % (1 node), 0.20 % (2 nodes) and 0.18 % (4 nodes).
+The range across the repeated Bonus runs is 0.05% (1 node), 0.20% (2 nodes) and 0.18% (4 nodes).
 
 ### Contribution of each change
 
@@ -83,29 +83,29 @@ cumulative effect is the measured Bonus against Basic above.
 
 | Change (commit) | Compared with | 1 node | 2 nodes | 4 nodes |
 |---|---|---:|---:|---:|
-| multiLevel decomposition, unmodified source (`2eacff5`) | `scotch` with its defaults (Basic before the mapping) | −0.45 % | −0.38 % | −1.54 % |
-| + 0001 (`e2730db`) | multiLevel, unmodified | −2.19 % | −2.94 % | −3.39 % |
-| + 0002 (`57b6567`) | `e2730db` | −6.39 % | −4.13 % | −2.29 % |
-| + 0003 (`20d285b`) | `57b6567` | −1.40 % | −1.88 % | −1.31 % |
-| + 0004 (`fa4f5b0`) | `20d285b` | −2.88 % | −2.29 % | −2.82 % |
+| multiLevel decomposition, unmodified source (`2eacff5`) | `scotch` with its defaults (Basic before the mapping) | −0.45% | −0.38% | −1.54% |
+| + 0001 (`e2730db`) | multiLevel, unmodified | −2.19% | −2.94% | −3.39% |
+| + 0002 (`57b6567`) | `e2730db` | −6.39% | −4.13% | −2.29% |
+| + 0003 (`20d285b`) | `57b6567` | −1.40% | −1.88% | −1.31% |
+| + 0004 (`fa4f5b0`) | `20d285b` | −2.88% | −2.29% | −2.82% |
 
-0002 gains most on 1 node (−6.4 %) and least on 4 nodes (−2.3 %). This fits a memory-bound smoother. With fewer nodes, each
+0002 gains most on 1 node (−6.4%) and least on 4 nodes (−2.3%). This fits a memory-bound smoother. With fewer nodes, each
 rank's arrays fit less well in cache, so reading the matrix once instead of three times saves more DRAM traffic. Hardware
-counters on 1 node support this for the four patches together: the demand refills from DRAM fall by 17 % while the instructions
-fall by 4 % (`../analysis/README.md`, "Hardware counters"). We have not measured each patch, or 4 nodes, with counters.
+counters on 1 node support this for the four patches together: the demand refills from DRAM fall by 17% while the instructions
+fall by 4% (`../analysis/README.md`, "Hardware counters"). We have not measured each patch, or 4 nodes, with counters.
 
 ## Tried and not adopted
 
 Each candidate was compared with the configuration it would have changed, on 4 nodes. We adopt a change only if it is at
-least 1 % faster than its control.
+least 1% faster than its control.
 
 | Candidate | Result | What we learned |
 |---|---|---|
-| `multiLevel` with cell weights (1 + the cell's share of its points) | +2.2 % (weight × 2), +6.1 % (× 12) | Static weights unbalance the cell counts; even cell counts matter most. |
-| METIS with two constraints (cells and faces) | +1.46 % | Better face balance, but 18 % more processor faces. |
-| GAMG coarsest level gathered on one master for all 512 ranks (`processorAgglomerator masterCoarsest`) | +4.95 % (40 steps) | Gathering to one rank and solving there costs more than the global sums it saves. |
-| The same with one master per node (`nProcessorsPerMaster 128`) or per NUMA domain (`16`) | +1.02 %, −0.25 % (single runs; Cd within 0.002 % of the control) | The coarsest level issues 81 % of the `MPI_Allreduce` calls, but moving it changes little: the MPI time is mostly waiting for slower ranks. |
-| UCX over RC between nodes instead of UD | −0.16 % (4 runs each, ranges overlapping) | Below our threshold; the same check on Basic gave −0.01 %. |
+| `multiLevel` with cell weights (1 + the cell's share of its points) | +2.2% (weight × 2), +6.1% (× 12) | Static weights unbalance the cell counts; even cell counts matter most. |
+| METIS with two constraints (cells and faces) | +1.46% | Better face balance, but 18% more processor faces. |
+| GAMG coarsest level gathered on one master for all 512 ranks (`processorAgglomerator masterCoarsest`) | +4.95% (40 steps) | Gathering to one rank and solving there costs more than the global sums it saves. |
+| The same with one master per node (`nProcessorsPerMaster 128`) or per NUMA domain (`16`) | +1.02%, −0.25% (single runs; Cd within 0.002% of the control) | The coarsest level issues 81% of the `MPI_Allreduce` calls, but moving it changes little: the MPI time is mostly waiting for slower ranks. |
+| UCX over RC between nodes instead of UD | −0.16% (4 runs each, ranges overlapping) | Below our threshold; the same check on Basic gave −0.01%. |
 
 ## Files
 

@@ -75,7 +75,7 @@ def final_runs(output):
         axis.set_xlim(-0.5, 1.85)
         axis.set_title(f"{nodes} node{'s' if nodes > 1 else ''} ({nodes * 128} ranks, {dict([(1, 40), (2, 80), (4, 150)])[nodes]} steps)")
         diff = change(runs[("Bonus", nodes)], runs[("Basic", nodes)])
-        axis.text(0.5, 0.5, f"{diff:+.1f} %", transform=axis.transAxes, ha="center", fontsize=18, fontweight="bold", color=ACCENT)
+        axis.text(0.5, 0.5, f"{diff:+.1f}%", transform=axis.transAxes, ha="center", fontsize=18, fontweight="bold", color=ACCENT)
         low = min(runs[("Bonus", nodes)])
         high = max(runs[("Basic", nodes)])
         axis.set_ylim(low - (high - low) * 0.15, high + (high - low) * 0.15)
@@ -105,7 +105,7 @@ def scaling(output):
     left.set_xlim(0.7, 4.9)
     left.minorticks_off()
     left.set_xlabel("Nodes (128 ranks per node)")
-    left.set_ylabel("s / step (mean of runs)")
+    left.set_ylabel("s/step (mean of runs)")
     left.legend(title="dashed: ideal from 1 node", frameon=False)
     width = 0.36
     for offset, (configuration, color) in zip((-width / 2, width / 2), (("Basic", BASIC), ("Bonus", BONUS))):
@@ -143,9 +143,9 @@ def changes_4node(output):
         axis.scatter(spread(control, index - 0.17, 0.12), control, s=60, color=CONTROL, edgecolor="black", linewidth=0.5, zorder=3, label="before (control)" if index == 0 else None)
         axis.scatter(spread(candidate, index + 0.17, 0.12), candidate, s=60, color=CANDIDATE, edgecolor="black", linewidth=0.5, zorder=3, label="after (candidate)" if index == 0 else None)
         axis.annotate("", xy=(index + 0.17, statistics.fmean(candidate)), xytext=(index - 0.17, statistics.fmean(control)), arrowprops={"arrowstyle": "->", "color": "black", "linewidth": 1})
-        axis.text(index, max(control) + 0.012, f"{change(candidate, control):+.2f} %\nn = {len(control)} vs {len(candidate)}", ha="center", fontsize=12)
+        axis.text(index, max(control) + 0.012, f"{change(candidate, control):+.2f}%\nn = {len(control)} vs {len(candidate)}", ha="center", fontsize=12)
     axis.set_xticks(range(len(CHANGES)), [label for _, label in CHANGES], fontsize=12)
-    axis.set_ylabel("4 nodes, s / step")
+    axis.set_ylabel("4 nodes, s/step")
     axis.set_ylim(2.57, 2.98)
     axis.legend(frameon=False, loc="lower left")
     figure.text(0.5, -0.03, "Each change against the configuration just before it, measured in the same period (4 nodes, 512 ranks, 150 steps).\nSeparate experiments: the percentages are not added up. coefficient.dat bit-identical for every source change.", ha="center", fontsize=11)
@@ -165,7 +165,7 @@ def changes_by_nodes(output):
         axis.bar_label(bars, labels=[f"{value:.1f}\n{count}" for value, count in zip(values, counts)], fontsize=9, padding=2)
     axis.axhline(0, color="black", linewidth=1)
     axis.set_xticks(range(len(CHANGES)), [label for _, label in CHANGES], fontsize=12)
-    axis.set_ylabel("Change in s / step vs the configuration before (%)")
+    axis.set_ylabel("Change in s/step vs the configuration before (%)")
     axis.set_ylim(-7.8, 0.5)
     axis.legend(frameon=False, loc="lower right")
     figure.text(0.5, -0.03, "Labels: change (%) and number of runs (before v after). Most 1- and 2-node values compare single runs.", ha="center", fontsize=11)
@@ -186,11 +186,11 @@ def decomposition(output):
         axis.set_xticks([0, 1], ["hierarchical\n(case default)", "scotch"])
         axis.set_xlim(-0.6, 1.6)
         axis.set_title(f"{nodes} node{'s' if nodes > 1 else ''}")
-        axis.text(0.5, 0.92, f"{change(data[(nodes, 'scotch')], data[(nodes, 'hierarchical')]):+.1f} %", transform=axis.transAxes, ha="center", fontsize=17, fontweight="bold", color=ACCENT)
+        axis.text(0.5, 0.92, f"{change(data[(nodes, 'scotch')], data[(nodes, 'hierarchical')]):+.1f}%", transform=axis.transAxes, ha="center", fontsize=17, fontweight="bold", color=ACCENT)
         values = data[(nodes, "hierarchical")] + data[(nodes, "scotch")]
         span = max(values) - min(values)
         axis.set_ylim(min(values) - span * 0.15, max(values) + span * 0.3)
-    axes[0].set_ylabel("s / step")
+    axes[0].set_ylabel("s/step")
     figure.text(0.5, -0.03, "Unmodified v2512, same build and placement. 3 runs each, alternated in the same period (4 nodes: 2026-10-02; 1 and 2 nodes: 2026-10-04).", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig05_decomposition_basic")
@@ -217,7 +217,7 @@ def pinning(output):
     axis.set_yticks(range(len(order)), order, fontsize=12)
     axis.set_xlim(2.8, 4.5)
     axis.set_ylim(-0.6, len(order) - 0.1)
-    axis.set_xlabel("4 nodes, s / step (scotch, 150 steps)")
+    axis.set_xlabel("4 nodes, s/step (scotch, 150 steps)")
     axis.invert_yaxis()
     figure.text(0.5, -0.04, "Fast only when the CPU is pinned for the whole solve and the memory was allocated on the rank's own NUMA domain.\n'pinned ranks': ranks on their own CPU during the solve (node 0). 'local pages': median share of each rank's pages on its NUMA domain.", ha="center", fontsize=11)
     figure.tight_layout()
@@ -238,10 +238,10 @@ def compiler(output):
         axis.scatter(spread(values, index), values, s=70, color=color, edgecolor="black", linewidth=0.6, zorder=3)
         axis.hlines(statistics.fmean(values), index - 0.22, index + 0.22, color=color, linewidth=2.5)
         if index:
-            axis.text(index, 2.927, f"{change(values, control):+.2f} %", ha="center", fontsize=13, color=ACCENT)
+            axis.text(index, 2.927, f"{change(values, control):+.2f}%", ha="center", fontsize=13, color=ACCENT)
     axis.set_xticks(range(len(names)), names, fontsize=12)
     axis.set_ylim(2.895, 2.932)
-    axis.set_ylabel("4 nodes, s / step")
+    axis.set_ylabel("4 nodes, s/step")
     figure.text(0.5, -0.03, "3 runs each in the same period (2026-10-03). Shaded: range of the control runs. Every mean lies inside that range.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig07_compiler_options")
@@ -273,7 +273,7 @@ def variability(output):
     top.legend(frameon=False, ncol=3, loc="upper right")
     figure.supylabel("Deviation from the median of the same configuration", fontsize=13)
     outliers = sum(1 for _, deviation, _ in points if abs(deviation) > 1.6)
-    figure.text(0.5, -0.03, f"{len(points)} runs in {sum(1 for runs in groups.values() if len(runs) >= 3)} configurations with 3 or more runs (same commit, build, nodes, decomposition), 2026-09-21 to 10-05.\n{outliers} runs lie outside the zoom; two September runs were 84 % and 91 % slower. Shaded: ±0.4 %.", ha="center", fontsize=11)
+    figure.text(0.5, -0.03, f"{len(points)} runs in {sum(1 for runs in groups.values() if len(runs) >= 3)} configurations with 3 or more runs (same commit, build, nodes, decomposition), 2026-09-21 to 10-05.\n{outliers} runs lie outside the zoom; two September runs were 84% and 91% slower. Shaded: ±0.4%.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig08_variability")
 
@@ -291,7 +291,7 @@ def mpi_breakdown(output):
         left = [start + width for start, width in zip(left, widths)]
     for index, row in enumerate(rows):
         share = float(row["mpi_s"]) / float(row["process_s"]) * 100
-        axis.text(left[index] + 3, index, f"{float(row['process_s']):.1f} s   (MPI {share:.1f} %)", va="center", fontsize=12)
+        axis.text(left[index] + 3, index, f"{float(row['process_s']):.1f} s   (MPI {share:.1f}%)", va="center", fontsize=12)
     axis.set_yticks(range(len(rows)), labels)
     axis.invert_yaxis()
     axis.set_xlim(0, 175)
@@ -313,7 +313,7 @@ def rank_compute(output):
     axis.set_xlabel("Ranks sorted by computation time")
     axis.set_ylabel("Computation time per rank (s, process − MPI)")
     axis.legend(frameon=False, loc="upper left")
-    figure.text(0.5, -0.03, "CrayPAT diagnostic runs, 4 nodes, 512 ranks, 40 steps. The whole distribution moves down by about 9 %; the spread between ranks stays.", ha="center", fontsize=11)
+    figure.text(0.5, -0.03, "CrayPAT diagnostic runs, 4 nodes, 512 ranks, 40 steps. The whole distribution moves down by about 9%; the spread between ranks stays.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig10_rank_compute")
 
@@ -336,14 +336,14 @@ def reference_comparison(output):
         reference = theirs[("scotch", nodes)]
         for position, key in ((2, "Basic"), (3, "Bonus")):
             values = ours[(key, nodes)]
-            axis.annotate(f"{change(values, reference):+.0f} %", (position, statistics.fmean(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, fontweight="bold", color=ACCENT)
+            axis.annotate(f"{change(values, reference):+.0f}%", (position, statistics.fmean(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, fontweight="bold", color=ACCENT)
         axis.set_xticks(range(len(groups)), [label for label, _, _ in groups], fontsize=10)
         axis.set_xlim(-0.6, len(groups) - 0.4)
         axis.set_title(f"{nodes} node{'s' if nodes > 1 else ''}")
         everything = [value for _, _, values_of in groups for value in values_of(nodes)]
         span = max(everything) - min(everything)
         axis.set_ylim(min(everything) - span * 0.18, max(everything) + span * 0.08)
-    axes[0].set_ylabel("s / step (each point is one job)")
+    axes[0].set_ylabel("s/step (each point is one job)")
     figure.text(0.5, -0.06, "Organisers: ASPIRE-2A notes (tasks 4.3): site module, mpirun with no options, default MPI settings, no binding; full-chain, split and simpleFoam-only runs.\nRed: our mean against the organisers' scotch mean. Different builds, MPI transport and placement, so the gap has more than one cause. y-axes do not start at 0.", ha="center", fontsize=10.5)
     figure.tight_layout()
     save(figure, output, "fig14_vs_organiser_reference")
@@ -355,7 +355,7 @@ def counters(output):
     for row in read("counters_1node.csv"):
         values[row["metric"]][row["condition"]].append(float(row["per_rank_mean"]))
         seconds[row["condition"]][row["actions_run"]] = float(row["s_per_step_under_uprof"])
-    rows = [("s / step", list(seconds["unpatched"].values()), list(seconds["patched"].values()))]
+    rows = [("s/step", list(seconds["unpatched"].values()), list(seconds["patched"].values()))]
     rows += [(metric, values[metric]["unpatched"], values[metric]["patched"]) for metric in ("cycles", "instructions", "L1 data accesses", "L1 refills from L2", "L1 refills from L3", "L1 refills from DRAM", "L2 accesses incl. prefetch")]
     figure, axis = plt.subplots(figsize=WIDE)
     for index, (metric, before, after) in enumerate(rows):
@@ -363,13 +363,13 @@ def counters(output):
         axis.barh(index, change(after, before), color=color, height=0.6)
         pairs = [(b / a - 1) * 100 for a in before for b in after]
         axis.scatter(pairs, [index] * len(pairs), s=28, color="black", zorder=3)
-        axis.text(min(min(pairs), change(after, before)) - 0.5, index, f"{change(after, before):+.1f} %", va="center", ha="right", fontsize=13, fontweight="bold", color=color)
+        axis.text(min(min(pairs), change(after, before)) - 0.5, index, f"{change(after, before):+.1f}%", va="center", ha="right", fontsize=13, fontweight="bold", color=color)
     axis.axvline(0, color="black", linewidth=1)
     axis.set_yticks(range(len(rows)), [metric for metric, _, _ in rows], fontsize=13)
     axis.invert_yaxis()
     axis.set_xlim(-22, 4.5)
     axis.set_xlabel("The four source changes against the same build without them (%)")
-    figure.text(0.5, -0.06, "1 node, 128 ranks, 40 steps, multiLevel (2 4 16). AMD uProf data_access on one rank per NUMA domain (rank 0 left out: it also writes the output);\ncomputation only (MPI, UCX and Pstream left out). Bars: mean of 2 runs per side; dots: the 4 run pairs. Refills count demand misses only;\nhardware prefetches are in the L2 accesses. Instructions fall 4 % while DRAM refills fall 17 %: the same math with less data moved.", ha="center", fontsize=10.5)
+    figure.text(0.5, -0.06, "1 node, 128 ranks, 40 steps, multiLevel (2 4 16). AMD uProf data_access on one rank per NUMA domain (rank 0 left out: it also writes the output);\ncomputation only (MPI, UCX and Pstream left out). Bars: mean of 2 runs per side; dots: the 4 run pairs. Refills count demand misses only;\nhardware prefetches are in the L2 accesses. Instructions fall 4% while DRAM refills fall 17%: the same math with less data moved.", ha="center", fontsize=10.5)
     figure.tight_layout()
     save(figure, output, "fig17_counters")
 
@@ -428,10 +428,10 @@ def memory_placement(output):
             axis.scatter(spread(values, index + offset, 0.08), values, s=60, color=color, edgecolor="white", linewidth=1.5, zorder=3, label=PLACEMENT_NAMES[config] if index == 0 else None)
             axis.hlines(statistics.fmean(values), index + offset - 0.09, index + offset + 0.09, color=color, linewidth=2.5)
         top = max(max(times[(config, placement)]) for config in PLACEMENT_CONFIGS)
-        axis.text(index, top + 0.35, f"patches {change(times[('Bonus', placement)], times[('baseline', placement)]):+.1f} %", ha="center", fontsize=13, color=ACCENT)
+        axis.text(index, top + 0.35, f"patches {change(times[('Bonus', placement)], times[('baseline', placement)]):+.1f}%", ha="center", fontsize=13, color=ACCENT)
     axis.set_xticks(range(len(placements)), [f"{label}\ntriad {bandwidth[placement]:.0f} GB/s" for placement, label in placements], fontsize=12)
     axis.set_ylim(0, 7.4)
-    axis.set_ylabel("4 nodes, s / step")
+    axis.set_ylabel("4 nodes, s/step")
     axis.legend(loc="upper left", frameon=False)
     figure.text(0.5, -0.05, "Official metric, 150 steps; each dot is one job, the bar its mean. 'Bonus without the patches': the final Bonus (same multiLevel split) with the four source changes removed.\n'patches': Bonus against that baseline at the same placement. coefficient.dat is bit-identical between spread64 and packed64 of each configuration,\nand between the baseline and the Bonus at each placement.", ha="center", fontsize=10.5)
     figure.tight_layout()
@@ -446,12 +446,12 @@ def step_breakdown(output):
         color = BASIC if index < len(rows) - 1 else CONTROL
         axis.barh(index, median, color=color, height=0.6)
         axis.errorbar(median, index, xerr=[[median - low], [high - median]], color="black", capsize=4, linewidth=1)
-        axis.text(high + 0.02, index, f"{float(row['share_of_step']) * 100:.1f} %", va="center", fontsize=13, fontweight="bold")
+        axis.text(high + 0.02, index, f"{float(row['share_of_step']) * 100:.1f}%", va="center", fontsize=13, fontweight="bold")
     axis.set_yticks(range(len(rows)), [row["region"].replace(" (", "\n(") for row in rows], fontsize=12)
     axis.invert_yaxis()
     axis.set_xlabel("s per step (median rank); whiskers: fastest and slowest of the 512 ranks")
     axis.set_xlim(0, 1.45)
-    figure.text(0.5, -0.06, "OpenFOAM's built-in profiling, Basic, 4 nodes, 512 ranks, a 40-step diagnostic run (Issue #57). Times are wall clock and include the MPI\nwaiting inside each region: a rank that finishes its earlier work sooner waits longer at the start of the next solve (omega: 0.12-0.22 s).\nMPI as a whole (parProfiling): 19 % of the step for the median rank.", ha="center", fontsize=10.5)
+    figure.text(0.5, -0.06, "OpenFOAM's built-in profiling, Basic, 4 nodes, 512 ranks, a 40-step diagnostic run (Issue #57). Times are wall clock and include the MPI\nwaiting inside each region: a rank that finishes its earlier work sooner waits longer at the start of the next solve (omega: 0.12-0.22 s).\nMPI as a whole (parProfiling): 19% of the step for the median rank.", ha="center", fontsize=10.5)
     figure.tight_layout()
     save(figure, output, "fig18_step_breakdown")
 
@@ -479,12 +479,12 @@ def journey(output):
         axis.hlines(means[index], index - 0.22, index + 0.22, color=color, linewidth=2.5, zorder=3)
         axis.annotate(f"{means[index]:.3f}", (index, min(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, color=color, fontweight="bold")
         if percent is not None:
-            axis.text(index - 0.45, (means[index - 1] + means[index]) / 2 + 0.035, f"{percent:+.1f} %", ha="left", fontsize=13, fontweight="bold", color=ACCENT)
+            axis.text(index - 0.45, (means[index - 1] + means[index]) / 2 + 0.035, f"{percent:+.1f}%", ha="left", fontsize=13, fontweight="bold", color=ACCENT)
     axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=10)
     axis.set_xlim(-0.5, len(steps) - 0.4)
     axis.set_ylim(2.5, 3.78)
-    axis.set_ylabel("4 nodes, s / step (each point is one job)")
-    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[3][1], start):+.1f} %. Basic {means[3]:.3f} (n = {len(steps[3][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[3][1]):+.1f} %. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
+    axis.set_ylabel("4 nodes, s/step (each point is one job)")
+    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[3][1], start):+.1f}%. Basic {means[3]:.3f} (n = {len(steps[3][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[3][1]):+.1f}%. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig16_journey")
 
@@ -627,7 +627,7 @@ def storage_flow(output):
     arrow(axis, (0.63, 0.43), (0.705, 0.585))
     arrow(axis, (0.705, 0.275), (0.63, 0.275))
     arrow(axis, (0.37, 0.275), (0.295, 0.355))
-    axis.text(0.5, 0.07, "Home is not used for runs. /dev/shm is noexec, so it only holds the compiler cache during builds.\nMeasured file I/O inside the timed steps: about 0.01 % of the run time (Issue #46).", ha="center", fontsize=11.5)
+    axis.text(0.5, 0.07, "Home is not used for runs. /dev/shm is noexec, so it only holds the compiler cache during builds.\nMeasured file I/O inside the timed steps: about 0.01% of the run time (Issue #46).", ha="center", fontsize=11.5)
     save(figure, output, "fig15_storage_flow")
 
 
@@ -665,7 +665,7 @@ def baseline_results(output):
         axis.set_ylim(min(everything) - span * 0.6, max(everything) + span * 0.25)
         axis.grid(axis="y", color="#e6e6e6", linewidth=0.8)
         axis.set_axisbelow(True)
-    axes[0].set_ylabel("s / step (each point is one job)")
+    axes[0].set_ylabel("s/step (each point is one job)")
     one = statistics.fmean(ours[1])
     efficiency = ", ".join(f"{one / (nodes * statistics.fmean(ours[nodes])):.2f} ({nodes} nodes)" for nodes in (2, 4))
     figure.text(0.5, -0.1, "Our baseline: our build of v2512 (GCC -O3, Cray MPICH over UCX), the case-default hierarchical split, 128 ranks per node with only the launcher's CPU binding.\n" f"Organisers: ASPIRE-2A notes (tasks 4.3), site module, mpirun with no options, one job each. Splits: ours (16 8 1) / (16 8 2) / (16 8 4); the organisers' 1-node job used (16 4 2).\nParallel efficiency of our baseline against 1 node: {efficiency}. The y-axes do not start at 0.", ha="center", fontsize=10.5, color="#333333")
@@ -695,7 +695,7 @@ def baseline_scaling(output):
     axis.set_ylim(0, 16)
     axis.set_yticks([0, 3, 6, 9, 12, 15])
     axis.set_xlabel("Nodes (128 ranks per node)")
-    axis.set_ylabel("s / step (each point is one job)")
+    axis.set_ylabel("s/step (each point is one job)")
     axis.grid(axis="y", color="#e6e6e6", linewidth=0.8)
     axis.set_axisbelow(True)
     axis.legend(frameon=False, loc="upper right")
@@ -727,22 +727,22 @@ def before_after_scaling(output):
     left.set_xlim(0.62, 5.4)
     left.minorticks_off()
     left.set_xlabel("Nodes (128 ranks per node)")
-    left.set_ylabel("s / step (mean of runs)")
+    left.set_ylabel("s/step (mean of runs)")
     left.legend(frameon=False, fontsize=11)
     width = 0.36
     for offset, (name, color) in zip((-width / 2, width / 2), (("Basic", BASIC), ("Bonus", BONUS))):
         reduction = [change(runs[(name, n)], runs[("Baseline", n)]) for n in nodes]
         bars = right.bar([index + offset for index in range(3)], reduction, width, color=color, label=name)
-        right.bar_label(bars, labels=[f"{value:.0f} %" for value in reduction], fontsize=11, padding=2)
+        right.bar_label(bars, labels=[f"{value:.0f}%" for value in reduction], fontsize=11, padding=2)
     right.axhline(0, color="black", linewidth=1)
     right.set_xticks(range(3), ["1", "2", "4"])
     right.set_xlabel("Nodes")
-    right.set_ylabel("s / step against our baseline (%)")
+    right.set_ylabel("s/step against our baseline (%)")
     right.set_ylim(-36, 0)
     right.legend(frameon=False, loc="lower left")
     efficiency = {name: statistics.fmean(runs[(name, 1)]) / (4 * statistics.fmean(runs[(name, 4)])) for name, _, _ in series}
     counts = {name: "/".join(str(len(runs[(name, n)])) for n in nodes) for name, _, _ in series}
-    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline 2026-10-12 (Issue #62), Basic 2026-10-15/16 (Issue #63), Bonus 2026-10-06; controls repeated on 10-12 and 10-15 agree within 0.2 %.", ha="center", fontsize=10.5, color="#333333")
+    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline 2026-10-12 (Issue #62), Basic 2026-10-15/16 (Issue #63), Bonus 2026-10-06; controls repeated on 10-12 and 10-15 agree within 0.2%.", ha="center", fontsize=10.5, color="#333333")
     figure.tight_layout()
     save(figure, output, "fig22_before_after_scaling")
 
@@ -758,8 +758,8 @@ def baseline_profile_tables(output):
     mpi_range = f"{value('CrayPAT', 'MPI time per rank (min)'):.0f}–{value('CrayPAT', 'MPI time per rank (max)'):.0f} s"
     by_calls = sorted(((name, value("CrayPAT", f"calls {name}")) for name in ("MPI_Isend", "MPI_Irecv", "MPI_Test", "MPI_Allreduce", "MPI_Waitall", "MPI_Bcast")), key=lambda item: -item[1])[:3]
     by_time = sorted(((name, value("CrayPAT", f"time {name}")) for name in ("MPI_Waitall", "MPI_Allreduce", "MPI_Bcast", "MPI_Comm_dup", "MPI_Isend")), key=lambda item: -item[1])[:3]
-    rows = [[str(index + 1), f"{calls[0]}   {calls[1]:,.0f}", f"{times[0]}   {times[1]:.1f} s ({100 * times[1] / mpi:.0f} % of MPI)"] for index, (calls, times) in enumerate(zip(by_calls, by_time))]
-    rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s, {100 * mpi / process:.0f} % of {process:.1f} s ({mpi_range} per rank)"])
+    rows = [[str(index + 1), f"{calls[0]}   {calls[1]:,.0f}", f"{times[0]}   {times[1]:.1f} s ({100 * times[1] / mpi:.0f}% of MPI)"] for index, (calls, times) in enumerate(zip(by_calls, by_time))]
+    rows.append(["All MPI", f"{value('CrayPAT', 'calls all MPI'):,.0f} calls", f"{mpi:.1f} s, {100 * mpi / process:.0f}% of {process:.1f} s ({mpi_range} per rank)"])
     table(output, "tab07_baseline_mpi_calls", ["4 nodes", "Most calls (per rank, 40-step run)", "Most time in MPI (per rank, 40-step run)"], rows, [0.12, 0.36, 0.52], fontsize=14)
     shares = {row["region"]: 100 * float(row["share_of_step"]) for row in read("baseline_step_regions_4node.csv")}
     turbulence = shares["omega solve"] + shares["k solve"]
@@ -768,12 +768,12 @@ def baseline_profile_tables(output):
     pinned = int(profile[("/proc", "ranks pinned to their own core")])
     home = 100 * value("/proc", "share of a rank's pages on its home NUMA domain (median)")
     rows = [
-        ["MPI (CrayPAT)", "Every MPI call per rank", f"{100 * mpi / process:.0f} % of the time, mostly waiting ({mpi_range} per rank)"],
-        ["Solver stages (OpenFOAM profiling)", "Time per solver stage, every rank", f"p {shares['p solve (GAMG)']:.0f} %, U {shares['U solve']:.0f} %, ω and k {turbulence:.0f} %, outside the solvers {outside:.0f} %. Computation per rank {low:.0f}–{high:.0f} s"],
+        ["MPI (CrayPAT)", "Every MPI call per rank", f"{100 * mpi / process:.0f}% of the time, mostly waiting ({mpi_range} per rank)"],
+        ["Solver stages (OpenFOAM profiling)", "Time per solver stage, every rank", f"p {shares['p solve (GAMG)']:.0f}%, U {shares['U solve']:.0f}%, ω and k {turbulence:.0f}%, outside the solvers {outside:.0f}%. Computation per rank {low:.0f}–{high:.0f} s"],
         ["Functions (AMD uProf)", "CPU time per function", "Gauss–Seidel, residual and A·x lead (sparse-matrix sweeps)"],
-        ["Memory and CPU placement (/proc)", "CPU binding and NUMA pages per rank", f"{'No rank' if pinned == 0 else f'{pinned} ranks'} pinned, {home:.0f} % of memory on its own NUMA domain (median)"],
+        ["Memory and CPU placement (/proc)", "CPU binding and NUMA pages per rank", f"{'No rank' if pinned == 0 else f'{pinned} ranks'} pinned, {home:.0f}% of memory on its own NUMA domain (median)"],
     ]
-    table(output, "tab08_baseline_profile", ["Profile (tool)", "What we measured", "Baseline (4 nodes, 40-step runs)"], keep_percent(rows), [0.22, 0.25, 0.53], fontsize=14)
+    table(output, "tab08_baseline_profile", ["Profile (tool)", "What we measured", "Baseline (4 nodes, 40-step runs)"], rows, [0.22, 0.25, 0.53], fontsize=14)
 
 
 def environment_tables(output):
@@ -787,18 +787,13 @@ def environment_tables(output):
     table(output, "tab05_environment", ["Item", "What we use", "Why"], environment_rows, [0.18, 0.44, 0.38])
     profiling_rows = [
         ["Official metric", "Every benchmark run; no profiler attached", "Average wall-clock time per step (steps 2 to N)", "The result; 3 or more runs per condition"],
-        ["CrayPAT 22.04, pat_run -g mpi", "Separate 4-node, 40-step diagnostic runs; simpleFoam only, after a warm-up step", "Time, calls and bytes of every MPI call, per rank", "MPI is about 19 % of the time, mostly waiting in Allreduce and Waitall"],
+        ["CrayPAT 22.04, pat_run -g mpi", "Separate 4-node, 40-step diagnostic runs; simpleFoam only, after a warm-up step", "Time, calls and bytes of every MPI call, per rank", "MPI is about 19% of the time, mostly waiting in Allreduce and Waitall"],
         ["eu-stack call stacks", "The same diagnostic runs, 48 ranks (slow, median, one per NUMA domain)", "Which solver phase each rank is in, and whether it is inside MPI", "Phase shares; found the solver copies and the unused boundary exchanges"],
-        ["AMD uProf 5.3, timer hotspots", "Separate profile runs, one rank per NUMA domain", "CPU time per function", "Copies and zero-fills were large in September (18.8 %)"],
+        ["AMD uProf 5.3, timer hotspots", "Separate profile runs, one rank per NUMA domain", "CPU time per function", "Copies and zero-fills were large in September (18.8%)"],
         ["/proc sampler in the job", "Diagnostic jobs", "CPU affinity, NUMA page placement, I/O bytes and waits per rank", "Binding lost during MPI_Init; solver I/O negligible"],
         ["IMB-MPI1", "After the solver in every benchmark run", "Ping-pong bandwidth and Allreduce latency", "A network baseline for each job"],
     ]
     table(output, "tab06_profiling", ["Tool", "When", "What it collects", "What it showed"], profiling_rows, [0.2, 0.28, 0.26, 0.26])
-
-
-def keep_percent(rows):
-    """A no-break space keeps every number next to its % when a cell wraps."""
-    return [[cell.replace(" %", "\u00a0%") for cell in row] for row in rows]
 
 
 def profile_values(name):
@@ -815,9 +810,9 @@ def baseline_chain(output):
     observed = profile[("/proc", "ranks observed during the solve")]
     home = profile[("/proc", "share of a rank's pages on its home NUMA domain (median)")]
     stages = [
-        ("Binding lost at MPI_Init", "/proc during the solve", f"{pinned:.0f} of {observed:.0f} ranks on their own core\n{100 * home:.0f} % of a rank's memory on\nits own NUMA domain (median)"),
+        ("Binding lost at MPI_Init", "/proc during the solve", f"{pinned:.0f} of {observed:.0f} ranks on their own core\n{100 * home:.0f}% of a rank's memory on\nits own NUMA domain (median)"),
         ("Uneven computation", "OpenFOAM profiling", f"{low:.0f}–{high:.0f} s per rank in 40 steps\nslowest / median {high / median:.2f}"),
-        ("Everyone waits", "CrayPAT", f"MPI is {100 * mpi / process:.0f} % of the time\nMPI_Waitall {100 * profile[('CrayPAT', 'time MPI_Waitall')] / mpi:.0f} % and\nMPI_Allreduce {100 * profile[('CrayPAT', 'time MPI_Allreduce')] / mpi:.0f} % of it"),
+        ("Everyone waits", "CrayPAT", f"MPI is {100 * mpi / process:.0f}% of the time\nMPI_Waitall {100 * profile[('CrayPAT', 'time MPI_Waitall')] / mpi:.0f}% and\nMPI_Allreduce {100 * profile[('CrayPAT', 'time MPI_Allreduce')] / mpi:.0f}% of it"),
     ]
     figure, axis = plt.subplots(figsize=(12.8, 4.6))
     figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -886,7 +881,7 @@ def deck_tables(output):
 
     def spread_of(values):
         value = (max(values) - min(values)) / statistics.fmean(values) * 100
-        return f"{value:.0f} %" if value >= 1 else f"{value:.2f} %"
+        return f"{value:.0f}%" if value >= 1 else f"{value:.2f}%"
 
     def imbalance(profile):
         return profile[("OpenFOAM profiling", "computation per rank (max)")] / profile[("OpenFOAM profiling", "computation per rank (time.run() minus Pstream; median)")]
@@ -896,39 +891,39 @@ def deck_tables(output):
     home = before[("/proc", "share of a rank's pages on its home NUMA domain (median)")]
     mpi_share = before[("CrayPAT", "MPI time per rank (mean)")] / before[("CrayPAT", "process time per rank (mean)")]
     basic_rows = [
-        ["s / step (jobs)", f"{statistics.fmean(baseline):.2f} ({len(baseline)})", f"{statistics.fmean(basic):.2f} ({len(basic)}): {change(basic, baseline):.0f} %"],
+        ["s/step (jobs)", f"{statistics.fmean(baseline):.2f} ({len(baseline)})", f"{statistics.fmean(basic):.2f} ({len(basic)}): {change(basic, baseline):.0f}%"],
         ["Spread between jobs", spread_of(baseline), spread_of(basic)],
         ["Ranks on their own core during the solve (/proc)", f"{pinned:.0f} of {observed:.0f}", f"{adopted['pinned_during_solve'].replace('/', ' of ')} per node"],
-        ["Memory on the rank's own NUMA domain, median (/proc)", f"{100 * home:.0f} %", f"{100 * float(adopted['local_pages_median']):.0f} %"],
+        ["Memory on the rank's own NUMA domain, median (/proc)", f"{100 * home:.0f}%", f"{100 * float(adopted['local_pages_median']):.0f}%"],
         ["Computation per rank, slowest / median (OpenFOAM profiling; Basic before the mapping)", f"{imbalance(before):.2f}", f"{imbalance(after):.2f}"],
-        ["MPI share of the time (CrayPAT; Basic before the mapping)", f"{100 * mpi_share:.0f} %", f"{100 * float(craypat['mpi_s']) / float(craypat['process_s']):.0f} %"],
+        ["MPI share of the time (CrayPAT; Basic before the mapping)", f"{100 * mpi_share:.0f}%", f"{100 * float(craypat['mpi_s']) / float(craypat['process_s']):.0f}%"],
     ]
-    table(output, "tab10_basic_before_after", ["4 nodes", "Baseline", "Basic"], keep_percent(basic_rows), [0.52, 0.2, 0.28], fontsize=14)
+    table(output, "tab10_basic_before_after", ["4 nodes", "Baseline", "Basic"], basic_rows, [0.52, 0.2, 0.28], fontsize=14)
 
     bonus_rows = []
     for nodes, steps in ((1, 40), (2, 80), (4, 150)):
         basic, bonus = final[("Basic", nodes)], final[("Bonus", nodes)]
-        bonus_rows.append([f"{nodes} ({steps})", f"{statistics.fmean(basic):.3f} ({len(basic)} jobs)", f"{statistics.fmean(bonus):.3f} ({len(bonus)} jobs)", f"{change(bonus, basic):.1f} %", "bit-identical"])
-    table(output, "tab11_bonus_results", ["Nodes (steps)", "Basic s / step", "Bonus s / step", "Bonus vs Basic", "coefficient.dat vs the pre-change baseline"], keep_percent(bonus_rows), [0.15, 0.2, 0.2, 0.16, 0.29], fontsize=14)
+        bonus_rows.append([f"{nodes} ({steps})", f"{statistics.fmean(basic):.3f} ({len(basic)} jobs)", f"{statistics.fmean(bonus):.3f} ({len(bonus)} jobs)", f"{change(bonus, basic):.1f}%", "bit-identical"])
+    table(output, "tab11_bonus_results", ["Nodes (steps)", "Basic s/step", "Bonus s/step", "Bonus vs Basic", "coefficient.dat vs the pre-change baseline"], bonus_rows, [0.15, 0.2, 0.2, 0.16, 0.29], fontsize=14)
 
     not_worked_rows = [
-        ["Compiler flags (-march=znver3, AOCC, -O2, LTO), GCC PGO", "within ±0.13 %", "The loops wait on memory, not on instructions"],
-        ["MPI transport: OFI with the organisers' workarounds, UCX over RC, OpenFOAM comm switches", "−0.16 % to +0.77 %", "MPI time is waiting for the slowest rank, not transfer"],
-        ["Rank reordering (92 % fewer faces between nodes)", "+0.1 %", "Fewer bytes between nodes do not shorten the wait"],
-        ["GAMG coarsest level on fewer ranks", "−0.25 % to +4.95 %", "81 % of the global sums, but about 0.6 % of the time"],
-        ["Weighted cells (×2, ×12), METIS with two constraints", "+1.5 % to +6.1 %", "Uneven cell counts, or more processor faces"],
-        ["malloc thresholds", "−0.4 % (3 runs)", "Too small to separate with 3 runs; not re-tested"],
+        ["Compiler flags (-march=znver3, AOCC, -O2, LTO), GCC PGO", "within ±0.13%", "The loops wait on memory, not on instructions"],
+        ["MPI transport: OFI with the organisers' workarounds, UCX over RC, OpenFOAM comm switches", "−0.16% to +0.77%", "MPI time is waiting for the slowest rank, not transfer"],
+        ["Rank reordering (92% fewer faces between nodes)", "+0.1%", "Fewer bytes between nodes do not shorten the wait"],
+        ["GAMG coarsest level on fewer ranks", "−0.25% to +4.95%", "81% of the global sums, but about 0.6% of the time"],
+        ["Weighted cells (×2, ×12), METIS with two constraints", "+1.5% to +6.1%", "Uneven cell counts, or more processor faces"],
+        ["malloc thresholds", "−0.4% (3 runs)", "Too small to separate with 3 runs; not re-tested"],
         ["SMT (2 ranks per core)", "5.7× slower", "Stalls of minutes; cause not isolated"],
     ]
-    table(output, "tab12_not_worked", ["Idea", "Result (4 nodes)", "Why it did not help"], keep_percent(not_worked_rows), [0.43, 0.19, 0.38], fontsize=14)
+    table(output, "tab12_not_worked", ["Idea", "Result (4 nodes)", "Why it did not help"], not_worked_rows, [0.43, 0.19, 0.38], fontsize=14)
 
     network_rows = [
-        ["UCX over RC instead of UD between nodes", "IMB bandwidth (1 MiB Sendrecv) 6.7 → 10.4 GB/s, +55 %", "−0.01 % Basic, −0.16 % Bonus (4 v 4 runs each)"],
-        ["Rank reordering, hierarchical split", "92 % fewer faces between nodes", "+0.1 %"],
-        ["OFI instead of UCX, with the organisers' two workarounds", "Another transport and provider", "+0.77 % (3 v 3), +0.50 % (1 v 1)"],
-        ["GAMG coarsest level solved on 32 ranks instead of 512", "Fewer ranks in 81 % of the global sums", "−0.25 % (1 v 1)"],
+        ["UCX over RC instead of UD between nodes", "IMB bandwidth (1 MiB Sendrecv) 6.7 → 10.4 GB/s, +55%", "−0.01% Basic, −0.16% Bonus (4 v 4 runs each)"],
+        ["Rank reordering, hierarchical split", "92% fewer faces between nodes", "+0.1%"],
+        ["OFI instead of UCX, with the organisers' two workarounds", "Another transport and provider", "+0.77% (3 v 3), +0.50% (1 v 1)"],
+        ["GAMG coarsest level solved on 32 ranks instead of 512", "Fewer ranks in 81% of the global sums", "−0.25% (1 v 1)"],
     ]
-    table(output, "tab13_network_checks", ["What we changed on the network side", "How much the network side changed", "Step time (4 nodes)"], keep_percent(network_rows), [0.36, 0.36, 0.28], fontsize=14)
+    table(output, "tab13_network_checks", ["What we changed on the network side", "How much the network side changed", "Step time (4 nodes)"], network_rows, [0.36, 0.36, 0.28], fontsize=14)
 
 
 def table(output, name, header, rows, widths, fontsize=12):
@@ -965,7 +960,7 @@ def tables(output):
     for nodes in (1, 2, 4):
         basic = runs[("Basic", nodes)]
         bonus = runs[("Bonus", nodes)]
-        rows.append([f"{nodes} ({nodes * 128} ranks, {dict([(1, 40), (2, 80), (4, 150)])[nodes]} steps)", f"{statistics.fmean(basic):.3f}  (n={len(basic)}, range {(max(basic) - min(basic)) / statistics.fmean(basic) * 100:.2f} %)", f"{statistics.fmean(bonus):.3f}  (n={len(bonus)}, range {(max(bonus) - min(bonus)) / statistics.fmean(bonus) * 100:.2f} %)", f"{change(bonus, basic):+.2f} %", f"{statistics.fmean(basic) / statistics.fmean(bonus):.3f} ×"])
+        rows.append([f"{nodes} ({nodes * 128} ranks, {dict([(1, 40), (2, 80), (4, 150)])[nodes]} steps)", f"{statistics.fmean(basic):.3f}  (n={len(basic)}, range {(max(basic) - min(basic)) / statistics.fmean(basic) * 100:.2f}%)", f"{statistics.fmean(bonus):.3f}  (n={len(bonus)}, range {(max(bonus) - min(bonus)) / statistics.fmean(bonus) * 100:.2f}%)", f"{change(bonus, basic):+.2f}%", f"{statistics.fmean(basic) / statistics.fmean(bonus):.3f} ×"])
     table(output, "tab01_final_results", ["Nodes", "Basic s/step (mean)", "Bonus s/step (mean)", "Bonus vs Basic", "Speedup"], rows, [0.22, 0.27, 0.27, 0.13, 0.11])
     f3_rows = [
         ["1 (40)", "25682093", "25709674, 25706195, 25709663", "bit-identical (SHA-256 36d35283…)", "0.43827636195043501"],
@@ -974,7 +969,7 @@ def tables(output):
     ]
     table(output, "tab02_f3_check", ["Nodes (steps)", "Pre-change baseline (PBS job)", "Bonus runs (PBS jobs)", "coefficient.dat", "Cd at last step"], f3_rows, [0.12, 0.19, 0.25, 0.25, 0.19])
     data = changes_by_role()
-    measured = {key: f"{change(data[(key, 4, 'candidate')], data[(key, 4, 'control')]):+.2f} %  ({len(data[(key, 4, 'control')])} v {len(data[(key, 4, 'candidate')])})" for key, _ in CHANGES}
+    measured = {key: f"{change(data[(key, 4, 'candidate')], data[(key, 4, 'control')]):+.2f}%  ({len(data[(key, 4, 'control')])} v {len(data[(key, 4, 'candidate')])})" for key, _ in CHANGES}
     change_rows = [
         ["multiLevel decomposition", "Partition follows node / socket / NUMA / core", "Decomposition only; unmodified source", measured["multiLevel"]],
         ["No copies in the solvers", "Temporary residual field and its copy (smoothSolver); copy + subtract (GAMG)", "Same function, same per-cell subtraction", measured["0001"]],
@@ -984,17 +979,17 @@ def tables(output):
     ]
     table(output, "tab03_bonus_changes", ["Change", "What it removes", "Why the result is the same", "4 nodes (runs before v after)"], change_rows, [0.19, 0.33, 0.31, 0.17])
     rejected_rows = [
-        ["Compiler: -march=znver3, AOCC 5.0, -O2, LTO (Basic)", "Within ±0.1 % of the control", "Code generation does not limit the run time"],
-        ["GCC profile-guided optimisation (Basic)", "+0.13 % (1 v 1, same period), +0.08 % at 1 node; Cd bit-identical", "The hot loops wait on memory and on other ranks"],
-        ["Weighted multiLevel cells (Bonus)", "+2.2 % (weight ×2), +6.1 % (×12)", "Static weights unbalance the cell counts; even cell counts matter most"],
-        ["METIS two-constraint partition (Bonus)", "+1.46 %", "Better face balance, but 18 % more processor faces"],
+        ["Compiler: -march=znver3, AOCC 5.0, -O2, LTO (Basic)", "Within ±0.1% of the control", "Code generation does not limit the run time"],
+        ["GCC profile-guided optimisation (Basic)", "+0.13% (1 v 1, same period), +0.08% at 1 node; Cd bit-identical", "The hot loops wait on memory and on other ranks"],
+        ["Weighted multiLevel cells (Bonus)", "+2.2% (weight ×2), +6.1% (×12)", "Static weights unbalance the cell counts; even cell counts matter most"],
+        ["METIS two-constraint partition (Bonus)", "+1.46%", "Better face balance, but 18% more processor faces"],
         ["OpenFOAM comm switches (Basic)", "No gain; commsType scheduled crashed in GAMG", "MPI time is mostly waiting for slower ranks"],
-        ["OFI instead of UCX, with FI_OFI_RXM_USE_SRX=0 or FI_VERBS_PREFER_XRC=0 (Basic)", "SRX=0: +0.77 % (3 v 3); XRC=0: +0.50 % (1 v 1)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
-        ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01 % Basic, −0.16 % Bonus (4 v 4 each)", "IMB bandwidth +55 %, yet a step does not wait on inter-node transfer"],
-        ["GAMG coarsest level on fewer ranks (Bonus)", "One master: +4.95 % (40 steps); per node +1.02 %, per NUMA −0.25 % (1 v 1)", "It issues 81 % of the Allreduce calls, but the wait is for slower ranks"],
+        ["OFI instead of UCX, with FI_OFI_RXM_USE_SRX=0 or FI_VERBS_PREFER_XRC=0 (Basic)", "SRX=0: +0.77% (3 v 3); XRC=0: +0.50% (1 v 1)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
+        ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01% Basic, −0.16% Bonus (4 v 4 each)", "IMB bandwidth +55%, yet a step does not wait on inter-node transfer"],
+        ["GAMG coarsest level on fewer ranks (Bonus)", "One master: +4.95% (40 steps); per node +1.02%, per NUMA −0.25% (1 v 1)", "It issues 81% of the Allreduce calls, but the wait is for slower ranks"],
         ["SMT, 2 ranks per core (Basic)", "About 5.7 × slower (stopped after 22 steps)", "More ranks on the same cores do not help this solver"],
-        ["Overlap of halo exchange and computation", "Under 1 % available (stack samples)", "Led to skipping the unused boundary exchanges instead"],
-        ["File I/O in the timed steps", "About 0.01 % of the run time", "Not a factor"],
+        ["Overlap of halo exchange and computation", "Under 1% available (stack samples)", "Led to skipping the unused boundary exchanges instead"],
+        ["File I/O in the timed steps", "About 0.01% of the run time", "Not a factor"],
     ]
     table(output, "tab04_not_adopted", ["Candidate (tier)", "Result (4 nodes unless noted)", "What we learned"], rejected_rows, [0.36, 0.3, 0.34])
 

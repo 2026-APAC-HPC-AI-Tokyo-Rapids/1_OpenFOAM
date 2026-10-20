@@ -9,16 +9,16 @@ The figures are in `figures/`; the raw logs are in `results/`, `scaling/`, `anal
 ## 1. Summary
 
 On 4 ASPIRE-2A nodes, the official case takes 3.65 s per step with the case defaults on our own build of v2512. Our
-**Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**, 21 % less. Our **Bonus**, which adds four
-source changes that keep every arithmetic operation, takes **2.599 s**, 29 % less, with a `coefficient.dat` bit-identical to
+**Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**, 21% less. Our **Bonus**, which adds four
+source changes that keep every arithmetic operation, takes **2.599 s**, 29% less, with a `coefficient.dat` bit-identical to
 the unpatched run. All three use the same build, scripts and measurement, so the differences are our optimisations. The
-spread between repeated jobs falls from 8 % to 0.2 %.
+spread between repeated jobs falls from 8% to 0.2%.
 
 | 4 nodes, 150 steps | s/step | Against our baseline |
 |---|---:|---:|
 | Our baseline (case-default `hierarchical`, launcher binding only) | 3.650 | — |
-| **Basic** | **2.898** | **−20.6 %** |
-| **Bonus** | **2.599** | **−28.8 %** |
+| **Basic** | **2.898** | **−20.6%** |
+| **Bonus** | **2.599** | **−28.8%** |
 
 For reference, the organisers' vanilla runs on the same machine took 3.30 s per step with `scotch`. They use the site build,
 the default MPI transport and no binding, so we show them as context, not as the comparison (section 5).
@@ -27,19 +27,19 @@ What we found and did:
 
 1. **The CPU binding is lost at `MPI_Init`.** On ASPIRE-2A, the binding that the launcher sets is removed from outside every
    process while MPI initialises. The ranks then move between cores, and most of their memory ends up on other NUMA domains
-   (median 9 % local). We put the placement back with the job script alone: −11 %.
+   (median 9% local). We put the placement back with the job script alone: −11%.
 2. **Every rank gets the same work.** The case-default `hierarchical` split cuts thin slabs, and the ranks next to the car get
-   more work. `scotch` cuts compact blocks (−10.5 %). Mapping the `scotch` split onto the sockets and NUMA domains of each
-   node cuts the faces between nodes by 23 % (−0.7 %).
+   more work. `scotch` cuts compact blocks (−10.5%). Mapping the `scotch` split onto the sockets and NUMA domains of each
+   node cuts the faces between nodes by 23% (−0.7%).
 3. **After that, memory bandwidth sets the speed.** We cannot read the memory-controller counters, so we moved the ranks
    instead: half the cores on all memory channels change nothing, while the same ranks on half the channels make a step
    2.2× slower, as much as the bandwidth drops.
 4. **Bonus: the same arithmetic, fewer bytes.** A node-aware `multiLevel` split and four source changes remove copies, the
    second and third pass over the same matrix, boundary values that nobody reads, and temporary face fields. The results are
-   bit-identical, every solver log line is identical, and the cores load 17 % fewer cache lines from DRAM: −10.3 % against
+   bit-identical, every solver log line is identical, and the cores load 17% fewer cache lines from DRAM: −10.3% against
    Basic.
 5. **The scaling is explained.** The parallel efficiency is 1.15 on 4 nodes because the cell arrays that the sparse-matrix
-   kernels gather fit in L3 there: per cell and step, a rank needs 30 % fewer refills from DRAM than on 1 node.
+   kernels gather fit in L3 there: per cell and step, a rank needs 30% fewer refills from DRAM than on 1 node.
 6. **It can be reproduced.** The submitted scripts rebuild everything from public sources and run with plain `qsub`. Running
    them again gave a byte-identical `coefficient.dat` at every node count.
 
@@ -58,7 +58,7 @@ same work. A mean over the steps is a fair measure, and a 40-step profile run re
 The rules allow two tiers. **Basic** runs the unmodified official v2512 source and tunes only built-in controls: the build,
 the job scripts and rank placement, and the decomposition (`hierarchical` or `scotch`, with that method's settings).
 **Bonus** may change the source or use other decompositions, if the team proves that the result is the same computation
-(Cd from `coefficient.dat` bit-identical to its own unchanged baseline, or within ±0.5 %, at 1, 2 and 4 nodes).
+(Cd from `coefficient.dat` bit-identical to its own unchanged baseline, or within ±0.5%, at 1, 2 and 4 nodes).
 
 ## 3. The machine
 
@@ -82,7 +82,7 @@ All our runs use 128 MPI ranks per node, one per physical core, no SMT, and excl
 ## 4. How we measured
 
 **Benchmark runs and profile runs are separate.** Every number in this report comes from benchmark runs without a profiler,
-read with the official metric. Profilers change a step by −1 % to +6 %, so profiles answer only "where" and "why", in
+read with the official metric. Profilers change a step by −1% to +6%, so profiles answer only "where" and "why", in
 separate runs:
 
 | Tool | Runs | Question it answers |
@@ -96,9 +96,9 @@ separate runs:
 
 **Every change is compared with a control in the same period.** Candidate and control jobs run alternately, at least 3 of
 each on 4 nodes, and a change is kept only if every job with it was faster than every job without it. Every change we
-adopted meets this rule on 4 nodes. We started with a 1 % minimum as well, and dropped it once we knew the run-to-run spread:
-in early October, 29 pinned `scotch` jobs on 4 nodes had a standard deviation of 0.19 %, and 72 of 81 October jobs in
-repeated configurations lie within ±0.5 % of their configuration's median. Single jobs can still go wrong — two September jobs were 84 % and 91 % slower
+adopted meets this rule on 4 nodes. We started with a 1% minimum as well, and dropped it once we knew the run-to-run spread:
+in early October, 29 pinned `scotch` jobs on 4 nodes had a standard deviation of 0.19%, and 72 of 81 October jobs in
+repeated configurations lie within ±0.5% of their configuration's median. Single jobs can still go wrong — two September jobs were 84% and 91% slower
 than usual — so we never decide from one job.
 
 ## 5. The baseline, and what slows it down
@@ -111,24 +111,24 @@ and no binding.
 
 | Nodes (steps) | Baseline s/step (jobs) | Spread | Organisers, `hierarchical` | Organisers, `scotch` (mean) |
 |---|---:|---:|---:|---:|
-| 1 (40) | 14.57 (6) | 5.5 % | 14.67 | 14.49 |
-| 2 (80) | 7.43 (3) | 4.0 % | 7.12 | 7.31 |
-| 4 (150) | 3.65 (3) | 7.8 % | 3.415 | 3.30 |
+| 1 (40) | 14.57 (6) | 5.5% | 14.67 | 14.49 |
+| 2 (80) | 7.43 (3) | 4.0% | 7.12 | 7.31 |
+| 4 (150) | 3.65 (3) | 7.8% | 3.415 | 3.30 |
 
 ![Baseline scaling against the organisers' reference](figures/fig23_baseline_scaling.png)
 
-*Figure 1. Baseline: linear scaling from 1 to 4 nodes (efficiency 1.00), but up to 8 % apart between jobs of the same setup.
-It is 7 % slower than the organisers' `hierarchical` run on 4 nodes. We think the lost binding (below) is why, but the build
+*Figure 1. Baseline: linear scaling from 1 to 4 nodes (efficiency 1.00), but up to 8% apart between jobs of the same setup.
+It is 7% slower than the organisers' `hierarchical` run on 4 nodes. We think the lost binding (below) is why, but the build
 and the MPI transport also differ, so we have not isolated it.*
 
 The profiles of the 4-node baseline show one chain of causes (Figure 2):
 
 1. **The binding is lost at `MPI_Init`.** During the solve, none of the 512 ranks was bound to its own core: every rank was
-   allowed on all 256 CPUs of its node. The median rank had 9 % of its memory pages on its own NUMA domain, about what random
-   placement over 8 domains gives (12.5 %). The binding requested at launch had been removed while MPI initialised.
+   allowed on all 256 CPUs of its node. The median rank had 9% of its memory pages on its own NUMA domain, about what random
+   placement over 8 domains gives (12.5%). The binding requested at launch had been removed while MPI initialised.
 2. **The computation becomes uneven.** The computation per rank (time outside MPI) ranged from 54 to 115 s over 40 steps;
    the slowest rank took 1.46 times the median.
-3. **Everyone waits.** MPI took 46 % of the time; 55 % of that was `MPI_Waitall` and 35 % `MPI_Allreduce`, the calls that
+3. **Everyone waits.** MPI took 46% of the time; 55% of that was `MPI_Waitall` and 35% `MPI_Allreduce`, the calls that
    wait for other ranks. Every solver iteration exchanges halo values and takes a global sum, so a rank sends about 14,000
    messages and joins about 1,600 global sums per step. Whenever one rank is slow, the other 511 wait.
 
@@ -147,16 +147,16 @@ are in brackets.
 | 3 | `MPI_Test` | 563,646 (288.6 M) | `MPI_Bcast` | 2.5 (1,289) |
 | All MPI | | 1,815,336 (929.5 M) | | 78.3 (40,069) |
 
-The most frequent calls are the non-blocking halo exchange with the neighbouring subdomains, 93 % of all MPI calls. The
-time goes to the calls that wait for other ranks: `MPI_Waitall` and `MPI_Allreduce` take 90 % of the MPI time. It is
-waiting, not transfer: the MPI time per rank ranges from 35 to 112 s, while the cell counts are equal within 0.002 %.
+The most frequent calls are the non-blocking halo exchange with the neighbouring subdomains, 93% of all MPI calls. The
+time goes to the calls that wait for other ranks: `MPI_Waitall` and `MPI_Allreduce` take 90% of the MPI time. It is
+waiting, not transfer: the MPI time per rank ranges from 35 to 112 s, while the cell counts are equal within 0.002%.
 
-The data exchanged is not the bottleneck. Cutting the faces between nodes by 92 % or raising the network bandwidth by 55 %
+The data exchanged is not the bottleneck. Cutting the faces between nodes by 92% or raising the network bandwidth by 55%
 did not make a step faster (section 10).
 
 ## 6. Basic: placement and decomposition
 
-### 6.1 Putting the binding back (−11 %)
+### 6.1 Putting the binding back (−11%)
 
 Linux places a memory page on the NUMA domain of the core that first writes it, and does not move it later. A rank that is
 not on its own core when it allocates its mesh and fields keeps that data in remote memory for the whole run. The fix needs
@@ -169,30 +169,30 @@ both the memory and the CPU placement, and only the job script:
 
 Each half alone is not enough. With `scotch` on 4 nodes, re-pinning only the CPUs gave 3.47 s/step, because the data
 allocated in the first 12 – 16 seconds stayed remote; binding only the memory gave 4.38, because the ranks then ran on other
-domains' cores; both together gave 2.92. With the case-default split, pinning took a step from 3.670 to 3.257 s (−11.2 %,
+domains' cores; both together gave 2.92. With the case-default split, pinning took a step from 3.670 to 3.257 s (−11.2%,
 3 jobs each, same period). That comparison pinned with an `LD_PRELOAD` interposer right after `MPI_Init`, which gives the
 same speed as `numactl` and `taskset`; the rules count `LD_PRELOAD` as Bonus work, so Basic uses `numactl` and `taskset`.
 
 ![Placement variants](figures/fig06_pinning.png)
 
 *Figure 3. Placement variants on 4 nodes with `scotch`. Only the variants that place both the memory and the CPU of every
-rank from the start reach 2.91 – 2.92 s/step; the others are 16 – 19 % slower on average, and binding only the memory 50 %.*
+rank from the start reach 2.91 – 2.92 s/step; the others are 16 – 19% slower on average, and binding only the memory 50%.*
 
 The organisers' ASPIRE-2A notes do not mention the binding, and their reference runs are not pinned. Their 5 vanilla `scotch`
-jobs on 4 nodes range from 3.19 to 3.58 s/step, a spread of 12 %.
+jobs on 4 nodes range from 3.19 to 3.58 s/step, a spread of 12%.
 
-### 6.2 `scotch` instead of `hierarchical` (−10.5 %)
+### 6.2 `scotch` instead of `hierarchical` (−10.5%)
 
 `hierarchical` cuts the domain into slabs along the coordinate axes. Ranks whose slabs hold much of the car's surface get many
 wall faces and more work: the computation per rank varied by 1.16 (slowest / median, CrayPAT, both pinned). `scotch` cuts
-compact blocks: the faces between subdomains fall by 32 % (4.31 M to 2.93 M), the imbalance falls to 1.06, and the median
+compact blocks: the faces between subdomains fall by 32% (4.31 M to 2.93 M), the imbalance falls to 1.06, and the median
 rank's `MPI_Waitall` time halves (18.7 s to 9.4 – 10.8 s).
 
 | Nodes | `hierarchical` (3 jobs) | `scotch` (3 jobs) | Change |
 |---:|---:|---:|---:|
-| 1 | 13.5229 | 13.3459 | −1.3 % |
-| 2 | 6.5282 | 6.3679 | −2.5 % |
-| 4 | 3.2574 | 2.9145 | −10.5 % |
+| 1 | 13.5229 | 13.3459 | −1.3% |
+| 2 | 6.5282 | 6.3679 | −2.5% |
+| 4 | 3.2574 | 2.9145 | −10.5% |
 
 ![hierarchical and scotch subdomains](figures/decomposition-subdomains-baseline-vs-basic.png)
 
@@ -201,7 +201,7 @@ rank's `MPI_Waitall` time halves (18.7 s to 9.4 – 10.8 s).
 One early `scotch` job took 5.03 s/step and made us reject `scotch` at first. Alternated jobs in one period reversed that
 decision; since then we never decide from a single job.
 
-### 6.3 Mapping the split onto the node (−0.7 %)
+### 6.3 Mapping the split onto the node (−0.7%)
 
 By default Scotch partitions onto a flat set of parts. Through `scotchCoeffs`, the settings of the `scotch` method that Basic
 allows, we give it the shape of a node instead (Scotch's tree-leaf target):
@@ -223,38 +223,38 @@ scotchCoeffs
 
 | 4 nodes, from `decomposePar` | `scotch` defaults | Mapped onto the node | Change |
 |---|---:|---:|---:|
-| Faces between subdomains | 2,927,022 | 3,022,295 | +3.3 % |
-| … between nodes | 337,324 | 260,748 | −22.7 % |
-| … between sockets | 492,282 | 387,196 | −21.3 % |
-| … between NUMA domains | 1,047,405 | 938,403 | −10.4 % |
+| Faces between subdomains | 2,927,022 | 3,022,295 | +3.3% |
+| … between nodes | 337,324 | 260,748 | −22.7% |
+| … between sockets | 492,282 | 387,196 | −21.3% |
+| … between NUMA domains | 1,047,405 | 938,403 | −10.4% |
 | Neighbours of a subdomain (max) | 66 | 40 | |
 | Largest subdomain against the mean | 1.0107 | 1.0100 | |
 
 On 4 nodes, five alternated jobs on each side gave 2.897638 s/step (2.894442 – 2.899615) against 2.917726
-(2.911949 – 2.925723): −0.69 %. Every job with the mapping was faster than every job without it, and the jobs varied less
-(standard deviation 0.0019 against 0.0065 s/step). On 1 and 2 nodes the mapping changes little (+0.00 % and +0.08 %).
+(2.911949 – 2.925723): −0.69%. Every job with the mapping was faster than every job without it, and the jobs varied less
+(standard deviation 0.0019 against 0.0065 s/step). On 1 and 2 nodes the mapping changes little (+0.00% and +0.08%).
 
 ### 6.4 The Basic result
 
 | 4 nodes | Baseline | Basic |
 |---|---:|---:|
-| s/step (jobs) | 3.650 (3) | **2.898 (5)**: −20.6 % |
-| Spread between jobs | 7.8 % | 0.18 % |
+| s/step (jobs) | 3.650 (3) | **2.898 (5)**: −20.6% |
+| Spread between jobs | 7.8% | 0.18% |
 | Ranks on their own core during the solve | 0 of 512 | 128 of 128 on every node |
-| Memory on the rank's own NUMA domain (median) | 9 % | 58 % |
+| Memory on the rank's own NUMA domain (median) | 9% | 58% |
 | Computation per rank, slowest / median* | 1.46 | 1.06 |
-| MPI share of the time* | 46 % | 19 % |
+| MPI share of the time* | 46% | 19% |
 
-\* Profiles of Basic before the mapping of section 6.3, which changes a step by 0.7 %.
+\* Profiles of Basic before the mapping of section 6.3, which changes a step by 0.7%.
 
-After pinning, 58 % rather than 100 % of a rank's pages are local. We think the rest are pages that several ranks share, such
+After pinning, 58% rather than 100% of a rank's pages are local. We think the rest are pages that several ranks share, such
 as shared libraries and MPI's shared buffers, which can live on only one domain; we have not verified this.
 
 | Nodes (steps) | Basic s/step (jobs) | Spread | Cd at the last step | Against our baseline |
 |---|---:|---:|---|---:|
-| 1 (40) | 13.364504 (3) | 0.04 % | 0.43957921531324928 | −8.3 % |
-| 2 (80) | 6.371748 (3) | 0.16 % | 0.33409590047442955 | −14.2 % |
-| 4 (150) | 2.897638 (5) | 0.18 % | 0.29301591596528520 | −20.6 % |
+| 1 (40) | 13.364504 (3) | 0.04% | 0.43957921531324928 | −8.3% |
+| 2 (80) | 6.371748 (3) | 0.16% | 0.33409590047442955 | −14.2% |
+| 4 (150) | 2.897638 (5) | 0.18% | 0.29301591596528520 | −20.6% |
 
 ![The path on 4 nodes](figures/fig16_journey.png)
 
@@ -282,7 +282,7 @@ To find out whether the cores or the memory system set the speed, we changed onl
 *Figure 6. Halving the cores changes nothing; halving the memory channels slows a step as much as the bandwidth drops.*
 
 If the computation or the latency of each core's memory requests set the speed, halving the cores would have doubled the time.
-It changed by −1 % to +2 %. Halving the channels made a step 2.11 – 2.20 times slower, while the triad bandwidth on the same
+It changed by −1% to +2%. Halving the channels made a step 2.11 – 2.20 times slower, while the triad bandwidth on the same
 nodes fell by 2.22 times. The step time follows the memory bandwidth. The same experiment halves the L3 too, so it cannot
 separate DRAM bandwidth from L3 capacity; both are the memory side.
 
@@ -291,7 +291,7 @@ matrix–vector product) do about 4 floating-point operations per internal face,
 an address (4 B) and cell values: 30 – 40 B in all, about 0.1 flop per byte. A node needs about 14 flop per byte to keep its
 cores busy (128 cores × 2.0 GHz × 16 flop ≈ 4.1 TFLOP/s against 290 GB/s). The sweeps sit far under the bandwidth roof of a
 roofline model, and the cores mostly wait: the measured IPC is 0.4 – 0.7. Compiler flags, another compiler and profile-guided
-optimisation all changed a step by at most 0.13 % (section 10).
+optimisation all changed a step by at most 0.13% (section 10).
 
 We cannot draw a measured roofline on ASPIRE-2A. The DRAM traffic in bytes needs the memory-controller counters, which users
 cannot read, and the core counters count only demand refills, not the lines that the hardware prefetchers bring in.
@@ -308,9 +308,9 @@ the patches.
 
 `multiLevel` decomposes level by level with `scotch` at every level: nodes, then the 2 sockets of a node, then the 4 NUMA
 domains of a socket, then the 16 cores of a domain (`(4 2 4 16)` on 4 nodes, `(2 2 4 16)` on 2, `(2 4 16)` on 1). It is a
-different decomposition method, so it is Bonus work. Against `scotch` with its defaults, the faces between nodes fall by 38 %,
-between sockets by 34 % and between NUMA domains by 26 %, and the total by 3.9 % (2.81 M). Without the source patches it is
-1.54 % faster on 4 nodes (4 jobs each).
+different decomposition method, so it is Bonus work. Against `scotch` with its defaults, the faces between nodes fall by 38%,
+between sockets by 34% and between NUMA domains by 26%, and the total by 3.9% (2.81 M). Without the source patches it is
+1.54% faster on 4 nodes (4 jobs each).
 
 ### 8.2 Four source changes
 
@@ -340,20 +340,20 @@ names, paths, dates and timings differ. Each patch was also checked on its own a
 
 | Nodes (steps) | Basic | Bonus | Bonus against Basic | `coefficient.dat` against the pre-change baseline |
 |---|---:|---:|---:|---|
-| 1 (40) | 13.364504 (3 jobs) | 11.668460 (3 jobs) | −12.69 % | bit-identical |
-| 2 (80) | 6.371748 (3 jobs) | 5.640683 (3 jobs) | −11.47 % | bit-identical |
-| 4 (150) | 2.897638 (5 jobs) | 2.599353 (3 jobs) | −10.29 % | bit-identical |
+| 1 (40) | 13.364504 (3 jobs) | 11.668460 (3 jobs) | −12.69% | bit-identical |
+| 2 (80) | 6.371748 (3 jobs) | 5.640683 (3 jobs) | −11.47% | bit-identical |
+| 4 (150) | 2.897638 (5 jobs) | 2.599353 (3 jobs) | −10.29% | bit-identical |
 
 Each change against the configuration just before it, in the same period (4 nodes: 3 – 4 jobs each; most 1- and 2-node values
 are single jobs):
 
 | Change | 1 node | 2 nodes | 4 nodes |
 |---|---:|---:|---:|
-| `multiLevel` against `scotch` with its defaults | −0.45 % | −0.38 % | −1.54 % |
-| + no copies in the solvers | −2.19 % | −2.94 % | −3.39 % |
-| + U components in one pass | −6.39 % | −4.13 % | −2.29 % |
-| + no unused boundary updates | −1.40 % | −1.88 % | −1.31 % |
-| + fused face loops | −2.88 % | −2.29 % | −2.82 % |
+| `multiLevel` against `scotch` with its defaults | −0.45% | −0.38% | −1.54% |
+| + no copies in the solvers | −2.19% | −2.94% | −3.39% |
+| + U components in one pass | −6.39% | −4.13% | −2.29% |
+| + no unused boundary updates | −1.40% | −1.88% | −1.31% |
+| + fused face loops | −2.88% | −2.29% | −2.82% |
 
 ### 8.5 Why the changes help
 
@@ -362,14 +362,14 @@ build without the patches, 2 jobs each, computation only (MPI, UCX and `Pstream`
 
 | Per rank, whole run | Without the patches | With the patches | Change |
 |---|---:|---:|---:|
-| Cycles | 450.2 G | 401.6 G | −10.8 % |
-| Instructions | 162.1 G | 155.5 G | −4.1 % |
-| L1 data accesses | 90.8 G | 85.5 G | −5.8 % |
-| L1 demand refills from DRAM | 0.493 G | 0.408 G | −17.2 % |
-| L2 accesses, including prefetches | 6.35 G | 5.74 G | −9.6 % |
-| IPC | 0.360 | 0.388 | +7.5 % |
+| Cycles | 450.2 G | 401.6 G | −10.8% |
+| Instructions | 162.1 G | 155.5 G | −4.1% |
+| L1 data accesses | 90.8 G | 85.5 G | −5.8% |
+| L1 demand refills from DRAM | 0.493 G | 0.408 G | −17.2% |
+| L2 accesses, including prefetches | 6.35 G | 5.74 G | −9.6% |
+| IPC | 0.360 | 0.388 | +7.5% |
 
-The patches remove little arithmetic (4 % of the instructions) and much data movement (17 % of the refills from DRAM).
+The patches remove little arithmetic (4% of the instructions) and much data movement (17% of the refills from DRAM).
 
 ![Counters with and without the patches](figures/fig17_counters.png)
 
@@ -378,9 +378,9 @@ The patches remove little arithmetic (4 % of the instructions) and much data mov
 **CrayPAT, 4 nodes.** From the first patch alone to the final Bonus, the computation per rank falls from 104.2 to 94.9 s
 (40 steps) while the MPI time stays at about 23.5 s: the patches shorten the computation and leave the communication as it was.
 
-**Less memory per core, more gain.** In the placement experiment of section 7, the patches gain 7.9 % on all 16 channels and
-11.4 % on 8 channels. They help most where bandwidth is scarcest, which is what removing memory traffic predicts. They also
-gain most on 1 node (U in one pass: −6.4 % on 1 node, −2.3 % on 4), where each rank holds four times more data.
+**Less memory per core, more gain.** In the placement experiment of section 7, the patches gain 7.9% on all 16 channels and
+11.4% on 8 channels. They help most where bandwidth is scarcest, which is what removing memory traffic predicts. They also
+gain most on 1 node (U in one pass: −6.4% on 1 node, −2.3% on 4), where each rank holds four times more data.
 
 ## 9. Scaling
 
@@ -418,28 +418,28 @@ from DRAM. How well each subdomain's data fits in cache sets its speed.
 
 | Idea (tier) | Result, 4 nodes | Why it did not help |
 |---|---|---|
-| `-march=znver3`, AOCC 5.0, `-O2`, LTO (Basic) | within ±0.1 % | The loops wait on memory, not on instructions |
-| GCC profile-guided optimisation (Basic) | +0.13 % (+0.08 % on 1 node), Cd bit-identical | The same |
-| Default OFI transport with the organisers' workarounds (Basic) | +0.77 % (3 v 3), +0.50 % (1 v 1); same Cd, no SIGBUS | Not faster than UCX |
-| UCX over RC instead of UD between nodes | −0.01 % (Basic), −0.16 % (Bonus), 4 v 4 | IMB bandwidth rose 55 %, but a step does not wait on transfers |
+| `-march=znver3`, AOCC 5.0, `-O2`, LTO (Basic) | within ±0.1% | The loops wait on memory, not on instructions |
+| GCC profile-guided optimisation (Basic) | +0.13% (+0.08% on 1 node), Cd bit-identical | The same |
+| Default OFI transport with the organisers' workarounds (Basic) | +0.77% (3 v 3), +0.50% (1 v 1); same Cd, no SIGBUS | Not faster than UCX |
+| UCX over RC instead of UD between nodes | −0.01% (Basic), −0.16% (Bonus), 4 v 4 | IMB bandwidth rose 55%, but a step does not wait on transfers |
 | OpenFOAM communication switches (`topoControl`, `nbx.tuning`, `pbufs.tuning`) | no gain; `commsType scheduled` crashed in GAMG | MPI time is waiting for the slowest rank |
-| Rank reordering (`MPICH_RANK_REORDER_METHOD=3`) | +0.1 %, with 92 % fewer faces between nodes | Fewer bytes between nodes do not shorten the wait |
-| GAMG coarsest level on fewer ranks (Bonus) | −0.25 % to +4.95 % | 81 % of the global sums, but about 0.6 % of the time |
-| Weighted cells (×2, ×12), METIS with two constraints (Bonus) | +1.5 % to +6.1 % | Uneven cell counts, or 18 % more faces between subdomains |
-| glibc `malloc` thresholds (Basic) | −0.4 % (3 jobs) | Too small to separate from the spread with 3 jobs; not re-tested |
+| Rank reordering (`MPICH_RANK_REORDER_METHOD=3`) | +0.1%, with 92% fewer faces between nodes | Fewer bytes between nodes do not shorten the wait |
+| GAMG coarsest level on fewer ranks (Bonus) | −0.25% to +4.95% | 81% of the global sums, but about 0.6% of the time |
+| Weighted cells (×2, ×12), METIS with two constraints (Bonus) | +1.5% to +6.1% | Uneven cell counts, or 18% more faces between subdomains |
+| glibc `malloc` thresholds (Basic) | −0.4% (3 jobs) | Too small to separate from the spread with 3 jobs; not re-tested |
 | SMT, 2 ranks per core (Basic) | about 5.7× slower | Stalls of minutes; cause not isolated |
-| Overlapping halo exchange with computation | under 1 % available (call-stack samples) | Led to skipping the unused exchanges instead (`0003`) |
-| File I/O in the timed steps | about 0.01 % of a step | Not a factor |
+| Overlapping halo exchange with computation | under 1% available (call-stack samples) | Led to skipping the unused exchanges instead (`0003`) |
+| File I/O in the timed steps | about 0.01% of a step | Not a factor |
 
 Two further numbers from the profiles support the table. One 8-byte global sum over 512 ranks takes about 12 µs, so the
-1,600 global sums of a step cost about 0.02 s, under 1 % of a step; the rest of the MPI time is waiting. And a rank's wait in
-`MPI_Waitall` follows its own computation (R² = 0.77), not its number of neighbours. Interrupt handling takes 0.8 % of every
+1,600 global sums of a step cost about 0.02 s, under 1% of a step; the rest of the MPI time is waiting. And a rank's wait in
+`MPI_Waitall` follows its own computation (R² = 0.77), not its number of neighbours. Interrupt handling takes 0.8% of every
 core's time; changing that needs root.
 
 ## 11. Correctness and the drag coefficient
 
-At 40, 80 and 150 steps the flow has not converged, and Cd depends on the decomposition. The organisers' notes give 0.7 %,
-3.0 % and 3.5 % between `hierarchical` and `scotch`.
+At 40, 80 and 150 steps the flow has not converged, and Cd depends on the decomposition. The organisers' notes give 0.7%,
+3.0% and 3.5% between `hierarchical` and `scotch`.
 
 | Steps | OHC-1 values | Baseline (`hierarchical`) | `scotch` defaults | **Basic** (mapped `scotch`) | Bonus (`multiLevel`) |
 |---:|---|---:|---:|---:|---:|
@@ -448,7 +448,7 @@ At 40, 80 and 150 steps the flow has not converged, and Cd depends on the decomp
 | 150 | 0.284 – 0.292 | 0.27356 | 0.28405 | **0.29302** | 0.29139 |
 
 - Every column except the Bonus uses unmodified source; the Bonus is bit-identical to its unmodified baseline (section 8.3).
-  The mapping moves Cd by +0.8 %, +2.1 % and +3.2 % from `scotch` with its defaults, within what the organisers report for a
+  The mapping moves Cd by +0.8%, +2.1% and +3.2% from `scotch` with its defaults, within what the organisers report for a
   change of method.
 - With the same decomposition, our Cd at 150 steps (0.284049, `scotch` defaults) differs from the organisers' (0.283983) by a
   relative 2.3 × 10⁻⁴. With the site module, our scripts and the same decomposition, we got their value exactly
@@ -463,15 +463,15 @@ solver). We re-ran them twice from the public sources, exactly as `README.md` de
 
 | Configuration | Nodes | PBS jobs (prepare, solve) | s/step | Recorded mean | Change | `coefficient.dat` |
 |---|---:|---|---:|---:|---:|---|
-| Basic (2026-10-16) | 1 | 25838142, 25838143 | 13.413150 | 13.364504 | +0.36 % | identical |
-| Basic (2026-10-16) | 2 | 25838144, 25838145 | 6.390324 | 6.371748 | +0.29 % | identical |
-| Basic (2026-10-16) | 4 | 25838146, 25838147 | 2.904620 | 2.897638 | +0.24 % | identical |
-| Bonus (2026-10-07) | 1 | 25714175, 25714176 | 11.644042 | 11.668460 | −0.21 % | identical |
-| Bonus (2026-10-07) | 2 | 25714177, 25714178 | 5.649779 | 5.640683 | +0.16 % | identical |
-| Bonus (2026-10-07) | 4 | 25714179, 25714180 | 2.600607 | 2.599353 | +0.05 % | identical |
+| Basic (2026-10-16) | 1 | 25838142, 25838143 | 13.413150 | 13.364504 | +0.36% | identical |
+| Basic (2026-10-16) | 2 | 25838144, 25838145 | 6.390324 | 6.371748 | +0.29% | identical |
+| Basic (2026-10-16) | 4 | 25838146, 25838147 | 2.904620 | 2.897638 | +0.24% | identical |
+| Bonus (2026-10-07) | 1 | 25714175, 25714176 | 11.644042 | 11.668460 | −0.21% | identical |
+| Bonus (2026-10-07) | 2 | 25714177, 25714178 | 5.649779 | 5.640683 | +0.16% | identical |
+| Bonus (2026-10-07) | 4 | 25714179, 25714180 | 2.600607 | 2.599353 | +0.05% | identical |
 
 Every step of every job ended with `End` and returned 0, and every solve job reported `bound=128/128` on every node. The
-Basic re-run ran on other hosts on another day and is 0.24 – 0.36 % slower than our means, within the ±0.5 % in which most of
+Basic re-run ran on other hosts on another day and is 0.24 – 0.36% slower than our means, within the ±0.5% in which most of
 our October jobs lie. Every recorded job, with its PBS job ID, is listed in `scaling/scaling.txt`.
 
 ## 13. Limitations and next steps
@@ -479,20 +479,20 @@ our October jobs lie. Every recorded job, with its PBS job ID, is listed in `sca
 - **Not measured.** The DRAM traffic in bytes, the share of the peak bandwidth that a step uses, and how much of the memory
   effect is DRAM bandwidth and how much is L3 capacity. The memory-controller counters are not available to users on
   ASPIRE-2A.
-- **The remaining imbalance.** The computation per rank still varies by 6 % (slowest / median 1.063), and MPI is 19 % of a step,
+- **The remaining imbalance.** The computation per rank still varies by 6% (slowest / median 1.063), and MPI is 19% of a step,
   mostly waiting. The counters tie it to how much each rank reads from DRAM (section 9), not to its cells, so a better
   balance would have to come from data locality per subdomain (renumbering, or weights from measured per-rank times), not
   from equal cell counts.
 - **Remaining source changes.** Fusing the assembly of `U`, `k` and `omega` across terms, the GAMG residual with its
   restriction, or the Laplacian coefficients with the diagonal would each remove a pass or two over the face arrays. We expect
-  a few per cent from them together. Gains of 10 % would need a different computation, which the rules prohibit.
+  a few per cent from them together. Gains of 10% would need a different computation, which the rules prohibit.
 
 ## 14. Conclusion
 
 Within the rules — the same case, the same math, the same work per step — the speed on ASPIRE-2A was set by two things in
 turn. First by placement and balance: the launcher's binding is lost at `MPI_Init`, and the case-default split gives the ranks
 near the car more work. Putting the binding back and using a `scotch` split mapped onto the node made Basic 2.898 s per step,
-21 % below our baseline, with a 0.2 % spread between jobs. Then by memory bandwidth, shown by moving ranks
+21% below our baseline, with a 0.2% spread between jobs. Then by memory bandwidth, shown by moving ranks
 rather than by counters we cannot read: the Bonus moves fewer bytes for the same arithmetic and reaches 2.599 s, bit-identical
 to its unmodified baseline. Every number here comes from alternated, repeated benchmark jobs, and the submitted scripts
 reproduce them from public sources.
@@ -504,14 +504,14 @@ reproduce them from public sources.
 `fvSolution.fixedIter` sets `tolerance 0` and `relTol 0` for `U`, `k` and `omega`, and `minIter = maxIter = 35` for the
 coarsest-level PCG of `p`. The convergence check can then never stop a solve early, so the residual norm that the solvers
 compute after every sweep — a residual pass and a global sum — is used only after the last one. A patch that computes it once,
-after the last iteration, gave 2.250 s/step against 2.595 for the final Bonus on 4 nodes (−13.3 %, 3 jobs each, ranges not
+after the last iteration, gave 2.250 s/step against 2.595 for the final Bonus on 4 nodes (−13.3%, 3 jobs each, ranges not
 overlapping). `coefficient.dat` was bit-identical at 1, 2 and 4 nodes, and all 1,323 solver log lines were identical.
 
 We do not count it. It helps only the benchmark's fixed-iteration setting: the case's other dictionary, `fvSolution.fixedTol`,
 which uses ordinary tolerances, runs the original code. The rules also prohibit "less work per step", and the skipped norms
 could be read as work. The idea itself exists in OpenFOAM: with a negative `nSweeps`, v2512's `smoothSolver` runs a fixed
 number of sweeps and computes no residual. What the result does show is the cost of convergence checking at this scale:
-about 13 % of a Bonus step on 512 ranks.
+about 13% of a Bonus step on 512 ranks.
 
 ## Appendix B. Where the evidence is
 

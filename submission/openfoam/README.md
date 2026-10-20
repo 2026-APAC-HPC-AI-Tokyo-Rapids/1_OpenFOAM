@@ -13,9 +13,9 @@ launcher's binding only), so the change against it is what our optimisations did
 
 | Nodes (ranks, steps) | Baseline | **Basic** | Bonus | Basic against baseline | Bonus against Basic |
 |---|---:|---:|---:|---:|---:|
-| 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 11.668460 (3) | −8.3 % | −12.69 % |
-| 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 5.640683 (3) | −14.2 % | −11.47 % |
-| **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.599353 (3)** | **−20.6 %** | **−10.29 %** |
+| 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 11.668460 (3) | −8.3% | −12.69% |
+| 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 5.640683 (3) | −14.2% | −11.47% |
+| **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.599353 (3)** | **−20.6%** | **−10.29%** |
 
 For reference only: the organisers' vanilla runs on ASPIRE-2A (tasks 4.3) took 3.296 s/step on 4 nodes with `scotch`
 (5 jobs, 3.191 – 3.576) and 3.415 with `hierarchical`. They use the site module, the default MPI transport and no binding,
@@ -88,10 +88,10 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
 | 4 | 2.8944 – 2.8996 | 0.29301591596528520 | byte-identical to `results/4node/coefficient.dat` |
 
 - We re-ran exactly these scripts from the public sources on 2026-10-16, on other hosts: `coefficient.dat` was byte-identical
-  at every node count, and the time was 0.24 – 0.36 % above our means (4 nodes: 2.904620 s/step). Most of our October runs lie
-  within ±0.5 % of the median of their configuration, so expect about that spread.
+  at every node count, and the time was 0.24 – 0.36% above our means (4 nodes: 2.904620 s/step). Most of our October runs lie
+  within ±0.5% of the median of their configuration, so expect about that spread.
 - The PBS output of the second job prints `bound=128/128` for every node when every rank sits on its own core. If it does not,
-  the placement has failed and a step will be 16 – 19 % slower (`REPORT.md`, section 6.1).
+  the placement has failed and a step will be 16 – 19% slower (`REPORT.md`, section 6.1).
 - At these step counts the flow has not converged, and Cd depends on the decomposition. Another decomposition gives a Cd a few
   per cent different (`REPORT.md`, section 11).
 

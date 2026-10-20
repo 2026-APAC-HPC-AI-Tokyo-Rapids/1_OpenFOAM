@@ -57,6 +57,11 @@
 - 20枚目（#68）は%ではなく時間で書きました：2.595 → 2.250 s/step、使われない収束判定は1 stepあたり約0.35秒。
 - 19枚目の「What remains」に出典（配置の実験、CrayPAT）を書き、最終Bonusの値にしました：最も遅いrankの計算は中央値の1.067倍（7%）、MPIはプロセス時間の19.9%（20%）。それまでの「6%」「19%」は、Basicのprofilingの値でした。
 
+### 10/21の更新
+
+- 提出物（`REPORT.md`、`README.md`、`analysis/README.md`、`bonus/README.md`）と`figures.py`の図も、`s/step`と「21%」の書き方にそろえました。Boxの`presentation/openfoam/figures/`と`openfoam/figures/`の図は、描き直したものに置き換えました。図の色は元のまま（Basicは青）で、デッキの図だけが`deck/palette.py`の色です。
+- REPORT 13章の「6%（1.063）」「MPI 19%」はBasicの値で、19枚目の「7%」「20%」（最終Bonusの値）とは対象が違うだけです。
+
 ---
 
 ## 方針
