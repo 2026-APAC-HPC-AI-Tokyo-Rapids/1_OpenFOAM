@@ -1,7 +1,8 @@
 """Helpers on top of python-pptx that add text, cards, tables and charts in the team deck's own style.
 
-Fonts and colours follow the template: Meiryo everywhere, navy #14378F for headings and bullets, and the tier colours of
-figures.py (baseline magenta, Basic blue, Bonus orange). Positions and sizes are in inches.
+Fonts follow the template (Meiryo everywhere); colours come from palette.py. The words baseline, Basic and Bonus take their
+tier colour wherever they appear in normal text and in titles, so the colours need no legend. Positions and sizes are in
+inches.
 """
 
 import copy
@@ -18,21 +19,9 @@ from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+from palette import BASE, BASIC, BONUS, GRID, INK, LIGHT, LINE, MUTED, NAVY, WHITE
+
 FONT = "メイリオ"
-NAVY = "14378F"
-RED = "C0392B"
-BASE = "A23B72"
-BASIC = "3B6EA8"
-BONUS = "D9822B"
-GREEN = "2E8B57"
-INK = "262626"
-MUTED = "5F5F5F"
-FAINT = "8C8C8C"
-LIGHT = "F3F6FA"
-TINT = "E6ECF6"
-LINE = "D3DAE6"
-GRID = "E4E9F1"
-WHITE = "FFFFFF"
 NO_GRID_STYLE = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 ALIGN = {"l": PP_ALIGN.LEFT, "c": PP_ALIGN.CENTER, "r": PP_ALIGN.RIGHT}
@@ -47,19 +36,26 @@ def rgb(hex_):
 # ---------------------------------------------------------------- text
 NBSP = " "
 NBHYPHEN = "‑"
-_UNIT = re.compile(r"(\d) (%|GB/s|Gb/s|TFLOP/s|GB|TB|MB|MiB|M|s/step|s|µs|ms|nodes?|cores?|channels?|jobs?|controls?|ranks?|steps?|runs?|sockets?|domains?|files|lines|calls|threads|L3s)(?=[^\w/]|$)")
+_PERCENT = re.compile(r"(\d) %")
+_UNIT = re.compile(r"(\d) (GB/s|Gb/s|TFLOP/s|GB|TB|MB|MiB|M|s/step|s|µs|ms|nodes?|cores?|channels?|jobs?|controls?|ranks?|steps?|runs?|sockets?|domains?|files|lines|calls|threads|L3s)(?=[^\w/]|$)")
 _CHAIN = re.compile(r"([\d%]) (/|→|to|v) (?=[\d−+])")
 _COMPOUND = re.compile(r"\b(bit|case|pre|fixed|run|node|re|off|non|two|same)-(?=[a-z])|\b(\d+)-(?=(?:node|core|step|byte)s?\b)")
 _PAIRS = re.compile(r"\b(max|slowest|r|R²) (/|=) (?=[\w+−])")
+TIER_COLOURS = {"baseline": BASE, "basic": BASIC, "bonus": BONUS}
+# "pre-change baseline" and "its own baseline" (the Bonus build without its patches), and "the new baseline", are not our
+# baseline configuration
+_TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
 
 
 def tidy(text):
-    """Keep numbers with their units, short number chains (1 / 2 / 4, 3.65 → 2.90, 3 v 3, −1 % to +6 %) and short compounds on one line.
+    """Keep numbers with their units, short number chains (1 / 2 / 4, 3.65 → 2.90, 3 v 3, −1% to +6%) and short compounds on one line.
 
-    Code-like tokens (--cpu-bind, PrgEnv-gnu) keep a plain hyphen so that they can be copied from the slide.
-    PowerPoint still breaks after an en dash (3.19–3.58) whatever joiner follows it; write "3.19 to 3.58" where that matters.
-    A joined token wider than its box is broken anywhere, so give table columns room for "−1.54 %" or "2 nodes".
+    % is not a unit: "21 %" is written "21%". Code-like tokens (--cpu-bind, PrgEnv-gnu) keep a plain hyphen so that they can
+    be copied from the slide. PowerPoint still breaks after an en dash (3.19–3.58) whatever joiner follows it; write
+    "3.19 to 3.58" where that matters. A joined token wider than its box is broken anywhere, so give table columns room for
+    "−1.54%" or "2 nodes".
     """
+    text = _PERCENT.sub(r"\1%", text)
     text = _COMPOUND.sub(lambda m: (m.group(1) or m.group(2)) + NBHYPHEN, text)
     text = _UNIT.sub(lambda m: m.group(1) + NBSP + m.group(2), text)
     text = _PAIRS.sub(lambda m: m.group(1) + NBSP + m.group(2) + NBSP, text)
@@ -68,6 +64,16 @@ def tidy(text):
         previous = text
         text = _CHAIN.sub(lambda m: m.group(1) + NBSP + m.group(2) + NBSP, text)
     return text.replace("≈ ", "≈" + NBSP)
+
+
+def tier_runs(text, color):
+    """Split text so that baseline, Basic and Bonus take their tier colour; text in white, red or a tier colour stays as it is.
+
+    color None stands for an inherited colour (titles). Returns [(piece, colour or None), ...].
+    """
+    if color not in (None, INK, MUTED, NAVY):
+        return [(text, color)]
+    return [(piece, TIER_COLOURS[piece.lower()] if k % 2 else color) for k, piece in enumerate(_TIER.split(text)) if piece]
 
 
 def style_run(run, size=None, bold=None, italic=None, color=None, font=FONT):
@@ -142,9 +148,10 @@ def fill_paragraph(p, para, size=16, color=INK, bold=False, align="l", line=None
         if text == "\n":
             p.add_line_break()
             continue
-        r = p.add_run()
-        r.text = tidy(text)
-        style_run(r, size=run_options.get("size", options.get("size", size)), bold=run_options.get("b", options.get("bold", bold)), italic=run_options.get("i"), color=run_options.get("color", options.get("color", color)))
+        for piece, piece_color in tier_runs(tidy(text), run_options.get("color", options.get("color", color))):
+            r = p.add_run()
+            r.text = piece
+            style_run(r, size=run_options.get("size", options.get("size", size)), bold=run_options.get("b", options.get("bold", bold)), italic=run_options.get("i"), color=piece_color)
     b = options.get("bullet", bullet)
     if b:
         set_bullet(p, **(b if isinstance(b, dict) else {}))
@@ -492,15 +499,19 @@ def add_sldnum(slide, template_sp):
 
 
 def set_title(slide, text):
-    """Replace the title text and drop any shrink-to-fit scale, so every title uses the master's 32 pt."""
+    """Replace the title text and drop any shrink-to-fit scale, so every title uses the master's 32 pt; tier words take their colour."""
     tf = slide.shapes.title.text_frame
     body = tf._txBody.bodyPr
     for el in list(body):
         body.remove(el)
-    tf.text = text
-    for p in tf.paragraphs:
-        for r in p.runs:
-            r._r.get_or_add_rPr().set("lang", "en-US")
+    tf.text = ""
+    p = tf.paragraphs[0]
+    for piece, color in tier_runs(text, None):
+        r = p.add_run()
+        r.text = piece
+        r._r.get_or_add_rPr().set("lang", "en-US")
+        if color:
+            r.font.color.rgb = rgb(color)
 
 
 def set_notes(slide, text):
