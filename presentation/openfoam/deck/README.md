@@ -1,6 +1,6 @@
 # チームのデッキのOpenFOAMパートを作るスクリプト
 
-10/15版のチームのデッキを入力にして、OpenFOAMパートを作り直したpptxを出力します。作り直すのは本編19枚、補足の扉、Q&A目次、補足20枚です。スライドの主張、原稿、根拠の正本は [`../slides.md`](../slides.md) で、このフォルダはそれをpptxにする道具です。
+10/15版のチームのデッキを入力にして、OpenFOAMパートを作り直したpptxを出力します。作り直すのは本編20枚、補足の扉、Q&A目次、補足20枚です。スライドの主張、原稿、根拠の正本は [`../slides.md`](../slides.md) で、このフォルダはそれをpptxにする道具です。
 
 ```bash
 presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
@@ -33,7 +33,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 
 ## 確かめ方
 
-1. `build.sh` が `saved ... with 53 slides` と53枚の題名を出して終わること。
+1. `build.sh` が `saved ... with 54 slides` と54枚の題名を出して終わること。
 2. `render.ps1` で書き出して、全スライドを等倍で見る。見るのは、文字のはみ出し、要素の重なり、数字と単位や「1 v 1」が別の行に分かれていないか、です。PowerPointは255文字を超えるパスを開けないので、`render.ps1` は短いパスにコピーしてから開きます。
 
     ```bash
@@ -46,12 +46,12 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
     uv run presentation/openfoam/deck/qa_gaps.py /mnt/c/Users/<you>/AppData/Local/Temp/deck_png
     ```
 
-4. Q&A目次（21枚目）の各行が、その番号のスライドへ飛ぶこと。
+4. Q&A目次（22枚目）の各行が、その番号のスライドへ飛ぶこと。
 
 ## 注意
 
 - `build_deck.py` は、入力のスライドの位置で素材を拾います（動画、メッシュ図、分割の絵、パッチ詳細の2枚）。だから入力は10/15版のデッキに限ります。チームがAIパートを更新したデッキでOpenFOAMパートを作り直すときは、次のどちらかにします。
-  - この出力の1〜42枚目を、PowerPointの「スライドの再利用」で更新後のデッキへ移す。
+  - この出力の1〜43枚目を、PowerPointの「スライドの再利用」で更新後のデッキへ移す。
   - `build_deck.py` の入力の確かめ（`check_input`）と素材の拾い方を、新しいデッキに合わせて書き換える。
 - PowerPointはen dash（3.19–3.58）の後ろで改行します。改行を避けたい範囲は「3.19 to 3.58」と書きます（`tidy()` が改行しない空白でつなぎます）。
 - 改行しない空白でつないだ語が枠より長いと、PowerPointはその語の途中で折ります。表の列は「−1.54 %」や「2 nodes」が収まる幅にします。

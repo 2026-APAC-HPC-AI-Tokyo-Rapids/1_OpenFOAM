@@ -211,14 +211,15 @@ def circle_num(slide, x, y, d, text, fill=NAVY, size=14):
     return sh
 
 
-def arrow_line(slide, x1, y1, x2, y2, color=NAVY, width=1.5):
+def arrow_line(slide, x1, y1, x2, y2, color=NAVY, width=1.5, head=True):
     connector = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
     connector.line.color.rgb = rgb(color)
     connector.line.width = Pt(width)
-    tail = etree.SubElement(connector.line._get_or_add_ln(), qn("a:tailEnd"))
-    tail.set("type", "triangle")
-    tail.set("w", "med")
-    tail.set("len", "med")
+    if head:
+        tail = etree.SubElement(connector.line._get_or_add_ln(), qn("a:tailEnd"))
+        tail.set("type", "triangle")
+        tail.set("w", "med")
+        tail.set("len", "med")
     return connector
 
 

@@ -41,7 +41,7 @@ JP:
 - UCXにした理由：9月、既定のOFIでは2・4ノードのrunが毎回 MPI_Finalize でSIGBUSになり、Allrunのままだと最初の並列ステップで止まる。UCXでは全run完走。後で主催者が見つけたOFIの回避策2つも、私たちの構成ではUCXより遅い（+0.77 %、+0.50 %、Cdは同じ。Q16）。
 - 自前ビルド：サイトのモジュールと同じ速さ（−0.08 %、Q8）。ccacheで作り直しは60分→5分半。
 - Q9（AOCL-LibMはBasicで良いか）：FOAM_EXTRA_LDFLAGSでリンクする数学ライブラリで、IEEE倍精度のまま、値が変わるflagは使っていない（F1のビルド設定の範囲）。
-- 「ここで頼んだ固定が、実は外れていた」が7枚目につながる。
+- 「ここで頼んだ固定が、実は外れていた」が8枚目につながる。
 """
 
 NOTES["baseline_results"] = """
@@ -49,7 +49,7 @@ NOTES["baseline_results"] = """
 EN: The baseline scales perfectly: a step falls to a quarter from one to four nodes. But it is slow, 3.65 seconds on four nodes, and unsteady: jobs with the identical setup differ by up to 8 percent. For reference, the organisers' own hierarchical run took 3.415 seconds, but with the site build, another MPI transport and no binding, so every comparison in this talk is against our own baseline. Slow and unsteady at the same time is a hint that something is misconfigured. The next slides find it.
 
 JP:
-- ばらつきの原因は、固定が外れて遅いrankが毎回違う場所に出ること（#36の症状）。7枚目で示す。
+- ばらつきの原因は、固定が外れて遅いrankが毎回違う場所に出ること（#36の症状）。8枚目で示す。
 - 1ノードの分割は(16 8 1)で、主催者の(16 4 2)と違う。
 - 日付の違う値を並べられる理由：baselineと同じ日（10/12）に流したscotchの対照は10/05の平均から0.2 %以内。10/15〜16の対照も10/05、10/06の平均から0.2 %以内。#36の3本（10/02〜03、平均3.670）とも0.5 %で合う。
 - Q27（なぜ主催者より遅いか）：固定が MPI_Init で外れ、ページが8領域に散った（自領域9 %）。主催者は固定を頼んでいない。ビルドとMPIも違うので切り分けてはいない。
@@ -63,22 +63,38 @@ Our decision rule: a candidate and its control alternate in the same period, at 
 JP:
 - 40 stepのプロファイルで足りる理由：反復回数が固定で、どのstepも同じ仕事（Q28）。
 - IMBは毎回のbenchmark runでsolverの後に流し、そのノード同士の帯域と大域和の時間を記録している。NICやスイッチのカウンタは読んでいない。
-- メモリコントローラのカウンタとIBSは利用者に読めない（perf_event_paranoid=2）。帯域は12枚目の配置実験で確かめた。
+- メモリコントローラのカウンタとIBSは利用者に読めない（perf_event_paranoid=2）。帯域は13枚目の配置実験で確かめた。
 - 採否：最初は「1 %以上」も条件にしていたが、run間のばらつきが4ノードで約0.2 %（10月のpinnedなscotch 29本で標準偏差0.19 %）と分かってから外した。0.7 %の差（分割の対応付け）も5本ずつで区別できた。
 - Q11：プロファイルは別の診断runで取り、benchmark runにはプロファイラを入れていない。
 """
 
+NOTES["mpi_profile"] = """
+[0:40]
+EN: We profiled the baseline on four nodes with CrayPAT's MPI tracing: all 512 ranks, 40 steps. By number of calls, the top three are MPI_Isend, MPI_Irecv and MPI_Test, about 566 thousand each per rank: the non-blocking halo exchange with the neighbouring subdomains, 93 percent of all calls. By time, the top three are MPI_Waitall, MPI_Allreduce and MPI_Bcast. Waitall and Allreduce alone take 90 percent of the MPI time, and MPI is 46 percent of a rank's time. Both are calls that wait for other ranks. And it is waiting, not transfer: the MPI time per rank ranges from 35 to 112 seconds, although every rank has the same number of cells. So why are some ranks late?
+
+JP:
+- 同じ主催者のISC26 SCCのOpenFOAM課題（https://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/3700260877）が「4ノードで任意のMPIプロファイラを使い、呼び出し回数と合計CPU時間でそれぞれ上位3つのMPI呼び出しを発表で示せ」と求めている。APACの課題文にはないが、同じ審査員が見る可能性が高いので本編に置いた（10/20）。
+- 値はrankあたり（512 rankの平均、40 step）。512 rankの合計：MPI_Isend・MPI_Irecvは各2.90億回、MPI_Testは2.89億回、MPI全体で9.29億回。CPU時間はMPI_Waitall 22,069 s、MPI_Allreduce 14,140 s、MPI_Bcast 1,289 s（スライドは3桁に丸めた）。
+- 割合：MPIはrankの時間169.6 sのうち78.3 s（46 %）。Waitall 55 %、Allreduce 35 %、Bcast 3 %（MPIの時間に対して）。回数の上位3つは、MPIの呼び出し全体（rankあたり181.5万回）の93 %。
+- 4位以下：回数はMPI_Allreduce 63,085回（1 stepに約1,600回の大域和）、MPI_Waitall 52,933回。時間はMPI_Comm_dup 1.8 s、MPI_Isend 1.6 s。
+- プロファイラの下では3.85 s/step（計測runは3.65）。時間は「どこで」を見るためだけに使う（6枚目）。
+- Basicの後（CrayPAT、#53）：回数の上位3つは同じ。時間はMPI_Allreduce 48 %、MPI_Waitall 38 %に入れ替わり、MPIはstepの19 %。
+- 待ちの原因は次の8枚目（固定が外れる → 計算が不均一 → 全員が待つ）。
+- Q2（MPIの待ちが大きいのに、なぜMPIのチューニングが効かないか）EN: Most of the MPI time is waiting: ranks that finish early wait at the next exchange or global sum. Library or switch tuning cannot remove that wait; only less work or better balance can. UCX over RC raised the IMB bandwidth by 55 % but changed a step by −0.01 %, and moving the GAMG coarsest level, which issues 81 % of the MPI_Allreduce calls, to 32 ranks changed it by −0.25 %.
+- 出典：CrayPAT 38219766511（#62）、data/baseline_profile_4node.csv。
+"""
+
 NOTES["baseline_analysis"] = """
 [0:50]
-EN: Here is what slows the baseline down: a chain of three findings. First, /proc during the solve: none of the 512 ranks was bound to its own core, and the median rank had only 9 percent of its memory on its own NUMA domain. That is random placement. The binding we asked the launcher for was removed while MPI initialised. Second, OpenFOAM's own profiling: the computation per rank ranged from 54 to 115 seconds, the slowest 1.46 times the median. Third, CrayPAT: MPI is 46 percent of the time, and it is waiting, in Waitall and Allreduce. Every solver iteration exchanges halos and takes a global sum, about 1,600 per step, so one slow rank holds up all the others.
+EN: Here is what slows the baseline down: a chain of three findings. First, /proc during the solve: none of the 512 ranks was bound to its own core, and the median rank had only 9 percent of its memory on its own NUMA domain. That is random placement. The binding we asked the launcher for was removed while MPI initialised. Second, OpenFOAM's own profiling: the computation per rank ranged from 54 to 115 seconds, the slowest 1.46 times the median. Third, the MPI profile we just saw: 46 percent of the time, spent waiting in Waitall and Allreduce. Every solver iteration exchanges halos and takes a global sum, about 1,600 per step, so one slow rank holds up all the others.
 The lesson we took: before hunting for gains, check what is already broken.
 
 JP:
-- 回数最多は隣のrankとのデータ交換（MPI_Isend・MPI_Irecv、rankあたり40 stepで56.6万回）。時間はMPI_Waitall 43.1 s（MPIの55 %）とMPI_Allreduce 27.6 s（35 %）。rankごとのMPI時間は35〜112 s。
+- MPIの上位3つ（回数と時間）は7枚目。rankごとのMPI時間は35〜112 s。
 - セル数はほぼ完全に均等（最大でも平均+0.002 %）なので、差は仕事の量ではなく待ち。
 - 自領域のページは中央値8.7 %。8領域に均等に散れば12.5 %なので、ほぼランダム。全rankが256 CPUのどこでも動ける状態だった。
 - 固定反復：1 stepにUで15回×3成分、kとωで8回ずつ、pでGAMG 12サイクル（最粗段PCG 35回）。rankあたり1 stepに約14,000回の送信と約1,600回の大域和。
-- 交換する量は律速ではない：ノード間の面を92 %減らしても、帯域を55 %上げても速くならない（17枚目、Q29）。
+- 交換する量は律速ではない：ノード間の面を92 %減らしても、帯域を55 %上げても速くならない（18枚目、Q29）。
 - 出典：CrayPAT 38219766511、OpenFOAM profilingと/proc 38219862855、uProf 38219770656（#62）。
 """
 
@@ -87,7 +103,7 @@ NOTES["strategy"] = """
 EN: So what limits a step? The core of the work is sparse-matrix sweeps that read every cell and face with very little arithmetic per byte, so memory bandwidth sets the speed. On top of that, the global sums let the slowest rank set the pace. The network, the arithmetic, file I/O and OS noise we measured to be small. That gives our plan: in Basic, keep memory next to each core and give every rank the same work; in the Bonus, move fewer bytes. Basic changes no source code. The Bonus does, and it has to prove it is the same math.
 
 JP:
-- 1行目の根拠（配置を変える実験）は12枚目で見せる。ここでは結論だけ言う。
+- 1行目の根拠（配置を変える実験）は13枚目で見せる。ここでは結論だけ言う。
 - ネットワークの行：UCXのRCでIMB帯域+55 %、rankの並べ替えでノード間の面−92 %、どちらも1 stepは変わらない（補足のネットワークの頁）。
 - OSノイズ：割り込みの処理に各コアの時間の0.8 %（#46）。変えるにはrootが要る。
 - BasicとBonusの線引き（F1、F2）：Basicはソース未改変、ビルド・ジョブスクリプト・配置、分割はhierarchicalかscotchまで（その係数は自由）。Bonusはソース変更とそれ以外の分割方法で、F3の自己証明が要る。
@@ -149,7 +165,7 @@ JP:
 - 演算密度（Q35）：Gauss-Seidel、残差、Amulは内部の面1つにつき約4 flopに対して30〜40 B（係数2つ16 B、番地4 B、セルの値）を読む。約0.1 flop/B。ノードの倍精度ピーク（128 × 2.0 GHz × 16 flop ≈ 4.1 TFLOP/s）÷ 290 GB/s ≈ 14 flop/B。IPCは0.4〜0.7。
 - rooflineは測れない：DRAMのバイト数はメモリコントローラのカウンタが要り、コアのカウンタはプリフェッチの分を数えない。
 - Q26（MPIが19 %なのになぜ帯域に従う）：MPIの多くは遅いrankを待つ時間で、その遅いrankの計算が帯域律速なので、待ちも帯域とともに伸び縮みする。帯域に比例しない部分は1 stepあたり約0.1 sだけ。
-- コンパイラ、フラグ、PGOが±0.13 %以内しか変えなかったこととも合う（17枚目）。
+- コンパイラ、フラグ、PGOが±0.13 %以内しか変えなかったこととも合う（18枚目）。
 """
 
 NOTES["bonus_opt"] = """
@@ -227,7 +243,7 @@ And one more thing, before we close.
 
 JP:
 - 最初と最後で同じ数字を言う：「同じ計算のまま、4ノードで3.65秒から2.60秒、1.40倍」。
-- 最後の一言のあと、19枚目（おまけ、#68）に進む。時間がなければ19枚目を飛ばして、ここで「Thank you」で終える。
+- 最後の一言のあと、20枚目（おまけ、#68）に進む。時間がなければ20枚目を飛ばして、ここで「Thank you」で終える。
 - 最下段の「HOW WE WORKED」は、旧課題の資料が重視していた姿勢（ばらつきを先に測る、壊れているものを先に直す、律速を測ってから手を打つ、代理指標ではなく1 stepの時間で判断する）を、私たちの経緯で言い直したもの。
 - run間のばらつきは8 %から0.2 %になった。再実行で採点されるので、ばらつきが小さいことも強み（提出スクリプトでの再実行は2.905 s/step、補足）。
 - （聞かれたら）主催者の参照runはscotchで3.30 s/step、ばらつき12 %。サイトのビルド、既定のMPI、固定なしと条件が違うので直接の比較にしない（補足）。
@@ -238,7 +254,13 @@ JP:
 
 # ---------------------------------------------------------------- supplementary
 NOTES["index"] = """
-JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。#68（数えなかった高速化）は本編19枚目に移したので、ここには載せていません。
+JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。MPIの呼び出しの上位3つは本編7枚目、#68（数えなかった高速化）は本編20枚目に移したので、ここには載せていません。
+"""
+
+NOTES["s_plan"] = """
+EN (Q, how did you plan the work?): We worked in rounds. Each round starts from a measured baseline, profiles it in separate runs, names the bottleneck, changes one thing per commit, and keeps the change only if every job beats every control job in the same period. Round one found the lost binding and the uneven work: Basic took a step from 3.65 to 2.90 seconds. Round two found memory bandwidth: the Bonus moved fewer bytes, from 2.90 to 2.60. A third round would start from what remains: memory bandwidth, and a 6 percent difference in computation between ranks.
+
+JP: 本編9枚目（OPTIMIZATION STRATEGY）は「律速 → 方針」の表で、この補足はその前後の進め方を1枚にしたもの：baselineを取る → 別のrunでプロファイル → 律速を決める → 1つだけ変える（1 commit = 1条件）→ 同じ時期の対照と交互に比べる（全runが対照より速いときだけ採用。Bonusはcoefficient.datのビット一致も）→ 新しいbaselineでまたプロファイル。下の表は実際の2回の回り方と、3回目に残っているもの。効かなかった案は「確かめる」で落ちたもの（本編18枚目、補足41枚目）。3回目の候補はQ20のとおり（rankごとの実測時間を重みにした分割、U・k・ωの組み立ての融合、GAMGの残差と制限の融合。数 %の見込み）。
 """
 
 NOTES["s_noise"] = """
@@ -263,12 +285,6 @@ NOTES["s_reference"] = """
 EN (Q15, why is your spread so much smaller?): Our 5 Basic jobs on 4 nodes lie within 0.18 %; the organisers' 5 scotch jobs spread over 12 %. It is not UCX: our jobs with the organisers' transport also lie within 0.26 %. The main difference is the placement: every rank pinned with its memory on its NUMA domain. Our own baseline without working pinning varied by 8 %.
 
 JP: 主催者の設定（tasks 4.3）：サイトのモジュール、オプションなしのmpirun、既定のMPI設定、固定なし。主催者のscotchの平均に対して、Basicは−8／−13／−12 %、Bonusは−19／−23／−21 %（1/2/4ノード）。ビルド、MPIの転送方式、配置がすべて違うので差の原因は1つではない。参考として見せるだけで、本編の比較は自分たちのbaselineに対して行う。
-"""
-
-NOTES["s_mpi_calls"] = """
-EN (Q2, MPI waiting is large; why didn't MPI tuning help?): Most of the MPI time is waiting: ranks that finish early wait at the next exchange or global sum. Library or switch tuning cannot remove that wait; only less work or better balance can. UCX over RC raised the IMB bandwidth by 55 % but changed a step by −0.01 %, and moving the GAMG coarsest level, which issues 81 % of the MPI_Allreduce calls, to 32 ranks changed it by −0.25 %.
-
-JP: CrayPAT（pat_run -g mpi）、baseline、4ノード、40 step、rankあたり（#62）。Basicの後も回数の上位3つは同じで、時間の順位が入れ替わる（MPI_Allreduce 48 %、MPI_Waitall 38 %）。
 """
 
 NOTES["s_step"] = """
