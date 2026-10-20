@@ -136,6 +136,21 @@ The profiles of the 4-node baseline show one chain of causes (Figure 2):
 
 *Figure 2. What slows the baseline down, from `/proc`, OpenFOAM's own profiling and CrayPAT (4 nodes, 40 steps).*
 
+The MPI profile of the same 4-node baseline (CrayPAT, `pat_run -g mpi`, 512 ranks, 40 steps) gives the three most used MPI
+calls by number of calls and by CPU time. Values are per rank, the mean of the 512 ranks; the totals over all 512 ranks
+are in brackets.
+
+| | Most calls | Calls per rank (total) | Most CPU time | Seconds per rank (total) |
+|---|---|---:|---|---:|
+| 1 | `MPI_Isend` | 566,107 (289.8 M) | `MPI_Waitall` | 43.1 (22,069) |
+| 2 | `MPI_Irecv` | 566,107 (289.8 M) | `MPI_Allreduce` | 27.6 (14,140) |
+| 3 | `MPI_Test` | 563,646 (288.6 M) | `MPI_Bcast` | 2.5 (1,289) |
+| All MPI | | 1,815,336 (929.5 M) | | 78.3 (40,069) |
+
+The most frequent calls are the non-blocking halo exchange with the neighbouring subdomains, 93 % of all MPI calls. The
+time goes to the calls that wait for other ranks: `MPI_Waitall` and `MPI_Allreduce` take 90 % of the MPI time. It is
+waiting, not transfer: the MPI time per rank ranges from 35 to 112 s, while the cell counts are equal within 0.002 %.
+
 The data exchanged is not the bottleneck. Cutting the faces between nodes by 92 % or raising the network bandwidth by 55 %
 did not make a step faster (section 10).
 
