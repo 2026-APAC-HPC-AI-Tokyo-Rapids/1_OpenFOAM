@@ -47,7 +47,7 @@ def rgb(hex_):
 # ---------------------------------------------------------------- text
 NBSP = " "
 NBHYPHEN = "‑"
-_UNIT = re.compile(r"(\d) (%|GB/s|Gb/s|TFLOP/s|GB|TB|MB|MiB|M|s/step|s|µs|ms|nodes?|cores?|channels?|jobs?|ranks?|steps?|runs?|sockets?|domains?|files|lines|calls|threads|L3s)(?=[^\w/]|$)")
+_UNIT = re.compile(r"(\d) (%|GB/s|Gb/s|TFLOP/s|GB|TB|MB|MiB|M|s/step|s|µs|ms|nodes?|cores?|channels?|jobs?|controls?|ranks?|steps?|runs?|sockets?|domains?|files|lines|calls|threads|L3s)(?=[^\w/]|$)")
 _CHAIN = re.compile(r"([\d%]) (/|→|to|v) (?=[\d−+])")
 _COMPOUND = re.compile(r"\b(bit|case|pre|fixed|run|node|re|off|non|two|same)-(?=[a-z])|\b(\d+)-(?=(?:node|core|step|byte)s?\b)")
 _PAIRS = re.compile(r"\b(max|slowest|r|R²) (/|=) (?=[\w+−])")
@@ -167,8 +167,8 @@ def add_text(slide, x, y, w, h, paras, size=16, color=INK, bold=False, align="l"
     return shape
 
 
-def bullets(slide, x, y, w, h, items, size=13, color=INK, space_after=6):
-    return add_text(slide, x, y, w, h, [{"runs": item if isinstance(item, list) else [item], "bullet": True, "space_after": space_after} for item in items], size=size, color=color)
+def bullets(slide, x, y, w, h, items, size=13, color=INK, space_after=6, anchor="t"):
+    return add_text(slide, x, y, w, h, [{"runs": item if isinstance(item, list) else [item], "bullet": True, "space_after": space_after} for item in items], size=size, color=color, anchor=anchor)
 
 
 # ---------------------------------------------------------------- shapes

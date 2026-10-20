@@ -20,10 +20,12 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 | `figures_nocaption.py` | `../figures.py` を、図の下の注記なしで実行する |
 | `render.ps1` | PowerPointでスライドをPNGに書き出す（Windows、確認用） |
 | `qa_grid.py` | 書き出したPNGを並べた一覧画像を作る（確認用） |
+| `qa_gaps.py` | 書き出したPNGで、各スライドの内容の下に残った余白を測る（確認用） |
 
 ## 作りの決まり
 
 - テンプレートのレイアウト「白背景_タイトルとテキスト_横のコピー」に載せ、タイトルはマスターの32 pt、主張の1行は紺の20 pt（補足は18 pt）、本文はメイリオです。
+- 本文は主張の下（1.6 in）から下端の線（7.0 in、スライド番号の上）までを使い、下に帯を残しません。空いたときは、まず図、グラフ、表を大きくし、次に文字を少し大きくし、残りを塊の間隔に配ります。キャプションとLESSONは下端の線にそろえます（`caption()`の既定はy=6.62、`lesson()`はy=6.52）。
 - 色は `figures.py` と同じで、baselineはマゼンタ、Basicは青、Bonusはオレンジです。強調は赤（#C0392B）です。
 - 表とグラフは、PowerPointで編集できる表とグラフで作ります。各runの点を描く図（ばらつき、4ノードの道筋、コンパイラの比較、baselineのscaling）だけ、`figures.py` の画像を使います。
 - 分割の絵、流れの動画、メッシュの図は、入力のデッキに入っているものを使います。分割の絵は3列×3段の合成画像から列と段を切り出しています。
@@ -38,7 +40,13 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
     powershell.exe -File "$(wslpath -w presentation/openfoam/deck/render.ps1)" -Pptx "$(wslpath -w "$HOME/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx")" -OutDir 'C:\Users\<you>\AppData\Local\Temp\deck_png'
     ```
 
-3. Q&A目次（21枚目）の各行が、その番号のスライドへ飛ぶこと。
+3. `qa_gaps.py` で、各スライドの内容の下の余白を測る。内容のあるスライドは0.6〜0.8 inになります。1 inを超えるスライドは、下に帯が空いています（LESSONや縦中央にそろえた注記だけの列は除く）。
+
+    ```bash
+    uv run presentation/openfoam/deck/qa_gaps.py /mnt/c/Users/<you>/AppData/Local/Temp/deck_png
+    ```
+
+4. Q&A目次（21枚目）の各行が、その番号のスライドへ飛ぶこと。
 
 ## 注意
 

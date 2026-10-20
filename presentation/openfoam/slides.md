@@ -43,6 +43,11 @@
 - 10/08版の旧スライド4枚（旧18・19・22・23枚目）を外しました。本編と重なり、Basic 2.9196や「10.97–12.69 %」のような古い数値が残っていたためです。パッチ詳細の2枚（旧20・21枚目）は、補足の33・34枚目として作り直しました。
 - 「数値の桁」の決まりを足しました。
 
+### 10/20の更新
+
+- デッキの各スライドの下に残っていた1〜2.7 inの余白をなくし、内容を下端（約7.0 in、スライド番号の上）までそろえて配置し直しました。表の行と文字、グラフ、図を大きくし、残りは塊の間隔に配りました。主張と数値は変えていません。
+- 10枚目の分割の絵に横断面の段を足し（4枚目と同じ3段）、19枚目の右側をカード2枚に、23枚目の7段の流れに番号を付けました。
+
 ---
 
 ## 方針
@@ -326,7 +331,7 @@
 - Then: map the split onto the node. `scotchCoeffs` follow 2 sockets × 4 NUMA domains × 16 cores: 23 % fewer faces between nodes; 2.918 → 2.898 s/step (−0.7 %); all 5 jobs beat all 5 controls. No change on 1 and 2 nodes.
 - （最下行、斜体）One early job at 5.03 s/step first made us reject scotch; alternated jobs reversed that. Since then we never decide from one job.
 
-図：hierarchicalとscotchの分割の絵（車体表面と中心断面の2段。旧pptxの`decomposition-subdomains.png`から切り出したもの）と、1/2/4ノードの効果の縦棒グラフ（PowerPointのグラフ、`fig05_decomposition_basic`の平均）。
+図：hierarchicalとscotchの分割の絵（車体表面、中心断面、横断面の3段。旧pptxの`decomposition-subdomains.png`から切り出したもの）と、1/2/4ノードの効果の縦棒グラフ（PowerPointのグラフ、`fig05_decomposition_basic`の平均）。
 
 旧課題との対応：最下行の教訓は、旧資料の「少ない本数はばらつきを小さく見せる。何本必要かは機械で大きく違う」と同じです。1本の外れ値で判断を誤り、同時期の交互の比較で正しました。
 
@@ -543,7 +548,7 @@
 - bit-identical: coefficient.dat at 1, 2 and 4 nodes; all 1,323 solver log lines identical
 - ≈ 13 %: of a Bonus step at 512 ranks goes to convergence checks that are never used
 
-右：
+右にカード2枚：
 - What it does: `fvSolution.fixedIter` sets `tolerance 0` and `relTol 0`, so no solve can stop early. The residual norm computed after every sweep, a residual pass plus a global sum, is used only after the last one. The patch computes it once, after the last sweep.
 - Why it is not in our Bonus:
   - It helps only the benchmark's fixed-iteration setting: the case's own `fvSolution.fixedTol` runs the original code
@@ -579,7 +584,7 @@
 | 改訂版pptx | 見出し | 第3版 |
 |---|---|---|
 | 22 | MEASURING HONESTLY | S12 |
-| 23 | EXPERIMENT AUTOMATION（PowerPointの図形で描き直し） | S15 |
+| 23 | EXPERIMENT AUTOMATION（PowerPointの図形で描き直し、7段に番号） | S15 |
 | 24 | BUILD, STORAGE AND MPI（同上） | S14 |
 | 25 | THE ORGANISERS' REFERENCE（主催者のscotchの平均に対する変化を棒グラフに） | S9 |
 | 26 | BASELINE MPI CALLS | S1 |
