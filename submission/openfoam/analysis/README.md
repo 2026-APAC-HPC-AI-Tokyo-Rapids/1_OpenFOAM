@@ -3,13 +3,17 @@
 ## Method
 
 - These are separate diagnostic runs, not the benchmark runs. Their timings are not used as results.
-- Each run used 4 nodes and 512 ranks with the same placement as the benchmarks, and ran 40 `simpleFoam` steps.
+- Each run used 4 nodes and 512 ranks with the same placement as the benchmark runs of its configuration, and ran 40
+  `simpleFoam` steps.
 - `pat_run -g mpi` (CrayPAT 22.04.0) traced every MPI call of every rank.
 - In the final Bonus run, `eu-stack` also sampled the call stacks of 48 ranks, which stops those ranks for short moments.
 - `pat-report-*.txt` are the `pat_report` text outputs.
+- `pat-report-baseline-calls.txt` is the baseline profile read again with `pat_report -T -O profile`, which lists every MPI
+  function. The default reports leave out functions that take little time, such as `MPI_Irecv` and `MPI_Test`.
 
 | Report | Configuration | Commit (profiling run) | Actions run | s/step under CrayPAT |
 |---|---|---|---|---:|
+| `pat-report-baseline.txt` | Baseline: the case's own `hierarchical` split and the launcher's binding only, unmodified v2512 | `7a77cc9` | 38219766511 | 3.850 |
 | `pat-report-basic.txt` | Basic before the mapping: `scotch` with its defaults, unmodified v2512 | `718acb3` | 37176272426 | 3.063 |
 | `pat-report-bonus-before.txt` | multiLevel + patch 0001 | `e2730db` + profiling changes (`34f4c5d`) | 37261721692 | 2.874 |
 | `pat-report-bonus-final.txt` | final Bonus: multiLevel + patches 0001 – 0004 | `fa4f5b0` + profiling changes (`ba5ba1b`) | 37529785072 | 2.712 |
@@ -64,9 +68,14 @@ pat_report -i <OPENFOAM_DIR>/OpenFOAM/platforms/linux64GccDPInt32Opt/bin/simpleF
 The profile of `pat-report-bonus-before.txt` needs a build with patch 0001 only: a `PATCH_DIR` that holds only
 `../bonus/patches/0001-drop-redundant-solver-copies.patch`.
 
-The three reports here were made through our CI. Its profile runs also recorded rank placement and hardware information, and
+The reports here were made through our CI. Its profile runs also recorded rank placement and hardware information, and
 the final Bonus run sampled the call stacks of 48 ranks with `eu-stack`. None of these change the solver run that CrayPAT
-measures.
+measures. The scripts here have no baseline mode: the baseline profile ran the case's own settings from commit `7a77cc9`.
+`pat-report-baseline-calls.txt` was made on a login node from the stored data of that run:
+
+```bash
+pat_report -T -i <the run's simpleFoam> -O profile -o pat-report-baseline-calls.txt simpleFoam+500951-1001t/
+```
 
 We ran both profile modes with these scripts on 2026-10-07 (PBS 25714173 and 25714174 for Basic, then still without the
 mapping, and 25714181 and 25714182 for the final Bonus), and made the reports with the `pat_report` command above:
@@ -85,6 +94,23 @@ mapping, and 25714181 and 25714182 for the final Bonus), and made the reports wi
 - In the re-run reports, Table 2 names each MPI call after the OpenFOAM function that makes it, in a group `ETC` instead of
   `MPI`: `Foam::PstreamDetail::allReduce<>` holds the `MPI_Allreduce` calls and `Foam::UPstream::waitRequests` the
   `MPI_Waitall` calls. The values above are taken from those rows.
+
+## Baseline: the most used MPI calls
+
+Means over the 512 ranks, 40 steps, from `pat-report-baseline-calls.txt` (Table 1). `../REPORT.md`, section 5, gives the
+totals over the 512 ranks.
+
+| | By number of calls | Calls per rank | By time | Seconds per rank |
+|---|---|---:|---|---:|
+| 1 | `MPI_Isend` | 566,107.3 | `MPI_Waitall` | 43.10 |
+| 2 | `MPI_Irecv` | 566,107.3 | `MPI_Allreduce` | 27.62 |
+| 3 | `MPI_Test` | 563,645.5 | `MPI_Bcast` | 2.52 |
+
+- MPI is 78.26 s of the 169.57 s process time per rank (46 %), and 1,815,335.7 calls per rank. The MPI time per rank ranges
+  from 34.8 to 112.1 s.
+- The three most frequent calls are the non-blocking halo exchange: 93 % of the calls, but 2.6 % of the MPI time.
+- With the binding lost, the wait for neighbours (`MPI_Waitall`) takes the most time. After Basic, the global sums
+  (`MPI_Allreduce`) do (below).
 
 ## Results
 
