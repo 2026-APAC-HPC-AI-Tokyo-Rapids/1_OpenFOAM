@@ -10,7 +10,7 @@ INPUT is the team deck as of 2026-10-15 (35 slides: OpenFOAM 1-24, AI track 25-3
 FIGDIR holds the deck's renders of ../figures.py (deck_figures.py) and its per-job plots (deck_plots.py). ASSETDIR holds
 pictures that are neither in INPUT nor drawn here: the decomposition renders from the Box folder
 presentation/openfoam/decomposition/. build.sh runs all three steps. The output keeps every slide from the AI title slide on
-byte for byte. The shared reproducibility slide (input 24) is left out: the team removed it from the deck on 2026-10-21.
+byte for byte, and puts the shared reproducibility slide (input 24) before it.
 """
 
 import copy
@@ -825,10 +825,10 @@ divider = S[15]
 COUNT.update(Figure=0, Table=0)
 SERIES[0] = "S"
 supporting = [("Bottlenecks we measured", s_bottlenecks()), ("Measuring honestly", s_noise()), ("Experiment automation", s_automation()), ("Build, storage and MPI", s_build()), ("The organisers' reference", s_reference()), ("Where a step goes after Basic", s_step()), ("The path on 4 nodes", s_path()), ("Is the network the bottleneck?", s_network()), ("OFI against UCX", s_ofi()), ("The three splits: faces or even work?", s_splits()), ("Cores or memory?", s_cores()), ("The source changes", s_changes()), ("Source changes in detail (1/2)", s_detail1()), ("Source changes in detail (2/2)", s_detail2()), ("Effect of each Bonus change", s_each()), ("Profiles before and after", s_profiles()), ("Why the efficiency exceeds 1", s_efficiency()), ("Drag coefficient checks", s_cd()), ("Reproducing our results", s_repro()), ("Not adopted: the full list", s_rejected()), ("Compiler and flags", s_compiler())]
-# 10/08 compact slides that repeat the main part with older numbers, and the shared reproducibility slide (removed by the team)
-deleted = [S[17], S[18], S[21], S[22], S[23]]
+add_sldnum(S[23], SLDNUM)  # the shared reproducibility slide held a static "14"
+deleted = [S[17], S[18], S[21], S[22]]  # 10/08 compact slides that repeat the main part with older numbers
 index_slide = new_slide()
-order = main + [divider, index_slide] + [sl for _, sl in supporting] + S[24:]
+order = main + [divider, index_slide] + [sl for _, sl in supporting] + S[23:]
 
 sldIdLst = prs.slides._sldIdLst
 by_part = {prs.part.related_part(sldId.rId): sldId for sldId in sldIdLst}

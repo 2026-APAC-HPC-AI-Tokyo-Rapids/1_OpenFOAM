@@ -3,16 +3,19 @@
 NOTES = {}
 
 NOTES["title"] = """
-[0:10]
-EN: We are Tokyo Rapids with RIKEN. In the HPC track we made the OpenFOAM DrivAer case 1.40 times faster on four ASPIRE-2A nodes, without changing the math. We will tell it as the path we took: measure, find what limits the speed, change one thing, and check it.
+[0:08]
+EN: We are Tokyo Rapids with RIKEN. We made OpenFOAM 1.40 times faster on four ASPIRE-2A nodes, with the same math.
 
-JP: HPCトラックでは、ASPIRE-2Aの4ノードで、同じ計算のままOpenFOAMのDrivAerケースを1.40倍速くしました。「測る → 律速を見つける → 1つ変える → 確かめる」の道筋で話します。
+訳（参考）: Tokyo Rapids with RIKENです。ASPIRE-2Aの4ノードで、同じ計算のままOpenFOAMを1.40倍速くしました。
+
+JP: 名乗りと結果だけ言って、すぐ次へ進む。
 """
 
 NOTES["overview"] = """
-[0:45]
-EN: The task is a steady simulation of the air around a car at 140 km/h, solved with simpleFoam on a fixed 65-million-cell mesh that is finest near the car. The iteration counts are fixed, so every step does the same work, and the score is the average time per step on four nodes; one and two nodes show the scaling. The rule is simple: make the same math faster, don't change it.
-Here is our answer first. On four nodes a step took 3.65 seconds with the case defaults, 2.90 seconds after our Basic tuning, and 2.60 seconds with the Bonus: 1.40 times faster. All three use the same build, scripts and measurement, so the differences are our optimisations.
+[0:30]
+EN: The task is a steady simulation of the air around a car, on a fixed mesh of 65 million cells. The iterations are fixed, so every step does the same work, and the score is the time per step on four nodes. Our result: 3.65 seconds with the case defaults, 2.90 with Basic tuning, and 2.60 with the Bonus. That is 1.40 times faster, with the same build, scripts and measurement.
+
+訳（参考）: 課題は、6,500万セルの固定したメッシュで、車のまわりの空気の流れを定常計算することです。反復回数が固定なので、どのstepも同じ仕事をし、スコアは4ノードでの1 stepの時間です。結果は、ケースの既定で3.65秒、Basicのチューニングで2.90秒、Bonusで2.60秒。同じビルド、スクリプト、測り方で、1.40倍速くなりました。
 
 JP:
 - 反復回数は固定（fvSolution.fixedIter：pはGAMGで12サイクル、最粗段はPCG 35回、Uは3成分それぞれGauss-Seidel 15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均で比べられる。
@@ -21,22 +24,26 @@ JP:
 """
 
 NOTES["aspire"] = """
-[0:35]
-EN: We used ASPIRE-2A. A node has two 64-core EPYC 7713 processors, split into eight NUMA domains of 16 cores, each with its own memory. The catalogue bandwidth is 410 GB/s; STREAM reaches about 290, and it gets there with only 16 threads, one per L3. Keep that in mind: memory bandwidth will come back.
-We chose ASPIRE-2A because OpenFOAM works with very many files. Our Gadi project allows 0.2 million files and 1 TB; ASPIRE-2A allows 200 million files and 100 TB, so we could keep every build, decomposed case and run record.
+[0:20]
+EN: We used ASPIRE-2A: eight NUMA domains of 16 cores per node. One thing to remember: just 16 of the 128 cores already fill the memory bandwidth. We chose ASPIRE-2A because OpenFOAM needs very many files, and its file quota is a thousand times Gadi's.
+
+訳（参考）: ASPIRE-2Aを使いました。1ノードは、16コアずつのNUMA領域が8つです。1つ覚えておいてください：128コアのうち16コアだけで、もうメモリ帯域を使い切ります。ASPIRE-2Aを選んだのは、OpenFOAMがとても多くのファイルを使い、ファイル数の上限がGadiの1000倍あるからです。
 
 JP:
 - 帯域：カタログ409.6 GB/s、STREAMで約290 GB/s。L3ごとに1スレッド（ノードで16）で飽和（#36）。128コア全部では269〜273 GB/s。
 - ネットワークの出典：TOP500「ASPIRE 2A (CPU Partition) - HPE Cray EX425, AMD EPYC 7713 64C 2GHz, Slingshot-10」、NSCC「All nodes are connected with HPE Slingshot Interconnect (Dragonfly Topology)」。ジョブから見えるNICはMellanox製（mlx5）で、UCXとOFIの両方が使える。
-- Q1（なぜASPIRE-2A）：昨年はGadiだったので今年はもう一方を学びたかった。OpenFOAMのビルド1つで約36,000ファイル、分割ケースごとに数千ファイル。Gadiでは8月に3件同時の準備で上限（212,100 inode）に達した。ASPIRE-2Aは100 TB・2億inode。
+- Q1（なぜASPIRE-2A）：昨年はGadiだったので今年はもう一方を学びたかった。OpenFOAMのビルド1つで約36,000ファイル、分割ケースごとに数千ファイル。Gadiでは8月に3件同時の準備で上限（212,100 inode）に達した。ASPIRE-2Aは100 TB・2億inode（Gadiのプロジェクトは0.2 M files・1 TB）。
 - 言わないこと：Gadiの利用停止、「ノードが空いていた」（実際は4ノードで4時間以上待った記録がある）。
 """
 
 NOTES["baseline_settings"] = """
-[0:35]
-EN: Our baseline is the case as shipped, on our own build of the official v2512 source: GCC 11.2 with -O3, AMD's math library, and Cray MPICH over UCX. This build runs as fast as the site module, it records exactly what ran, and the Bonus patches need a build anyway. The split is the case default, hierarchical, and the 128 ranks per node are bound by the launcher, as the site recommends. Every point you will see is one job with the official metric, with at least three jobs per condition.
+[0:20]
+EN: Our baseline is the case as shipped, on our own build of the official source, with the ranks bound by the launcher as the site recommends. Every point you will see is one job, with at least three jobs per condition.
+
+訳（参考）: baselineは配布されたままのケースです。公式のソースから自分たちでビルドし、rankはサイトの推奨どおり起動コマンドで固定しています。これから見せる点はどれも1つのジョブで、1つの条件につき3本以上流しています。
 
 JP:
+- （聞かれたら）ビルドの中身：公式v2512、GCC 11.2 -O3、AMDの数学ライブラリ、Cray MPICH over UCX。サイトのモジュールと同じ速さで、何を使ったかを正確に記録でき、Bonusのパッチにもビルドが要る。分割はケース既定のhierarchical。
 - module load PrgEnv-gnu/8.3.3 craype-x86-milan aocl/4.0.0-gcc11.2 → module swap craype-network-ofi craype-network-ucx → module swap cray-mpich cray-mpich-ucx/8.1.15。
 - UCXにした理由：9月、既定のOFIでは2・4ノードのrunが毎回 MPI_Finalize でSIGBUSになり、Allrunのままだと最初の並列ステップで止まる。UCXでは全run完走。後で主催者が見つけたOFIの回避策2つも、私たちの構成ではUCXより遅い（+0.77%、+0.50%、Cdは同じ。Q16）。
 - 自前ビルド：サイトのモジュールと同じ速さ（−0.08%、Q8）。ccacheで作り直しは60分→5分半。
@@ -45,11 +52,13 @@ JP:
 """
 
 NOTES["baseline_results"] = """
-[0:30]
-EN: The baseline scales perfectly: a step falls to a quarter from one to four nodes. But it is slow, 3.65 seconds on four nodes, and unsteady: jobs with the identical setup differ by up to 8 percent. The open circles are the organisers' own hierarchical runs, one job each, with the site build, another MPI transport and no binding. They are for reference only; every comparison in this talk is against our own baseline. Slow and unsteady at the same time is a hint that something is misconfigured. The next slides find it.
+[0:25]
+EN: The baseline scales perfectly: a step falls to a quarter from one to four nodes. But it is slow, 3.65 seconds on four nodes, and unsteady: identical jobs differ by up to 8 percent. The open circles are the organisers' runs, for reference only; we compare against our own baseline. Slow and unsteady at the same time suggests something is misconfigured.
+
+訳（参考）: baselineはきれいにスケールし、1ノードから4ノードで1 stepが4分の1になります。でも遅く、4ノードで3.65秒です。しかも不安定で、同じ設定のジョブでも最大8%ばらつきます。白丸は主催者のrunで、参考として示すだけです。比較は自分たちのbaselineに対して行います。遅くて不安定なのは、何かの設定がおかしいサインです。
 
 JP:
-- 図の白丸は主催者のhierarchicalの1本ずつ（14.67／7.12／3.41 s/step、tasks 4.3）。スライドの下にあった注記（3.415 s/step、サイトのビルド、既定のMPI、固定なし。比較は自分たちのbaselineに対して）は、図と口頭に移した。
+- 図の白丸は主催者のhierarchicalの1本ずつ（14.67／7.12／3.41 s/step、tasks 4.3）。サイトのビルド、既定のMPI、固定なしで、条件が違う。スライドの下にあった注記は、図と口頭に移した。
 - ばらつきの原因は、固定が外れて遅いrankが毎回違う場所に出ること（#36の症状）。8枚目で示す。
 - 1ノードの分割は(16 8 1)で、主催者の(16 4 2)と違う。
 - 日付の違う値を並べられる理由：baselineと同じ日（10/12）に流したscotchの対照は10/05の平均から0.2%以内。10/15〜16の対照も10/05、10/06の平均から0.2%以内。#36の3本（10/02〜03、平均3.670）とも0.5%で合う。
@@ -57,11 +66,13 @@ JP:
 """
 
 NOTES["measure"] = """
-[0:35]
-EN: Before trusting any gain, we needed to know our noise. So benchmark runs and profile runs are separate. Benchmark runs carry no profiler and give every number in this talk. Profilers change a step by minus one to plus six percent, so their times are never results; they only answer where and why. Each tool answers one question, from which MPI calls take the time, to where each rank's memory actually lives.
-Our decision rule: a candidate and its control alternate in the same period, at least three jobs each on four nodes, and we keep a change only if every job with it beats every job without it.
+[0:25]
+EN: Benchmark runs carry no profiler and give every number in this talk. Profilers change a step by up to six percent, so profile runs only tell us where and why. And our rule: a change is kept only if every job with it beats every job without it, run alternately in the same period.
+
+訳（参考）: 計測のrunにはプロファイラを入れず、この発表の数字はすべてそこから取っています。プロファイラは1 stepを最大6%変えるので、プロファイルのrunは「どこで」「なぜ」を見るためだけに使います。採否の決まりは、同じ時期に交互に流し、変更ありの全ジョブが変更なしの全ジョブより速いときだけ採用する、です。
 
 JP:
+- 表の道具は指すだけで、1つずつは読まない。プロファイラは1 stepを−1%〜+6%変える（baselineはCrayPATの下で3.85 s、計測runで3.65 s）。
 - 40 stepのプロファイルで足りる理由：反復回数が固定で、どのstepも同じ仕事（Q28）。
 - IMBは毎回のbenchmark runでsolverの後に流し、そのノード同士の帯域と大域和の時間を記録している。NICやスイッチのカウンタは読んでいない。
 - メモリコントローラのカウンタとIBSは利用者に読めない（perf_event_paranoid=2）。帯域は13枚目の配置実験で確かめた。
@@ -70,8 +81,10 @@ JP:
 """
 
 NOTES["mpi_profile"] = """
-[0:40]
-EN: We profiled the baseline on four nodes with CrayPAT's MPI tracing: all 512 ranks, 40 steps. By number of calls, the top three are MPI_Isend, MPI_Irecv and MPI_Test, about 566 thousand each per rank: the non-blocking halo exchange with the neighbouring subdomains, 93 percent of all calls. By time, the top three are MPI_Waitall, MPI_Allreduce and MPI_Bcast. Waitall and Allreduce alone take 90 percent of the MPI time, and MPI is 46 percent of a rank's time. Both are calls that wait for other ranks. And it is waiting, not transfer: the MPI time per rank ranges from 35 to 112 seconds, although every rank has the same number of cells. So why are some ranks late?
+[0:35]
+EN: We profiled the baseline with CrayPAT on four nodes, all 512 ranks. By number of calls, the top three are MPI_Isend, MPI_Irecv and MPI_Test: the halo exchange with the neighbouring subdomains, 93 percent of all calls. By time, the top three are MPI_Waitall, MPI_Allreduce and MPI_Bcast. Waitall and Allreduce take 90 percent of the MPI time, and both wait for other ranks. It is waiting, not transfer: MPI time per rank ranges from 35 to 112 seconds, with equal cell counts. So why are some ranks late?
+
+訳（参考）: baselineを、4ノード・全512 rankでCrayPATでプロファイルしました。呼び出し回数の上位3つはMPI_Isend、MPI_Irecv、MPI_Testで、隣のサブ領域との境界の値のやり取りです。全呼び出しの93%を占めます。時間の上位3つはMPI_Waitall、MPI_Allreduce、MPI_Bcastです。WaitallとAllreduceでMPIの時間の90%を占め、どちらも他のrankを待つ呼び出しです。つまり転送ではなく待ちです。セル数は同じなのに、rankごとのMPIの時間は35秒から112秒までばらつきます。では、なぜ遅れるrankがあるのでしょうか。
 
 JP:
 - 同じ主催者のISC26 SCCのOpenFOAM課題（https://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/3700260877）が「4ノードで任意のMPIプロファイラを使い、呼び出し回数と合計CPU時間でそれぞれ上位3つのMPI呼び出しを発表で示せ」と求めている。APACの課題文にはないが、同じ審査員が見る可能性が高いので本編に置いた（10/20）。
@@ -86,14 +99,15 @@ JP:
 """
 
 NOTES["baseline_analysis"] = """
-[0:50]
-EN: Here is what slows the baseline down: a chain of three findings. First, /proc during the solve: none of the 512 ranks was bound to its own core, and the median rank had only 9 percent of its memory on its own NUMA domain. That is random placement. The binding we asked the launcher for was removed while MPI initialised. Second, OpenFOAM's own profiling: the computation per rank ranged from 54 to 115 seconds, the slowest 1.46 times the median. Third, the MPI profile we just saw: 46 percent of the time, spent waiting in Waitall and Allreduce. Every solver iteration exchanges halos and takes a global sum, about 1,600 per step, so one slow rank holds up all the others.
-And where does the computation itself go? AMD uProf names the sparse-matrix sweeps: Gauss–Seidel smoothing, residuals and matrix–vector products, about a quarter of the computation. Each sweep streams the whole matrix with very little arithmetic. Keep that in mind; it comes back after Basic.
+[0:40]
+EN: Three findings explain it. First, /proc during the solve: none of the 512 ranks was on its own core, and only 9 percent of a rank's memory was on its own NUMA domain. The binding we asked for was removed while MPI initialised. Second, the computation per rank ranged from 54 to 115 seconds. Third, 46 percent of the time is MPI, mostly waiting. With about 1,600 global sums per step, one slow rank holds up all the others. And the computation itself is mostly sparse-matrix sweeps, which stream the whole matrix with little arithmetic. That comes back later.
+
+訳（参考）: 3つの発見で説明できます。1つ目。計算中の/procを見ると、512 rankのどれも自分のコアに固定されておらず、自分のNUMA領域にあるメモリは9%だけでした。頼んだ固定が、MPIの初期化の途中で外されていたのです。2つ目。rankごとの計算時間は54秒から115秒までばらついていました。3つ目。時間の46%がMPIで、その多くは待ちです。1 stepに約1,600回、全rankで値を足し合わせるので、遅いrankが1つあると全員が待ちます。そして計算そのものの多くは疎行列のsweepで、行列全体を少しの演算で読み流します。これは後で効いてきます。
 
 JP:
 - uProf（32 rankをサンプル、self CPU time、40 step）：GaussSeidelSmoother::smooth 394.6 s、lduMatrix::residual 228.9 s、lduMatrix::Amul 53.1 s。rankあたり12.3 + 7.2 + 1.7 = 21.1 sで、rankあたりの計算時間（OpenFOAM profilingの中央値78.6 s）の約27%。次はmultiply 30.6 s、gaussGrad 29.2 s、dotInterpolate 27.7 s。
 - 以前この下にあったLESSONの札（Check what is already broken before hunting for gains）は外し、次の9枚目の方針の1行目（Fix what is broken first）にした。
-- MPIの上位3つ（回数と時間）は7枚目。rankごとのMPI時間は35〜112 s。
+- MPIの上位3つ（回数と時間）は7枚目。rankごとのMPI時間は35〜112 s。最も遅いrankの計算は中央値の1.46倍。
 - セル数はほぼ完全に均等（最大でも平均+0.002%）なので、差は仕事の量ではなく待ち。
 - 自領域のページは中央値8.7%。8領域に均等に散れば12.5%なので、ほぼランダム。全rankが256 CPUのどこでも動ける状態だった。
 - 固定反復：1 stepにUで15回×3成分、kとωで8回ずつ、pでGAMG 12サイクル（最粗段PCG 35回）。rankあたり1 stepに約14,000回の送信と約1,600回の大域和。
@@ -102,9 +116,10 @@ JP:
 """
 
 NOTES["strategy"] = """
-[0:40]
-EN: That gave us our strategy: before hunting for gains, fix what is broken; then follow the measured bottleneck, one change at a time. Every round has five steps. Measure a baseline with several jobs, so we know its spread. Profile it in separate runs. Name the bottleneck. Change one thing, one commit per condition. And keep the change only if every job beats every control job in the same period. Then we profile the new baseline and go round again.
-Round one found the lost binding and the uneven work: Basic took a step from 3.65 to 2.90 seconds. Round two found memory bandwidth: the Bonus moved fewer bytes, down to 2.60. Basic changes no source code; the Bonus does, and it has to prove it is the same math.
+[0:35]
+EN: So our strategy: fix what is broken first, then follow the measured bottleneck, one change at a time. Each round, we measure a baseline, profile it, name the bottleneck, change one thing, and keep it only if it beats its control. Then we profile the new baseline. Round one found the lost binding and the uneven work: Basic, from 3.65 to 2.90 seconds. Round two found memory bandwidth: the Bonus, down to 2.60. Basic changes no source code; the Bonus does, and must prove the math is the same.
+
+訳（参考）: そこで方針は、まず壊れているものを直し、次に測った律速を1つずつ追う、です。1回ごとに、baselineを測り、プロファイルし、律速を決め、1つだけ変え、対照より速いときだけ残します。そして新しいbaselineをまたプロファイルします。1回目は外れた固定と不均一な仕事を見つけ、Basicで3.65秒から2.90秒になりました。2回目はメモリ帯域を見つけ、Bonusで2.60秒になりました。Basicはソースを変えません。Bonusは変えるので、計算が同じであることを示す必要があります。
 
 JP:
 - 8枚目の「壊れているものを先に直す」を、ここで方針として言う（8枚目のLESSONの札は外した）。3の「What is broken?」が最初の問い。
@@ -115,9 +130,10 @@ JP:
 """
 
 NOTES["basic_pinning"] = """
-[0:50]
-EN: The first fix puts the lost binding back. Linux places a memory page next to the core that first writes it, and never moves it. So a rank that is not on its own core when it allocates its mesh keeps that data in remote memory for the whole run. We fixed it in the job script alone: every rank starts under numactl with its memory bound to its NUMA domain, and one watcher per node re-pins each rank to its core with taskset. Both halves are needed: CPU only gives 3.47 seconds, memory only 4.38, both 2.92. With the case-default split, pinning alone took a step from 3.65 to 3.26 seconds, minus 11 percent.
-The organisers' notes don't mention this, and their reference runs are not pinned, so this is where we differ most from other teams on the same machine.
+[0:40]
+EN: First, we put the lost binding back. Linux keeps a memory page where it was first written, so data allocated off-core stays remote for the whole run. We fixed it in the job script only: numactl binds each rank's memory, and a watcher re-pins each rank to its core. Both halves are needed: CPU only gives 3.47 seconds, memory only 4.38, both 2.92. On the default split, this alone is 11 percent faster. The organisers' runs are not pinned, so this is where we differ most from other teams.
+
+訳（参考）: まず、外れた固定を戻しました。Linuxはメモリのページを最初に書かれた場所に置いたままにするので、別のコアで確保したデータは、run中ずっと遠いメモリに残ります。ジョブスクリプトだけで直しました。numactlで各rankのメモリを縛り、見張り役が各rankを自分のコアに固定し直します。両方が必要で、CPUだけなら3.47秒、メモリだけなら4.38秒、両方そろって2.92秒です。既定の分割でも、これだけで11%速くなります。主催者のrunは固定していないので、ここが他のチームとの一番の違いです。
 
 JP:
 - 「頼んだ配置」と「実際の配置」を区別したことが要点。起動コマンドの指定は正しく、外れていたのは実行中の/procで分かった。
@@ -131,10 +147,10 @@ JP:
 """
 
 NOTES["basic_decomp"] = """
-[0:40]
-EN: The second fix gives every rank the same work. The default hierarchical split cuts thin slabs along the axes, and ranks whose slabs hold much of the car's surface get more work: an imbalance of 1.16, even with pinning. scotch cuts compact blocks: 32 percent fewer faces between subdomains, an imbalance of 1.06, and the median rank's waiting time halves. That is minus 10.5 percent on four nodes.
-Then we mapped the scotch split onto the node's sockets and NUMA domains through scotchCoeffs. That cut the faces between nodes by 23 percent and gave another 0.7 percent, which we kept because all five jobs beat all five controls.
-One lesson on the way: a single slow job first made us reject scotch. Alternated runs reversed that, and since then we never decide from one job.
+[0:35]
+EN: Second, we gave every rank the same work. The default split cuts thin slabs, and ranks with much of the car's surface get more work: an imbalance of 1.16. scotch cuts compact blocks: a third fewer faces, an imbalance of 1.06, and minus 10.5 percent on four nodes. Mapping the split onto each node's sockets and NUMA domains gave another 0.7 percent; all five jobs beat all five controls. One slow job once made us reject scotch; since then we never decide from one job.
+
+訳（参考）: 次に、どのrankにも同じ仕事を割り当てました。既定の分割は薄い板に切るので、車の表面を多く含むrankの仕事が多くなり、偏りは1.16でした。scotchはまとまった塊に切るので、面は3分の1減り、偏りは1.06になり、4ノードで10.5%速くなりました。さらに分割を各ノードのソケットとNUMA領域に対応付けると0.7%速くなり、5本すべてが対照の5本より速くなりました。一度は遅いジョブ1本のせいでscotchを捨てかけたので、それ以来、1本では決めていません。
 
 JP:
 - 不均衡はrankの計算時間の最大/中央値（CrayPAT、どちらも固定あり）。hierarchicalの不均衡は壁の面（車の表面）の数と相関（#38）。
@@ -143,19 +159,21 @@ JP:
 - ノード数が多いほど効く理由は確かめていない（Q30）。
 - 対応付け（#63）：scotchCoeffsの domains (2 4 16)、domainWeights、strategy（Scotchのtree-leaf target）。面の総数は+3.3%だが、ノード・ソケット・NUMA領域をまたぐ面は−22.7%・−21.3%・−10.4%。4ノードで2.917726 → 2.897638（5本ずつ交互、−0.69%）。1・2ノードはほぼ変わらない。
 - 絵は対応付けの前のscotch。右の図は1/2/4ノードの各ジョブ（data/decomposition_basic.csv、3本ずつ、#36、#38）。縦軸はパネルごとに違う。
-- 「1本の遅いjobでscotchを捨てかけた」話は、スライドの斜体の1行をやめて口頭だけにした（EN原稿の最後の段落）。
+- 「1本の遅いjobでscotchを捨てかけた」話は、スライドの斜体の1行をやめて口頭だけにした（EN原稿の最後の文）。9/27の1本が5.03 s/stepだった（Q3）。
 - Q10：multiLevelはBasicで使っていない（別の分割方法なのでBonus）。
 - Q19：hierarchicalの係数は対照としてケース既定(16 8 4)のまま。他の分解は探していない。
 """
 
 NOTES["basic_results"] = """
-[0:35]
-EN: Together, pinning and scotch take a step on four nodes from 3.65 to 2.90 seconds, minus 21 percent, with unmodified OpenFOAM. The profiles show why. All 512 ranks are now on their own cores, most of their memory is local, the slowest rank is only 6 percent above the median instead of 46, and MPI falls from 46 to 19 percent of the time. On the right, each job: the baseline jobs spread by 8 percent, the five Basic jobs by 0.18 percent. That matters, because the organisers score a re-run of exactly this Basic configuration.
+[0:30]
+EN: Together, Basic takes a step on four nodes from 3.65 to 2.90 seconds, minus 21 percent, with unmodified OpenFOAM. The profiles show why: every rank on its own core, the slowest rank 6 percent above the median instead of 46, and MPI down from 46 to 19 percent. And it is steady: five jobs within 0.18 percent, which matters because the organisers re-run exactly this configuration.
+
+訳（参考）: 合わせて、Basicは改変していないOpenFOAMのまま、4ノードで1 stepを3.65秒から2.90秒、21%短くしました。プロファイルがその理由を示しています。全rankが自分のコアにいて、最も遅いrankは中央値より46%ではなく6%遅いだけになり、MPIは時間の46%から19%に減りました。しかも安定していて、5本が0.18%以内に収まります。主催者はまさにこの構成を再実行して採点するので、これは大事です。
 
 JP:
 - 出典：s/stepはbaselineが#62、Basicは10/15の5本（#63）。「(profile run)」の2行は対応付けの前のBasic（scotch既定）のプロファイルrun。対応付けで4ノードは0.7%しか変わらない（以前の「*」の注記はここに移した）。
 - 「0 of 512 → 512 of 512」：baselineは/procで全512 rankを見て、自分のコアに固定されたrankは0（#62）。Basicは全ジョブで各ノードの見張り役がbound=128/128を出す（4ノードで512 of 512）。以前の「128 of 128 per node」は同じことの書き方の違いで、512 of 512にそろえた。
-- /procで見たメモリの置き場所は、baselineが全512 rank（#62）、Basicはノード0の128 rank（#36 A3）。
+- /procで見たメモリの置き場所は、baselineが全512 rank（#62）、Basicはノード0の128 rank（#36 A3）。自領域のメモリは9% → 58%。
 - 1・2ノードの効果（−8%、−14%）は17枚目で見せる。OpenFOAM profilingはbaselineが#62、Basicが#57。CrayPATはbaselineが#62、Basicが37176272426（#36 A4）。
 - 固定後も自領域のページが58%なのは、共有ライブラリやMPIの共有バッファのように複数rankが使う部分は1つの領域にしか置けないためと考えているが、未確認。「各rankのデータ（メッシュと場）を自分の領域に置いた」と言う。
 - 残る19%のMPIも、多くは遅いrankを待つ時間（Q2、Q21）。
@@ -163,9 +181,10 @@ JP:
 """
 
 NOTES["bandwidth"] = """
-[0:45]
-EN: After Basic, what sets the speed now? We cannot read the memory-controller counters on ASPIRE-2A, so we moved the ranks instead. Experiment one: half the cores, 64 ranks per node, still on all 16 memory channels. If the cores set the speed, a step would take twice as long. It didn't change. Experiment two: the same 64 ranks and the same split, but on half the memory channels. A step took 2.2 times as long, as much as the measured bandwidth dropped. So the step follows memory bandwidth.
-The arithmetic intensity agrees: about 0.1 flop per byte, a hundredth of what would keep the cores busy. So the next move cannot be faster bytes. It has to be fewer bytes.
+[0:35]
+EN: After Basic, what sets the speed? We can't read memory counters on ASPIRE-2A, so we moved the ranks instead. With half the cores but all 16 memory channels, nothing changed. With the same ranks on half the channels, a step took 2.2 times as long, as much as the bandwidth dropped. So the step follows memory bandwidth. The sweeps do about 0.1 flop per byte, a hundredth of what keeps the cores busy. So the next move is not faster bytes, but fewer bytes.
+
+訳（参考）: Basicの後、何が速さを決めているのか。ASPIRE-2Aではメモリのカウンタを読めないので、rankの置き場所を変えて確かめました。コアを半分にしても、16本のメモリチャネルを全部使えば何も変わりませんでした。同じrankをチャネル半分に置くと、帯域が落ちたのと同じだけ、1 stepが2.2倍かかりました。つまり1 stepはメモリ帯域で決まります。sweepの演算は1バイトあたり約0.1 flopで、コアを忙しくさせるのに要る量の100分の1です。だから次の一手は、バイトを速く運ぶことではなく、運ぶバイトを減らすことです。
 
 JP:
 - 実験（#61）：4ノード、150 step、各2本、全rankをCPUとメモリに固定。full128（提出の配置）、spread64（64 rank/ノード、16個のL3と16チャネル全部）、packed64（同じ64 rank・同じ分割で8個のL3と8チャネル）。
@@ -179,12 +198,13 @@ JP:
 """
 
 NOTES["bonus_opt"] = """
-[0:50]
-EN: The Bonus does the same arithmetic with fewer bytes moved. First, a split that follows the machine: multiLevel cuts nodes, then sockets, then NUMA domains, then cores, with scotch at every level. On the left, its subdomains look as compact as scotch's; on the right, coloured by node, each node takes one connected part of the car, and each NUMA domain a part of that. Then four source changes, each removing data movement, not arithmetic.
-The clearest example is on the right. The three velocity components share one matrix, but the original code read that matrix three times, once per component. We read it once and update all three; each component still sees the same operations in the same order. The other three follow the same idea: no temporary copies in the solvers, no boundary values that nobody reads, and face values formed inside the summation loops instead of in temporary fields.
+[0:40]
+EN: The Bonus does the same arithmetic with fewer bytes moved. First, multiLevel splits the mesh by node, then socket, NUMA domain and core, so each node gets one connected part of the car. Then four source changes, each removing data movement, not arithmetic. The clearest example: the three velocity components share one matrix, but the code read it three times. We read it once and update all three, with the same operations in the same order. The others remove temporary copies, boundary values nobody reads, and temporary face fields.
+
+訳（参考）: Bonusは、同じ演算を、運ぶバイトを減らして行います。まずmultiLevelで、メッシュをノード、ソケット、NUMA領域、コアの順に分けるので、各ノードが車の一続きの部分を受け持ちます。次に4つのソースの変更で、どれも演算ではなくデータの移動を減らします。一番分かりやすい例は、速度の3成分が同じ行列を使うのに、元のコードは行列を3回読んでいたことです。私たちは1回読んで3成分を更新し、演算と順番は同じままです。残りの変更は、一時的なコピー、誰も読まない境界の値、一時的な面の場をなくすものです。
 
 JP:
-- 絵は#39の分割の描画（Boxの presentation/openfoam/decomposition/panels/ の multiLevel-car-subdomains.png と multiLevel-car-numa.png）。3つの分割を並べた絵と面の数の表は補足（THE THREE SPLITS）。
+- 絵は#39の分割の描画（Boxの presentation/openfoam/decomposition/panels/ の multiLevel-car-subdomains.png と multiLevel-car-numa.png）。左はサブ領域ごと、右はノードとNUMA領域で塗ったもの。3つの分割を並べた絵と面の数の表は補足（THE THREE SPLITS）。
 - Bonusになる理由（F2）：hierarchical・scotch以外の分割方法とソースの変更はBonus。
 - Q（Uだけなのか）：Uに固有なのは「U components in one pass」だけ。Uは3成分が同じ行列を使うので1回で読める。k、ω、pは成分が1つなので、まとめる相手がない。kとωは別の式（別の行列）で、kOmegaSSTはωを解いてから新しいωでkを解くので、1回にまとめると計算の順序が変わる。残りの3つ（no copies：smoothSolverとGAMG、no unused boundary updates：pEqn.HやkOmegaSSTを含む6か所、fused face loops：全部の場の勾配と面積分）は、p・U・k・ωのすべてに効いている。
 - multiLevel：(4 2 4 16)／(2 2 4 16)／(2 4 16)。scotch既定に対してノード・ソケット・NUMA領域をまたぐ面が−38%・−34%・−26%、総数2.81 M（−3.9%）。パッチなしで4ノード−1.54%（4本ずつ）。
@@ -197,12 +217,15 @@ JP:
 """
 
 NOTES["bonus_results"] = """
-[0:35]
-EN: Here is every job at one, two and four nodes: our Basic, the Bonus split with the source unchanged, and the Bonus. The split alone moves a step only a little; the four source changes do the rest, and the Bonus is 12.7, 11.5 and 10.3 percent faster than Basic. The rules ask four things of Bonus work, and the cards answer them. What changed: four patches and the multiLevel dictionaries, submitted as text. Why it is the same math: we change only how memory is used, never an operation or its order. The evidence: against the same multiLevel split with the source unchanged, coefficient.dat is bit-identical at one, two and four nodes, and every solver log line, every residual to 16 digits, is identical.
+[0:30]
+EN: Each job at one, two and four nodes: Basic, the multiLevel split alone, and the Bonus. The split alone changes little; the source changes do the rest: the Bonus is 12.7, 11.5 and 10.3 percent faster than Basic. And it is the same math: against the split with unchanged source, coefficient.dat is bit-identical at every node count, and every solver log line matches to 16 digits. The cards answer the four questions the rules ask of Bonus work.
+
+訳（参考）: 1、2、4ノードの各ジョブです。Basic、multiLevelの分割だけ、そしてBonusです。分割だけではほとんど変わらず、残りはソースの変更によるもので、BonusはBasicより12.7%、11.5%、10.3%速くなりました。そして計算は同じです。ソースを変えていない同じ分割と比べて、coefficient.datはどのノード数でもビット単位で一致し、solverのログも全行が16桁まで一致しています。下のカードは、ルールがBonusに求める4つの問いへの答えです。
 
 JP:
 - 図の中央（白抜きの赤）は「multiLevelの分割だけ、ソースは未改変」のrun（#42、data/changes_ab.csv、1/2ノードは各1本、4ノードは4本、10/02〜04）。F3の照合相手（pre-change baseline）と同じ構成。4ノードで2.873 s/stepで、Basic（2.898）との差は小さい。そこからソース変更で2.599（−9.5%）。BasicとBonusは別の日のrunだが、10/12と10/15に流した対照は0.2%以内で一致している。
 - Q（multiLevelだけのbaselineはどこにあるか）：この図の中央の列。時間はscotch既定に対して−1.5%（4ノード、4本ずつ）、Cdの照合は下のEvidenceのカード。
+- カードの4点（R3）：何を変えたか（4つのpatchとmultiLevelの辞書、テキストで提出）、なぜ同じ計算か（メモリの使い方だけを変え、演算とその順番は変えない）、証拠（ビット一致とログの全行一致）、Basicに対する速度向上。
 - 4ノード512 rankで、4つの変更をすべて外したbaselineと最終Bonusの coefficient.dat がビット一致（SHA-256 1/2/4ノード 36d35283…、2a49a26d…、8952a056…）。
 - 固定反復（tolerance 0、relTol 0）なので、U・k・ωの残差や連続の式の誤差の誤りは解に戻らず coefficient.dat では見えない。そこで提出物の simpleFoam.log（bonus/f3-baseline/ と bonus/results/）を比べた：全stepの残差（16桁）、反復回数、連続の式の誤差、kとωのboundingが1/2/4ノードとも全行一致（371、771、1,475行）。違うのはホスト名、パス、日時、時間の行だけ。
 - multiLevelだけの変更（ソース未改変）はSanity checkで確かめる：80 stepのCdは0.323でscotch既定（0.327）や主催者のscotchと同程度（Q12）。
@@ -211,10 +234,13 @@ JP:
 """
 
 NOTES["bonus_analysis"] = """
-[0:35]
-EN: Do the patches really move fewer bytes? Hardware counters on one node say yes: instructions fall only 4 percent, but L1 refills from DRAM fall 17 percent, and cycles 11 percent. On four nodes, where we can't read those counters, we used the placement experiment again: with less bandwidth per core, the same patches gain more, 7.9 percent on all channels and 11.4 percent on half of them. CrayPAT agrees: the computation per rank shrinks by 9 percent while the MPI time stays the same.
+[0:20]
+EN: Do the patches really move fewer bytes? Yes: instructions fall only 4 percent, but refills from DRAM fall 17 percent. And with less bandwidth per core, the same patches gain more: 7.9 percent on all channels, 11.4 on half of them.
+
+訳（参考）: 本当に運ぶバイトが減ったのか。はい。命令数は4%しか減らないのに、DRAMからの読み込みは17%減りました。さらに、1コアあたりの帯域が少ないほど、同じ変更がよく効きます。全チャネルで7.9%、半分のチャネルで11.4%です。
 
 JP:
+- （時間があれば）右下のカード：CrayPATでも、rankあたりの計算時間は9%減り、MPIの時間は変わらない。
 - uProf（#55）：1ノード128 rank、40 step、multiLevel (2 4 16)、data_accessをNUMA領域ごとに1 rank（rank 0は出力も書くので除く）、計算部分のみ（MPI、UCX、Pstreamを除く）、パッチの有無で各2本。cycles −10.8%、instructions −4.1%、L1 data accesses −5.8%、L1 refills from DRAM −17.2%、from L2 −0.2%、L2 accesses incl. prefetch −9.6%。IPC 0.360 → 0.388。同じ側の2本は全カウンタで約4%以内で一致。
 - 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではない（uncoreのカウンタは権限がない）。カウンタは1ノードだけ。IPCは0.36 → 0.39（以前スライドの下にあった注記）。
 - 4ノードの配置実験（#61）：同じ分割・64 rank/ノードで、全チャネルなら−7.9%、半分のチャネルなら−11.4%（提出の128 rank/ノードでは−9.5%）。
@@ -223,22 +249,26 @@ JP:
 """
 
 NOTES["scaling"] = """
-[0:40]
-EN: Here is every job at one, two and four nodes, on log axes, so ideal scaling is a straight dashed line. Both tiers are faster at every node count: Basic by 8, 14 and 21 percent, the Bonus by 20, 24 and 29. The baseline sits on its ideal line; Basic and the Bonus fall below theirs, so the parallel efficiency from one to four nodes rises from 1.00 to 1.15. Basic gains grow with the node count, mostly from scotch. The source changes gain most on one node, where each rank holds four times more data and more of it comes from DRAM. And the efficiency above one is cache: on four nodes the cell arrays the sparse kernels gather shrink to 1 MB per rank and fit in L3, so DRAM refills per cell fall by 30 percent. We measured that with counters at each node count.
+[0:35]
+EN: Every job at one, two and four nodes, on log axes, where ideal scaling is a straight line. Both tiers are faster at every node count, and the efficiency from one to four nodes rises from 1.00 to 1.15. Basic gains grow with node count, mostly from scotch. The source changes gain most on one node, where each rank holds more data. Efficiency above one is cache: on four nodes the cell arrays fit in L3, and DRAM refills per cell fall by 30 percent.
+
+訳（参考）: 1、2、4ノードの各ジョブを対数軸で描いたもので、理想的なスケーリングは直線になります。どちらの段もすべてのノード数で速くなり、1ノードから4ノードの並列効率は1.00から1.15に上がりました。Basicの効果はノード数とともに大きくなり、その多くはscotchによるものです。ソースの変更は、各rankのデータが多い1ノードで最もよく効きます。効率が1を超えるのはキャッシュのためで、4ノードではセルの配列がL3に収まり、1セルあたりのDRAMからの読み込みが30%減ります。
 
 JP:
 - ルールが求める「1/2/4ノードのscaling」と「4ノードのbefore/after」をこの1枚で見せる。
+- （聞かれたら）baselineに対してBasicは−8／−14／−21%、Bonusは−20／−24／−29%（1/2/4ノード）。
 - 本数（1/2/4ノード）：baseline 6/3/3、Basic 3/3/5、Bonus 3/3/3。Baseline 10/12（#62）、Basic 10/15〜16（#63）、Bonus 10/06。10/12と10/15に流した対照は0.2%以内で一致。
 - Basicの効果がノード数とともに大きくなる理由は確かめていない（Q30）。hierarchicalの軸に沿った切り方が、サブ領域が小さいほど偏るためと考えている。
+- ソースの変更が1ノードでよく効くのは、各rankのデータが4倍あり、DRAMから来る量が多いため（U in one pass：1ノード−6.4%、4ノード−2.3%）。
 - カウンタ（#66、対応付けの前のBasic、uProf、1/2/4ノード）：1セル・1 stepあたりのcyclesは4ノードで1ノードの0.843倍、DRAMからのL1 refillは0.697倍。平滑化・残差・行列とベクトルの積のDRAM refillは0.30／0.40／0.42倍、セルの場を順に流すループは0.95倍のまま。セルの配列はrankあたり1ノードで4 MB、4ノードで1 MB、L3はコアあたり4 MB。面の配列（4ノードでも約16 MB）はどのノード数でも収まらない。
 - 1・2ノードの変更ごとの値の多くは1本どうしの比較なので、本編では傾向だけ言う（補足）。
 """
 
 NOTES["not_helped"] = """
-[0:40]
-EN: Just as important is what did not help. Better compiler flags, PGO, another MPI transport, 92 percent fewer faces between nodes, 55 percent more network bandwidth: none of them moved a step by more than a few tenths of a percent. Two reasons explain all of them. None moves fewer bytes, and memory bandwidth sets the speed. And MPI time is mostly waiting for the slowest rank, so faster communication does not shorten the wait.
-What about fewer faces between subdomains, the most obvious idea in OpenFOAM? Faces alone did nothing: reordering ranks cut the faces between nodes by 92 percent and changed a step by plus 0.1 percent. What paid off was even work: scotch cut the faces by a third and evened the computation, minus 10.5 percent.
-We also did not stack the small gains. Anything we cannot separate from the run-to-run spread may be luck, and stacking it would be overfitting to lucky runs.
+[0:35]
+EN: Just as important is what did not help: compiler flags, PGO, other MPI transports, more network bandwidth. None moved a step by more than a few tenths of a percent, because none moves fewer bytes, and MPI time is waiting, not transfer. Fewer faces alone did not help either: 92 percent fewer faces between nodes gave plus 0.1 percent. What paid off was even work. And we did not stack small gains that we cannot separate from the noise.
+
+訳（参考）: 効かなかったことも同じくらい大事です。コンパイラのフラグ、PGO、別のMPIの転送方式、ネットワークの帯域を上げること。どれも1 stepを0.数%しか動かしませんでした。どれも運ぶバイトを減らさず、MPIの時間は転送ではなく待ちだからです。面を減らすだけでも効きませんでした。ノード間の面を92%減らして+0.1%です。効いたのは、仕事をそろえることでした。そして、ばらつきと区別できない小さな改善は、積み重ねませんでした。
 
 JP:
 - 面の数と時間の関係（補足のTHE THREE SPLITSに表）：rankの並べ替えはサブ領域そのものを変えず、ノード間の面だけ−92%で+0.1%。scotchは面の総数−32%と計算の偏り1.16 → 1.06で−10.5%。ノードへの対応付けはノード間の面−23%で−0.7%、multiLevelは−38%で−1.5%。METISの2制約は面が18%増えて+1.5%。面を減らすこと自体は小さく効くが、効いたのは計算を均すことの方。
@@ -247,21 +277,21 @@ JP:
 - 重み付けはセル数を崩してかえって遅くなった：×2で不均衡1.073、×12では最上位の分割が崩れノード間の面が5倍（Q4、Q5）。METISの2制約は面のバランスは良いがprocessor面が18%増えて+1.46%。
 - OpenFOAMの通信スイッチ（topoControl、nbx.tuning、pbufs.tuning）も効果なし。commsType scheduledはGAMGで落ちた。
 - mallocの閾値（−0.4%、3本）は、ばらつきと区別できず、測り直していない。
-- 採用したのは同じ時期に交互に流して全runが対照より速かったものだけ（6枚目）。0.7%の対応付けも5本ずつで確かめてから採用した。
+- 小さな改善を積み重ねない理由：run間のばらつき（4ノードで約0.2%）と区別できない改善は、たまたま速かったrunかもしれず、積み重ねるとそのrunに合わせることになる（過学習）。採用したのは同じ時期に交互に流して全runが対照より速かったものだけ（6枚目）。0.7%の対応付けも5本ずつで確かめてから採用した。
 - 全部の一覧は補足（Not adopted）。Q2：MPIの待ちが大きいのにMPIのチューニングが効かない理由も同じ。
 """
 
 NOTES["conclusion"] = """
-[0:40]
-EN: To conclude: with the same math, a step on four nodes went from 3.65 to 2.60 seconds, 1.40 times faster. Each change removed a bottleneck we had measured first: the lost binding, the uneven work near the car, and memory traffic. Each gain is against its own control, so we don't add them up. What remains, measured on the Bonus, is memory bandwidth, which still sets the speed, and a 7 percent difference in computation between ranks that MPI still waits for.
-How we worked: we measured our noise first, fixed what was broken before hunting for gains, followed the measured bottleneck from placement to balance to bytes, and judged every idea by the time per step, not by proxy metrics such as fewer faces, more bandwidth or better counters. Basic fixed placement and balance for 21 percent; the Bonus moved fewer bytes for another 10.
-And one more thing, before we close.
+[0:35]
+EN: To conclude: with the same math, a step on four nodes went from 3.65 to 2.60 seconds, 1.40 times faster. Each change removed a bottleneck we measured first: the lost binding, the uneven work, and memory traffic. What remains is memory bandwidth, and a 7 percent difference between ranks. How we worked: know the noise, fix what is broken first, follow the bottleneck, and judge by the time per step, not by proxy metrics. One more thing before we close.
+
+訳（参考）: まとめです。同じ計算のまま、4ノードで1 stepは3.65秒から2.60秒になり、1.40倍速くなりました。どの変更も、先に測った律速を取り除いたものです。外れた固定、不均一な仕事、メモリの読み書きです。残っているのは、メモリ帯域と、rank間の7%の差です。進め方は、ばらつきを知る、壊れたものを先に直す、律速を追う、そして代理の指標ではなく1 stepの時間で判断する、でした。最後にもう1つだけ。
 
 JP:
 - 最初と最後で同じ数字を言う：「同じ計算のまま、4ノードで3.65秒から2.60秒、1.40倍」。
 - 最後の一言のあと、20枚目（おまけ、#68）に進む。時間がなければ20枚目を飛ばして、ここで「Thank you」で終える。
 - 右下の「How we worked」は、旧課題の資料が重視していた姿勢（ばらつきを先に測る、壊れているものを先に直す、律速を測ってから手を打つ、代理指標ではなく1 stepの時間で判断する）を、私たちの経緯で言い直したもの。代理指標（proxy metrics）は、速さと関係しそうに見える別の量のこと：ノード間の面の数、ネットワークの帯域、IPCや命令数など。18枚目のとおり、これらを良くしても1 stepは速くならなかった。
-- 表の右列は、それぞれ同じ時期の対照に対する値で、足し合わせない（以前は左下の文に書いていた）。
+- 表の右列は、それぞれ同じ時期の対照に対する値で、足し合わせない（以前は左下の文に書いていた）。時間があれば「Basicで置き場所と仕事の均等さを直して21%、Bonusで運ぶデータを減らしてさらに10%」と足す。
 - run間のばらつきは8%から0.2%になった。再実行で採点されるので、ばらつきが小さいことも強み（提出スクリプトでの再実行は2.905 s/step、補足）。
 - （聞かれたら）主催者の参照runはscotchで3.30 s/step、ばらつき12%。サイトのビルド、既定のMPI、固定なしと条件が違うので直接の比較にしない（補足）。
 - 「What remains」の出典（どれも最終Bonusの測定）：メモリ帯域は配置の実験（#61）で、Bonusでもチャネル半分で2.11倍遅い。計算時間の差はCrayPATのrankごとの値（#53）で、最も遅いrankは中央値の1.067倍（Basicの全rankのOpenFOAM profilingでは1.063、#57）。MPIはプロセス時間の19.9%（#53、Basicは19.4%）。計算時間の差はセル数では説明できず、DRAMからの読み込み量で決まる（Q21、#66）。
@@ -393,17 +423,18 @@ JP: #36 D。4ノード、scotch、各3本、同じ時期（2026-10-03）。網�
 """
 
 NOTES["extra"] = """
-[0:35]
-EN: One more thing: a gain we found but did not count. In the call stacks of the final Bonus, every sweep of the U, k and omega solvers ended with a residual and a global sum, an MPI_Allreduce, for the convergence check. But the benchmark fixes the iterations, with tolerance zero, so the check can never stop a solve, and every one of those results but the last is thrown away. Computing it once, after the last sweep, takes a step on four nodes from 2.60 to 2.25 seconds, and the results stay bit-identical, every log line included.
-We did not put it in our Bonus. It only helps because the benchmark fixes the iterations: the case's own production setting, fvSolution.fixedTol, runs the original code. And the skipped norms could be read as less work per step. What it does show is the price of convergence checking at this scale: about a third of a second in every step on 512 ranks. Our four Bonus changes, by contrast, help with any convergence setting. Thank you.
+[0:30]
+EN: One more thing: a gain we did not count. In the call stacks, every sweep ended with a residual and an MPI_Allreduce for the convergence check. With fixed iterations, all but the last of those results are thrown away. Computing it only once takes a step from 2.60 to 2.25 seconds, bit-identical. We did not count it: it only helps the benchmark's fixed iterations, and skipping that work could be read as less work per step, which the rules prohibit. Thank you.
+
+訳（参考）: 最後に、数えなかった高速化です。call stackを見ると、どのsweepも、収束判定のための残差とMPI_Allreduceで終わっていました。反復回数が固定なので、その結果は最後の1回以外捨てられています。1回だけ計算するようにすると、1 stepは2.60秒から2.25秒になり、結果はビット単位で同じです。でもこれは数えていません。ベンチマークの固定反復にしか効かず、省いた計算が、ルールが禁じる「1 stepあたりの仕事を減らすこと」と読まれ得るからです。ありがとうございました。
 
 JP:
 - 見つけた経緯（#68の本文）：#53のeu-stack（最終Bonus、4ノード、48 rank）で、Uの3成分のGauss-Seidelに残差1.1%＋gSumMag（Allreduce）1.2%＋normFactor 1.1%、k・ωのsmoothSolverにgSumMag 1.2%、normFactor 2.5%などが出ていた。v2512のソースでは、smoothSolverは毎sweepの後に残差を作ってAllreduceし、収束判定に使う。tolerance 0・relTol 0では判定が成立しないので、最後の1回以外の結果は捨てられる（最粗段のPCGもminIter = maxIter = 35で同じ）。
 - 以前の「LESSON: Speed up the computation, not the benchmark」の札は外した。言うなら口頭で。
 - #68、branch experiment/issue68-skip-unused-residuals（e2e2ae8、最終Bonus fa4f5b0の上）、patch 0005-skip-unused-convergence-residuals.patch。4ノード2.250 vs 2.595 s/step（−13.3%、同時期に交互に3本ずつ、範囲は重ならない）。1ノード10.29 s/step（−11.8%）、2ノード4.93（−12.7%）は各1本。今のBasic（2.898）からは4ノードで−22.3%。
 - coefficient.datは1/2/4ノードでビット一致、solverログ1,323行（全残差と反復回数）が全行一致。
-- 数えない理由：固定反復はベンチマークの取り決め（ケースのREADME、OHC-1は、hardware trackでfvSolution.fixedIter、software trackはfvSolution.fixedTol（pはtolerance 1e-7・relTol 0.01、U・k・ωは1e-8・0.1）から始めるとしている）。ルールは「less work per step」を禁止しており、省いたノルムを仕事と読まれ得る。
+- 数えない理由：固定反復はベンチマークの取り決め（ケースのREADME、OHC-1は、hardware trackでfvSolution.fixedIter、software trackはfvSolution.fixedTol（pはtolerance 1e-7・relTol 0.01、U・k・ωは1e-8・0.1）から始めるとしている）。fixedTolでは元のコードが走る。ルールは「less work per step」を禁止しており、省いたノルムを仕事と読まれ得る。Bonusの4つの変更は、どの収束設定でも効く。
 - 考え方自体はOpenFOAMにもある：v2512のsmoothSolverは、nSweepsが負のときは決まった回数だけ回して残差を計算しない。
-- 言い方：「過学習」というより「計測の取り決めにだけ効く高速化」（Goodhartの法則の例）。Bonusの4つの変更はどの収束設定でも捨てられる計算を省いたもので、fixedTolでも効く。この線引きを言えることが、この1枚の価値。旧課題の資料の「代理指標を良くしても意味がない」と同じ姿勢を、自分たちの結果に当てはめた例として話せる。
+- 言い方：「過学習」というより「計測の取り決めにだけ効く高速化」（Goodhartの法則の例）。Bonusの4つの変更はどの収束設定でも捨てられる計算を省いたもので、fixedTolでも効く。この線引きを言えることが、この1枚の価値。旧課題の資料の「代理指標を良くしても意味がない」と同じ姿勢を、自分たちの結果に当てはめた例として話せる。1 stepの約0.35秒（約13%）が、この規模での収束判定の値段。
 - Q34（もう10%速くならないのか）：同じ計算・同じ仕事量では難しい。1 stepはメモリ帯域に従うので、運ぶバイトを減らすかキャッシュの再利用を増やすしかない。残っている案（U・k・ωの組み立ての融合、GAMGの残差と制限の融合、ラプラシアンの係数と対角の融合）は面の配列への往復を1〜2回ずつ減らすもので、合わせて数%の見込み。10%の利得には、ルールで禁止された別の計算か、この1枚のようにベンチマークの固定反復だけで許される変更が要る。
 """

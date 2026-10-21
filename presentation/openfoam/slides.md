@@ -81,7 +81,8 @@
 - 19枚目：「What remains」を2つの箇条書きにし、「HOW WE WORKED」の札を右下の箱にして、「proxies」を「proxy metrics such as faces or counters」と言い換えました。
 - 20枚目：LESSONの札を外し、「How we found it」（最終Bonusのcall stackで、毎sweepの残差とAllreduceの結果が、最後の1回以外は捨てられていた）を足しました。
 - 補足42枚目（Not adopted）：Basicの案、Bonusの案、そのほかの工夫の順に並べ替えました（文は変えていません）。
-- 共通の再現性スライド（旧43枚目）は、チームが10/21にpptxから外したので、`build_deck.py`でも外しました。
+- 共通の再現性スライド（44枚目）は、pptxから誤って消されていたので、一度`build_deck.py`でも外しましたが、元に戻しました。
+- 原稿（ノートの英語）を短くしました。タイトル、ASPIRE-2A、baselineの設定、測り方、Bonusのカウンタ、おまけは要点だけにし、律速の発見とBasic・Bonusの説明は内容を残して言い回しを詰めました。合計は約12分45秒から約10分になりました。本編の各ノートには、英語の原稿の下に日本語訳（「訳（参考）」）を足しました。
 
 ---
 
@@ -139,46 +140,47 @@
 
 ### 時間配分
 
-- 各スライドの目安は、ゆっくり話した場合の上限で、合計は約12分45秒（本編19枚で約12分10秒、おまけの20枚目が約35秒）です。発表は英語ネイティブが担当するので、少し速めに話せば20枚で約11分に収まります。
+- 各スライドの目安は、ノートの英語の原稿（1秒に約2.5語）から出したもので、合計は約10分（本編19枚で約9分30秒、おまけの20枚目が約30秒）です。タイトル（約8秒）、ASPIRE-2A、baselineの設定、測り方、Bonusのカウンタは短く話し、律速の発見（7〜9枚目）とBasic・Bonus（10〜15枚目）に時間を使います。
+- ノートには、英語の原稿、その日本語訳（「訳（参考）」）、チーム向けの日本語のメモ（出典、注意、想定問答）の順に書いてあります。
 - Qwenに時間を回すときだけ、下の「削るとき」を使います。時間がなければ、おまけの20枚目を飛ばして、19枚目で終えます。
 - 質疑（10分、Qwenと共通）は、補足スライドと想定問答で受けます。
 
 ---
 
-## 本編（20枚、約12分45秒）
+## 本編（20枚、約10分）
 
 改訂版pptxの番号です。主張（Message）はデッキの文と同じです。「旧課題」の列は、上の「旧課題の資料から取り入れた姿勢」との対応です。
 
 | # | 見出し（デッキ） | スライドの主張（1行） | 主な図 | 目安 | 旧課題 |
 |---|---|---|---|---|---|
-| 1 | Title | | | 0:10 | |
-| 2 | OpenFOAM TASK OVERVIEW | Make the same math faster: same mesh, same solver, same work | 流れの動画、メッシュ、4ノードの結果（3.65 → 2.90 → 2.60） | 0:45 | |
-| 3 | ASPIRE-2A | 8 NUMA domains per node; 16 cores already fill the bandwidth | 仕様の表、ノードの図（図形） | 0:35 | |
-| 4 | BASELINE SETTINGS | We start from the case defaults, on our own build of v2512 | 設定の表、hierarchicalの分割の絵 | 0:35 | |
-| 5 | BASELINE RESULTS | 3.65 s/step on 4 nodes: linear scaling, but slow and unsteady | Figure 5（各ジョブの点と、主催者のhierarchicalの値）、数字3つ | 0:30 | |
-| 6 | HOW WE MEASURE AND PROFILE | Benchmark runs give the numbers; profile runs explain them | 道具の表、採否の決め方とノイズのカード | 0:35 | ノイズを先に知る |
-| 7 | MPI PROFILE ON 4 NODES | Most calls are halo exchanges; most time goes to the calls that wait | 回数と時間の上位3つ（2枚のカード、棒） | 0:40 | |
-| 8 | BASELINE ANALYSIS | Binding lost at MPI_Init → uneven computation → everyone waits | 3つの箱の鎖、「Why one slow rank matters」と「Where the computation goes」の箱 | 0:50 | 壊れているものを先に |
-| 9 | OPTIMIZATION STRATEGY | Fix what is broken first, then follow the measured bottleneck | 進め方の5段（Baseline → Profile → Bottleneck → Change one thing → Check）、実際の回り方の表（Table 4） | 0:40 | 壊れているものを先に、仮説から次の一手 |
-| 10 | BASIC OPTIMIZATION (1/2) | Putting the lost binding back: 3.65 → 3.26 s/step (−11%) | 原因 → 対策 → 確認、Figure 7（各ジョブの点：Both / CPU only / Neither / Memory only） | 0:50 | 壊れているものを先に |
-| 11 | BASIC OPTIMIZATION (2/2) | scotch cuts compact blocks: 3.26 → 2.92 s/step (−10.5%) | hierarchicalとscotchの絵、Figure 9（1/2/4ノードの各ジョブ）、対応付け | 0:40 | 1本で決めない（メモ） |
-| 12 | BASIC RESULTS | −21% on 4 nodes, and the profiles show why | before/afterの表（Table 5）、Figure 10（4ノードの各ジョブ） | 0:35 | |
-| 13 | MEMORY BANDWIDTH SETS THE SPEED | Half the memory channels: 2.2× slower. Half the cores: no change | 2つの実験のカード（チャネルの図）、TAKEAWAY | 0:45 | 運ぶバイトを減らす |
-| 14 | BONUS OPTIMIZATION | The same arithmetic with fewer bytes moved | multiLevelの絵2枚（サブ領域ごと、ノードとNUMA領域）、変更の一覧、Uを1回で読む図（図形） | 0:50 | 運ぶバイトを減らす |
-| 15 | BONUS RESULTS | Bit-identical Cd, and 10% faster than our Basic | Figure 13（Basic、multiLevelだけ、Bonusの各ジョブ）、R3の4点のカード | 0:35 | |
-| 16 | BONUS ANALYSIS | 4% fewer instructions, but 17% fewer refills from DRAM | カウンタの棒グラフ、配置の実験、CrayPAT | 0:35 | 運ぶバイトを減らす |
-| 17 | SCALING ANALYSIS | Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15 | Figure 15（3つの段の各ジョブ、対数軸）、s/stepと効率の表 | 0:40 | scalingを説明する |
-| 18 | WHAT DID NOT HELP, AND WHY | Proxy metrics improved; the time per step did not | 効かなかったことの表（Basic、Bonusの順）、3つの問い | 0:40 | 代理指標は時間を動かさない |
-| 19 | CONCLUSION | 1.40× faster on 4 nodes, with the same math | 数字3つ、最適化表、What remains、How we worked | 0:40 | 最適化表、全体の要約 |
-| 20 | EXTRA: A GAIN WE DID NOT COUNT | 2.595 → 2.250 s/step and bit-identical, but only with fixed iterations | 数字3つ、見つけた経緯、何をするか、数えない理由 | 0:35 | 代理指標と同じ線引き |
+| 1 | Title | | | 0:08 | |
+| 2 | OpenFOAM TASK OVERVIEW | Make the same math faster: same mesh, same solver, same work | 流れの動画、メッシュ、4ノードの結果（3.65 → 2.90 → 2.60） | 0:30 | |
+| 3 | ASPIRE-2A | 8 NUMA domains per node; 16 cores already fill the bandwidth | 仕様の表、ノードの図（図形） | 0:20 | |
+| 4 | BASELINE SETTINGS | We start from the case defaults, on our own build of v2512 | 設定の表、hierarchicalの分割の絵 | 0:20 | |
+| 5 | BASELINE RESULTS | 3.65 s/step on 4 nodes: linear scaling, but slow and unsteady | Figure 5（各ジョブの点と、主催者のhierarchicalの値）、数字3つ | 0:25 | |
+| 6 | HOW WE MEASURE AND PROFILE | Benchmark runs give the numbers; profile runs explain them | 道具の表、採否の決め方とノイズのカード | 0:25 | ノイズを先に知る |
+| 7 | MPI PROFILE ON 4 NODES | Most calls are halo exchanges; most time goes to the calls that wait | 回数と時間の上位3つ（2枚のカード、棒） | 0:35 | |
+| 8 | BASELINE ANALYSIS | Binding lost at MPI_Init → uneven computation → everyone waits | 3つの箱の鎖、「Why one slow rank matters」と「Where the computation goes」の箱 | 0:40 | 壊れているものを先に |
+| 9 | OPTIMIZATION STRATEGY | Fix what is broken first, then follow the measured bottleneck | 進め方の5段（Baseline → Profile → Bottleneck → Change one thing → Check）、実際の回り方の表（Table 4） | 0:35 | 壊れているものを先に、仮説から次の一手 |
+| 10 | BASIC OPTIMIZATION (1/2) | Putting the lost binding back: 3.65 → 3.26 s/step (−11%) | 原因 → 対策 → 確認、Figure 7（各ジョブの点：Both / CPU only / Neither / Memory only） | 0:40 | 壊れているものを先に |
+| 11 | BASIC OPTIMIZATION (2/2) | scotch cuts compact blocks: 3.26 → 2.92 s/step (−10.5%) | hierarchicalとscotchの絵、Figure 9（1/2/4ノードの各ジョブ）、対応付け | 0:35 | 1本で決めない（メモ） |
+| 12 | BASIC RESULTS | −21% on 4 nodes, and the profiles show why | before/afterの表（Table 5）、Figure 10（4ノードの各ジョブ） | 0:30 | |
+| 13 | MEMORY BANDWIDTH SETS THE SPEED | Half the memory channels: 2.2× slower. Half the cores: no change | 2つの実験のカード（チャネルの図）、TAKEAWAY | 0:35 | 運ぶバイトを減らす |
+| 14 | BONUS OPTIMIZATION | The same arithmetic with fewer bytes moved | multiLevelの絵2枚（サブ領域ごと、ノードとNUMA領域）、変更の一覧、Uを1回で読む図（図形） | 0:40 | 運ぶバイトを減らす |
+| 15 | BONUS RESULTS | Bit-identical Cd, and 10% faster than our Basic | Figure 13（Basic、multiLevelだけ、Bonusの各ジョブ）、R3の4点のカード | 0:30 | |
+| 16 | BONUS ANALYSIS | 4% fewer instructions, but 17% fewer refills from DRAM | カウンタの棒グラフ、配置の実験、CrayPAT | 0:20 | 運ぶバイトを減らす |
+| 17 | SCALING ANALYSIS | Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15 | Figure 15（3つの段の各ジョブ、対数軸）、s/stepと効率の表 | 0:35 | scalingを説明する |
+| 18 | WHAT DID NOT HELP, AND WHY | Proxy metrics improved; the time per step did not | 効かなかったことの表（Basic、Bonusの順）、3つの問い | 0:35 | 代理指標は時間を動かさない |
+| 19 | CONCLUSION | 1.40× faster on 4 nodes, with the same math | 数字3つ、最適化表、What remains、How we worked | 0:35 | 最適化表、全体の要約 |
+| 20 | EXTRA: A GAIN WE DID NOT COUNT | 2.595 → 2.250 s/step and bit-identical, but only with fixed iterations | 数字3つ、見つけた経緯、何をするか、数えない理由 | 0:30 | 代理指標と同じ線引き |
 
-旧pptxの18〜24枚目（10/08版の旧スライド）のうち、18・19・22・23枚目は本編と重なるので外し、20・21枚目（パッチの詳細）は補足35・36枚目として作り直しました。24枚目（再現性）はQwenと共通のスライドでしたが、チームが10/21にpptxから外したので、改訂版にも入れていません。
+旧pptxの18〜24枚目（10/08版の旧スライド）のうち、18・19・22・23枚目は本編と重なるので外し、20・21枚目（パッチの詳細）は補足35・36枚目として作り直しました。24枚目（再現性）はQwenと共通なので、内容は変えずに補足の後ろ（44枚目）に残してあります。
 
-### 1. Title（0:10）
+### 1. Title（0:08）
 
 旧pptxの1枚目のままです。ノートだけ足しました。
 
-### 2. OpenFOAM TASK OVERVIEW（0:45）
+### 2. OpenFOAM TASK OVERVIEW（0:30）
 
 **Message:** Make the same math faster: same mesh, same solver, same work
 
@@ -190,13 +192,13 @@
 
 図：流れの動画（Boxの`flow/flow-iterations.mp4`）と、メッシュの図（旧pptxの2枚目のもの）。結果は左下の帯に、答えを先に出す形で置きました。
 
-メモ（45秒）：
+メモ（30秒）：
 - 車の周りの空気の流れを計算するケースを、同じ計算のまま速くする課題です。メッシュは固定で、車の近くほど細かく、車輪は回りません。
 - 反復の回数が固定です（`fvSolution.fixedIter`：pはGAMGで12サイクル、Uは3成分それぞれGauss-Seidelで15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均時間で比べられます。
 - 動画は、場を書き出すための別runです。計測runは場を書き出さないので、同じ公式ケースに出力だけを足して流しました（Q22）。
 - 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.60秒になりました」。比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaselineです。主催者の値は、ビルド、MPI、配置が違うので、5枚目で参考として見せます。
 
-### 3. ASPIRE-2A（0:35）
+### 3. ASPIRE-2A（0:20）
 
 **Message:** 8 NUMA domains per node; 16 cores already fill the bandwidth
 
@@ -209,13 +211,13 @@
 
 図：ノードの図（2ソケット × 4 NUMA領域、各16コア・2チャネル）。`fig11_node_layout`は文字が約5 ptで投影すると読めないので、PowerPointの図形で描き直しました。
 
-メモ（35秒）：
+メモ（20秒）：
 - 旧pptxの「EPIC」は「EPYC」に、「4x NUMA domains」は「8 NUMA domains（ソケットあたり4）」に直しました。
 - 帯域はカタログ値で409.6 GB/sですが、STREAMでは約290 GB/sで、L3ごとに1コア（ノードで16コア）使うだけで飽和します（#36）。これが後の「メモリ帯域が律速」の伏線です。
 - 選んだ理由はファイル数と容量の上限です（Q1）。OpenFOAMのビルド1つで約36,000ファイル、分割したケースごとに数千ファイルが増えます。
 - ネットワークの出典：TOP500のシステム名が「ASPIRE 2A (CPU Partition) - HPE Cray EX425, AMD EPYC 7713 64C 2GHz, Slingshot-10」です（https://top500.org/system/180078/）。NSCCのページには「All nodes are connected with HPE Slingshot Interconnect (Dragonfly Topology)」とあります（https://www.nscc.sg/aspire-2a/）。100 Gb/sはSlingshot-10の世代のNICの速さです（NSCCのページで「100G」と書いてあるのはHigh Frequency nodesの項）。ジョブから見えるNICはMellanox製（mlx5）で、UCXとOFIのどちらも使えます。
 
-### 4. BASELINE SETTINGS（0:35）
+### 4. BASELINE SETTINGS（0:20）
 
 **Message:** We start from the case defaults, on our own build of v2512
 
@@ -227,12 +229,12 @@
 
 図：hierarchicalの分割の絵（車体表面、中心断面、横断面の3段。旧pptxの`decomposition-subdomains.png`から左の列を切り出したもの）。scotchの絵は11枚目まで見せません。
 
-メモ（35秒）：
+メモ（20秒）：
 - OpenFOAMは公式のソースから自分たちでビルドしました。サイトのモジュールと同じ速さで（−0.08%、Q8）、何を使ったかを正確に記録でき、Bonusのパッチも当てられます。ccacheで、作り直しは60分から5分半になりました。
 - UCXにした理由（pptxのメモのとおり）：既定のOFIでは、9月に2・4ノードのrunが毎回`MPI_Finalize`でSIGBUSになり、UCXでは全runが完走しました。主催者が後で見つけた2つの回避策も、私たちの構成ではUCXより遅いです（+0.77%、+0.50%。Q16）。
 - 配置はサイトの推奨どおりの起動方法です。「ここで頼んだ固定が、実は外れていた」が8枚目につながります。
 
-### 5. BASELINE RESULTS（0:30）
+### 5. BASELINE RESULTS（0:25）
 
 **Message:** 3.65 s/step on 4 nodes: linear scaling, but slow and unsteady
 
@@ -245,12 +247,12 @@
 
 旧課題との対応：「遅くて不安定」は、旧資料が「baselineから大きく外れるなら設定の誤り」と言っていた形そのものです。ここで「何かがおかしい」と言い切ると、7・8枚目の発見が筋道としてつながります。
 
-メモ（30秒）：
+メモ（25秒）：
 - 「スケーリングはきれいだが、遅く、ばらつく」。ばらつきは、固定が外れて遅いrankが毎回違う場所に出るためで（#36の症状）、8枚目で原因を示します。
 - 1ノードの分割は(16 8 1)で、主催者の(16 4 2)と違います（図の注記）。
 - 測った日が違う値を並べられる理由：baselineと同じ日（10/12）に流したscotchの対照は、10/05の平均から0.2%以内でした。10/15〜16に流したscotchとBonusの対照も、それぞれ10/05、10/06の平均から0.2%以内です。だから、baseline（10/12）、Bonus（10/06）、Basic（10/15〜16）を並べられます。#36の3本（10/02〜03、平均3.670）とも0.5%で合います。
 
-### 6. HOW WE MEASURE AND PROFILE（0:35、新規）
+### 6. HOW WE MEASURE AND PROFILE（0:25、新規）
 
 **Message:** Benchmark runs give the numbers; profile runs explain them
 
@@ -271,7 +273,7 @@
 
 旧課題との対応：旧資料が「いちばん安く、いちばん飛ばされる実験」と呼んでいた、ばらつきを先に測ることです。2枚目のカードの見出しは、その考え方をそのまま言葉にしたものです。
 
-メモ（35秒）：
+メモ（25秒）：
 - プロファイラは1 stepの時間を−1%〜+6%変えます（baselineでは、CrayPATの下で3.85秒、計測runで3.65秒）。だからプロファイルの時間は比較に使わず、「どこで」「なぜ」にだけ使います。
 - 40 stepで足りる理由：反復回数が固定なので、どのstepも同じ仕事です。
 - 道具は、それぞれ1つの問いに答えます。CrayPATはMPIの関数ごとの時間と回数、OpenFOAM組み込みのprofilingは区間ごとの時間を全512 rankで、uProfは関数ごとのCPU時間とハードウェアカウンタ、`/proc`は実行中のCPUの固定とメモリのページの置き場所です。
@@ -279,7 +281,7 @@
 - メモリコントローラのカウンタは、利用者には読めません（`perf_event_paranoid=2`）。そこで帯域は、rankの置き場所を変える実験で確かめました（13枚目）。
 - 採否の決め方：候補と対照を同じ時期に交互に流し（4ノードで3本以上ずつ）、候補の全runが対照の全runより速いものだけを採用しました。採用した変更は、4ノードではどれもこれを満たします。run間のばらつきは4ノードで約0.2%なので、0.7%の差（scotchの対応付け、5本ずつ）でも区別できます。最初は「1%以上」も条件にしていましたが、ばらつきが小さいとわかってから外しました。
 
-### 7. MPI PROFILE ON 4 NODES（0:40、10/20に補足S1から移動）
+### 7. MPI PROFILE ON 4 NODES（0:35、10/20に補足S1から移動）
 
 同じ主催者のISC26 SCCのOpenFOAM課題が求める「4ノードで任意のMPIプロファイラを使い、呼び出し回数と合計CPU時間でそれぞれ上位3つのMPI呼び出しを示す」に答える1枚です。
 
@@ -305,14 +307,14 @@
 
 図：2枚のカード。各行に順位、関数名、値と、上位の値に対する長さの棒（回数は紺、待つ呼び出しである時間の上位2つは紫）。
 
-メモ（40秒）：
+メモ（35秒）：
 - 回数の上位3つは、隣のサブ領域とのデータ交換（非ブロッキングの送受信と、その完了の確認）です。時間の上位3つのうち、WaitallとAllreduceは他のrankを待つ呼び出しです。
 - 測ったのは全512 rankで、値はrankあたり（512 rankの平均）です。課題の「合計CPU時間」は512 rank分を足した値で、聞かれたら答えます（MPI_Waitall 22,069 s、MPI_Allreduce 14,140 s、MPI_Bcast 1,289 s）。順位はどちらでも同じです。
 - 待ちであって転送ではありません。rankごとのMPI時間は35〜112秒ですが、セル数はほぼ完全に均等です。なぜ遅いrankが出るのかは、次の8枚目で示します。
 - Basicの後（#53）も回数の上位3つは同じで、時間はMPI_Allreduce 48%、MPI_Waitall 38%に入れ替わります。MPIはstepの19%になります（12枚目）。
 - 出典：CrayPAT 38219766511（#62）、`data/baseline_profile_4node.csv`。
 
-### 8. BASELINE ANALYSIS（0:50）
+### 8. BASELINE ANALYSIS（0:40）
 
 **Message:** Binding lost at MPI_Init → uneven computation → everyone waits
 
@@ -331,7 +333,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 旧課題との対応：旧資料は「誤った固定1つで数倍遅くなり、どんな最適化も取り戻せない。利得を探す前に、すでに何かを手放していないか確かめよ」と書いていました。私たちの場合、固定は正しく頼んでいたのに、`MPI_Init`の中で外されていました。「頼んだ設定」と「実際の状態」を分けて確かめたことが、この発見の要点です。
 
-メモ（50秒）：
+メモ（40秒）：
 - 回数が多いのは隣のrankとのデータ交換（`MPI_Isend`・`MPI_Irecv`、rankあたり40 stepで56.6万回）ですが、時間を使っているのは`MPI_Waitall`（43.1秒、MPIの55%）と`MPI_Allreduce`（27.6秒、35%）、つまり他のrankを待つ呼び出しです。
 - rankごとのMPI時間は35〜112秒です。セル数はほぼ完全に均等（最大でも平均+0.002%）なので、この差は仕事の量ではなく待ちです。
 - 原因は`/proc`で分かりました。512 rankのどれも自分のコアに固定されておらず（全員が256 CPUのどこでも動ける）、自分のNUMA領域にあるページは中央値8.7%でした。8領域に均等に散れば12.5%なので、ほぼ散らばっています。起動時に頼んだ固定が、`MPI_Init`の途中で外されていました。
@@ -340,7 +342,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - 計算の中身はuProfで見ました。上位はGauss-Seidelの平滑化、残差、行列とベクトルの積で、どれも疎行列を1回なめる処理です（13枚目のメモリ帯域の話へ）。32 rankのself CPU time（40 step）は394.6 s、228.9 s、53.1 sで、rankあたり21.1 s。rankあたりの計算時間（OpenFOAM profilingの中央値78.6 s）の約27%なので「about a quarter」と書きました。
 - 出典：CrayPAT 38219766511、OpenFOAM profilingと`/proc` 38219862855、uProf 38219770656（#62）。
 
-### 9. OPTIMIZATION STRATEGY（0:40、10/21に補足の進め方から作り直し）
+### 9. OPTIMIZATION STRATEGY（0:35、10/21に補足の進め方から作り直し）
 
 **Message:** Fix what is broken first, then follow the measured bottleneck
 
@@ -365,13 +367,13 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 旧課題との対応：「利得を探す前に、すでに壊れているものがないか確かめる」と「予算は仮説のためにあり、総当たりのためではない」の2つを、進め方そのものとして見せます。8枚目のLESSONの言葉は、この主張にしました。審査の「Present a logical workflow: Tell the optimization as a problem-solving path」に、この1枚で答えます。
 
-メモ（40秒）：
+メモ（35秒）：
 - 「Fix what is broken first」：3の最初の問いが「What is broken?」です。8枚目で見つけた固定の外れは、最適化ではなく故障の修理で、それを先にしました。
 - 5段を1回ずつ言い、最後に「新しいbaselineをまたプロファイルする」と言います。表は話の予告で、1行目は10〜12枚目、2行目は13〜16枚目、3行目は19枚目（What remains）で話します。
 - BasicとBonusの線引きを1文で言います：Basicはソースを変えず、ビルド、ジョブスクリプト、配置と、分割はhierarchicalかscotchまで。Bonusはソースの変更と、それ以外の分割方法で、同じ計算であることを示す必要があります。
 - ネットワーク、演算、I/O、OSノイズはどうしたかと聞かれたら、補足23枚目を出します（どれも測って、律速ではないと分かった）。
 
-### 10. BASIC OPTIMIZATION (1/2): CPU AND MEMORY PINNING（0:50）
+### 10. BASIC OPTIMIZATION (1/2): CPU AND MEMORY PINNING（0:40）
 
 デッキの見出しは「BASIC OPTIMIZATION (1/2)」です（32 ptで1行に収めるため）。
 
@@ -383,7 +385,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 図：Figure 7「Each half alone is not enough」（4 nodes, scotch split, each job。`deck/deck_plots.py`の`p10_pinning`）。行は上から Both: Basic (numactl + keeper) 2.92、CPU only (taskset keeper) 3.47、Neither: the launcher's binding, lost 3.40、Memory only (numactl) 4.38 s/step（`data/pinning.csv`、各1〜3本）。意図は「CPUの固定とメモリの縛りは、片方だけでは速くならない。両方そろって初めて速い」です。Neitherはbaselineと同じ状態です。以前の下の注記（−11%の出どころ、`LD_PRELOAD`はBonus扱い）はメモに移しました。
 
-メモ（50秒）：
+メモ（40秒）：
 - 要点は「頼んだ配置」と「実際の配置」を区別したことです。起動コマンドの指定は正しく、外れていたのは実行中の`/proc`を見て分かりました。
 - Linuxは、ページを最初に書いたコアの近くに置き、後から動かしません（first touch）。データを確保する時点でrankが正しい場所にいないと、データは遠いメモリに置かれたままになります。
 - CPUだけ戻すと、戻すまでの12〜16秒に確保したデータが遠くに残ります（3.47）。メモリだけ縛ると、CPUが別の領域へ動き、全部のアクセスが遠くなります（4.38）。
@@ -391,7 +393,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - −11%は、hierarchicalのまま固定だけを足した同時期の比較です（3.670 → 3.257、10/02〜03。このときの固定は`LD_PRELOAD`で、Basicの`numactl`＋`taskset`と同じ速さ）。図はscotchでの比較で、固定なしの各方式は16〜19%遅くなります。
 - ここが、同じASPIRE-2Aを使うチームとの一番の差です。主催者のASPIRE-2Aのノートには固定の話がなく、主催者の参照runも固定していないので、scotch 5本で3.19〜3.58と12%ばらつきます（Q15）。ノートどおりに進めると、この3.2〜3.6のあたりに来ます。
 
-### 11. BASIC OPTIMIZATION (2/2): DECOMPOSITION（0:40）
+### 11. BASIC OPTIMIZATION (2/2): DECOMPOSITION（0:35）
 
 デッキの見出しは「BASIC OPTIMIZATION (2/2)」です。
 
@@ -406,7 +408,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 旧課題との対応：メモの教訓（1本で決めない）は、旧資料の「少ない本数はばらつきを小さく見せる。何本必要かは機械で大きく違う」と同じです。1本の外れ値で判断を誤り、同時期の交互の比較で正しました。
 
-メモ（40秒）：
+メモ（35秒）：
 - 不均衡は、rankの計算時間の最大/中央値です（CrayPAT、どちらも固定あり）。hierarchicalの不均衡は、壁の面（車の表面）の数と相関しました（#38）。セル数はほぼ完全にそろっているので、そろっていないのは面の仕事です。
 - scotchにすると、中央値のrankの`MPI_Waitall`は18.7秒から9.4〜10.8秒に半減しました。
 - ノード間の通信が理由ではありません。rankの並べ替え（`MPICH_RANK_REORDER_METHOD=3`）でノード間の面を92%減らしても、変わりませんでした（+0.1%）。
@@ -414,7 +416,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - ノード数が多いほど効く理由は確かめていません（Q30）。
 - scotchの係数（`domains`、`domainWeights`、`strategy`）で、分割をノードの木（ソケット、NUMA領域、コア）に対応付けました。サブ領域間の面の総数は3%増えますが、ノード・ソケット・NUMA領域をまたぐ面は23%・21%・10%減ります。10/05の3本ずつの比較では−0.82%で、当時の1%の基準に届かず見送りました。採点はBasicの4ノードの再実行なので、10/15に交互に5本ずつ測り直し、全runが対照より速い−0.69%で採用しました（#63）。1・2ノードではほぼ変わりません。絵は対応付けの前のscotchです。
 
-### 12. BASIC RESULTS（0:35）
+### 12. BASIC RESULTS（0:30）
 
 **Message:** −21% on 4 nodes, and the profiles show why
 
@@ -431,13 +433,13 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 「0 of 512 → 512 of 512」：以前は「128 of 128 per node」と書いていましたが、各ノード128/128を4ノード分まとめただけで同じことなので、baselineの「0 of 512」とそろえました。「(profile run)」の2行は対応付けの前のBasicのプロファイルrunで、以前の「*」の注記はメモに移しました。1・2ノードの効果（−8%、−14%）は17枚目で見せます。
 
-メモ（35秒）：
+メモ（30秒）：
 - 固定と分割で、遅いrankがいなくなり（最大/中央値1.46 → 1.06）、待ち（MPI 46% → 19%）とrunごとのばらつき（8% → 0.18%）が減りました。
 - 出典：s/stepはbaselineが#62、Basicは10/15の5本（#63）。プロファイルの2行は、対応付けの前のBasic（scotchの既定）のrunです。対応付けで4ノードのstepは0.7%しか変わらないので、そのまま使います。`/proc`はbaselineが全512 rank（#62）、Basicはノード0の128 rank（#36 A3）。OpenFOAM profilingはbaselineが#62、Basicが#57。CrayPATはbaselineが#62、Basicが37176272426（#36 A4）。
 - 固定後も自分の領域にあるページが58%なのは、共有ライブラリやMPIの共有バッファのように、複数のrankが使う部分は1つの領域にしか置けないためと考えていますが、確かめていません。「各rankのデータ（メッシュと場）を自分の領域に置いた」と言います。
 - 残った19%のMPIも、多くは遅いrankを待つ時間です（Q2、Q21）。
 
-### 13. MEMORY BANDWIDTH SETS THE SPEED（0:45）
+### 13. MEMORY BANDWIDTH SETS THE SPEED（0:35）
 
 **Message:** Half the memory channels: 2.2× slower. Half the cores: no change
 
@@ -451,7 +453,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 旧課題との対応：旧資料は「帯域の壁に近ければ、バイトを速く運ぶのは行き止まりで、運ぶバイトを減らす余地が開いている」と書いていました。私たちはカウンタが読めないので、配置を変える実験で同じ結論に着き、それがBonusの方針になりました。旧資料の93%や2.5倍は使いません。
 
-メモ（45秒）：
+メモ（35秒）：
 - 「Basicで置き場所と均等さを直した。では今、何が速さを決めているか」という問いから始めます。
 - ASPIRE-2Aでは、利用者がメモリコントローラのカウンタ（DRAMの帯域）とIBSを読めません（`perf_event_paranoid=2`）。そこで、rankの置き場所だけを変えました（#61）。
 - 実験（4ノード、150 step、各2本）：(a) 1ノード128 rankを64 rankにし、16本のメモリチャネルと16個のL3はそのまま使う（コアだけ半分）。(b) 同じ64 rank・同じ分割のまま、使うチャネルとL3を半分（8本・8個）にする。(a)は−1%〜+2%でほぼ変わらず、(b)は2.11〜2.20倍でした。同じノードで測ったtriadの帯域は、(b)で1/2.22です（274、279、125 GB/s/ノード）。
@@ -460,7 +462,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - 演算密度（3行目、Q35）：Gauss-Seidel、残差、Amulは、内部の面1つにつき約4 flopの計算に、係数2つ（16 B）と番地（4 B）とセルの値を合わせて30〜40 Bを読みます。約0.1 flop/Bです。ノードの倍精度ピーク（128コア × 2.0 GHz × 16 flop ≈ 4.1 TFLOP/s）をSTREAM（約290 GB/s）で割った境目は約14 flop/Bなので、その約1/100です。演算器はほとんど待っていて、IPCは0.4〜0.7です。
 - だから次の一手は「運ぶデータを減らす」です。コンパイラやフラグ、PGOが±0.13%以内しか変えなかったこととも合います（18枚目）。
 
-### 14. BONUS OPTIMIZATION（0:50）
+### 14. BONUS OPTIMIZATION（0:40）
 
 **Message:** The same arithmetic with fewer bytes moved
 
@@ -474,7 +476,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 図：1の下にFigure 11（multiLevelの車体表面の絵2枚。左はサブ領域ごとに塗ったもの（Boxの`decomposition/panels/multiLevel-car-subdomains.png`）で11枚目のhierarchical・scotchと並べて見られる形、右はノード（色相）とNUMA領域（濃淡）で塗ったもの（`multiLevel-car-numa.png`）で、ノード → NUMA領域の木に沿って分けていることが見える）。右にFigure 12「Example: U components in one pass」（行列を3回読むか1回読むか。`fig25_u_in_one_pass`と同じ内容をPowerPointの図形で描いた）。3つの分割を並べた絵と面の数の表は補足32枚目です。1 stepのどこに効くかを見せたいときは`fig13_solver_flow`を使います。
 
-メモ（50秒）：
+メモ（40秒）：
 - 13枚目の「帯域が律速」から来た方針です。メモリを速くするのではなく、運ぶデータを減らします。
 - Bonusになる理由：hierarchical・scotch以外の分割方法と、ソースの変更はBonusです（F2）。
 - multiLevelは、ノード → ソケット → NUMA領域 → コアの順に、各段をscotchで分けます。ノードとNUMA領域ごとにまとまった塊になり、サブ領域間の面は2.81 Mで、scotchの既定の2.93 M、Basic（対応付けたscotch）の3.02 Mより少なくなります（絵は`decomposition/decomposition-numa-basic-vs-bonus.png`）。
@@ -483,7 +485,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - 変更の中身の全文は、提出物の`bonus/README.md`とpatchにあります（補足S4。提出物ではpatchに0001〜0004の番号が付いています）。
 - （聞かれたら）Uだけか：Uに固有なのは「U components in one pass」だけです。Uは3成分が同じ行列を使うので1回で読めますが、k、ω、pは成分が1つなので、まとめる相手がありません。kとωは別の式（別の行列）で、kOmegaSSTはωを解いてから、新しいωを使ってkを解くので、1回にまとめると計算の順序が変わります。残りの3つは全部の式に効いています：no copiesはsmoothSolver（U、k、ω）とGAMG（p）、no unused boundary updatesはpEqn.HやkOmegaSSTを含む6か所、fused face loopsは全部の場の勾配と面積分です。
 
-### 15. BONUS RESULTS（0:35、新規）
+### 15. BONUS RESULTS（0:30、新規）
 
 **Message:** Bit-identical Cd, and 10% faster than our Basic
 
@@ -505,7 +507,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 変更ごとの効果は補足37枚目（Effect of each Bonus change）です。図の値は、提出物のREADMEと照合できるよう小数3桁にしています（「数値の桁」）。
 
-メモ（35秒）：
+メモ（30秒）：
 - R3の4点のうち、「証拠」と「Basicに対する速度向上」がこの1枚です（「何を変えたか」「なぜ同じ計算か」は14枚目）。
 - ビット一致する理由：浮動小数点の演算そのものと順番を変えていないからです。変えたのは、メモリの持ち方と、捨てられていた仕事だけです。
 - 4ノード512 rankでは、4つの変更をすべて外したbaselineと、最終Bonusの`coefficient.dat`がビット一致しました（SHA-256 `8952a056…`）。
@@ -513,7 +515,7 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 - multiLevelだけの変更（ソースは未改変）は、ルール上はSanity checkで確かめます。80 stepのCdは0.323で目安より少し低いですが、scotchの既定（0.327）も主催者のscotchも同じです。Basic（対応付けたscotch）は0.334です（Q12）。
 - 変更ごとの効果を聞かれたら補足S3を出します。4ノードで、multiLevel −1.5%（scotchの既定に対して）、ソースの変更が順に−3.4%、−2.3%、−1.3%、−2.8%です（どれも直前の構成を対照に、同じ時期に3〜4本ずつ）。別々の実験なので足し合わせません。合計の効果は、上の表で直接測っています。
 
-### 16. BONUS ANALYSIS（0:35）
+### 16. BONUS ANALYSIS（0:20）
 
 **Message:** 4% fewer instructions, but 17% fewer refills from DRAM
 
@@ -523,13 +525,13 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 図：Figure 14「Patched against unpatched, the same build」（カウンタの横棒グラフ。PowerPointのグラフ、`fig17_counters`の平均）と、右に2枚のカード。以前の下の注記（L1のdemand refillでDRAMのバイト数ではない、IPC 0.36 → 0.39）はメモに移しました。
 
-メモ（35秒）：
+メモ（20秒）：
 - 「計算は同じで、DRAMから運ぶデータが減った」ことの直接の根拠です。命令数は4%しか減らないのに、DRAMからのrefillは17%減り、cyclesは11%減りました。IPCは0.36 → 0.39です。
 - 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではありません（uncoreのカウンタは権限がなく使えません）。カウンタは1ノードだけです。
 - 4ノードでは、カウンタの代わりに配置の実験で確かめました（#61）。同じ分割・同じ64 rank/ノードで、全チャネルを使うとソースの変更は−7.9%、半分のチャネルでは−11.4%です（現行の128 rank/ノードでは−9.5%）。1コアあたりの帯域が少ないほど効くので、効果は運ぶデータを減らしたことによるものです。
 - CrayPATの値：最初の変更（no copies in the solvers）だけを入れたBonusから最終Bonusまで、rankあたりの計算時間は104.2秒から94.9秒（40 step）。MPIは約23.5秒のままです。
 
-### 17. SCALING ANALYSIS（0:40）
+### 17. SCALING ANALYSIS（0:35）
 
 **Message:** Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15
 
@@ -540,14 +542,14 @@ LESSONの札（Check what is already broken before hunting for gains）は外し
 
 図：Figure 15「Time per step on 1, 2 and 4 nodes, each job」（baseline、Basic、Bonusの各ジョブの点と平均の棒を対数軸に描き、1ノードの平均から引いた理想の線を破線で添える。`deck/deck_plots.py`の`p17_scaling`。凡例に各段の並列効率）と、Table 6（平均のs/stepと効率）。理想の線の上にbaselineが乗り、BasicとBonusは4ノードで線より下に来る（効率が1を超える）ことが見えます。
 
-メモ（40秒）：
+メモ（35秒）：
 - ルールが求める「1/2/4ノードのscaling」と「4ノードのbefore/after」を、この1枚で見せます。
 - Basicの効果がノード数とともに大きくなるのは、主に分割の効果です（scotchが1/2/4ノードで−1.3/−2.5/−10.5%）。理由は確かめていません（Q30）。
 - ソースの変更の効果が1ノードで大きいのは、rankあたりのデータが4倍あり、DRAMから来る量が多いからだと説明します。16枚目の「1コアあたりの帯域が少ないほど効く」と同じ向きです。
 - 効率が1を超える理由は、カウンタで確かめました（#66、対応付けの前のBasic、uProf、1/2/4ノード）。1セル・1 stepあたりのサイクルは、4ノードで1ノードの0.84倍、DRAMからのL1 refillは0.70倍です。減ったのは、面の番地を通してセルの配列を飛び飛びに読み書きする疎行列の計算（平滑化、残差、行列とベクトルの積）で、DRAMからのrefillが60〜70%減ります。この配列はrankあたり1ノードで4 MB、4ノードで1 MBになり、コアあたり4 MBのL3に収まります。
 - 1・2ノードの変更ごとの値の多くは1本どうしの比較なので、本編では傾向だけ言います（補足S3）。
 
-### 18. WHAT DID NOT HELP, AND WHY（0:40）
+### 18. WHAT DID NOT HELP, AND WHY（0:35）
 
 第3版の見出しは「OPTIMIZATION IDEAS (NOT WORKED)」でした。主張を、旧課題の資料の言う「代理指標」の教訓にしました。
 
@@ -574,14 +576,14 @@ Table 7（10/21に、Basicの案、Bonusの案の順に並べ替えた）：
 
 旧課題との対応：旧資料の「最適化の価値は、取り除いた律速の分だけ。代理指標は時間を動かさずに大きく動き得る」です。ノード間の面（−92%）、ネットワークの帯域（+55%）、METISの面の均衡は、どれも指標としては良くなりましたが、1 stepは動きませんでした。
 
-メモ（40秒）：
+メモ（35秒）：
 - 一覧を指して、理由は2つにまとまると言います。1つはどれも運ぶデータを減らさないこと（速さを決めているのはメモリ帯域）。もう1つは、MPIの時間の多くが遅いrankを待つ時間で、通信を速くしても待ちは減らないことです。
 - UCXのRCはIMBの帯域を55%上げましたが、1 stepは−0.01%（Basic）でした。GAMGの最も粗い段は`MPI_Allreduce`の呼び出しの81%を出しますが、時間はstepの約0.6%です。
 - 重み付けは、セル数を崩してかえって遅くなりました（Q4、Q5）。
 - 面を減らすこと（OpenFOAMで最初に思いつく最適化）：面だけ減らしても速くなりませんでした。rankの並べ替えはサブ領域を変えずにノード間の面を92%減らし、+0.1%。効いたのは仕事をそろえたことで、scotchは面を3分の1減らし、計算の偏りを1.16 → 1.06にして−10.5%。ノードへの対応付け（ノード間の面−23%）とmultiLevel（−38%）は−0.7%、−1.5%と小さく効きました（補足32枚目）。
 - 小さな改善を組み合わせない理由：run間のばらつき（4ノードで約0.2%）と区別できない改善は、たまたま速かったrunかもしれません。確かめないまま積み重ねると、そのrunに合わせることになります（過学習）。採用したのは、同じ時期に交互に流して全runが対照より速かったものだけです（6枚目）。0.7%のscotchの対応付けも、5本ずつ流して確かめてから採用しました（11枚目）。mallocの閾値（−0.4%、3本）は、測り直していません。
 
-### 19. CONCLUSION（0:40）
+### 19. CONCLUSION（0:35）
 
 **Message:** 1.40× faster on 4 nodes, with the same math
 
@@ -614,7 +616,7 @@ Table 8「What we changed, the bottleneck it removed, and the gain on 4 nodes」
 
 旧課題との対応：旧Rulesの最適化表は「なぜ効くと考えたか」「律速だった証拠」の列が点の大半を占めるとしていました。真ん中の列がそれに当たります。右下の「How we worked」は、上の「旧課題の資料から取り入れた姿勢」の要約です。
 
-メモ（40秒）：
+メモ（35秒）：
 - 最初と最後で同じ数字を言います：「同じ計算のまま、4ノードで3.65秒から2.60秒、1.40倍です」。
 - run間のばらつきは8%から0.2%になりました。再実行で採点される以上、ばらつきが小さいことも強みです（提出スクリプトでの再実行は2.905 s/step、補足S10）。
 - （参考、聞かれたら）主催者の参照runは、scotchで3.30秒、ばらつき12%です。サイトのビルド、既定のMPI、固定なしと条件が違うので、直接の比較にはしません（補足S9）。
@@ -622,7 +624,7 @@ Table 8「What we changed, the bottleneck it removed, and the gain on 4 nodes」
 - 残る律速：配置の実験では、Bonusでもチャネル半分で2.11倍遅く、速さを決めているのは最適化の前後でメモリ帯域です。rankの計算時間の差（最大/中央値1.06）は、セル数では説明できず、壁の面で一部だけ説明できます（Q21）。
 - 最後の一言：「Basicで置き場所と仕事の均等さを直して21%、Bonusで運ぶデータを減らしてさらに10%」。続けて「And one more thing」で20枚目へ進みます。時間がなければ、ここで終えます。
 
-### 20. EXTRA: A GAIN WE DID NOT COUNT（0:35、おまけ、#68）
+### 20. EXTRA: A GAIN WE DID NOT COUNT（0:30、おまけ、#68）
 
 補足S17を本編へ移したものです（10/19）。
 
@@ -643,7 +645,7 @@ Table 8「What we changed, the bottleneck it removed, and the gain on 4 nodes」
 
 見つけた経緯（#68の本文）：#53のeu-stack（最終Bonus、4ノード、48 rank）で、Uの3成分のGauss-Seidelに残差＋`gSumMag`（Allreduce）＋`normFactor`、k・ωのsmoothSolverにも`gSumMag`と`normFactor`が出ていました。v2512のソースでは、smoothSolverは毎sweepの後に残差を作ってAllreduceし、収束判定に使います。`tolerance 0`・`relTol 0`では判定が成立しないので、最後の1回以外の結果は捨てられます（最粗段のPCGも`minIter = maxIter = 35`で同じ）。
 
-メモ（35秒）：
+メモ（30秒）：
 - 数値と出典は補足S17のメモのとおりです（#68、branch `experiment/issue68-skip-unused-residuals`、patch `0005-skip-unused-convergence-residuals.patch`）。
 - この1枚の価値は、速さではなく線引きです。「計測の取り決めにだけ効く高速化は数えない」と自分で言えることを見せます。18枚目の「代理指標は時間を動かさない」と同じ姿勢で、代理（ベンチマークの設定）だけを良くする変更を、本当の高速化と区別しています。
 - 最後に「Thank you」で終えます。
@@ -652,9 +654,9 @@ Table 8「What we changed, the bottleneck it removed, and the gain on 4 nodes」
 
 ## 削るとき（Qwenに時間を回すとき）
 
-- 20枚目（おまけ）を飛ばし、19枚目で終える（−35秒）。
-- 6枚目を8枚目に入れる：`tab08_baseline_profile`（道具、測ったもの、結果の3列）を8枚目に置き、6枚目の「計測runとプロファイルrunを分けた」は4枚目の最後の行に1文で足します（−35秒）。
-- 16枚目を15枚目に入れる：カウンタは15枚目に1行（DRAM refill −17%、命令 −4%）だけ書き、`fig17_counters`は補足にします（−35秒）。
+- 20枚目（おまけ）を飛ばし、19枚目で終える（−30秒）。
+- 6枚目を8枚目に入れる：`tab08_baseline_profile`（道具、測ったもの、結果の3列）を8枚目に置き、6枚目の「計測runとプロファイルrunを分けた」は4枚目の最後の行に1文で足します（−25秒）。
+- 16枚目を15枚目に入れる：カウンタは15枚目に1行（DRAM refill −17%、命令 −4%）だけ書き、`fig17_counters`は補足にします（−20秒）。
 - 9枚目の下の表（実際の回り方）は指すだけにして、5段の進め方だけを話します（−10秒）。
 - 7枚目（MPIの上位3つ）は、主催者がISC26の課題で発表に求めた分析なので削りません。
 
@@ -694,7 +696,7 @@ Table 8「What we changed, the bottleneck it removed, and the gain on 4 nodes」
 | 42 | NOT ADOPTED: THE FULL LIST（10/21にBasic、Bonus、そのほかの順に並べ替え） | S8 |
 | 43 | COMPILER AND FLAGS | S8 |
 
-S1（MPIの呼び出し）は本編7枚目、S6（カウンタ）は本編16枚目、S17（#68）は本編20枚目、10/20に足した進め方（OPTIMIZATION PLAN）は本編9枚目にあります。Qwenと共通の再現性スライド（旧43枚目）は、チームが10/21に外しました。
+S1（MPIの呼び出し）は本編7枚目、S6（カウンタ）は本編16枚目、S17（#68）は本編20枚目、10/20に足した進め方（OPTIMIZATION PLAN）は本編9枚目にあります。補足の後ろの44枚目は、Qwenと共通の再現性スライド（Reproducibility: Code, Build, Runtime and Results、内容はそのまま）です。
 
 ### 補足23. BOTTLENECKS WE MEASURED（10/21、本編9枚目から移動）
 
@@ -1008,10 +1010,10 @@ Table S1（律速の候補、4ノードで測ったこと、方針。上の3行�
 
 ## 発表の準備
 
-- pptxへの反映（10/20に済み）：第3版で挙げていた修正（「EPIC」→「EPYC」、8 NUMA domains、4枚目の図ほか）、第4版の変更（旧課題の姿勢、おまけの#68、Q&A目次、旧スライドの整理）、10/20の変更（配置の見直し、MPIの上位3つを本編7枚目へ、補足23枚目の進め方）、10/21の変更（色、注記とissue番号の削除、図と表の番号、各ジョブの点の図、進め方を本編9枚目へ、補足32枚目の追加、再現性スライドの削除）は、改訂版pptx（`Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）に入っています。作り直すときは`deck/build.sh`を使います。pptxを手で直したら、作り直す前にその変更を`deck/build_deck.py`に入れます。
-- 改訂版pptxをBoxのデッキへ移すこと：Boxのデッキを置き換えるか、改訂版の1〜43枚目を「スライドの再利用」で移します。AIパート（44枚目以降）は改訂版でも元のデッキと同じです。
+- pptxへの反映（10/20に済み）：第3版で挙げていた修正（「EPIC」→「EPYC」、8 NUMA domains、4枚目の図ほか）、第4版の変更（旧課題の姿勢、おまけの#68、Q&A目次、旧スライドの整理）、10/20の変更（配置の見直し、MPIの上位3つを本編7枚目へ、補足23枚目の進め方）、10/21の変更（色、注記とissue番号の削除、図と表の番号、各ジョブの点の図、進め方を本編9枚目へ、補足32枚目の追加、原稿の短縮と日本語訳）は、改訂版pptx（`Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）に入っています。作り直すときは`deck/build.sh`を使います。pptxを手で直したら、作り直す前にその変更を`deck/build_deck.py`に入れます。
+- 改訂版pptxをBoxのデッキへ移すこと：Boxのデッキを置き換えるか、改訂版の1〜44枚目を「スライドの再利用」で移します。AIパート（45枚目以降）は改訂版でも元のデッキと同じです。
 - 本編20枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。
-- 話す人と交代の位置を決めます（Qwenとの切り替えも）。HPCの後にAIを話すなら、補足（21〜43枚目）はスライドショーで「44」Enterで飛ばせます。
+- 話す人と交代の位置を決めます（Qwenとの切り替えも）。HPCの後にAIを話すなら、補足と再現性のスライド（21〜44枚目）はスライドショーで「45」Enterで飛ばせます。
 - 数値は提出物の`README.md`と同じものを使います（2.898 / 2.599 / −10.3%、3.296）。baselineは3.65です。桁は上の「数値の桁」に従います。
 - 補足スライドは本編の後ろに置き、22枚目のQ&A目次から1クリックで出せます。
 - （任意）ISC26の課題にある「ログから描くCdの収束グラフ」は、まだデッキにありません。足すなら、150 stepのrunの`coefficient.dat`から描いて補足40枚目（DRAG COEFFICIENT CHECKS）の隣に置きます。
