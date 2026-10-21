@@ -7,10 +7,10 @@
 usage: uv run build_deck.py INPUT.pptx OUTPUT.pptx FIGDIR ASSETDIR
 
 INPUT is the team deck as of 2026-10-15 (35 slides: OpenFOAM 1-24, AI track 25-31, acknowledgements and supporting slides 32-35).
-FIGDIR holds the deck's renders of ../figures.py (deck_figures.py). ASSETDIR holds pictures that are neither in INPUT nor
-drawn by figures.py: multiLevel-car-numa.png from the Box folder presentation/openfoam/decomposition/panels/. build.sh runs
-both steps. The output keeps every slide from the AI title slide on byte for byte, and puts the shared reproducibility slide
-(input 24) before it.
+FIGDIR holds the deck's renders of ../figures.py (deck_figures.py) and its per-job plots (deck_plots.py). ASSETDIR holds
+pictures that are neither in INPUT nor drawn here: the decomposition renders from the Box folder
+presentation/openfoam/decomposition/. build.sh runs all three steps. The output keeps every slide from the AI title slide on
+byte for byte. The shared reproducibility slide (input 24) is left out: the team removed it from the deck on 2026-10-21.
 """
 
 import copy
@@ -22,16 +22,18 @@ from pptx.enum.chart import XL_LEGEND_POSITION
 
 from decklib import NBSP, add_sldnum, add_text, arrow_line, bar_chart, block_arrow, box, bullets, circle_num, clear_slide, picture, picture_fit, remove_body_placeholders, set_notes, set_title, shape_info, shape_text, table
 from notes import NOTES
-from palette import BASE, BASIC, BONUS, BONUS_LIGHT, FAINT, GRID, INK, LIGHT, LINE, MUTED, NAVY, RED, TINT, WHITE
+from palette import BAD, BASE, BASIC, BONUS, BONUS_LIGHT, BONUS_LINE, BONUS_TINT, FAINT, GRID, INK, LIGHT, LINE, MUTED, NAVY, TINT, WHITE
 
 SRC, OUT, FIG, ASSETS = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
 prs = Presentation(SRC)
 S = list(prs.slides)  # S[i] is input slide i + 1
 X0, XW = 0.70, 11.93  # left edge and width of the content area
-ORANGE_TINT = "FDF1E4"
 GREY_TINT = "F1F1F1"
 DECOMP_COLUMNS = {"hier": (0.0, 0.667), "scotch": (0.333, 0.334)}
 PANEL_TOP, PLANE_BOTTOM, ALL_BOTTOM = 0.113, 0.346, 0.085
+CAR_CROP = (0.06, 0.12, 0.17, 0.0)  # a 1920 x 1080 car render from decomposition/panels/, cropped to the car
+COUNT = {"Figure": 0, "Table": 0}
+SERIES = [""]  # "" in the main part, "S" in the supporting slides
 
 
 def check_input():
@@ -62,11 +64,25 @@ def message(s, runs, size=20):
     return add_text(s, X0, 0.94, XW, 0.5, [runs], size=size, color=NAVY, bold=True, name="Message")
 
 
-def caption(s, text, x=X0, y=6.62, w=XW, h=0.32, size=11, color=MUTED, align="l", italic=False):
-    return add_text(s, x, y, w, h, [[(text, {"i": italic})]], size=size, color=color, align=align, name="Caption")
+def number(kind):
+    """The next figure or table number in slide order: Figure 1, Table 1 in the main part, Figure S1, Table S1 after it."""
+    COUNT[kind] += 1
+    return f"{kind} {SERIES[0]}{COUNT[kind]}"
 
 
-def lesson(s, text, x=X0, y=6.52, label="LESSON"):
+def heading(s, x, y, w, kind, text, sub=None, size=15):
+    """A numbered heading over a figure or table, with an optional short line under it."""
+    add_text(s, x, y, w, 0.36, [[(number(kind) + ". ", {}), (text, {})]], size=size, color=NAVY, bold=True)
+    if sub:
+        add_text(s, x, y + 0.36, w, 0.3, [sub], size=12, color=MUTED)
+
+
+def figure_caption(s, text, x, y, w, h=0.3, size=11, align="l"):
+    """A numbered caption under a picture."""
+    return add_text(s, x, y, w, h, [{"runs": [(number("Figure") + ". ", {"b": True}), (text, {})], "align": align}], size=size, color=MUTED)
+
+
+def lesson(s, text, x=X0, y=6.52, label="TAKEAWAY"):
     w = min(XW, 1.15 + 0.1 * len(label) + 0.122 * len(text))
     box(s, x, y, w, 0.46, fill=TINT, radius=0.5, name="Lesson")
     add_text(s, x + 0.22, y, w - 0.3, 0.46, [[(label + "   ", {"b": True, "size": 11}), (text, {"b": True, "size": 14})]], color=NAVY, anchor="m", name="LessonText")
@@ -76,9 +92,9 @@ def card(s, x, y, w, h, fill=LIGHT, line=None):
     return box(s, x, y, w, h, fill=fill, line=line, radius=0.05)
 
 
-def stat(s, x, y, w, h, number, label, sub=None, color=NAVY, num_size=34, label_size=14, sub_size=12):
+def stat(s, x, y, w, h, number_text, label, sub=None, color=NAVY, num_size=34, label_size=14, sub_size=12):
     card(s, x, y, w, h)
-    paras = [{"runs": [number], "size": num_size, "color": color, "bold": True, "line": 0.95}, {"runs": [label], "size": label_size, "bold": True, "space_before": 2}]
+    paras = [{"runs": [number_text], "size": num_size, "color": color, "bold": True, "line": 0.95}, {"runs": [label], "size": label_size, "bold": True, "space_before": 2}]
     if sub:
         paras.append({"runs": [sub], "size": sub_size, "color": MUTED, "space_before": 2})
     add_text(s, x + 0.22, y, w - 0.44, h, paras, color=INK, anchor="m")
@@ -91,6 +107,14 @@ def label_value_table(s, x, y, col_w, rows, row_h=0.6, size=14):
 def decomp_panel(s, which, x, y, w=None, h=None, bottom=PLANE_BOTTOM):
     left, right = DECOMP_COLUMNS[which]
     return picture(s, DECOMP, x, y, w, h, crop=(left, PANEL_TOP, right, bottom))
+
+
+def answer_rows(s, y0, pairs, step=0.48, size=13.5):
+    """Question pills on the left, one-line answers on the right."""
+    for i, (question, answer) in enumerate(pairs):
+        y = y0 + i * step
+        shape_text(box(s, X0, y, 2.85, 0.42, fill=NAVY, radius=0.5), question, size=13)
+        add_text(s, X0 + 3.05, y - 0.04, 8.88, 0.5, [answer], size=size, bold=True, anchor="m")
 
 
 # ====================================================================== main part
@@ -115,13 +139,13 @@ def slide_overview():
             sh.left, sh.top, sh.width, sh.height = [int(v * 914400) for v in (xr, 1.6, wr, flow_h)]
         if sh.name == "図 5":  # its caption ends on the bottom line, with the result card
             sh.left, sh.top, sh.width, sh.height = [int(v * 914400) for v in (xr, 6.7 - mesh_h, wr, mesh_h)]
-    caption(s, "Flow around the car (ParaView, a separate run)", x=xr, y=1.66 + flow_h, w=wr, h=0.3)
-    caption(s, "Mesh: refinement level of the 65,334,765 cells", x=xr, y=6.76, w=wr, h=0.26)
+    figure_caption(s, "Flow around the car (ParaView, a separate run)", xr, 1.66 + flow_h, wr)
+    figure_caption(s, "Mesh: refinement level of the 65,334,765 cells", xr, 6.76, wr, h=0.26)
     card(s, X0, 4.98, 6.35, 2.02)
     add_text(s, X0 + 0.25, 5.14, 5.9, 0.34, [[("Our result on 4 nodes", {"b": True, "color": NAVY}), ("   s/step, lower is better", {"color": MUTED, "size": 12})]], size=15)
-    for i, (number, name, delta, color) in enumerate([("3.65", "Baseline", "", BASE), ("2.90", "Basic", "−21%", BASIC), ("2.60", "Bonus", "−29%", BONUS)]):
+    for i, (number_text, name, delta, color) in enumerate([("3.65", "Baseline", "", BASE), ("2.90", "Basic", "−21%", BASIC), ("2.60", "Bonus", "−29%", BONUS)]):
         x = X0 + 0.25 + i * 2.05
-        add_text(s, x, 5.48, 1.5, 0.62, [number], size=34, color=color, bold=True)
+        add_text(s, x, 5.48, 1.5, 0.62, [number_text], size=34, color=color, bold=True)
         add_text(s, x, 6.12, 1.85, 0.34, [[(name + "  ", {"b": True}), (delta, {"color": color, "b": True})]], size=14)
         if i < 2:
             block_arrow(s, x + 1.45, 5.64, 0.4, 0.32, color="B8C2D3")
@@ -133,7 +157,7 @@ def slide_overview():
 def node_diagram(s, x, y, w, h):
     """One ASPIRE-2A node as the job sees it: 2 sockets x 4 NUMA domains, each 16 cores with 2 memory channels."""
     box(s, x, y, w, h, fill="F7F8FA", line=LINE, radius=0.04)
-    add_text(s, x + 0.15, y + 0.06, w - 0.3, 0.3, ["One node: 2 sockets × 4 NUMA domains × 16 cores"], size=12, color=NAVY, bold=True)
+    add_text(s, x + 0.15, y + 0.06, w - 0.3, 0.3, [f"{number('Figure')}. One node: 2 sockets × 4 NUMA × 16 cores"], size=12, color=NAVY, bold=True)
     socket_w, socket_h = (w - 0.45) / 2, h - 0.52
     numa_w, numa_h = (socket_w - 0.3) / 2, (socket_h - 0.46) / 2
     for k in range(2):
@@ -153,15 +177,16 @@ def slide_aspire():
     clear_slide(s)
     set_title(s, "ASPIRE-2A")
     message(s, "8 NUMA domains per node; 16 cores already fill the bandwidth")
+    heading(s, X0, 1.58, 6.7, "Table", "One ASPIRE-2A node")
     rows = [["Processor", "2 × EPYC 7713 (Zen 3): 128 cores, 2.0 GHz"], ["NUMA, cache", "8 NUMA × 16 cores; 32 MB L3 per 8 cores"], ["Memory", "512 GB DDR4-3200, 16 channels, 409.6 GB/s peak"], ["Network", "HPE Slingshot-10 (100 Gb/s), dragonfly"], ["Software", "Cray PE: GCC 11.2, Cray MPICH 8.1.15, PBS Pro"]]
-    label_value_table(s, X0, 1.62, [1.62, 5.08], rows, row_h=0.73, size=14)
+    label_value_table(s, X0, 1.98, [1.62, 5.08], rows, row_h=0.66, size=14)
     node_diagram(s, 7.6, 1.62, 5.03, 2.5)
     card(s, 7.6, 4.3, 5.03, 1.0, fill=TINT)
     add_text(s, 7.82, 4.3, 4.7, 1.0, [{"runs": [("≈ 290 GB/s", {"size": 20}), ("  STREAM triad", {"size": 13})], "bold": True, "color": NAVY}, {"runs": ["reached with only 16 of 128 cores (one per L3)"], "size": 13, "color": NAVY}], anchor="m")
     card(s, X0, 5.55, XW, 1.45)
     add_text(s, X0 + 0.25, 5.8, 5.6, 0.4, ["Why ASPIRE-2A?"], size=17, color=NAVY, bold=True)
     add_text(s, X0 + 0.25, 6.22, 5.75, 0.7, ["OpenFOAM works with very many files: a build is ≈ 36,000 files, and each decomposed case adds thousands more."], size=13)
-    for i, (head, value, fill, color, mark) in enumerate([("Gadi project quota", "0.2 M files · 1 TB", GREY_TINT, MUTED, "✕"), ("ASPIRE-2A quota", "200 M files · 100 TB", WHITE, NAVY, "✓")]):
+    for i, (head, value, fill, color, mark) in enumerate([("Gadi project quota", "0.2 M files · 1 TB", GREY_TINT, BAD, "✕"), ("ASPIRE-2A quota", "200 M files · 100 TB", WHITE, NAVY, "✓")]):
         x = 6.75 + i * 2.95
         box(s, x, 5.75, 2.75, 1.06, fill=fill, line=LINE, radius=0.08)
         add_text(s, x + 0.18, 5.78, 2.45, 1.0, [{"runs": [(mark + " ", {"color": color}), (head, {})], "size": 12, "color": MUTED, "bold": True}, {"runs": [value], "size": 16, "color": color, "bold": True, "space_before": 3}], anchor="m")
@@ -174,9 +199,10 @@ def slide_baseline_settings():
     clear_slide(s, keep=("図 7",))
     set_title(s, "BASELINE SETTINGS")
     message(s, "We start from the case defaults, on our own build of v2512")
+    heading(s, X0, 1.58, 8.35, "Table", "Baseline settings")
     rows = [["Build", "Official v2512 source, GCC 11.2 -O3, AMD AOCL-LibM: as fast as the site module (−0.08%), and it records what ran"], ["MPI", "Cray MPICH 8.1.15 over UCX: with the default OFI, every 2-node and 4-node run died with SIGBUS at MPI_Finalize"], ["Decomposition", "Case default hierarchical: (16 8 1) / (16 8 2) / (16 8 4) on 1 / 2 / 4 nodes"], ["Placement", "128 ranks per node, one per core, bound by the launcher (mpiexec --cpu-bind depth), as the site recommends"], ["Measurement", "Official metric (steps 2 to N); at least 3 jobs per condition; one point = one job"], ["Modules", "PrgEnv-gnu/8.3.3, aocl/4.0.0, cray-mpich-ucx/8.1.15"]]
-    label_value_table(s, X0, 1.62, [2.0, 6.35], rows, row_h=0.885, size=15)
-    h = 4.5
+    label_value_table(s, X0, 1.98, [2.0, 6.35], rows, row_h=0.82, size=15)
+    h = 4.45
     w = h * (3840 * 0.333) / (2220 * (1 - PANEL_TOP - ALL_BOTTOM))
     x = 12.63 - w
     for sh in s.shapes:
@@ -184,7 +210,7 @@ def slide_baseline_settings():
             sh.crop_left, sh.crop_top, sh.crop_right, sh.crop_bottom = 0.0, PANEL_TOP, 0.667, ALL_BOTTOM
             sh.left, sh.top, sh.width, sh.height = [int(v * 914400) for v in (x, 1.98, w, h)]
     add_text(s, x, 1.6, w, 0.34, ["hierarchical (16 8 4)"], size=14, color=BASE, bold=True, align="c")
-    add_text(s, x, 6.55, w, 0.45, [{"runs": ["512 subdomains"], "align": "c"}, {"runs": ["car · centre plane · cross-section"], "align": "c"}], size=11, color=MUTED)
+    add_text(s, x, 6.5, w, 0.45, [{"runs": [(number("Figure") + ". ", {"b": True}), ("512 subdomains", {})], "align": "c"}, {"runs": ["car · centre plane · cross-section"], "align": "c"}], size=11, color=MUTED)
     set_notes(s, NOTES["baseline_settings"])
     return s
 
@@ -194,12 +220,12 @@ def slide_baseline_results():
     clear_slide(s)
     set_title(s, "BASELINE RESULTS")
     message(s, "3.65 s/step on 4 nodes: linear scaling, but slow and unsteady")
-    picture(s, fig("fig23_baseline_scaling"), 0.45, 1.6, w=8.55)
-    stat(s, 9.2, 1.62, 3.43, 1.33, "3.65 s/step", "on 4 nodes", "mean of 3 jobs", color=BASE, num_size=30)
-    stat(s, 9.2, 3.1, 3.43, 1.33, "4.0×", "from 1 to 4 nodes", "parallel efficiency 1.00", color=NAVY, num_size=30)
-    stat(s, 9.2, 4.58, 3.43, 1.33, "8%", "spread between jobs", "of one setup: 3.53–3.82 s/step", color=RED, num_size=30)
-    add_text(s, X0, 6.1, XW, 0.38, ["Slow and unsteady at the same time: a sign that something is misconfigured"], size=15, color=NAVY, bold=True)
-    caption(s, "Reference only: the organisers' hierarchical run took 3.415 s/step (site build, default MPI transport, no binding). Every comparison in this talk is against our own baseline: same build, scripts and measurement.", y=6.5, h=0.5, size=11.5)
+    heading(s, X0, 1.58, 8.3, "Figure", "Time per step on 1, 2 and 4 nodes, each job")
+    picture(s, fig("p05_baseline_scaling"), 0.55, 1.98, w=8.4)
+    stat(s, 9.2, 1.62, 3.43, 1.38, "3.65 s/step", "on 4 nodes", "mean of 3 jobs", color=BASE, num_size=30)
+    stat(s, 9.2, 3.15, 3.43, 1.38, "4.0×", "from 1 to 4 nodes", "parallel efficiency 1.00", color=NAVY, num_size=30)
+    stat(s, 9.2, 4.68, 3.43, 1.38, "8%", "spread between jobs", "of one setup: 3.53–3.82 s/step", color=BAD, num_size=30)
+    add_text(s, X0, 6.56, XW, 0.4, ["Slow and unsteady at the same time: a sign that something is misconfigured"], size=15, color=NAVY, bold=True)
     set_notes(s, NOTES["baseline_results"])
     return s
 
@@ -208,9 +234,10 @@ def slide_measure():
     s = new_slide()
     set_title(s, "HOW WE MEASURE AND PROFILE")
     message(s, "Benchmark runs give the numbers; profile runs explain them")
+    heading(s, X0, 1.58, XW, "Table", "One question per tool")
     rows = [["Tool", "When it runs", "Question it answers"], ["Official metric", "Every benchmark run, no profiler", "How long does a step take?"], ["IMB-MPI1", "After the solver, every benchmark run", "How fast is the network between these nodes?"], ["CrayPAT", "Profile runs: 4 nodes, 40 steps", "Which MPI calls take the time, per rank?"], ["OpenFOAM profiling", "Profile runs", "Which solver stage takes the time, per rank?"], ["AMD uProf", "Profile runs", "Which functions use the CPU? Hardware counters"], ["/proc in the job", "Profile runs", "Is each rank on its own core? Where is its memory?"]]
     colors = [None] + [[NAVY, INK, INK]] * 6
-    table(s, X0, 1.6, [2.45, 4.3, 5.18], rows, row_h=0.5, size=14, bolds=[None] + [[True, False, False]] * 6, colors=colors)
+    table(s, X0, 1.98, [2.45, 4.3, 5.18], rows, row_h=0.46, size=14, bolds=[None] + [[True, False, False]] * 6, colors=colors)
     cards = [("✓", "Decision rule", "Candidate and control alternate in the same period, at least 3 jobs each on 4 nodes. A change is kept only if every job with it beats every job without it."), ("≈", "Know the noise before trusting a gain", "One setup, repeated: 8% spread in our baseline, 0.18% after Basic. Profilers shift a step by −1% to +6%, so profiled times are never results.")]
     for i, (mark, head, body) in enumerate(cards):
         x = X0 + i * 6.08
@@ -227,24 +254,23 @@ def slide_mpi_profile():
     s = new_slide()
     set_title(s, "MPI PROFILE ON 4 NODES")
     message(s, "Most calls are halo exchanges; most time goes to the calls that wait")
-    add_text(s, X0, 1.52, XW, 0.36, ["CrayPAT (pat_run -g mpi) on our baseline: 4 nodes, 512 ranks, 40 steps; values per rank are the mean of the 512 ranks"], size=13, color=MUTED)
-    cards = [("Top 3 by number of calls", "calls per rank in 40 steps, of 1.82 M MPI calls per rank", [("MPI_Isend", 566107.3, "566,107", ""), ("MPI_Irecv", 566107.3, "566,107", ""), ("MPI_Test", 563645.5, "563,646", "")], [NAVY] * 3, [("93% of all calls: ", {"b": True, "color": NAVY}), ("the non-blocking halo exchange with the neighbouring subdomains", {})]), ("Top 3 by total time", "seconds per rank, and share of the 78.3 s of MPI per rank", [("MPI_Waitall", 43.103, "43.1 s", "   55%"), ("MPI_Allreduce", 27.617, "27.6 s", "   35%"), ("MPI_Bcast", 2.518, "2.5 s", "   3%")], [RED, RED, FAINT], [("90% of the MPI time waits for other ranks, ", {"b": True, "color": RED}), ("and MPI is 46% of a rank's time", {})])]
+    add_text(s, X0, 1.52, XW, 0.36, [[(number("Figure") + ". CrayPAT on our baseline", {"b": True, "color": NAVY}), (": 4 nodes, all 512 ranks, 40 steps; values per rank are the mean of the 512 ranks", {})]], size=13.5, color=MUTED)
+    cards = [("Top 3 by number of calls", "calls per rank in 40 steps, of 1.82 M MPI calls per rank", [("MPI_Isend", 566107.3, "566,107", ""), ("MPI_Irecv", 566107.3, "566,107", ""), ("MPI_Test", 563645.5, "563,646", "")], [NAVY] * 3, [("93% of all calls: ", {"b": True, "color": NAVY}), ("the non-blocking halo exchange with the neighbouring subdomains", {})]), ("Top 3 by total time", "seconds per rank, and share of the 78.3 s of MPI per rank", [("MPI_Waitall", 43.103, "43.1 s", "   55%"), ("MPI_Allreduce", 27.617, "27.6 s", "   35%"), ("MPI_Bcast", 2.518, "2.5 s", "   3%")], [BAD, BAD, FAINT], [("90% of the MPI time waits for other ranks, ", {"b": True, "color": BAD}), ("and MPI is 46% of a rank's time", {})])]
     for i, (head, sub, rows, colors, footer) in enumerate(cards):
         x = X0 + i * 6.08
-        card(s, x, 1.98, 5.85, 4.0)
-        add_text(s, x + 0.3, 2.08, 5.3, 0.42, [head], size=18, color=NAVY, bold=True)
-        add_text(s, x + 0.3, 2.5, 5.3, 0.32, [sub], size=12.5, color=MUTED)
+        card(s, x, 1.98, 5.85, 4.12)
+        add_text(s, x + 0.3, 2.1, 5.3, 0.42, [head], size=18, color=NAVY, bold=True)
+        add_text(s, x + 0.3, 2.53, 5.3, 0.32, [sub], size=12.5, color=MUTED)
         vmax = max(value for _, value, _, _ in rows)
         for k, ((name, value, label, share), color) in enumerate(zip(rows, colors)):
-            y = 3.0 + k * 0.78
+            y = 3.05 + k * 0.78
             circle_num(s, x + 0.3, y, 0.38, str(k + 1), fill=color, size=13)
             add_text(s, x + 0.82, y - 0.04, 2.6, 0.46, [name], size=16, bold=True, anchor="m")
             add_text(s, x + 3.0, y - 0.04, 2.55, 0.46, [[(label, {"b": True}), (share, {"color": MUTED, "size": 13})]], size=16, align="r", anchor="m")
             box(s, x + 0.82, y + 0.47, 4.73, 0.12, fill=GRID, radius=0.5)
             box(s, x + 0.82, y + 0.47, 4.73 * value / vmax, 0.12, fill=color, radius=0.5)
-        add_text(s, x + 0.3, 5.3, 5.3, 0.62, [footer], size=13.5)
-    add_text(s, X0, 6.13, XW, 0.38, [[("Waiting, not transfer: ", {"b": True, "color": NAVY}), ("MPI time per rank ranges from 35 to 112 s, with equal cell counts", {})]], size=15)
-    caption(s, "Summed over the 512 ranks: MPI_Isend and MPI_Irecv 290 M calls each, MPI_Test 289 M; MPI_Waitall 22,100 s, MPI_Allreduce 14,100 s and MPI_Bcast 1,290 s of CPU time (#62).", h=0.4, size=11.5)
+        add_text(s, x + 0.3, 5.4, 5.3, 0.62, [footer], size=13.5)
+    add_text(s, X0, 6.4, XW, 0.4, [[("Waiting, not transfer: ", {"b": True, "color": NAVY}), ("MPI time per rank ranges from 35 to 112 s, with equal cell counts", {})]], size=15)
     set_notes(s, NOTES["mpi_profile"])
     return s
 
@@ -256,39 +282,55 @@ def slide_baseline_analysis():
     message(s, "Binding lost at MPI_Init → uneven computation → everyone waits")
     items = [("Binding lost", "/proc during the solve", "0 / 512", "ranks on their own core", "removed during MPI_Init; 9% of a rank's memory on its own NUMA domain (random: 12.5%)"), ("Uneven computation", "OpenFOAM profiling, 512 ranks", "1.46×", "slowest / median rank", "computation per rank: 54–115 s in 40 steps; cell counts equal within 0.002%"), ("Everyone waits", "CrayPAT", "46%", "of the time is MPI", "MPI_Waitall 55% and MPI_Allreduce 35% of it: calls that wait for other ranks")]
     w, gap = 3.55, 0.64
-    for i, (head, tool, number, label, detail) in enumerate(items):
+    for i, (head, tool, number_text, label, detail) in enumerate(items):
         x = X0 + i * (w + gap)
         card(s, x, 1.62, w, 3.28)
         circle_num(s, x + 0.2, 1.8, 0.38, str(i + 1), size=14)
         add_text(s, x + 0.68, 1.76, w - 0.8, 0.46, [head], size=16, color=NAVY, bold=True, anchor="m")
         add_text(s, x + 0.25, 2.3, w - 0.4, 0.3, [(tool, {"i": True})], size=12, color=MUTED)
-        add_text(s, x + 0.25, 2.68, w - 0.4, 0.68, [number], size=38, color=RED, bold=True)
+        add_text(s, x + 0.25, 2.68, w - 0.4, 0.68, [number_text], size=38, color=BAD, bold=True)
         add_text(s, x + 0.25, 3.38, w - 0.4, 0.34, [label], size=14, bold=True)
         add_text(s, x + 0.25, 3.78, w - 0.45, 1.05, [detail], size=13, color=MUTED)
         if i < 2:
             block_arrow(s, x + w + 0.11, 3.05, 0.42, 0.42)
-    card(s, X0, 5.1, XW, 0.92, fill=TINT)
-    add_text(s, X0 + 0.25, 5.1, XW - 0.5, 0.92, [[("Why one slow rank matters:  ", {"b": True, "color": NAVY}), ("every solver iteration exchanges halo values and takes a global sum, about 14,000 messages and 1,600 global sums per rank per step. When one rank is late, the other 511 wait.", {})]], size=14, anchor="m")
-    caption(s, "Hottest functions (AMD uProf): sparse-matrix sweeps, i.e. Gauss–Seidel, residual and A·x. Profiles: 4 nodes, separate 40-step runs (#62).", y=6.12, size=11.5)
-    lesson(s, "Check what is already broken before hunting for gains")
+    boxes = [("Why one slow rank matters", "Every solver iteration exchanges halo values and takes a global sum: about 14,000 messages and 1,600 global sums per rank per step. When one rank is late, the other 511 wait.", TINT), ("Where the computation goes (AMD uProf)", "Sparse-matrix sweeps lead: Gauss–Seidel smoothing, residuals and A·x are about a quarter of the computation. Each sweep streams the whole matrix with little arithmetic per byte.", LIGHT)]
+    for i, (head, body, fill) in enumerate(boxes):
+        x = X0 + i * 6.08
+        card(s, x, 5.1, 5.85, 1.88, fill=fill)
+        add_text(s, x + 0.25, 5.2, 5.4, 0.4, [head], size=15, color=NAVY, bold=True)
+        add_text(s, x + 0.25, 5.62, 5.4, 1.3, [body], size=14.5)
     set_notes(s, NOTES["baseline_analysis"])
     return s
 
 
 def slide_strategy():
+    """The plan of the work: the loop we ran, and the rounds it took on 4 nodes."""
     s = S[6]
     clear_slide(s)
     set_title(s, "OPTIMIZATION STRATEGY")
-    message(s, "Keep memory near each core, balance the work, move fewer bytes")
-    rows = [["Bottleneck", "Measured on 4 nodes", "Our strategy"], ["Memory bandwidth", "Main limit: half the bandwidth → 2.2× slower; half the cores → no change", "Move fewer bytes (Bonus)"], ["Memory placement", "0 of 512 ranks pinned; 9% of a rank's memory local", "Pin CPU and memory (Basic)"], ["Load imbalance", "MPI 46% of the time, mostly waiting for the slowest rank", [[("scotch (Basic), ", {}), ("multiLevel (Bonus)", {"color": BONUS})]]], ["Network", "55% more bandwidth or 92% fewer faces between nodes: no change", "—"], ["Arithmetic", "Compiler flags, another compiler, PGO: within 0.13%", "—"], ["File I/O", "0.01% of a step", "—"], ["OS noise", "0.8% of each core's time", "— (needs root)"]]
-    fills = [None] + [[TINT] * 3] * 3 + [[WHITE] * 3] * 4
-    colors = [None, [NAVY, INK, BONUS], [NAVY, INK, BASIC], [NAVY, INK, BASIC]] + [[MUTED] * 3] * 4
-    bolds = [None] + [[True, False, True]] * 3 + [[True, False, False]] * 4
-    table(s, X0, 1.6, [2.4, 6.15, 3.38], rows, row_h=0.54, size=14, fills=fills, colors=colors, bolds=bolds, zebra=False)
-    for i, (name, color, text) in enumerate([("BASIC", BASIC, "No source change: build, job script, placement, hierarchical or scotch"), ("BONUS", BONUS, "Source changes and other decomposition methods, proven to be the same math")]):
+    message(s, "Fix what is broken first, then follow the measured bottleneck")
+    steps = [("Baseline", "Case defaults on our own build, 3 or more jobs per node count: know the spread"), ("Profile", "Separate profile runs: /proc, OpenFOAM profiling, CrayPAT, uProf, IMB"), ("Bottleneck", "What is broken? Why do the ranks wait? What limits one rank?"), ("Change one thing", "One commit per condition: job script and split (Basic), source (Bonus)"), ("Check", "Alternate with a control; keep it only if every job is faster. Bonus: Cd bit-identical")]
+    w, gap = 2.146, 0.3
+    for i, (head, body) in enumerate(steps):
+        x = X0 + i * (w + gap)
+        box(s, x, 1.6, w, 1.6, fill=TINT, line="B8C2D3", radius=0.08)
+        circle_num(s, x + w / 2 - 0.17, 1.67, 0.34, str(i + 1), size=12)
+        add_text(s, x + 0.08, 2.03, w - 0.16, 0.34, [head], size=14.5, color=NAVY, bold=True, align="c")
+        add_text(s, x + 0.1, 2.38, w - 0.2, 0.8, [body], size=11.5, align="c")
+        if i < len(steps) - 1:
+            arrow_line(s, x + w + 0.03, 2.4, x + w + gap - 0.03, 2.4, color=MUTED, width=1.5)
+    x_profile, x_check = X0 + (w + gap) + w / 2, X0 + 4 * (w + gap) + w / 2
+    arrow_line(s, x_check, 3.21, x_check, 3.42, color=MUTED, width=1.5, head=False)
+    arrow_line(s, x_check, 3.42, x_profile, 3.42, color=MUTED, width=1.5, head=False)
+    arrow_line(s, x_profile, 3.42, x_profile, 3.22, color=MUTED, width=1.5)
+    add_text(s, x_profile + 0.3, 3.45, x_check - x_profile - 0.6, 0.28, [("next round: profile the new baseline", {"i": True})], size=12, color=MUTED, align="c")
+    heading(s, X0, 3.74, XW, "Table", "Our rounds on 4 nodes")
+    rows = [["Round, from", "Bottleneck found, and how", "What we changed", "4 nodes"], ["1  baseline", "Binding lost at MPI_Init, uneven work, MPI 46% waiting (/proc, OpenFOAM profiling, CrayPAT)", "Pin CPU and memory, scotch, map the split onto the node (Basic)", "3.65 → 2.90 s/step"], ["2  Basic", "Memory bandwidth: half the channels 2.2× slower, half the cores no change (placement runs)", "Move fewer bytes: four source changes, multiLevel split (Bonus)", "2.90 → 2.60 s/step"], ["3  Bonus", "Still memory bandwidth; the slowest rank computes 7% longer than the median (placement runs, CrayPAT)", "Not done: weights from measured rank times, fusing more passes", "next steps"]]
+    table(s, X0, 4.12, [1.35, 4.85, 3.7, 2.03], rows, row_h=0.6, size=12.5, row_heights=[0.4, 0.62, 0.62, 0.62], colors=[None, [BASE, INK, INK, BASIC], [BASIC, INK, INK, BONUS], [BONUS, INK, MUTED, MUTED]], bolds=[None, [True, False, False, True], [True, False, False, True], [True, False, False, False]], aligns=["l", "l", "l", "c"])
+    for i, (name, color, text) in enumerate([("BASIC", BASIC, "Unmodified source; hierarchical or scotch split"), ("BONUS", BONUS, "Source changes or other splits; proven the same math")]):
         x = X0 + i * 6.08
-        shape_text(box(s, x, 6.42, 1.15, 0.42, fill=color, radius=0.5), name, size=13)
-        add_text(s, x + 1.3, 6.31, 4.6, 0.64, [text], size=13.5, anchor="m")
+        shape_text(box(s, x, 6.6, 0.98, 0.34, fill=color, radius=0.5), name, size=11)
+        add_text(s, x + 1.1, 6.55, 4.75, 0.44, [text], size=12.5, anchor="m")
     set_notes(s, NOTES["strategy"])
     return s
 
@@ -298,15 +340,13 @@ def slide_basic_pinning():
     clear_slide(s)
     set_title(s, "BASIC OPTIMIZATION (1/2)")
     message(s, [("Putting the lost binding back: 3.65 → 3.26 s/step ", {}), ("(−11%)", {"color": BASIC})])
-    steps = [("Cause", "The launcher binds each rank, but the binding is removed from outside during MPI_Init. Linux keeps a page where it was first written (first touch), so data allocated off-core stays remote."), ("Fix, in the job script only", "Each rank starts under numactl, with its memory bound to its own NUMA domain; one watcher per node re-pins each rank to its core with taskset."), ("Check", "/proc during the solve: 128 of 128 ranks pinned on every node; 58% of pages local (was 9%).")]
-    for y, (i, (head, body)) in zip((1.65, 3.6, 5.33), enumerate(steps)):
+    steps = [("Cause", "The launcher binds each rank, but the binding is removed from outside during MPI_Init. Linux keeps a page where it was first written (first touch), so data allocated off-core stays remote."), ("Fix, in the job script only", "Each rank starts under numactl, with its memory bound to its own NUMA domain; one watcher per node re-pins each rank to its core with taskset."), ("Check", "During the solve, every rank is on its own core (512 of 512) and 58% of its pages are local (was 9%). Case-default split: 3.67 → 3.26 s/step, 3 v 3 jobs.")]
+    for y, (i, (head, body)) in zip((1.65, 3.62, 5.38), enumerate(steps)):
         circle_num(s, X0, y, 0.42, str(i + 1), size=15)
         add_text(s, X0 + 0.6, y - 0.02, 5.1, 0.42, [head], size=16, color=NAVY, bold=True, anchor="m")
-        add_text(s, X0 + 0.6, y + 0.44, 5.1, 1.25, [body], size=14)
-    add_text(s, 6.75, 1.6, 5.88, 0.36, ["Both halves are needed"], size=16, color=NAVY, bold=True)
-    add_text(s, 6.75, 1.95, 5.88, 0.3, ["4 nodes, scotch: s/step, lower is better (mean of 1–3 jobs)"], size=12, color=MUTED)
-    bar_chart(s, 6.55, 2.25, 6.08, 4.0, ["Memory bound only\n(numactl)", "CPU re-pinned only\n(taskset keeper)", "Launcher binding only\n(lost at MPI_Init)", "Both: Basic\n(numactl + keeper)"], [("s/step", (4.3796, 3.4738, 3.3950, 2.9168))], point_colors=[RED, FAINT, FAINT, BASIC], number_format="0.00", vmin=0, vmax=5, font_size=12.5, label_size=15, gap=45, value_axis=False, gridlines=False)
-    caption(s, "−11%: the case-default split with and without pinning, 3 jobs each in the same period (3.670 → 3.257 s/step). LD_PRELOAD pinning is as fast but counts as Bonus work, so Basic uses numactl and taskset.", y=6.45, h=0.55, size=11.5)
+        add_text(s, X0 + 0.6, y + 0.44, 5.1, 1.4, [body], size=14.5)
+    heading(s, 6.75, 1.58, 5.88, "Figure", "Each half alone is not enough", sub="4 nodes, scotch split, each job")
+    picture(s, fig("p10_pinning"), 6.73, 2.32, w=5.9)
     set_notes(s, NOTES["basic_pinning"])
     return s
 
@@ -316,19 +356,18 @@ def slide_basic_decomp():
     set_title(s, "BASIC OPTIMIZATION (2/2)")
     message(s, [("scotch cuts compact blocks: 3.26 → 2.92 s/step ", {}), ("(−10.5%)", {"color": BASIC})])
     pw = 2.95
-    for i, (which, label, color, lines) in enumerate([("hier", "hierarchical (case default)", BASE, ["4.31 M faces between subdomains", "slowest / median rank 1.16"]), ("scotch", "scotch (Basic)", BASIC, ["2.93 M faces (−32%)", "slowest / median rank 1.06"])]):
+    heading(s, X0, 1.58, 2 * pw + 0.12, "Figure", "One colour per subdomain, 4 nodes")
+    for i, (which, label, lines) in enumerate([("hier", "hierarchical (case default)", ["4.31 M faces between subdomains", "slowest / median rank 1.16"]), ("scotch", "scotch (Basic)", ["2.93 M faces (−32%)", "slowest / median rank 1.06"])]):
         x = X0 + i * (pw + 0.12)
-        add_text(s, x, 1.58, pw, 0.34, [label], size=14, color=color, bold=True, align="c")
-        decomp_panel(s, which, x, 1.95, w=pw, bottom=ALL_BOTTOM)
-        add_text(s, x, 6.15, pw, 0.45, [{"runs": [lines[0]], "align": "c"}, {"runs": [lines[1]], "align": "c"}], size=12, color=INK if i else MUTED, bold=bool(i))
+        add_text(s, x, 1.95, pw, 0.32, [label], size=13.5, color=NAVY, bold=True, align="c")
+        decomp_panel(s, which, x, 2.3, w=pw, bottom=ALL_BOTTOM)
+        add_text(s, x, 6.47, pw, 0.5, [{"runs": [lines[0]], "align": "c"}, {"runs": [lines[1]], "align": "c"}], size=12, color=INK if i else MUTED, bold=bool(i))
     xr, wr = 7.15, 5.48
-    add_text(s, xr, 1.58, wr, 0.36, ["scotch against hierarchical"], size=16, color=NAVY, bold=True)
-    add_text(s, xr, 1.93, wr, 0.3, ["same placement, 3 jobs each, alternated"], size=12, color=MUTED)
-    bar_chart(s, xr - 0.1, 2.2, wr + 0.1, 2.6, ["1 node", "2 nodes", "4 nodes"], [("change", (-1.31, -2.46, -10.53))], colors=[BASIC], horizontal=False, number_format='0.0"%";"−"0.0"%"', vmin=-13, vmax=0, font_size=12, label_size=14, gap=70, value_axis=False, gridlines=False)
-    card(s, xr, 4.95, wr, 1.5, fill=TINT)
-    add_text(s, xr + 0.22, 5.03, wr - 0.4, 0.36, ["Then: map the split onto the node"], size=14, color=NAVY, bold=True)
-    add_text(s, xr + 0.22, 5.39, wr - 0.4, 1.0, [[("scotchCoeffs follow 2 sockets × 4 NUMA domains × 16 cores: 23% fewer faces between nodes. ", {}), ("2.918 → 2.898 s/step (−0.7%)", {"b": True, "color": BASIC}), ("; all 5 jobs beat all 5 controls", {})]], size=12.5)
-    caption(s, "One early job at 5.03 s/step first made us reject scotch; alternated jobs reversed that. Since then we never decide from one job.", y=6.68, size=12, italic=True, color=NAVY)
+    heading(s, xr, 1.58, wr, "Figure", "scotch against hierarchical", sub="same placement, 3 jobs each, alternated")
+    picture(s, fig("p11_scotch"), xr, 2.28, w=wr)
+    card(s, xr, 5.4, wr, 1.58, fill=TINT)
+    add_text(s, xr + 0.22, 5.5, wr - 0.4, 0.36, ["Then: map the split onto the node"], size=14.5, color=NAVY, bold=True)
+    add_text(s, xr + 0.22, 5.88, wr - 0.4, 1.05, [[("scotchCoeffs follow 2 sockets × 4 NUMA domains × 16 cores: 23% fewer faces between nodes. ", {}), ("2.918 → 2.898 s/step (−0.7%)", {"b": True, "color": BASIC}), ("; all 5 jobs beat all 5 controls", {})]], size=13)
     set_notes(s, NOTES["basic_decomp"])
     return s
 
@@ -338,12 +377,12 @@ def slide_basic_results():
     clear_slide(s)
     set_title(s, "BASIC RESULTS")
     message(s, "−21% on 4 nodes, and the profiles show why")
-    rows = [["4 nodes", "Baseline", "Basic"], ["s/step (jobs)", "3.65 (3)", "2.90 (5): −21%"], ["Spread between jobs", "8%", "0.18%"], ["Ranks on their own core (/proc)", "0 of 512", "128 of 128 per node"], ["Memory on the rank's own NUMA domain (median)", "9%", "58%"], ["Computation, slowest / median rank *", "1.46", "1.06"], ["MPI share of the time *", "46%", "19%"]]
-    table(s, X0, 1.6, [4.55, 1.6, 2.55], rows, row_h=0.64, size=15, colors=[None] + [[INK, BASE, BASIC]] * 6, bolds=[None, [True, True, True]] + [[False, False, True]] * 5, aligns=["l", "c", "c"])
-    card(s, 9.7, 1.6, 2.93, 4.48)
-    add_text(s, 9.95, 1.6, 2.5, 4.48, [{"runs": ["2.90"], "size": 54, "color": BASIC, "bold": True, "line": 0.95}, {"runs": ["s/step on 4 nodes"], "size": 15, "bold": True}, {"runs": [("−21%", {"b": True, "color": BASIC}), (" vs our baseline", {})], "size": 14, "space_before": 14}, {"runs": ["1 node: −8%"], "size": 13, "color": MUTED, "space_before": 10}, {"runs": ["2 nodes: −14%"], "size": 13, "color": MUTED}], anchor="m")
-    caption(s, "* Profiles of Basic before the node mapping, which changes a step by 0.7%. The MPI time left is mostly waiting for the slowest rank.", y=6.2, size=11.5)
-    add_text(s, X0, 6.56, XW, 0.4, ["Steadier too: the organisers score a re-run of exactly this configuration"], size=15, color=NAVY, bold=True)
+    heading(s, X0, 1.58, 8.1, "Table", "Baseline against Basic on 4 nodes")
+    rows = [["4 nodes", "Baseline", "Basic"], ["s/step (jobs)", "3.65 (3)", "2.90 (5): −21%"], ["Spread between jobs", "8%", "0.18%"], ["Ranks on their own core", "0 of 512", "512 of 512"], ["Memory on the rank's own NUMA domain (median)", "9%", "58%"], ["Computation, slowest / median rank (profile run)", "1.46", "1.06"], ["MPI share of the time (profile run)", "46%", "19%"]]
+    table(s, X0, 1.98, [4.3, 1.55, 2.25], rows, row_h=0.6, size=14.5, colors=[None] + [[INK, BASE, BASIC]] * 6, bolds=[None, [True, True, True]] + [[False, False, True]] * 5, aligns=["l", "c", "c"])
+    heading(s, 8.95, 1.58, 3.68, "Figure", "Each job on 4 nodes")
+    picture(s, fig("p12_basic"), 8.93, 1.98, w=3.7)
+    add_text(s, X0, 6.5, XW, 0.42, ["Steadier too: the organisers score a re-run of exactly this configuration"], size=15, color=NAVY, bold=True)
     set_notes(s, NOTES["basic_results"])
     return s
 
@@ -359,15 +398,15 @@ def slide_bandwidth():
     set_title(s, "MEMORY BANDWIDTH SETS THE SPEED")
     message(s, "Half the memory channels: 2.2× slower. Half the cores: no change")
     add_text(s, X0, 1.52, XW, 0.36, ["No memory-controller counters on ASPIRE-2A, so we moved the ranks instead (4 nodes, every rank pinned, 2 jobs each)"], size=13, color=MUTED)
-    experiments = [("Half the cores", "128 → 64 ranks per node, still on all 16 channels", 16, "×0.99–1.02", NAVY, "If the cores set the speed: ×2"), ("Half the memory channels", "the same 64 ranks and split, on 8 of the 16 channels", 8, "×2.11–2.20", RED, "Triad bandwidth: 279 → 125 GB/s (×2.22)")]
-    for i, (head, sub, used, number, color, note) in enumerate(experiments):
+    experiments = [("Half the cores", "128 → 64 ranks per node, still on all 16 channels", 16, "×0.99–1.02", NAVY, "If the cores set the speed: ×2"), ("Half the memory channels", "the same 64 ranks and split, on 8 of the 16 channels", 8, "×2.11–2.20", BAD, "Triad bandwidth: 279 → 125 GB/s (×2.22)")]
+    for i, (head, sub, used, number_text, color, note) in enumerate(experiments):
         x = X0 + i * 6.08
         card(s, x, 1.98, 5.85, 3.47)
         add_text(s, x + 0.3, 2.1, 5.3, 0.42, [head], size=18, color=NAVY, bold=True)
         add_text(s, x + 0.3, 2.55, 5.3, 0.34, [sub], size=13, color=MUTED)
         channel_row(s, x + 0.3, 3.1, used)
         add_text(s, x + 0.3, 3.42, 5.3, 0.3, [f"{used} of 16 memory channels in use"], size=11, color=MUTED)
-        add_text(s, x + 0.3, 3.8, 5.3, 0.75, [[(number, {}), ("  time per step", {"size": 15, "color": INK, "b": False})]], size=36, color=color, bold=True)
+        add_text(s, x + 0.3, 3.8, 5.3, 0.75, [[(number_text, {}), ("  time per step", {"size": 15, "color": INK, "b": False})]], size=36, color=color, bold=True)
         add_text(s, x + 0.3, 4.72, 5.3, 0.5, [note], size=14, bold=True)
     add_text(s, X0, 5.68, XW, 0.62, [[("Arithmetic intensity agrees: ", {"b": True, "color": NAVY}), ("the sparse-matrix sweeps do ≈ 0.1 flop per byte, about 1/100 of what keeps the cores busy (4.1 TFLOP/s ÷ 290 GB/s ≈ 14 flop/byte).", {})]], size=14)
     lesson(s, "Move fewer bytes, not the same bytes faster")
@@ -381,32 +420,33 @@ def slide_bonus_opt():
     set_title(s, "BONUS OPTIMIZATION")
     message(s, "The same arithmetic with fewer bytes moved")
     circle_num(s, X0, 1.66, 0.4, "1", fill=BONUS, size=14)
-    add_text(s, X0 + 0.55, 1.62, 5.6, 0.46, ["A split that follows the machine"], size=16, color=NAVY, bold=True, anchor="m")
-    add_text(s, X0 + 0.55, 2.1, 2.95, 1.7, ["multiLevel (4 2 4 16) splits nodes → sockets → NUMA → cores, with scotch at each level: 38% fewer faces between nodes"], size=14)
-    # multiLevel coloured by node (hue) and NUMA domain (shade), cropped to the car; from the decomposition renders (#39)
-    picture(s, ASSETS / "multiLevel-car-numa.png", 4.4, 2.08, w=2.65, crop=(0.06, 0.12, 0.17, 0.0))
-    caption(s, "colour: node · shade: NUMA domain", x=4.4, y=3.8, w=2.65, h=0.26, size=10.5, align="c")
-    circle_num(s, X0, 4.2, 0.4, "2", fill=BONUS, size=14)
-    add_text(s, X0 + 0.55, 4.16, 5.6, 0.46, ["Four source changes that move fewer bytes"], size=16, color=NAVY, bold=True, anchor="m")
+    add_text(s, X0 + 0.55, 1.62, 5.75, 0.46, ["A split that follows the machine"], size=16, color=NAVY, bold=True, anchor="m")
+    add_text(s, X0 + 0.55, 2.1, 5.75, 0.6, ["multiLevel (4 2 4 16): nodes → sockets → NUMA → cores, scotch at each level; 38% fewer faces between nodes"], size=13.5)
+    # the car surface from the decomposition renders of #39: one colour per subdomain, then colour = node, shade = NUMA domain
+    left = picture(s, ASSETS / "multiLevel-car-subdomains.png", X0 + 0.55, 2.74, h=1.48, crop=CAR_CROP)
+    picture(s, ASSETS / "multiLevel-car-numa.png", X0 + 0.55 + left.width / 914400 + 0.12, 2.74, h=1.48, crop=CAR_CROP)
+    figure_caption(s, "multiLevel by subdomain (left), by node and NUMA domain (right)", X0 + 0.55, 4.25, 5.75, h=0.28, size=10.5)
+    circle_num(s, X0, 4.68, 0.4, "2", fill=BONUS, size=14)
+    add_text(s, X0 + 0.55, 4.64, 5.75, 0.46, ["Four source changes that move fewer bytes"], size=16, color=NAVY, bold=True, anchor="m")
     items = [("No copies in the linear solvers", ""), ("U components in one pass", ": the shared matrix is read once, not 3 times"), ("No unused boundary updates", ": skip values nobody reads"), ("Fused face loops", ": face values formed inside the sums")]
-    add_text(s, X0 + 0.55, 4.62, 5.75, 1.4, [{"runs": [(a, {"b": True}), (b, {})], "bullet": {"color": BONUS}, "space_after": 3} for a, b in items], size=13)
-    card(s, X0, 6.1, 6.3, 0.88, fill=TINT)
-    add_text(s, X0 + 0.25, 6.1, 5.9, 0.88, [{"runs": ["Same math: every operation and its order are kept"], "bold": True, "color": NAVY, "size": 14}, {"runs": ["Only copies, extra passes and values nobody reads are removed"], "size": 13}], anchor="m")
+    add_text(s, X0 + 0.55, 5.12, 5.75, 1.2, [{"runs": [(a, {"b": True}), (b, {})], "bullet": {"color": BONUS}, "space_after": 2} for a, b in items], size=13)
+    card(s, X0, 6.4, 6.3, 0.58, fill=TINT)
+    add_text(s, X0 + 0.25, 6.4, 5.9, 0.58, [[("Same math: ", {"b": True, "color": NAVY}), ("every operation and its order are kept", {})]], size=14, anchor="m")
     xd = 7.35
-    add_text(s, xd, 1.58, 5.28, 0.36, ["Example: U components in one pass"], size=15, color=NAVY, bold=True)
+    heading(s, xd, 1.58, 5.28, "Figure", "Example: U components in one pass")
     add_text(s, xd, 2.02, 5.28, 0.3, ["Before: one pass per component"], size=13, bold=True)
     for k, component in enumerate(("Ux", "Uy", "Uz")):
         y = 2.42 + k * 0.56
         shape_text(box(s, xd, y, 2.15, 0.44, fill=TINT, line="9FB0CC", radius=0.12), "matrix arrays", size=12.5, color=NAVY, bold=False)
         arrow_line(s, xd + 2.2, y + 0.22, xd + 2.85, y + 0.22, color=FAINT)
-        shape_text(box(s, xd + 2.9, y, 2.2, 0.44, fill=ORANGE_TINT, line="E8B987", radius=0.12), f"sweep {component}", size=12.5, color=INK, bold=False)
-    add_text(s, xd, 4.06, 5.1, 0.32, ["the matrix is read 3 times"], size=13.5, color=RED, bold=True, align="c")
+        shape_text(box(s, xd + 2.9, y, 2.2, 0.44, fill=BONUS_TINT, line=BONUS_LINE, radius=0.12), f"sweep {component}", size=12.5, color=INK, bold=False)
+    add_text(s, xd, 4.06, 5.1, 0.32, ["the matrix is read 3 times"], size=13.5, color=BAD, bold=True, align="c")
     add_text(s, xd, 4.6, 5.28, 0.3, ["After: one pass for all three"], size=13, bold=True)
     shape_text(box(s, xd, 5.0, 2.15, 1.1, fill=TINT, line="9FB0CC", radius=0.08), "matrix arrays", size=12.5, color=NAVY, bold=False)
     arrow_line(s, xd + 2.2, 5.55, xd + 2.85, 5.55, color=FAINT)
-    shape_text(box(s, xd + 2.9, 5.0, 2.2, 1.1, fill=ORANGE_TINT, line="E8B987", radius=0.08), ["sweep Ux", "sweep Uy", "sweep Uz"], size=12.5, color=INK, bold=False)
+    shape_text(box(s, xd + 2.9, 5.0, 2.2, 1.1, fill=BONUS_TINT, line=BONUS_LINE, radius=0.08), ["sweep Ux", "sweep Uy", "sweep Uz"], size=12.5, color=INK, bold=False)
     add_text(s, xd, 6.18, 5.1, 0.32, ["the matrix is read once"], size=13.5, color=BONUS, bold=True, align="c")
-    caption(s, "Each component still gets the same operations in the same order.", x=xd, y=6.62, w=5.28, size=11.5, align="c")
+    add_text(s, xd, 6.58, 5.28, 0.36, ["Each component gets the same operations in the same order"], size=12, align="c")
     set_notes(s, NOTES["bonus_opt"])
     return s
 
@@ -415,18 +455,17 @@ def slide_bonus_results():
     s = new_slide()
     set_title(s, "BONUS RESULTS")
     message(s, "Bit-identical Cd, and 10% faster than our Basic")
-    rows = [["Nodes (steps)", "Basic s/step", "Bonus s/step", "Bonus vs Basic", "coefficient.dat vs pre-change baseline"], ["1 (40)", "13.365 (3 jobs)", "11.668 (3 jobs)", "−12.7%", "bit-identical"], ["2 (80)", "6.372 (3 jobs)", "5.641 (3 jobs)", "−11.5%", "bit-identical"], ["4 (150)", "2.898 (5 jobs)", "2.599 (3 jobs)", "−10.3%", "bit-identical"]]
-    table(s, X0, 1.6, [1.85, 2.3, 2.3, 2.05, 3.43], rows, row_h=0.56, size=15, colors=[None] + [[INK, BASIC, BONUS, BONUS, INK]] * 3, bolds=[None] + [[True, False, True, True, True]] * 3, aligns=["l", "c", "c", "c", "c"])
-    add_text(s, X0, 4.12, XW, 0.38, ["What the rules ask of Bonus work, and our answer"], size=15, color=NAVY, bold=True)
-    checks = [("What changed", "Four patches and the multiLevel dictionaries, submitted as text"), ("Why the same math", "Only copies, extra passes and unread values are removed; every operation and its order is kept"), ("Evidence", "Against the same split without the patches: coefficient.dat bit-identical, all 371 / 771 / 1,475 log lines identical"), ("Speedup vs Basic", "−12.7 / −11.5 / −10.3% on 1 / 2 / 4 nodes, on the same machine")]
+    heading(s, X0, 1.58, XW, "Figure", "Each job: Basic, the multiLevel split alone, and the Bonus")
+    picture(s, fig("p15_bonus"), X0, 1.96, w=XW)
+    add_text(s, X0, 5.0, XW, 0.38, ["What the rules ask of Bonus work, and our answer"], size=15, color=NAVY, bold=True)
+    checks = [("What changed", "Four patches and the multiLevel dictionaries, submitted as text"), ("Why the same math", "Only copies, extra passes and unread values are removed; every operation and its order is kept"), ("Evidence", "Against the multiLevel split with the source unchanged: coefficient.dat bit-identical, all 371 / 771 / 1,475 log lines identical"), ("Speedup vs Basic", "−12.7 / −11.5 / −10.3% on 1 / 2 / 4 nodes, on the same machine")]
     w = 2.83
     for i, (head, body) in enumerate(checks):
         x = X0 + i * (w + 0.2)
-        card(s, x, 4.55, w, 1.92)
-        circle_num(s, x + 0.18, 4.69, 0.36, "✓", fill=NAVY, size=13)
-        add_text(s, x + 0.62, 4.65, w - 0.75, 0.44, [head], size=13.5, color=NAVY, bold=True, anchor="m")
-        add_text(s, x + 0.2, 5.17, w - 0.36, 1.25, [body], size=12.5)
-    caption(s, "Pre-change baseline: the same multiLevel split and rank counts with the four source changes removed. Each change was also checked on its own.", y=6.62, size=11.5)
+        card(s, x, 5.42, w, 1.56)
+        circle_num(s, x + 0.18, 5.53, 0.34, "✓", fill=NAVY, size=12)
+        add_text(s, x + 0.6, 5.49, w - 0.72, 0.42, [head], size=13.5, color=NAVY, bold=True, anchor="m")
+        add_text(s, x + 0.2, 5.95, w - 0.36, 1.0, [body], size=12)
     set_notes(s, NOTES["bonus_results"])
     return s
 
@@ -436,21 +475,19 @@ def slide_bonus_analysis():
     clear_slide(s)
     set_title(s, "BONUS ANALYSIS")
     message(s, [("4% fewer instructions, but ", {}), ("17% fewer refills from DRAM", {"color": BONUS})])
-    add_text(s, X0, 1.58, 6.9, 0.36, ["With the patches, against the same build without them"], size=15, color=NAVY, bold=True)
-    add_text(s, X0, 1.93, 6.9, 0.3, ["1 node, AMD uProf, computation only, 2 jobs each"], size=12, color=MUTED)
+    heading(s, X0, 1.58, 6.9, "Figure", "Patched against unpatched, the same build", sub="1 node, AMD uProf, computation only, 2 jobs each")
     categories = ["L1 refills from DRAM", "L2 accesses incl. prefetch", "L1 data accesses", "Instructions", "Cycles", "Time per step"]
-    bar_chart(s, 0.5, 2.22, 7.1, 4.3, categories, [("change", (-17.17, -9.61, -5.85, -4.07, -10.81, -12.28))], point_colors=[BONUS, BONUS_LIGHT, BONUS_LIGHT, FAINT, BONUS_LIGHT, BONUS_LIGHT], number_format='0.0"%";"−"0.0"%"', vmin=-25, vmax=0, font_size=13, label_size=14.5, gap=45, value_axis=False, gridlines=False)
+    bar_chart(s, 0.5, 2.25, 7.1, 4.7, categories, [("change", (-17.17, -9.61, -5.85, -4.07, -10.81, -12.28))], point_colors=[BONUS, BONUS_LIGHT, BONUS_LIGHT, FAINT, BONUS_LIGHT, BONUS_LIGHT], number_format='0.0"%";"−"0.0"%"', vmin=-25, vmax=0, font_size=13, label_size=14.5, gap=45, value_axis=False, gridlines=False)
     xr, wr = 7.95, 4.68
-    card(s, xr, 1.6, wr, 2.35)
-    add_text(s, xr + 0.25, 1.7, wr - 0.4, 0.4, ["Less bandwidth per core, bigger gain"], size=15, color=NAVY, bold=True)
-    for k, (number, label, color) in enumerate((("−7.9%", "all 16 channels", BONUS), ("−11.4%", "8 of 16 channels", BONUS))):
-        add_text(s, xr + 0.25 + k * 2.2, 2.16, 2.1, 1.0, [{"runs": [number], "size": 28, "color": color, "bold": True}, {"runs": [label], "size": 13, "bold": True}])
-    add_text(s, xr + 0.25, 3.36, wr - 0.4, 0.5, ["4 nodes, 64 ranks per node, the same patches (placement experiment)"], size=11.5, color=MUTED)
-    card(s, xr, 4.17, wr, 2.35)
-    add_text(s, xr + 0.25, 4.27, wr - 0.4, 0.4, ["Computation shrinks, MPI does not"], size=15, color=NAVY, bold=True)
-    add_text(s, xr + 0.25, 4.73, wr - 0.4, 1.0, [{"runs": ["104.2 → 94.9 s"], "size": 28, "color": BONUS, "bold": True}, {"runs": ["computation per rank in 40 steps; MPI stays ≈ 23.5 s"], "size": 13, "bold": True}])
-    add_text(s, xr + 0.25, 6.0, wr - 0.4, 0.45, ["CrayPAT, 4 nodes, 512 ranks"], size=11.5, color=MUTED)
-    caption(s, "Counters are L1 demand refills, not DRAM bytes: the memory-controller counters are not readable. IPC 0.36 → 0.39.", y=6.64, size=11.5)
+    card(s, xr, 1.6, wr, 2.5)
+    add_text(s, xr + 0.25, 1.72, wr - 0.4, 0.4, ["Less bandwidth per core, bigger gain"], size=15, color=NAVY, bold=True)
+    for k, (number_text, label) in enumerate((("−7.9%", "all 16 channels"), ("−11.4%", "8 of 16 channels"))):
+        add_text(s, xr + 0.25 + k * 2.2, 2.2, 2.1, 1.0, [{"runs": [number_text], "size": 28, "color": BONUS, "bold": True}, {"runs": [label], "size": 13, "bold": True}])
+    add_text(s, xr + 0.25, 3.45, wr - 0.4, 0.55, ["4 nodes, 64 ranks per node, the same patches (placement experiment)"], size=12, color=MUTED)
+    card(s, xr, 4.3, wr, 2.68)
+    add_text(s, xr + 0.25, 4.42, wr - 0.4, 0.4, ["Computation shrinks, MPI does not"], size=15, color=NAVY, bold=True)
+    add_text(s, xr + 0.25, 4.9, wr - 0.4, 1.1, [{"runs": ["104.2 → 94.9 s"], "size": 28, "color": BONUS, "bold": True}, {"runs": ["computation per rank in 40 steps; MPI stays ≈ 23.5 s"], "size": 13, "bold": True}])
+    add_text(s, xr + 0.25, 6.4, wr - 0.4, 0.45, ["CrayPAT, 4 nodes, 512 ranks"], size=12, color=MUTED)
     set_notes(s, NOTES["bonus_analysis"])
     return s
 
@@ -460,13 +497,13 @@ def slide_scaling():
     clear_slide(s)
     set_title(s, "SCALING ANALYSIS")
     message(s, "Faster at 1, 2 and 4 nodes; parallel efficiency 1.00 → 1.15")
-    add_text(s, X0, 1.58, 6.3, 0.36, ["Time per step against our baseline"], size=15, color=NAVY, bold=True)
-    bar_chart(s, 0.5, 1.95, 6.45, 5.0, ["1 node", "2 nodes", "4 nodes"], [("Basic", (-8.25, -14.21, -20.60)), ("Bonus", (-19.90, -24.06, -28.77))], colors=[BASIC, BONUS], horizontal=False, number_format='0"%";"−"0"%"', vmin=-33, vmax=0, font_size=13.5, label_size=15, gap=90, overlap=-20, legend=True, value_axis=False, gridlines=False)
-    rows = [["s/step", "1 node", "2 nodes", "4 nodes", "E(4)"], ["Baseline", "14.57", "7.43", "3.65", "1.00"], ["Basic", "13.36", "6.37", "2.90", "1.15"], ["Bonus", "11.67", "5.64", "2.60", "1.12"]]
-    table(s, 7.25, 1.6, [1.35, 1.0, 1.1, 1.1, 0.83], rows, row_h=0.55, size=15, colors=[None, [BASE, INK, INK, INK, INK], [BASIC, INK, INK, BASIC, BASIC], [BONUS, INK, INK, BONUS, BONUS]], bolds=[None, [True, False, False, False, False], [True, False, False, True, True], [True, False, False, True, True]], aligns=["l", "r", "r", "r", "r"])
-    caption(s, "E(4): parallel efficiency from 1 to 4 nodes. Jobs per point: 3–6.", x=7.25, y=3.88, w=5.38, size=11)
+    heading(s, X0, 1.58, 6.4, "Figure", "Time per step on 1, 2 and 4 nodes, each job")
+    picture(s, fig("p17_scaling"), 0.6, 1.98, w=6.45)
+    heading(s, 7.25, 1.58, 5.38, "Table", "Mean time per step")
+    rows = [["s/step", "1 node", "2 nodes", "4 nodes", "Efficiency"], ["Baseline", "14.57", "7.43", "3.65", "1.00"], ["Basic", "13.36", "6.37", "2.90", "1.15"], ["Bonus", "11.67", "5.64", "2.60", "1.12"]]
+    table(s, 7.25, 1.98, [1.1, 0.9, 1.0, 1.0, 1.38], rows, row_h=0.52, size=13.5, colors=[None, [BASE, INK, INK, INK, INK], [BASIC, INK, INK, BASIC, BASIC], [BONUS, INK, INK, BONUS, BONUS]], bolds=[None, [True, False, False, False, False], [True, False, False, True, True], [True, False, False, True, True]], aligns=["l", "r", "r", "r", "r"])
     items = [[("Basic gains grow with the node count, ", {}), ("mostly from scotch: −1.3 / −2.5 / −10.5%", {"b": True})], [("The source changes gain most on 1 node, ", {}), ("where each rank holds 4× more data", {"b": True}), (" (U in one pass: −6.4% vs −2.3%)", {})], [("Efficiency above 1 is cache: ", {"b": True}), ("on 4 nodes the cell arrays shrink to 1 MB per rank and fit in L3; DRAM refills per cell −30% (uProf)", {})]]
-    bullets(s, 7.25, 4.38, 5.38, 2.6, items, size=14, space_after=12)
+    bullets(s, 7.25, 4.3, 5.38, 2.68, items, size=14, space_after=12)
     set_notes(s, NOTES["scaling"])
     return s
 
@@ -476,12 +513,10 @@ def slide_not_helped():
     clear_slide(s)
     set_title(s, "WHAT DID NOT HELP, AND WHY")
     message(s, "Proxy metrics improved; the time per step did not")
-    rows = [["Idea", "Result (4 nodes)", "Why it did not help"], ["Compiler flags, AOCC, LTO, GCC PGO", "within ±0.13%", "The loops wait on memory, not on instructions"], ["Other MPI transports: OFI, UCX over RC", "−0.16% to +0.77%", "MPI time is waiting for the slowest rank"], ["Reordering ranks: 92% fewer inter-node faces", "+0.1%", "Fewer bytes between nodes do not cut the wait"], ["GAMG coarsest level on fewer ranks", "−0.25% to +4.95%", "81% of the global sums, ≈ 0.6% of the time"], ["Weighted cells (×2, ×12), 2-constraint METIS", "+1.5% to +6.1%", "Uneven cells, or more faces between subdomains"], ["malloc thresholds", "−0.4% (3 jobs)", "Too small to separate with 3 jobs; not re-tested"], ["SMT: 2 ranks per core", "5.7× slower", "Stalls of minutes; cause not isolated"]]
-    table(s, X0, 1.6, [4.75, 2.25, 4.93], rows, row_h=0.51, size=13, bolds=[None] + [[True, False, False]] * 7)
-    for i, (question, answer) in enumerate([("Why no gain?", "None of them moves fewer bytes, and memory bandwidth sets the speed."), ("Why not combine them?", "Gains we cannot separate from the run-to-run spread may be luck; stacking them would be overfitting.")]):
-        y = 5.98 + i * 0.58
-        shape_text(box(s, X0, y, 2.85, 0.44, fill=NAVY, radius=0.5), question, size=13)
-        add_text(s, X0 + 3.05, y - 0.06, 8.88, 0.56, [answer], size=14, bold=True, anchor="m")
+    heading(s, X0, 1.58, XW, "Table", "Ideas that did not make a step faster")
+    rows = [["Idea", "Result (4 nodes)", "Why it did not help"], ["Compiler flags, AOCC, LTO, GCC PGO", "within ±0.13%", "The loops wait on memory, not on instructions"], ["Other MPI transports: OFI, UCX over RC", "−0.16% to +0.77%", "MPI time is waiting for the slowest rank"], ["Reordering ranks: 92% fewer inter-node faces", "+0.1%", "Fewer bytes between nodes do not cut the wait"], ["malloc thresholds", "−0.4% (3 jobs)", "Too small to separate with 3 jobs; not re-tested"], ["SMT: 2 ranks per core", "5.7× slower", "Stalls of minutes; cause not isolated"], ["GAMG coarsest level on fewer ranks", "−0.25% to +4.95%", "81% of the global sums, ≈ 0.6% of the time"], ["Weighted cells (×2, ×12), 2-constraint METIS", "+1.5% to +6.1%", "Uneven cells, or more faces between subdomains"]]
+    table(s, X0, 1.96, [4.75, 2.25, 4.93], rows, row_h=0.44, size=13, bolds=[None] + [[True, False, False]] * 7)
+    answer_rows(s, 5.6, [("Why no gain?", "None of them moves fewer bytes, and memory bandwidth sets the speed."), ("Fewer faces?", "Only with even work: scotch −10.5%; 92% fewer faces between nodes alone, +0.1%."), ("Why not combine them?", "Gains we cannot separate from the spread may be luck; stacking them is overfitting.")], step=0.47)
     set_notes(s, NOTES["not_helped"])
     return s
 
@@ -492,16 +527,22 @@ def slide_conclusion():
     set_title(s, "CONCLUSION")
     message(s, [("1.40× faster on 4 nodes", {"color": BONUS}), (", with the same math", {})])
     w = 3.82
-    for i, (number, head, sub, nodes, color) in enumerate([("3.65", "Baseline", "case defaults", "14.57 / 7.43 / 3.65", BASE), ("2.90", "Basic  −21%", "unmodified v2512", "13.36 / 6.37 / 2.90", BASIC), ("2.60", "Bonus  −29%", "bit-identical Cd", "11.67 / 5.64 / 2.60", BONUS)]):
+    for i, (number_text, head, sub, nodes, color) in enumerate([("3.65", "Baseline", "case defaults", "14.57 / 7.43 / 3.65", BASE), ("2.90", "Basic  −21%", "unmodified v2512", "13.36 / 6.37 / 2.90", BASIC), ("2.60", "Bonus  −29%", "bit-identical Cd", "11.67 / 5.64 / 2.60", BONUS)]):
         x = X0 + i * (w + 0.235)
         card(s, x, 1.58, w, 1.45)
-        add_text(s, x + 0.22, 1.6, 1.6, 0.85, [[(number, {}), ("\n", {}), ("s/step", {"size": 12, "color": MUTED, "b": False})]], size=32, color=color, bold=True, anchor="m")
+        add_text(s, x + 0.22, 1.6, 1.6, 0.85, [[(number_text, {}), ("\n", {}), ("s/step", {"size": 12, "color": MUTED, "b": False})]], size=32, color=color, bold=True, anchor="m")
         add_text(s, x + 1.72, 1.62, w - 1.85, 0.85, [{"runs": [head], "size": 15, "bold": True, "color": color}, {"runs": [sub], "size": 12}], anchor="m")
         add_text(s, x + 0.22, 2.52, w - 0.4, 0.42, [[("1 / 2 / 4 nodes:  ", {}), (nodes, {})]], size=11.5, color=MUTED, anchor="m")
-    rows = [["What we changed", "The bottleneck it removes, and the evidence", "4 nodes, own control"], ["Pin CPU and memory (Basic)", "Lost binding: 0 of 512 ranks pinned, 9% of memory local", "−11%"], ["scotch, then node mapping (Basic)", "Uneven work near the car: slowest / median 1.16 → 1.06", "−10.5%, −0.7%"], ["Four source changes (Bonus)", "Memory bandwidth: half the channels → 2.2× slower", "−9.5%"], ["multiLevel split (Bonus)", "Faces between nodes −38%, sockets −34%, NUMA −26%", "−1.5%"]]
-    table(s, X0, 3.25, [3.85, 5.83, 2.25], rows, row_h=0.5, size=13.5, colors=[None, [BASIC, INK, BASIC], [BASIC, INK, BASIC], [BONUS, INK, BONUS], [BONUS, INK, BONUS]], bolds=[None] + [[True, False, True]] * 4, aligns=["l", "l", "c"])
-    add_text(s, X0, 5.97, XW, 0.62, [[("What remains after the Bonus ", {"b": True, "color": NAVY}), ("(placement runs, CrayPAT): ", {"color": MUTED}), ("memory bandwidth still sets the speed, and the slowest rank computes 7% longer than the median, so MPI is 20% of a step, mostly waiting. Each gain is against its own control; they are not added up.", {})]], size=13)
-    lesson(s, "know the noise · fix what is broken · follow the bottleneck · trust time, not proxies", label="HOW WE WORKED")
+    heading(s, X0, 3.14, XW, "Table", "What we changed, the bottleneck it removed, and the gain on 4 nodes")
+    rows = [["What we changed", "The bottleneck it removes, and the evidence", "vs own control"], ["Pin CPU and memory (Basic)", "Lost binding: 0 of 512 ranks pinned, 9% of memory local", "−11%"], ["scotch, then node mapping (Basic)", "Uneven work near the car: slowest / median 1.16 → 1.06", "−10.5%, −0.7%"], ["Four source changes (Bonus)", "Memory bandwidth: half the channels → 2.2× slower", "−9.5%"], ["multiLevel split (Bonus)", "Faces between nodes −38%, sockets −34%, NUMA −26%", "−1.5%"]]
+    table(s, X0, 3.5, [3.85, 5.83, 2.25], rows, row_h=0.41, size=13.5, colors=[None, [BASIC, INK, BASIC], [BASIC, INK, BASIC], [BONUS, INK, BONUS], [BONUS, INK, BONUS]], bolds=[None] + [[True, False, True]] * 4, aligns=["l", "l", "c"])
+    card(s, X0, 5.76, 6.55, 1.22, fill=TINT)
+    add_text(s, X0 + 0.22, 5.82, 6.15, 0.36, ["What remains after the Bonus"], size=14.5, color=NAVY, bold=True)
+    bullets(s, X0 + 0.22, 6.2, 6.2, 0.78, ["Memory bandwidth sets the speed: half the channels, 2.1× slower", "The slowest rank computes 7% longer than the median; the rest wait (MPI 20% of a step)"], size=12.5, space_after=2)
+    xr = X0 + 6.75
+    card(s, xr, 5.76, XW - 6.75, 1.22)
+    add_text(s, xr + 0.22, 5.82, XW - 7.2, 0.36, ["How we worked"], size=14.5, color=NAVY, bold=True)
+    add_text(s, xr + 0.22, 6.2, XW - 7.2, 0.75, ["Know the noise · fix what is broken first · follow the measured bottleneck · judge by the time per step, not by proxy metrics such as faces or counters"], size=12.5)
     set_notes(s, NOTES["conclusion"])
     return s
 
@@ -510,17 +551,17 @@ def slide_extra():
     s = new_slide()
     set_title(s, "EXTRA: A GAIN WE DID NOT COUNT")
     message(s, "2.595 → 2.250 s/step and bit-identical, but only with fixed iterations")
-    stat(s, X0, 1.6, 4.3, 1.38, "2.595 → 2.250", "s/step on 4 nodes, before → after", "3 jobs each, alternated; ranges do not overlap", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
-    stat(s, X0, 3.12, 4.3, 1.38, "bit-identical", "coefficient.dat at 1, 2 and 4 nodes", "all 1,323 solver log lines identical", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
-    stat(s, X0, 4.64, 4.3, 1.38, "≈ 0.35 s", "of every 2.6 s Bonus step on 4 nodes", "goes to convergence checks that are never used", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
+    stat(s, X0, 1.6, 4.3, 1.7, "2.595 → 2.250", "s/step on 4 nodes, before → after", "3 jobs each, alternated; ranges do not overlap", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
+    stat(s, X0, 3.43, 4.3, 1.7, "bit-identical", "coefficient.dat at 1, 2 and 4 nodes", "all 1,323 solver log lines identical", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
+    stat(s, X0, 5.26, 4.3, 1.7, "≈ 0.35 s", "of every 2.6 s Bonus step on 4 nodes", "goes to convergence checks that are never used", color=NAVY, num_size=28, label_size=14, sub_size=11.5)
     xr, wr = 5.3, 7.33
-    card(s, xr, 1.6, wr, 1.74)
-    add_text(s, xr + 0.25, 1.7, wr - 0.5, 0.38, ["What it does"], size=16, color=NAVY, bold=True)
-    add_text(s, xr + 0.25, 2.12, wr - 0.5, 1.15, ["fvSolution.fixedIter sets tolerance 0 and relTol 0, so no solve can stop early. The residual norm computed after every sweep, a residual pass plus a global sum, is used only after the last one. The patch computes it once, after the last sweep."], size=14)
-    card(s, xr, 3.48, wr, 2.54)
-    add_text(s, xr + 0.25, 3.6, wr - 0.5, 0.38, ["Why it is not in our Bonus"], size=16, color=NAVY, bold=True)
-    bullets(s, xr + 0.25, 4.05, wr - 0.5, 1.9, ["It helps only the benchmark's fixed-iteration setting: the case's own fvSolution.fixedTol runs the original code", "The rules prohibit “less work per step”, and the skipped norms could be read as work", "Our four Bonus changes, in contrast, help with any convergence setting"], size=14, space_after=8)
-    lesson(s, "Speed up the computation, not the benchmark")
+    for y, h, head, body in [(1.6, 1.6, "How we found it", "In the call stacks of the final Bonus, every sweep of the U, k and ω solvers ends with a residual and a global sum (MPI_Allreduce) for the convergence check. With tolerance 0 the check can never stop a solve, so every result but the last is thrown away."), (3.33, 1.25, "What it does", "The patch computes the residual once, after the last sweep. The residuals and iteration counts in the log stay the same.")]:
+        card(s, xr, y, wr, h)
+        add_text(s, xr + 0.25, y + 0.08, wr - 0.5, 0.38, [head], size=16, color=NAVY, bold=True)
+        add_text(s, xr + 0.25, y + 0.48, wr - 0.5, h - 0.52, [body], size=13.5)
+    card(s, xr, 4.71, wr, 2.25)
+    add_text(s, xr + 0.25, 4.79, wr - 0.5, 0.38, ["Why it is not in our Bonus"], size=16, color=NAVY, bold=True)
+    bullets(s, xr + 0.25, 5.22, wr - 0.5, 1.7, ["It helps only the benchmark's fixed-iteration setting: the case's own fvSolution.fixedTol runs the original code", "The rules prohibit “less work per step”, and the skipped norms could be read as work", "Our four Bonus changes, in contrast, help with any convergence setting"], size=13.5, space_after=6)
     set_notes(s, NOTES["extra"])
     return s
 
@@ -534,215 +575,220 @@ def supp(title, msg, notes_key):
     return s
 
 
-def s_plan():
-    s = supp("OPTIMIZATION PLAN", "Measure, find the bottleneck, change one thing, check it against a control, repeat", "s_plan")
-    steps = [("Baseline", "Case defaults on our own build, 3 or more jobs per node count: know the spread", TINT), ("Profile", "Separate profile runs: /proc, OpenFOAM profiling, CrayPAT, uProf, IMB", TINT), ("Bottleneck", "What is broken? Why do the ranks wait? What limits one rank?", TINT), ("Change one thing", "One commit per condition: job script and split (Basic), source (Bonus)", TINT), ("Check", "Alternate with a control; keep it only if every job is faster. Bonus: Cd bit-identical", TINT)]
-    w, gap = 2.146, 0.3
-    for i, (head, body, fill) in enumerate(steps):
-        x = X0 + i * (w + gap)
-        box(s, x, 1.6, w, 2.05, fill=fill, line="B8C2D3", radius=0.08)
-        circle_num(s, x + w / 2 - 0.2, 1.74, 0.4, str(i + 1), size=13)
-        add_text(s, x + 0.08, 2.2, w - 0.16, 0.36, [head], size=15, color=NAVY, bold=True, align="c")
-        add_text(s, x + 0.1, 2.6, w - 0.2, 1.0, [body], size=12, align="c")
-        if i < len(steps) - 1:
-            arrow_line(s, x + w + 0.03, 2.62, x + w + gap - 0.03, 2.62, color=MUTED, width=1.5)
-    x_profile, x_check = X0 + (w + gap) + w / 2, X0 + 4 * (w + gap) + w / 2
-    arrow_line(s, x_check, 3.66, x_check, 3.95, color=MUTED, width=1.5, head=False)
-    arrow_line(s, x_check, 3.95, x_profile, 3.95, color=MUTED, width=1.5, head=False)
-    arrow_line(s, x_profile, 3.95, x_profile, 3.68, color=MUTED, width=1.5)
-    add_text(s, x_profile + 0.3, 3.99, x_check - x_profile - 0.6, 0.3, [("next round: profile the new baseline", {"i": True})], size=12, color=MUTED, align="c")
-    rows = [["Round, from", "Bottleneck found, and how", "What we changed", "4 nodes"], ["1  baseline", "Binding lost at MPI_Init, uneven work, MPI 46% waiting (/proc, OpenFOAM profiling, CrayPAT)", "Pin CPU and memory, scotch, map the split onto the node (Basic)", "3.65 → 2.90 s/step"], ["2  Basic", "Memory bandwidth: half the channels 2.2× slower, half the cores no change (placement runs)", "Move fewer bytes: four source changes, multiLevel split (Bonus)", "2.90 → 2.60 s/step"], ["3  Bonus", "Still memory bandwidth, and the slowest rank computes 7% longer than the median (placement runs, CrayPAT)", "Not done: weights from measured rank times, fusing more passes", "next steps"]]
-    table(s, X0, 4.45, [1.35, 4.65, 3.9, 2.03], rows, row_h=0.615, size=12.5, row_heights=[0.42, 0.68, 0.68, 0.68], colors=[None, [BASE, INK, INK, BASIC], [BASIC, INK, INK, BONUS], [BONUS, INK, MUTED, MUTED]], bolds=[None, [True, False, False, True], [True, False, False, True], [True, False, False, False]], aligns=["l", "l", "l", "c"])
+def s_bottlenecks():
+    s = supp("BOTTLENECKS WE MEASURED", "What limits a step: placement, balance and memory bandwidth", "s_bottlenecks")
+    heading(s, X0, 1.58, XW, "Table", "Each candidate bottleneck, what we measured on 4 nodes, and what we did")
+    rows = [["Bottleneck", "Measured on 4 nodes", "Our strategy"], ["Memory placement", "0 of 512 ranks pinned; 9% of a rank's memory local", "Pin CPU and memory (Basic)"], ["Load imbalance", "MPI 46% of the time, mostly waiting for the slowest rank", [[("scotch (Basic), ", {}), ("multiLevel (Bonus)", {"color": BONUS})]]], ["Memory bandwidth", "Half the bandwidth → 2.2× slower; half the cores → no change", "Move fewer bytes (Bonus)"], ["Network", "55% more bandwidth or 92% fewer faces between nodes: no change", "—"], ["Arithmetic", "Compiler flags, another compiler, PGO: within 0.13%", "—"], ["File I/O", "0.01% of a step", "—"], ["OS noise", "0.8% of each core's time", "— (needs root)"]]
+    fills = [None] + [[TINT] * 3] * 3 + [[WHITE] * 3] * 4
+    colors = [None, [NAVY, INK, BASIC], [NAVY, INK, BASIC], [NAVY, INK, BONUS]] + [[MUTED] * 3] * 4
+    bolds = [None] + [[True, False, True]] * 3 + [[True, False, False]] * 4
+    table(s, X0, 1.98, [2.4, 6.15, 3.38], rows, row_h=0.6, size=14, fills=fills, colors=colors, bolds=bolds, zebra=False)
     return s
 
 
 def s_noise():
     s = supp("MEASURING HONESTLY", "Most repeated jobs lie within ±0.4% of their median, but single jobs can be 90% slower", "s_noise")
-    picture(s, fig("fig08_variability"), 0.45, 1.62, w=8.9)
-    bullets(s, 9.55, 1.6, 3.08, 4.9, [f"92 jobs in 29 repeated configurations, 21{NBSP}Sep to 5{NBSP}Oct", "Two September jobs were 84% and 91% slower", "So we never decide from one job, and alternate candidate and control", "Step-to-step variation inside a job is not the job-to-job spread: 150 steps are not 150 samples"], size=14.5, space_after=14, anchor="m")
-    caption(s, "Deviation from the median of the same configuration (same commit, build, nodes, decomposition). Shaded: ±0.4%. Issue #47.")
+    heading(s, X0, 1.58, 8.7, "Figure", "Each job against the median of its configuration", sub="same commit, build, nodes and split; shaded: ±0.4%")
+    picture(s, fig("fig08_variability"), 0.45, 2.3, w=8.85)
+    bullets(s, 9.55, 1.6, 3.08, 5.35, [f"92 jobs in 29 repeated configurations, 21{NBSP}Sep to 5{NBSP}Oct", "Two September jobs were 84% and 91% slower", "So we never decide from one job, and alternate candidate and control", "Step-to-step variation inside a job is not the job-to-job spread: 150 steps are not 150 samples"], size=14.5, space_after=14, anchor="m")
     return s
 
 
 def s_automation():
     s = supp("EXPERIMENT AUTOMATION", "One commit = one condition; every run is started by GitHub Actions", "s_automation")
-    steps = [("git push or manual run", GREY_TINT), ("select build: reuse if inputs unchanged", TINT), ("build OpenFOAM (1-node job)", TINT), ("prepare case: decomposePar, cached", TINT), ("run job: Allrun chain + simpleFoam", ORANGE_TINT), ("official parser + Cd file", "E7F3EC"), ("archive raw records + metrics DB", "E7F3EC")]
+    heading(s, X0, 1.58, XW, "Figure", "One condition, from a push to the archived run")
+    steps = [("git push or manual run", GREY_TINT), ("select build: reuse if inputs unchanged", TINT), ("build OpenFOAM (1-node job)", TINT), ("prepare case: decomposePar, cached", TINT), ("run job: Allrun chain + simpleFoam", TINT), ("official parser + Cd file", TINT), ("archive raw records + metrics DB", TINT)]
     w, gap = 1.533, 0.2
     for i, (text, fill) in enumerate(steps):
         x = X0 + i * (w + gap)
-        box(s, x, 1.8, w, 2.0, fill=fill, line="B8C2D3", radius=0.08)
-        circle_num(s, x + w / 2 - 0.2, 1.97, 0.4, str(i + 1), size=13)
-        add_text(s, x + 0.06, 2.47, w - 0.12, 1.2, [text], size=13, align="c", anchor="m")
+        box(s, x, 2.02, w, 2.0, fill=fill, line="B8C2D3", radius=0.08)
+        circle_num(s, x + w / 2 - 0.2, 2.19, 0.4, str(i + 1), size=13)
+        add_text(s, x + 0.06, 2.69, w - 0.12, 1.2, [text], size=13, align="c", anchor="m")
         if i < len(steps) - 1:
-            arrow_line(s, x + w + 0.02, 2.8, x + w + gap - 0.02, 2.8, color=MUTED, width=1.25)
-    bullets(s, X0, 4.3, XW, 2.65, ["Each condition is a commit (compiler flag, decomposition, patch), so every result traces back to its exact scripts", "Builds and decomposed cases are reused only when their inputs are identical; nothing is shared between clusters", "Profilers run only in separate diagnostic jobs; nothing is measured inside a benchmark's timed solver run", "Several runners submit jobs in parallel, so control and candidate run in the same period"], size=16, space_after=22)
+            arrow_line(s, x + w + 0.02, 3.02, x + w + gap - 0.02, 3.02, color=MUTED, width=1.25)
+    bullets(s, X0, 4.4, XW, 2.58, ["Each condition is a commit (compiler flag, decomposition, patch), so every result traces back to its exact scripts", "Builds and decomposed cases are reused only when their inputs are identical; nothing is shared between clusters", "Profilers run only in separate diagnostic jobs; nothing is measured inside a benchmark's timed solver run", "Several runners submit jobs in parallel, so control and candidate run in the same period"], size=15.5, space_after=18)
     return s
 
 
 def s_build():
     s = supp("BUILD, STORAGE AND MPI", "Builds and records on Lustre; every node solves from its own local disk", "s_build")
-    columns = [(X0, 3.35, GREY_TINT, ["GitHub Actions runner", "team server"]), (4.4, 4.05, TINT, ["ASPIRE-2A login node", "/scratch: Lustre, shared"]), (8.8, 3.83, ORANGE_TINT, ["Compute nodes", "$TMPDIR: node-local"])]
-    rows_y = [2.4, 3.12, 3.84, 4.56]
+    heading(s, X0, 1.58, XW, "Figure", "Where builds, cases and runs live")
+    columns = [(X0, 3.35, GREY_TINT, ["GitHub Actions runner", "team server"]), (4.4, 4.05, TINT, ["ASPIRE-2A login node", "/scratch: Lustre, shared"]), (8.8, 3.83, LIGHT, ["Compute nodes", "$TMPDIR: node-local"])]
+    rows_y = [2.72, 3.37, 4.02, 4.67]
     items = {0: {0: f"start build, case and run jobs (ssh{NBSP}+{NBSP}qsub)", 3: "after the job: pack the run, archive it, send metrics to the database"}, 1: {0: "mesh archive (3.2 GB)", 1: "build archive per build (OpenFOAM tree, flags, hashes)", 2: "decomposed case per build and decomposition", 3: f"run directory per run (logs,{NBSP}results,{NBSP}records)"}, 2: {0: "unpack the OpenFOAM build", 1: "copy the decomposed case, restore0Dir", 2: "Allrun chain + simpleFoam: all case I/O stays local", 3: "write logs and coefficient.dat back"}}
     for ci, (x, w, fill, head) in enumerate(columns):
-        box(s, x, 1.58, w, 3.75, fill=fill, line="B8C2D3", radius=0.04)
-        add_text(s, x, 1.66, w, 0.62, [{"runs": [head[0]], "bold": True, "size": 13.5, "color": NAVY, "align": "c"}, {"runs": [head[1]], "size": 12, "color": MUTED, "align": "c"}])
+        box(s, x, 1.98, w, 3.42, fill=fill, line="B8C2D3", radius=0.04)
+        add_text(s, x, 2.04, w, 0.62, [{"runs": [head[0]], "bold": True, "size": 13.5, "color": NAVY, "align": "c"}, {"runs": [head[1]], "size": 12, "color": MUTED, "align": "c"}])
         for ri, text in items[ci].items():
-            shape_text(box(s, x + 0.15, rows_y[ri], w - 0.3, 0.6, fill=WHITE, line=LINE, radius=0.1), text, size=12, color=INK, bold=False, margin=(0.06, 0.02, 0.06, 0.02))
+            shape_text(box(s, x + 0.15, rows_y[ri], w - 0.3, 0.56, fill=WHITE, line=LINE, radius=0.1), text, size=12, color=INK, bold=False, margin=(0.06, 0.02, 0.06, 0.02))
+
     def mid(ci, ri, side):
         x, w = columns[ci][0], columns[ci][1]
-        return (x + 0.15 if side == "l" else x + w - 0.15), rows_y[ri] + 0.3
+        return (x + 0.15 if side == "l" else x + w - 0.15), rows_y[ri] + 0.28
+
     for (c1, r1, s1), (c2, r2, s2) in [((0, 0, "r"), (1, 0, "l")), ((1, 1, "r"), (2, 0, "l")), ((1, 2, "r"), (2, 1, "l")), ((2, 3, "l"), (1, 3, "r")), ((1, 3, "l"), (0, 3, "r"))]:
         x1, y1 = mid(c1, r1, s1)
         x2, y2 = mid(c2, r2, s2)
         arrow_line(s, x1 + (0.02 if s1 == "r" else -0.02), y1, x2 + (-0.02 if s2 == "l" else 0.02), y2, color=MUTED, width=1.25)
-    bullets(s, X0, 5.58, XW, 1.4, ["Build: official v2512, GCC 11.2 -O3, AMD math library, in a 1-node PBS job; every run records which build it used", "Storage: every node solves from its own copy in $TMPDIR (‑hostRoots, ‑ioRanks); file I/O in the timed steps ≈ 0.01% of the run (#46)", "MPI: Cray MPICH 8.1.15 over UCX instead of the default OFI"], size=14)
+    bullets(s, X0, 5.58, XW, 1.4, ["Build: official v2512, GCC 11.2 -O3, AMD math library, in a 1-node PBS job; every run records which build it used", "Storage: every node solves from its own copy in $TMPDIR (‑hostRoots, ‑ioRanks); file I/O in the timed steps ≈ 0.01% of the run", "MPI: Cray MPICH 8.1.15 over UCX instead of the default OFI"], size=14)
     return s
 
 
 def s_reference():
     s = supp("THE ORGANISERS' REFERENCE", "For context only: Basic −12% and Bonus −21% against the organisers' scotch runs", "s_reference")
-    add_text(s, X0, 1.58, 6.2, 0.36, ["Against the organisers' scotch mean, same machine"], size=15, color=NAVY, bold=True)
-    bar_chart(s, 0.5, 1.95, 6.35, 4.6, ["1 node", "2 nodes", "4 nodes"], [("Our Basic", (-7.76, -12.83, -12.09)), ("Our Bonus", (-19.47, -22.83, -21.14))], colors=[BASIC, BONUS], horizontal=False, number_format='0"%";"−"0"%"', vmin=-27, vmax=0, font_size=13.5, label_size=15, gap=90, overlap=-20, legend=True, value_axis=False, gridlines=False)
-    rows = [["s/step", "1 node", "2 nodes", "4 nodes"], ["Organisers' hierarchical", "14.67", "7.12", "3.41"], ["Organisers' scotch, mean", "14.49", "7.31", "3.30"], ["Our Basic", "13.36", "6.37", "2.90"], ["Our Bonus", "11.67", "5.64", "2.60"]]
-    table(s, 7.1, 1.6, [2.35, 1.0, 1.1, 1.08], rows, row_h=0.52, size=14, colors=[None, [MUTED] * 4, [MUTED] * 4, [BASIC, INK, INK, BASIC], [BONUS, INK, INK, BONUS]], bolds=[None, None, None, [True, False, False, True], [True, False, False, True]], aligns=["l", "r", "r", "r"])
-    bullets(s, 7.1, 4.62, 5.53, 1.9, ["Organisers (tasks 4.3 notes): site module, mpirun with no options, default MPI settings, no binding", "Their scotch runs (3 / 2 / 5 jobs) spread by 12% on 4 nodes: 3.19 to 3.58 s/step", "Build, MPI transport and placement all differ, so the gap has more than one cause"], size=13.5, space_after=8)
-    caption(s, "Our own comparisons use our baseline, with the same build, scripts and measurement.", y=6.66)
+    heading(s, X0, 1.58, XW, "Figure", "Each job: the organisers' runs and ours, on the same machine", sub="% under our jobs: our mean against the organisers' scotch mean")
+    picture(s, fig("ps_reference"), X0, 2.3, w=XW)
+    bullets(s, X0, 5.85, XW, 1.12, ["Organisers (tasks 4.3 notes): site module, mpirun with no options, default MPI settings, no binding; their scotch jobs spread by 12% on 4 nodes", "Build, MPI transport and placement all differ, so the gap has more than one cause"], size=14, space_after=6)
     return s
 
 
 def s_step():
     s = supp("WHERE A STEP GOES AFTER BASIC", "The p and U solves take half a step; assembly and turbulence the rest", "s_step")
-    add_text(s, X0, 1.58, 7.4, 0.36, ["Share of a step, median rank"], size=15, color=NAVY, bold=True)
+    heading(s, X0, 1.58, 7.4, "Figure", "Share of a step, median rank")
     categories = ["rest of the step\n(assembly, gradients, turbulence)", "function objects", "fvOptions", "k solve", "omega solve", "U solve", "p solve (GAMG)"]
     bar_chart(s, 0.5, 1.95, 7.7, 5.0, categories, [("share", (40.46, 1.84, 0.48, 4.25, 4.66, 22.23, 26.07))], point_colors=[FAINT, BASIC, BASIC, BASIC, BASIC, BASIC, BASIC], number_format='0.0"%"', vmin=0, vmax=48, font_size=13, label_size=14, gap=45, value_axis=False, gridlines=False)
-    bullets(s, 8.5, 1.6, 4.13, 5.35, ["OpenFOAM's built-in profiling, Basic, 4 nodes, all 512 ranks, 40 steps (#57)", "Computation per rank: median 97.95 s, max 104.17 s (max / median 1.063)", "Cell counts do not explain the spread (r = +0.06); wall faces partly (r = +0.43)", "MPI as a whole: 19% of the step for the median rank; region times include the waiting inside them"], size=14, space_after=14, anchor="m")
+    bullets(s, 8.5, 1.6, 4.13, 5.35, ["OpenFOAM's built-in profiling, Basic, 4 nodes, all 512 ranks, 40 steps", "Computation per rank: median 97.95 s, max 104.17 s (max / median 1.063)", "Cell counts do not explain the spread (r = +0.06); wall faces partly (r = +0.43)", "MPI as a whole: 19% of the step for the median rank; region times include the waiting inside them"], size=14, space_after=14, anchor="m")
     return s
 
 
 def s_path():
     s = supp("THE PATH ON 4 NODES", "Each change against its own control, in the same period: 3.670 → 2.599 s/step", "s_path")
-    picture_fit(s, fig("fig16_journey"), X0, 1.5, XW, 5.02)
-    caption(s, "Grey: the start (case-default split, binding lost; #36, the same setup as our 3.65 baseline), then the Basic and the Bonus steps. The % labels: each change against its own control; the changes are separate experiments and are not added up. y-axis does not start at 0.", y=6.58, h=0.42, size=11)
+    heading(s, X0, 1.58, XW, "Figure", "Every step of the path, each job", sub="the first column is the start (case-default split, binding lost); each % is against the column before it, and they are not added up")
+    picture_fit(s, fig("fig16_journey"), X0, 2.3, XW, 4.68)
     return s
 
 
 def s_network():
     s = supp("IS THE NETWORK THE BOTTLENECK?", "No: four changes to the network side, none made a step more than 0.25% faster", "s_network")
+    heading(s, X0, 1.55, XW, "Table", "Four changes to the network side, 4 nodes")
     rows = [["What we changed on the network side", "How much the network side changed", "Step time (4 nodes)"], ["UCX over RC instead of UD between nodes", "IMB bandwidth (1 MiB Sendrecv) 6.7 → 10.4 GB/s, +55%", "−0.01% Basic, −0.16% Bonus (4 v 4)"], ["Rank reordering, hierarchical split", "92% fewer faces between nodes", "+0.1%"], ["OFI instead of UCX, with the organisers' two workarounds", "Another transport and provider", "+0.77% (3 v 3), +0.50% (1 v 1)"], ["GAMG coarsest level solved on 32 ranks instead of 512", "Fewer ranks in 81% of the global sums", "−0.25% (1 v 1)"]]
-    table(s, X0, 1.55, [4.3, 4.3, 3.33], rows, row_h=0.8, size=14.5, bolds=[None] + [[True, False, False]] * 4)
-    bullets(s, X0, 5.8, XW, 1.2, ["One 8-byte global sum over 512 ranks takes ≈ 12 µs (IMB): 1,600 per step ≈ 0.02 s, under 1% of a step", "A rank's MPI_Waitall follows its own computation (R² 0.77); adding its neighbours raises that only to 0.80. 13 of the 16 slowest ranks have no neighbours on other nodes", "Not measured: NIC and switch counters"], size=14.5)
+    table(s, X0, 1.93, [4.3, 4.3, 3.33], rows, row_h=0.72, size=14.5, bolds=[None] + [[True, False, False]] * 4)
+    bullets(s, X0, 5.68, XW, 1.3, ["One 8-byte global sum over 512 ranks takes ≈ 12 µs (IMB): 1,600 per step ≈ 0.02 s, under 1% of a step", "A rank's MPI_Waitall follows its own computation (R² 0.77); adding its neighbours raises that only to 0.80. 13 of the 16 slowest ranks have no neighbours on other nodes", "Not measured: NIC and switch counters"], size=14)
     return s
 
 
 def s_ofi():
     s = supp("OFI AGAINST UCX", "The organisers' OFI workarounds avoid the crash; UCX stays faster", "s_ofi")
+    heading(s, X0, 1.58, XW, "Table", "MPI transport, Basic before the node mapping, 4 nodes")
     rows = [["MPI transport (Basic, 4 nodes)", "Jobs", "s/step", "Against UCX"], ["UCX (what we use)", "3", "2.9176, 2.9168, 2.9246 (mean 2.9197)", "—"], ["OFI with FI_OFI_RXM_USE_SRX=0", "3", "2.9452, 2.9374, 2.9438 (mean 2.9421)", "+0.77%"], ["OFI with FI_VERBS_PREFER_XRC=0", "1", "2.9338 (UCX beside it: 2.9192)", "+0.50%"]]
-    table(s, X0, 1.62, [4.3, 0.9, 4.73, 2.0], rows, row_h=0.86, size=15, bolds=[None, [True, False, False, False], [True, False, False, True], [True, False, False, True]], colors=[None, [BASIC, INK, INK, INK], [INK, INK, INK, RED], [INK, INK, INK, RED]], aligns=["l", "c", "l", "c"])
-    bullets(s, X0, 5.4, XW, 1.55, ["Basic before the node mapping; only the transport changed; alternated in the same period (7 and 9 Oct, #56, #60)", "All jobs VALID, no SIGBUS, the same Cd (0.28404934573921931)", "OFI's own spread is 0.26%, so our small spread does not come from UCX: it comes from the placement"], size=16, space_after=14)
+    table(s, X0, 1.98, [4.3, 0.9, 4.73, 2.0], rows, row_h=0.8, size=15, bolds=[None, [True, False, False, False], [True, False, False, True], [True, False, False, True]], colors=[None, [BASIC, INK, INK, INK], [INK, INK, INK, BAD], [INK, INK, INK, BAD]], aligns=["l", "c", "l", "c"])
+    bullets(s, X0, 5.4, XW, 1.58, ["Only the transport changed; alternated in the same period (7 and 9 Oct)", "All jobs VALID, no SIGBUS, the same Cd (0.28404934573921931)", "OFI's own spread is 0.26%, so our small spread does not come from UCX: it comes from the placement"], size=16, space_after=14)
+    return s
+
+
+def s_splits():
+    s = supp("THE THREE SPLITS: FACES OR EVEN WORK?", "Fewer faces between nodes alone did not help; evening out the work did", "s_splits")
+    heading(s, X0, 1.55, XW, "Figure", "The three splits on 4 nodes: colour = node, shade = NUMA domain")
+    for i, (name, faces) in enumerate([("hierarchical (case default)", "4.31 M faces"), ("scotch (Basic)", "2.93 M faces"), ("multiLevel (Bonus)", "2.81 M faces")]):
+        add_text(s, X0 + i * XW / 3, 1.93, XW / 3, 0.3, [{"runs": [(name, {"b": True, "color": NAVY}), ("   " + faces, {"color": MUTED, "size": 11.5})], "align": "c"}], size=13)
+    picture(s, ASSETS / "decomposition-numa.png", X0, 2.27, w=XW, crop=(0.0, 0.118, 0.0, 0.57))
+    heading(s, X0, 4.56, XW, "Table", "Faces and time per step, each change against its own control on 4 nodes")
+    rows = [["What changed", "Faces between subdomains", "Faces between nodes", "Work per rank", "Time per step"], ["scotch instead of hierarchical (Basic)", "−32%", "—", "evened (1.16 → 1.06)", "−10.5%"], ["Reordering ranks, hierarchical split", "unchanged", "−92%", "unchanged", "+0.1%"], ["scotch mapped onto the node (Basic)", "+3.3%", "−23%", "—", "−0.7%"], ["multiLevel instead of scotch (Bonus)", "−3.9%", "−38%", "—", "−1.5%"], ["METIS with two constraints (Bonus)", "+18%", "—", "—", "+1.5%"]]
+    table(s, X0, 4.94, [3.75, 1.85, 1.75, 3.08, 1.5], rows, row_h=0.31, size=12, row_heights=[0.46] + [0.31] * 5, bolds=[None] + [[True, False, False, False, True]] * 5, aligns=["l", "c", "c", "c", "c"], margins=(0.08, 0.03, 0.08, 0.03))
     return s
 
 
 def s_cores():
     s = supp("CORES OR MEMORY?", "Halving the cores changes nothing; halving the memory channels slows a step 2.2×", "s_cores")
+    heading(s, X0, 1.58, XW, "Table", "Time per step under three placements, 4 nodes, 2 jobs each")
     rows = [["s/step (4 nodes, 2 jobs each)", "full128", "spread64", "packed64", "spread64 / full128", "packed64 / spread64"], ["Basic (before the mapping)", "2.920", "2.887", "6.347", "0.99", "2.20"], ["Bonus without the patches", "2.869", "2.874", "6.321", "1.00", "2.20"], ["Bonus", "2.595", "2.649", "5.598", "1.02", "2.11"], ["Triad bandwidth per node", "274 GB/s", "279 GB/s", "125 GB/s", "—", "0.45"]]
-    table(s, X0, 1.62, [3.5, 1.45, 1.5, 1.5, 1.95, 2.03], rows, row_h=0.5, size=14, bolds=[None] + [[True, False, False, False, True, True]] * 4, colors=[None] + [[INK, INK, INK, INK, NAVY, RED]] * 4, aligns=["l", "r", "r", "r", "r", "r"])
-    add_text(s, X0, 4.4, 5.85, 0.36, ["The three placements"], size=15, color=NAVY, bold=True)
-    bullets(s, X0, 4.8, 5.85, 1.75, ["full128: 128 ranks per node, as submitted", "spread64: 64 ranks per node, 4 per L3, on all 16 L3s and all 16 memory channels", "packed64: the same 64 ranks and split, 8 per L3, on 8 L3s and 8 channels"], size=13.5)
-    add_text(s, 6.78, 4.4, 5.85, 0.36, ["What it shows"], size=15, color=NAVY, bold=True)
-    bullets(s, 6.78, 4.8, 5.85, 1.75, ["Half the cores: ×0.99–1.02, no change", "Half the channels: ×2.11–2.20, as the triad bandwidth drops ×2.22", "Limit: packed64 also halves the L3, so DRAM bandwidth and L3 capacity are not separated"], size=13.5)
-    caption(s, "Memory-controller counters and IBS are not readable (perf_event_paranoid=2), so we moved the ranks instead (#61). coefficient.dat is bit-identical across placements.", y=6.58, h=0.42)
+    table(s, X0, 1.98, [3.5, 1.45, 1.5, 1.5, 1.95, 2.03], rows, row_h=0.58, size=14.5, bolds=[None] + [[True, False, False, False, True, True]] * 4, colors=[None] + [[INK, INK, INK, INK, NAVY, BAD]] * 4, aligns=["l", "r", "r", "r", "r", "r"])
+    add_text(s, X0, 5.0, 5.85, 0.36, ["The three placements"], size=15, color=NAVY, bold=True)
+    bullets(s, X0, 5.4, 5.85, 1.58, ["full128: 128 ranks per node, as submitted", "spread64: 64 ranks per node, 4 per L3, on all 16 L3s and all 16 memory channels", "packed64: the same 64 ranks and split, 8 per L3, on 8 L3s and 8 channels"], size=14)
+    add_text(s, 6.78, 5.0, 5.85, 0.36, ["What it shows"], size=15, color=NAVY, bold=True)
+    bullets(s, 6.78, 5.4, 5.85, 1.58, ["Half the cores: ×0.99–1.02, no change", "Half the channels: ×2.11–2.20, as the triad bandwidth drops ×2.22", "Limit: packed64 also halves the L3, so DRAM bandwidth and L3 capacity are not separated"], size=14)
     return s
 
 
 def s_changes():
     s = supp("THE SOURCE CHANGES", "Each change removes data movement, never an operation or its order", "s_changes")
+    heading(s, X0, 1.55, XW, "Table", "The four patches (full text: bonus/patches/0001–0004 in the submission)")
     rows = [["Change (patch)", "What it removes", "Why the result is the same"], ["No copies in the solvers (0001)", "smoothSolver built each residual in a new field and copied it; GAMG copied the source, then subtracted", "The same function computes the same residual in place; source − A·psi is the same subtraction per cell"], ["U components in one pass (0002)", "Gauss–Seidel read the shared matrix of U three times, once per component", "The components are independent; each sees the same operations in the same order"], ["No unused boundary updates (0003)", "Six callers built boundary values of a surface integral, exchanged them, and used only the cell values", "The cell values come from the same loop; only values nobody reads are skipped"], ["Fused face loops (0004)", "Interpolated face fields and product fields built before every summation", "The same face expressions, evaluated inside the summation loop in the same face order"]]
-    table(s, X0, 1.55, [3.05, 4.5, 4.38], rows, row_h=0.94, size=13.5, bolds=[None] + [[True, False, False]] * 4, colors=[None] + [[BONUS, INK, INK]] * 4, row_heights=[0.5, 1.05, 1.05, 1.05, 1.05])
-    caption(s, "Full text: bonus/README.md and bonus/patches/0001–0004 in the submission. Boundary conditions, every exchange the solution uses, and the bounding of k and omega are unchanged.", y=6.45, h=0.55, size=11.5)
+    table(s, X0, 1.93, [3.05, 4.5, 4.38], rows, row_h=0.94, size=13.5, bolds=[None] + [[True, False, False]] * 4, colors=[None] + [[BONUS, INK, INK]] * 4, row_heights=[0.5, 1.1, 1.1, 1.1, 1.1])
     return s
 
 
-def detail_slide(s, title, msg, cards, footer):
+def detail_slide(s, title, msg, cards):
     clear_slide(s)
     add_sldnum(s, SLDNUM)  # the 10/08 slide held a static number
     set_title(s, title)
     message(s, msg, size=18)
-    for i, (number, name, functions, lines, result) in enumerate(cards):
+    for i, (number_text, name, functions, lines, result) in enumerate(cards):
         x = X0 + i * 6.08
-        card(s, x, 1.6, 5.85, 4.85)
-        shape_text(box(s, x + 0.25, 1.8, 0.85, 0.36, fill=BONUS, radius=0.5), number, size=12)
+        card(s, x, 1.6, 5.85, 5.38)
+        shape_text(box(s, x + 0.25, 1.8, 0.85, 0.36, fill=BONUS, radius=0.5), number_text, size=12)
         add_text(s, x + 1.25, 1.74, 4.45, 0.48, [name], size=16, color=NAVY, bold=True, anchor="m")
         add_text(s, x + 0.25, 2.34, 5.35, 0.62, [{"runs": [f]} for f in functions], size=13, color=MUTED)
-        bullets(s, x + 0.25, 3.08, 5.35, 2.55, lines, size=14.5, space_after=10)
-        box(s, x + 0.18, 5.72, 5.49, 0.56, fill=ORANGE_TINT, radius=0.5)
-        add_text(s, x + 0.4, 5.72, 5.1, 0.56, [result], size=15.5, color=BONUS, bold=True, anchor="m")
-    caption(s, footer, y=6.62, size=12)
+        bullets(s, x + 0.25, 3.12, 5.35, 2.95, lines, size=14.5, space_after=10)
+        box(s, x + 0.18, 6.2, 5.49, 0.58, fill=BONUS_TINT, radius=0.5)
+        add_text(s, x + 0.4, 6.2, 5.1, 0.58, [result], size=15.5, color=BONUS, bold=True, anchor="m")
     set_notes(s, NOTES["s_detail"])
     return s
 
 
 def s_detail1():
     cards = [("0001", "No copies in the solvers", ["smoothSolver::scalarSolve", "GAMGSolver::solve"], ["Before: residual = matrix_.residual(...) builds a new field, then copies it", "After: matrix_.residual(residual, ...) writes into the existing buffer", "GAMG: source − A·psi in one pass instead of a copy and a subtraction"], "2.873 → 2.776 s/step (−3.39%, 4 v 4 jobs)"), ("0002", "U components in one pass", ["fvMatrix::solveSegregated", "solveGaussSeidelComponents"], ["Before: one complete solve per component, each reading the matrix", "After: each face coefficient serves Ux, Uy and Uz in one sweep", "Shared: lower and upper coefficients and the addressing; per component: diagonal, source, norms", "Falls back to the original path when the solver or field type does not match"], "2.781 → 2.718 s/step (−2.29%, 3 v 3 jobs)")]
-    return detail_slide(S[19], "SOURCE CHANGES IN DETAIL (1/2)", "No copies, and the U matrix read once instead of three times", cards, "Face order and per-component convergence are kept. Each gain is against the configuration just before it, in the same period.")
+    return detail_slide(S[19], "SOURCE CHANGES IN DETAIL (1/2)", "No copies, and the U matrix read once instead of three times", cards)
 
 
 def s_detail2():
     cards = [("0003", "No unused boundary updates", ["fvc::surfaceIntegrateInternal", "gaussConvectionScheme::fvmDiv"], ["Return the internal cell values directly; skip building and evaluating output boundaries that nobody reads", "Input boundary contributions are kept", "Build lower, upper and diagonal in one face loop", "Used at six call sites, including pEqn.H and kOmegaSST"], "2.708 → 2.672 s/step (−1.31%, 3 v 3 jobs)"), ("0004", "Fused face loops", ["gaussGrad / addLinearFaceSums", "surfaceIntegrateInternal(a, b)"], ["Interpolate while adding the gradient's face sums", "Multiply the two fields inside the integration loop", "No temporary surface fields and no re-reads; boundaries, volume division and order kept", "Non-linear interpolation keeps the original path"], "2.675 → 2.599 s/step (−2.82%, 3 v 3 jobs)")]
-    return detail_slide(S[20], "SOURCE CHANGES IN DETAIL (2/2)", "No unused boundary values, and no temporary face fields", cards, "coefficient.dat matches the unpatched build with the same split at 1, 2 and 4 nodes.")
+    return detail_slide(S[20], "SOURCE CHANGES IN DETAIL (2/2)", "No unused boundary values, and no temporary face fields", cards)
 
 
 def s_each():
     s = supp("EFFECT OF EACH BONUS CHANGE", "Each change against the configuration just before it; separate experiments, not added up", "s_each")
-    add_text(s, X0, 1.58, 6.3, 0.36, ["Change in time per step (%)"], size=15, color=NAVY, bold=True)
-    categories = ["multiLevel\nvs scotch", "+ no copies\nin solvers", "+ U in\none pass", "+ no unused\nboundary updates", "+ fused face\nloops"]
-    series = [("1 node", (-0.45, -2.19, -6.39, -1.40, -2.88)), ("2 nodes", (-0.38, -2.94, -4.13, -1.88, -2.29)), ("4 nodes", (-1.54, -3.39, -2.29, -1.31, -2.82))]
-    bar_chart(s, 0.5, 1.95, 6.25, 5.0, categories, series, colors=["F0CDAE", "D9894A", BONUS], horizontal=False, number_format='0;"−"0', vmin=-7, vmax=0, major=1, font_size=11.5, gap=60, overlap=-5, legend=True, value_axis=True, gridlines=True, labelled=())
+    heading(s, X0, 1.58, 6.4, "Figure", "Each change against the one before, 4 nodes")
+    picture(s, fig("ps_each"), X0 - 0.05, 1.98, w=6.4)
+    heading(s, 7.25, 1.58, 5.38, "Table", "Change per step, 1 / 2 / 4 nodes")
     rows = [["Change", "1 node", "2 nodes", "4 nodes"], ["multiLevel vs scotch defaults", "−0.45%", "−0.38%", "−1.54%"], ["+ no copies in the solvers", "−2.19%", "−2.94%", "−3.39%"], ["+ U components in one pass", "−6.39%", "−4.13%", "−2.29%"], ["+ no unused boundary updates", "−1.40%", "−1.88%", "−1.31%"], ["+ fused face loops", "−2.88%", "−2.29%", "−2.82%"]]
-    table(s, 7.0, 1.6, [2.27, 1.1, 1.1, 1.16], rows, row_h=0.64, size=13.5, bolds=[None] + [[True, False, False, True]] * 5, colors=[None] + [[INK, INK, INK, BONUS]] * 5, aligns=["l", "r", "r", "r"])
-    bullets(s, 7.0, 5.72, 5.63, 1.25, ["4 nodes: 3–4 jobs each, alternated; most 1- and 2-node values are single jobs", "coefficient.dat is bit-identical for every source change"], size=13.5)
+    table(s, 7.25, 1.98, [2.28, 0.98, 1.02, 1.1], rows, row_h=0.62, size=13, bolds=[None] + [[True, False, False, True]] * 5, colors=[None] + [[INK, INK, INK, BONUS]] * 5, aligns=["l", "r", "r", "r"])
+    bullets(s, 7.25, 5.85, 5.38, 1.12, ["4 nodes: 3–4 jobs each, alternated; most 1- and 2-node values are single jobs", "coefficient.dat is bit-identical for every source change"], size=13.5)
     return s
 
 
 def s_profiles():
     s = supp("PROFILES BEFORE AND AFTER", "The source changes shorten the computation by 9% and leave MPI as it was", "s_profiles")
-    add_text(s, X0, 1.58, 7.4, 0.36, ["Seconds per rank in 40 steps (mean of 512 ranks)"], size=15, color=NAVY, bold=True)
-    categories = ["Final Bonus\n118.5 s, MPI 19.9%", "Bonus, first change only\n127.6 s, MPI 18.3%", "Basic (scotch)\n137.6 s, MPI 19.4%"]
+    heading(s, X0, 1.58, 7.4, "Figure", "Seconds per rank in 40 steps (mean of 512 ranks)")
+    categories = ["Final Bonus\n118.5 s, MPI 19.9%", "multiLevel + no copies only\n127.6 s, MPI 18.3%", "Basic (scotch)\n137.6 s, MPI 19.4%"]
     series = [("computation", (94.94, 104.25, 110.83)), ("MPI_Allreduce", (11.35, 11.01, 12.89)), ("MPI_Waitall", (8.45, 8.78, 10.25)), ("other MPI", (3.73, 3.60, 3.61))]
-    bar_chart(s, 0.5, 1.95, 7.6, 4.55, categories, series, colors=["A9BCDD", "E8907F", "F2B36B", "F7D9B4"], stacked=True, number_format="0.0", vmin=0, vmax=140, font_size=12.5, label_size=13, gap=55, overlap=100, legend=XL_LEGEND_POSITION.BOTTOM, value_axis=False, gridlines=False, label_pos="ctr", labelled=(0,))
-    bullets(s, 8.45, 1.6, 4.18, 4.9, ["CrayPAT diagnostic runs, 4 nodes, 512 ranks, 40 steps (#53)", "Computation per rank 104.2 → 94.9 s from the first change alone to the final Bonus; MPI stays ≈ 23.5 s", "The spread between ranks stays: max / median 1.074 → 1.067; the whole distribution moves down by about 9%"], size=14.5, space_after=14, anchor="m")
-    caption(s, "“Bonus, first change only”: multiLevel with no copies in the solvers, before the other three source changes.")
+    bar_chart(s, 0.5, 1.95, 7.6, 5.0, categories, series, colors=["A9BCDD", "A26C97", "C7A3C2", "E5D3E2"], stacked=True, number_format="0.0", vmin=0, vmax=140, font_size=12.5, label_size=13, gap=55, overlap=100, legend=XL_LEGEND_POSITION.BOTTOM, value_axis=False, gridlines=False, label_pos="ctr", labelled=(0,))
+    bullets(s, 8.45, 1.6, 4.18, 5.35, ["CrayPAT diagnostic runs, 4 nodes, 512 ranks, 40 steps", "Computation per rank 104.2 → 94.9 s from the first change alone to the final Bonus; MPI stays ≈ 23.5 s", "The spread between ranks stays: max / median 1.074 → 1.067; the whole distribution moves down by about 9%"], size=14.5, space_after=14, anchor="m")
     return s
 
 
 def s_efficiency():
     s = supp("WHY THE EFFICIENCY EXCEEDS 1", "On 4 nodes the cell arrays fit in L3: 30% fewer DRAM refills per cell", "s_efficiency")
+    heading(s, X0, 1.58, XW, "Table", "Per cell and step, Basic before the node mapping, AMD uProf")
     rows = [["Per cell and step (Basic, uProf)", "1 node", "2 nodes", "4 nodes", "4 nodes / 1 node"], ["Cycles", "24,235", "22,860", "20,418", "0.843"], ["L1 demand refills from DRAM", "24.6", "20.7", "17.1", "0.697"], ["L1 demand refills from L3 (same CCX)", "5.4", "6.3", "9.4", "1.75"]]
-    table(s, X0, 1.62, [4.7, 1.6, 1.6, 1.6, 2.43], rows, row_h=0.68, size=15.5, bolds=[None] + [[True, False, False, False, True]] * 3, colors=[None, [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY]], aligns=["l", "r", "r", "r", "r"])
-    bullets(s, X0, 4.68, XW, 2.3, ["AMD uProf data_access, one rank per NUMA domain, normalised by ranks, steps and cells per rank (#66)", f"The sparse-matrix kernels gather cell arrays in face order: their DRAM refills fall to 0.30{NBSP}(Gauss–Seidel), 0.40{NBSP}(residual) and 0.42{NBSP}(A·x); a loop that streams cell fields stays at 0.95", "Cell arrays per rank: 4 MB on 1 node, 2 MB on 2, 1 MB on 4, against 4 MB of L3 per core; the face arrays (≈ 16 MB) never fit", "The same counters explain the imbalance left: a rank's cycles follow its DRAM refills (r = +0.69), not its instructions (r = −0.09) or its cells (r = +0.24)"], size=14.5, space_after=10)
+    table(s, X0, 1.98, [4.7, 1.6, 1.6, 1.6, 2.43], rows, row_h=0.62, size=15.5, bolds=[None] + [[True, False, False, False, True]] * 3, colors=[None, [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY]], aligns=["l", "r", "r", "r", "r"])
+    bullets(s, X0, 4.7, XW, 2.28, ["AMD uProf data_access, one rank per NUMA domain, normalised by ranks, steps and cells per rank", f"The sparse-matrix kernels gather cell arrays in face order: their DRAM refills fall to 0.30{NBSP}(Gauss–Seidel), 0.40{NBSP}(residual) and 0.42{NBSP}(A·x); a loop that streams cell fields stays at 0.95", "Cell arrays per rank: 4 MB on 1 node, 2 MB on 2, 1 MB on 4, against 4 MB of L3 per core; the face arrays (≈ 16 MB) never fit", "The same counters explain the imbalance left: a rank's cycles follow its DRAM refills (r = +0.69), not its instructions (r = −0.09) or its cells (r = +0.24)"], size=14.5, space_after=10)
     return s
 
 
 def s_cd():
     s = supp("DRAG COEFFICIENT CHECKS", "Cd depends on the split before convergence; the Bonus is bit-identical to its own baseline", "s_cd")
+    heading(s, X0, 1.58, XW, "Table", "Cd at the last step, 1 / 2 / 4 nodes")
     rows = [["Steps", "OHC-1 values", ["Baseline", "(hierarchical)"], ["scotch", "defaults"], ["Basic", "(mapped scotch)"], ["Bonus", "(multiLevel)"]], ["40", "0.433 – 0.436", "0.43305", "0.43599", "0.43958", "0.43828"], ["80", "0.334 – 0.345", "0.33733", "0.32714", "0.33410", "0.32286"], ["150", "0.284 – 0.292", "0.27356", "0.28405", "0.29302", "0.29139"]]
-    table(s, X0, 1.62, [1.0, 2.0, 2.45, 1.95, 2.35, 2.18], rows, row_h=0.78, size=15.5, colors=[None] + [[INK, MUTED, BASE, INK, BASIC, BONUS]] * 3, bolds=[None] + [[True, False, False, False, True, True]] * 3, aligns=["c"] * 6)
-    bullets(s, X0, 5.05, XW, 1.95, ["The organisers' notes: hierarchical and scotch differ by 0.7 / 3.0 / 3.5% at 40 / 80 / 150 steps; the node mapping moves Cd by +0.8 / +2.1 / +3.2%, within that", "Same split as the organisers: our 150-step Cd is 0.284049 against their 0.283983 (2.3 × 10⁻⁴). With the site module and our scripts we get their value exactly, so the difference is our build (AMD's math library), not the method", "Every job of the same configuration and node count produced a byte-identical coefficient.dat"], size=15, space_after=10)
+    table(s, X0, 1.98, [1.0, 2.0, 2.45, 1.95, 2.35, 2.18], rows, row_h=0.8, size=16, colors=[None] + [[INK, MUTED, BASE, INK, BASIC, BONUS]] * 3, bolds=[None] + [[True, False, False, False, True, True]] * 3, aligns=["c"] * 6)
+    bullets(s, X0, 5.3, XW, 1.68, ["The organisers' notes: hierarchical and scotch differ by 0.7 / 3.0 / 3.5% at 40 / 80 / 150 steps; the node mapping moves Cd by +0.8 / +2.1 / +3.2%, within that", "Same split as the organisers: our 150-step Cd is 0.284049 against their 0.283983 (2.3 × 10⁻⁴). With the site module and our scripts we get their value exactly, so the difference is our build (AMD's math library), not the method", "Every job of the same configuration and node count produced a byte-identical coefficient.dat"], size=14.5, space_after=8)
     return s
 
 
 def s_repro():
     s = supp("REPRODUCING OUR RESULTS", "The submitted scripts, run from public sources: same Cd, times within 0.4%", "s_repro")
+    heading(s, X0, 1.58, XW, "Table", "Re-runs with the submitted scripts against our recorded means")
     rows = [["Configuration", "Nodes", "s/step", "Recorded mean", "Change", "coefficient.dat"], ["Basic (2026-10-16)", "1", "13.413150", "13.364504", "+0.36%", "identical"], ["Basic (2026-10-16)", "2", "6.390324", "6.371748", "+0.29%", "identical"], ["Basic (2026-10-16)", "4", "2.904620", "2.897638", "+0.24%", "identical"], ["Bonus (2026-10-07)", "1", "11.644042", "11.668460", "−0.21%", "identical"], ["Bonus (2026-10-07)", "2", "5.649779", "5.640683", "+0.16%", "identical"], ["Bonus (2026-10-07)", "4", "2.600607", "2.599353", "+0.05%", "identical"]]
-    table(s, X0, 1.6, [2.85, 1.0, 2.0, 2.2, 1.6, 2.28], rows, row_h=0.62, size=15, colors=[None] + [[BASIC, INK, INK, INK, INK, INK]] * 3 + [[BONUS, INK, INK, INK, INK, INK]] * 3, bolds=[None] + [[True, False, False, False, False, True]] * 6, aligns=["l", "c", "r", "r", "r", "c"])
-    bullets(s, X0, 6.2, XW, 0.8, ["build/build.pbs builds from the official public sources; run/submit.sh 1|2|4 runs the whole Allrun chain with plain qsub", "Every step ended with End and returned 0; every solve job reported bound=128/128 on every node"], size=14)
+    table(s, X0, 1.98, [2.85, 1.0, 2.0, 2.2, 1.6, 2.28], rows, row_h=0.58, size=15, colors=[None] + [[BASIC, INK, INK, INK, INK, INK]] * 3 + [[BONUS, INK, INK, INK, INK, INK]] * 3, bolds=[None] + [[True, False, False, False, False, True]] * 6, aligns=["l", "c", "r", "r", "r", "c"])
+    bullets(s, X0, 6.2, XW, 0.78, ["build/build.pbs builds from the official public sources; run/submit.sh 1|2|4 runs the whole Allrun chain with plain qsub", "Every step ended with End and returned 0; every solve job reported bound=128/128 on every node"], size=13.5)
     return s
 
 
 def s_rejected():
     s = supp("NOT ADOPTED: THE FULL LIST", "What we tried, what happened, and what we learned", "s_rejected")
-    rows = [["Idea (tier)", "Result, 4 nodes", "Why it did not help"], ["-march=znver3, AOCC 5.0, -O2, LTO (Basic)", "within ±0.1%", "The loops wait on memory, not on instructions"], ["GCC profile-guided optimisation (Basic)", "+0.13% (+0.08% on 1 node)", "The same; Cd bit-identical"], ["Default OFI with the organisers' workarounds (Basic)", "+0.77% (3 v 3), +0.50% (1 v 1)", "Not faster than UCX; same Cd, no SIGBUS"], ["UCX over RC instead of UD between nodes", "−0.01% Basic, −0.16% Bonus", "IMB bandwidth +55%, but a step does not wait on transfers"], ["OpenFOAM comm switches (topoControl, nbx, pbufs)", "no gain; commsType scheduled crashed", "MPI time is waiting for the slowest rank"], ["Rank reordering (MPICH_RANK_REORDER_METHOD=3)", "+0.1%, 92% fewer faces between nodes", "Fewer bytes between nodes do not shorten the wait"], ["GAMG coarsest level on fewer ranks (Bonus)", "−0.25% to +4.95%", "81% of the global sums, but ≈ 0.6% of the time"], ["Weighted cells (×2, ×12), METIS two constraints (Bonus)", "+1.5% to +6.1%", "Uneven cells, or 18% more faces between subdomains"], ["glibc malloc thresholds (Basic)", "−0.4% (3 jobs)", "Too small to separate with 3 jobs; not re-tested"], ["SMT, 2 ranks per core (Basic)", "≈ 5.7× slower", "Stalls of minutes; cause not isolated"], ["Overlapping halo exchange with computation", "under 1% available", "Led to skipping unused exchanges instead (0003)"], ["File I/O in the timed steps", "≈ 0.01% of a step", "Not a factor"]]
-    table(s, X0, 1.6, [4.85, 3.45, 3.63], rows, row_h=0.37, size=11.5, bolds=[None] + [[True, False, False]] * 12, margins=(0.08, 0.04, 0.08, 0.04))
+    heading(s, X0, 1.55, XW, "Table", "Every idea we did not adopt: Basic, then Bonus, then other ideas")
+    rows = [["Idea (tier)", "Result, 4 nodes", "Why it did not help"], ["-march=znver3, AOCC 5.0, -O2, LTO (Basic)", "within ±0.1%", "The loops wait on memory, not on instructions"], ["GCC profile-guided optimisation (Basic)", "+0.13% (+0.08% on 1 node)", "The same; Cd bit-identical"], ["Default OFI with the organisers' workarounds (Basic)", "+0.77% (3 v 3), +0.50% (1 v 1)", "Not faster than UCX; same Cd, no SIGBUS"], ["UCX over RC instead of UD between nodes", "−0.01% Basic, −0.16% Bonus", "IMB bandwidth +55%, but a step does not wait on transfers"], ["OpenFOAM comm switches (topoControl, nbx, pbufs)", "no gain; commsType scheduled crashed", "MPI time is waiting for the slowest rank"], ["Rank reordering (MPICH_RANK_REORDER_METHOD=3)", "+0.1%, 92% fewer faces between nodes", "Fewer bytes between nodes do not shorten the wait"], ["glibc malloc thresholds (Basic)", "−0.4% (3 jobs)", "Too small to separate with 3 jobs; not re-tested"], ["SMT, 2 ranks per core (Basic)", "≈ 5.7× slower", "Stalls of minutes; cause not isolated"], ["GAMG coarsest level on fewer ranks (Bonus)", "−0.25% to +4.95%", "81% of the global sums, but ≈ 0.6% of the time"], ["Weighted cells (×2, ×12), METIS two constraints (Bonus)", "+1.5% to +6.1%", "Uneven cells, or 18% more faces between subdomains"], ["Overlapping halo exchange with computation", "under 1% available", "Led to skipping unused exchanges instead (0003)"], ["File I/O in the timed steps", "≈ 0.01% of a step", "Not a factor"]]
+    table(s, X0, 1.9, [4.7, 3.25, 3.98], rows, row_h=0.36, size=11, bolds=[None] + [[True, False, False]] * 12, margins=(0.08, 0.02, 0.08, 0.02))
     return s
 
 
@@ -751,8 +797,8 @@ def s_compiler():
     clear_slide(s)
     set_title(s, "COMPILER AND FLAGS")
     message(s, "Every compiler and flag variant lies inside the control's range", size=18)
-    picture_fit(s, fig("fig07_compiler_options"), X0, 1.5, XW, 5.02)
-    caption(s, "4 nodes, scotch, 3 jobs each in the same period (2026-10-03). Shaded: range of the control jobs; every mean lies inside it. GCC PGO: +0.13% (#59).", size=11.5)
+    heading(s, X0, 1.58, XW, "Figure", "Each compiler and flag variant against the control, 4 nodes, each job", sub="scotch, 3 jobs each in the same period (2026-10-03); shaded: the range of the control jobs. GCC PGO, run separately: +0.13%")
+    picture_fit(s, fig("fig07_compiler_options"), X0, 2.3, XW, 4.68)
     set_notes(s, NOTES["s_compiler"])
     return s
 
@@ -761,7 +807,7 @@ def fill_index(s, entries):
     """Q&A index: one clickable line per supporting slide; call after the slide order is final."""
     set_title(s, "Q&A INDEX")
     message(s, "Supporting slides for questions: click a line to jump there", size=18)
-    groups = [(0, "Method and setup", entries[0:5]), (0, "Baseline and Basic", entries[5:9]), (1, "Memory and Bonus", entries[9:16]), (1, "Results, and what we did not use", entries[16:])]
+    groups = [(0, "Method and setup", entries[0:5]), (0, "Baseline and Basic", entries[5:10]), (1, "Memory and Bonus", entries[10:17]), (1, "Results, and what we did not use", entries[17:])]
     next_y = [1.6, 1.6]
     for column, group_name, items in groups:
         x, y0 = (X0, 6.78)[column], next_y[column]
@@ -776,11 +822,13 @@ def fill_index(s, entries):
 # ====================================================================== assemble
 main = [slide_title(), slide_overview(), slide_aspire(), slide_baseline_settings(), slide_baseline_results(), slide_measure(), slide_mpi_profile(), slide_baseline_analysis(), slide_strategy(), slide_basic_pinning(), slide_basic_decomp(), slide_basic_results(), slide_bandwidth(), slide_bonus_opt(), slide_bonus_results(), slide_bonus_analysis(), slide_scaling(), slide_not_helped(), slide_conclusion(), slide_extra()]
 divider = S[15]
-supporting = [("Optimization plan", s_plan()), ("Measuring honestly", s_noise()), ("Experiment automation", s_automation()), ("Build, storage and MPI", s_build()), ("The organisers' reference", s_reference()), ("Where a step goes after Basic", s_step()), ("The path on 4 nodes", s_path()), ("Is the network the bottleneck?", s_network()), ("OFI against UCX", s_ofi()), ("Cores or memory?", s_cores()), ("The source changes", s_changes()), ("Source changes in detail (1/2)", s_detail1()), ("Source changes in detail (2/2)", s_detail2()), ("Effect of each Bonus change", s_each()), ("Profiles before and after", s_profiles()), ("Why the efficiency exceeds 1", s_efficiency()), ("Drag coefficient checks", s_cd()), ("Reproducing our results", s_repro()), ("Not adopted: the full list", s_rejected()), ("Compiler and flags", s_compiler())]
-add_sldnum(S[23], SLDNUM)  # the shared reproducibility slide held a static "14"
-deleted = [S[17], S[18], S[21], S[22]]  # 10/08 compact slides that repeat the main part with older numbers
+COUNT.update(Figure=0, Table=0)
+SERIES[0] = "S"
+supporting = [("Bottlenecks we measured", s_bottlenecks()), ("Measuring honestly", s_noise()), ("Experiment automation", s_automation()), ("Build, storage and MPI", s_build()), ("The organisers' reference", s_reference()), ("Where a step goes after Basic", s_step()), ("The path on 4 nodes", s_path()), ("Is the network the bottleneck?", s_network()), ("OFI against UCX", s_ofi()), ("The three splits: faces or even work?", s_splits()), ("Cores or memory?", s_cores()), ("The source changes", s_changes()), ("Source changes in detail (1/2)", s_detail1()), ("Source changes in detail (2/2)", s_detail2()), ("Effect of each Bonus change", s_each()), ("Profiles before and after", s_profiles()), ("Why the efficiency exceeds 1", s_efficiency()), ("Drag coefficient checks", s_cd()), ("Reproducing our results", s_repro()), ("Not adopted: the full list", s_rejected()), ("Compiler and flags", s_compiler())]
+# 10/08 compact slides that repeat the main part with older numbers, and the shared reproducibility slide (removed by the team)
+deleted = [S[17], S[18], S[21], S[22], S[23]]
 index_slide = new_slide()
-order = main + [divider, index_slide] + [sl for _, sl in supporting] + S[23:]
+order = main + [divider, index_slide] + [sl for _, sl in supporting] + S[24:]
 
 sldIdLst = prs.slides._sldIdLst
 by_part = {prs.part.related_part(sldId.rId): sldId for sldId in sldIdLst}
