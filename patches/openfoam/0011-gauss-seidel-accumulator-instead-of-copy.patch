@@ -1,0 +1,307 @@
+Subject: [PATCH 0011] GaussSeidel: accumulate corrections without copying source
+
+F3 rounding change (not bit-identical). Write s for source[celli], i_j for
+interface contributions in their existing update order, and l_j*psi_j for
+lower-neighbour contributions in the existing forward-sweep scatter order.
+Before diagonal division, with upper-neighbour terms still subtracted last:
+
+  old: (((((s - i1) - i2) ...) - l1*psi1) - l2*psi2 ...) - u1*psi...;
+  new: (s + (((((0 - i1) - i2) ...) - l1*psi1) - l2*psi2 ...))
+       - u1*psi...;
+
+Same terms and sweep order; the interface/lower sum is reassociated away from
+s. The division and upper-neighbour loop are unchanged. Each cell resets its
+accumulator before scattering only to larger indices, leaving zero between
+sweeps/calls. Object calls retain a private zero-initialised field; the public
+static entry point and batched component solver initialise their own fields
+once per call. Shared matrix.work() is not used: symGaussSeidel also uses it
+and leaves non-zero contents.
+
+A multiply/subtract such as acc[u] -= lower*psii or psii -= upper*psi[u]
+can contract to FMA if enabled. With -ffp-contract=off it cannot. Contrary to
+the task's premise, this GCC 13.3 defaults to -ffp-contract=fast even with
+-std=c++17; native FMA additionally requires suitable target flags. No compiler
+flags are changed here. F3 Cd validation remains necessary.
+
+diff --git a/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.C b/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.C
+index e7d0bee4..623ac8ba 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.C
++++ b/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.C
+@@ -62,7 +62,8 @@ Foam::GaussSeidelSmoother::GaussSeidelSmoother
+         interfaceBouCoeffs,
+         interfaceIntCoeffs,
+         interfaces
+-    )
++    ),
++    acc_(matrix.diag().size(), Zero)
+ {}
+ 
+ 
+@@ -79,15 +80,44 @@ void Foam::GaussSeidelSmoother::smooth
+     const direction cmpt,
+     const label nSweeps
+ )
++{
++    // The static entry point has no smoother object to retain the storage.
++    solveScalarField acc(psi.size(), Zero);
++
++    smooth
++    (
++        fieldName_,
++        psi,
++        matrix_,
++        source,
++        interfaceBouCoeffs_,
++        interfaces_,
++        cmpt,
++        nSweeps,
++        acc
++    );
++}
++
++
++void Foam::GaussSeidelSmoother::smooth
++(
++    const word& fieldName_,
++    solveScalarField& psi,
++    const lduMatrix& matrix_,
++    const solveScalarField& source,
++    const FieldField<Field, scalar>& interfaceBouCoeffs_,
++    const lduInterfaceFieldPtrsList& interfaces_,
++    const direction cmpt,
++    const label nSweeps,
++    solveScalarField& acc
++)
+ {
+     solveScalar* __restrict__ psiPtr = psi.begin();
+ 
+     const label nCells = psi.size();
+ 
+-    //solveScalarField bPrime(nCells);
+-    solveScalarField& bPrime = matrix_.work(nCells);
+-
+-    solveScalar* __restrict__ bPrimePtr = bPrime.begin();
++    const solveScalar* const __restrict__ sourcePtr = source.begin();
++    solveScalar* __restrict__ accPtr = acc.begin();
+ 
+     const scalar* const __restrict__ diagPtr = matrix_.diag().begin();
+     const scalar* const __restrict__ upperPtr =
+@@ -116,8 +146,6 @@ void Foam::GaussSeidelSmoother::smooth
+ 
+     for (label sweep=0; sweep<nSweeps; sweep++)
+     {
+-        bPrime = source;
+-
+         const label startRequest = UPstream::nRequests();
+ 
+         matrix_.initMatrixInterfaces
+@@ -126,7 +154,7 @@ void Foam::GaussSeidelSmoother::smooth
+             interfaceBouCoeffs_,
+             interfaces_,
+             psi,
+-            bPrime,
++            acc,
+             cmpt
+         );
+ 
+@@ -136,7 +164,7 @@ void Foam::GaussSeidelSmoother::smooth
+             interfaceBouCoeffs_,
+             interfaces_,
+             psi,
+-            bPrime,
++            acc,
+             cmpt,
+             startRequest
+         );
+@@ -151,8 +179,11 @@ void Foam::GaussSeidelSmoother::smooth
+             fStart = fEnd;
+             fEnd = ownStartPtr[celli + 1];
+ 
+-            // Get the accumulated neighbour side
+-            psii = bPrimePtr[celli];
++            // Add the source after the interface and lower-neighbour sum.
++            // All scatter targets have larger indices, so resetting here
++            // leaves the accumulator zero at the end of every sweep.
++            psii = sourcePtr[celli] + accPtr[celli];
++            accPtr[celli] = 0;
+ 
+             // Accumulate the owner product side
+             for (label facei=fStart; facei<fEnd; facei++)
+@@ -166,7 +197,7 @@ void Foam::GaussSeidelSmoother::smooth
+             // Distribute the neighbour side using psi for this cell
+             for (label facei=fStart; facei<fEnd; facei++)
+             {
+-                bPrimePtr[uPtr[facei]] -= lowerPtr[facei]*psii;
++                accPtr[uPtr[facei]] -= lowerPtr[facei]*psii;
+             }
+ 
+             psiPtr[celli] = psii;
+@@ -192,7 +223,8 @@ void Foam::GaussSeidelSmoother::smooth
+         interfaceBouCoeffs_,
+         interfaces_,
+         cmpt,
+-        nSweeps
++        nSweeps,
++        acc_
+     );
+ }
+ 
+@@ -214,7 +246,8 @@ void Foam::GaussSeidelSmoother::scalarSmooth
+         interfaceBouCoeffs_,
+         interfaces_,
+         cmpt,
+-        nSweeps
++        nSweeps,
++        acc_
+     );
+ }
+ 
+diff --git a/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.H b/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.H
+index 99ff6fa9..28193fbf 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.H
++++ b/src/OpenFOAM/matrices/lduMatrix/smoothers/GaussSeidel/GaussSeidelSmoother.H
+@@ -56,6 +56,28 @@ class GaussSeidelSmoother
+ :
+     public lduMatrix::smoother
+ {
++    // Private Data
++
++        //- Interface and lower-neighbour sum, zero between sweeps and calls
++        mutable solveScalarField acc_;
++
++
++    // Private Member Functions
++
++        //- Smooth with an accumulator that is zero on entry and on return
++        static void smooth
++        (
++            const word& fieldName,
++            solveScalarField& psi,
++            const lduMatrix& matrix,
++            const solveScalarField& source,
++            const FieldField<Field, scalar>& interfaceBouCoeffs,
++            const lduInterfaceFieldPtrsList& interfaces,
++            const direction cmpt,
++            const label nSweeps,
++            solveScalarField& acc
++        );
++
+ 
+ public:
+ 
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+index c8f9bdf2..9731e572 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -64,7 +64,8 @@ void gaussSeidelSweep
+     const Foam::scalar* const __restrict__ lowerPtr,
+     const Foam::scalar* const diagPtr[N],
+     Foam::solveScalar* const psiPtr[N],
+-    Foam::solveScalar* const bPrimePtr[N]
++    const Foam::solveScalar* const sourcePtr[N],
++    Foam::solveScalar* const accPtr[N]
+ )
+ {
+     using namespace Foam;
+@@ -79,10 +80,11 @@ void gaussSeidelSweep
+         fStart = fEnd;
+         fEnd = ownStartPtr[celli + 1];
+ 
+-        // Get the accumulated neighbour side
++        // Consume and reset after all interface and lower-neighbour terms.
+         for (int k=0; k<N; k++)
+         {
+-            psii[k] = bPrimePtr[k][celli];
++            psii[k] = sourcePtr[k][celli] + accPtr[k][celli];
++            accPtr[k][celli] = 0;
+         }
+ 
+         // Accumulate the owner product side
+@@ -109,7 +111,7 @@ void gaussSeidelSweep
+             const label j = uPtr[facei];
+             for (int k=0; k<N; k++)
+             {
+-                bPrimePtr[k][j] -= a*psii[k];
++                accPtr[k][j] -= a*psii[k];
+             }
+         }
+ 
+@@ -445,10 +447,12 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+     const scalar* const upperPtr = cmatrix.upper().begin();
+     const scalar* const lowerPtr = cmatrix.lower().begin();
+ 
+-    PtrList<solveScalarField> bPrime(nCmpt);
++    // Each active component consumes all its entries on every sweep. An
++    // inactive component remains zero, including when no sweeps are taken.
++    PtrList<solveScalarField> acc(nCmpt);
+     for (label k=0; k<nCmpt; k++)
+     {
+-        bPrime.set(k, new solveScalarField(nCells));
++        acc.set(k, new solveScalarField(nCells, Zero));
+     }
+ 
+     while (active[0] || active[1] || active[2])
+@@ -465,7 +469,6 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                 if (!active[k]) continue;
+ 
+                 const smoothSolver& s = *solvers[k];
+-                bPrime[k] = *source[k];
+ 
+                 const label startRequest = UPstream::nRequests();
+ 
+@@ -475,7 +478,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                     s.interfaceBouCoeffs_,
+                     s.interfaces_,
+                     *psi[k],
+-                    bPrime[k],
++                    acc[k],
+                     k
+                 );
+ 
+@@ -485,7 +488,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                     s.interfaceBouCoeffs_,
+                     s.interfaces_,
+                     *psi[k],
+-                    bPrime[k],
++                    acc[k],
+                     k,
+                     startRequest
+                 );
+@@ -495,8 +498,20 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+             {
+                 const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
+                 solveScalar* p[3] = {psi[0]->data(), psi[1]->data(), psi[2]->data()};
+-                solveScalar* b[3] = {bPrime[0].data(), bPrime[1].data(), bPrime[2].data()};
+-                gaussSeidelSweep<3>(nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, b);
++                const solveScalar* s[3] =
++                {
++                    source[0]->cdata(),
++                    source[1]->cdata(),
++                    source[2]->cdata()
++                };
++                solveScalar* a[3] =
++                {
++                    acc[0].data(), acc[1].data(), acc[2].data()
++                };
++                gaussSeidelSweep<3>
++                (
++                    nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
++                );
+             }
+             else
+             {
+@@ -505,8 +520,12 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                     if (!active[k]) continue;
+                     const scalar* d[1] = {diag[k]->cdata()};
+                     solveScalar* p[1] = {psi[k]->data()};
+-                    solveScalar* b[1] = {bPrime[k].data()};
+-                    gaussSeidelSweep<1>(nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, b);
++                    const solveScalar* s[1] = {source[k]->cdata()};
++                    solveScalar* a[1] = {acc[k].data()};
++                    gaussSeidelSweep<1>
++                    (
++                        nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
++                    );
+                 }
+             }
+         }
