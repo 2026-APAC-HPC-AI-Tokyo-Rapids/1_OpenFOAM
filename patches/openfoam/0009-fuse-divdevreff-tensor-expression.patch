@@ -1,0 +1,135 @@
+diff --git a/src/TurbulenceModels/turbulenceModels/linearViscousStress/linearViscousStress.C b/src/TurbulenceModels/turbulenceModels/linearViscousStress/linearViscousStress.C
+index 057720d6..54ab04af 100644
+--- a/src/TurbulenceModels/turbulenceModels/linearViscousStress/linearViscousStress.C
++++ b/src/TurbulenceModels/turbulenceModels/linearViscousStress/linearViscousStress.C
+@@ -30,6 +30,106 @@ License
+ #include "fvc.H"
+ #include "fvm.H"
+ 
++// * * * * * * * * * * * * * * * Local Functions * * * * * * * * * * * * * * //
++
++namespace Foam
++{
++namespace
++{
++
++//- The field muEff*dev2(T(gradU)) formed in one pass over the cells and
++//- one pass over each patch.
++//
++//  The field algebra evaluates this expression as three whole-field
++//  operations, T(), dev2() and scalar*tensor, each a loop that writes a
++//  complete volTensorField (the first allocates it, the other two reuse it
++//  in place) and each followed by correctLocalBoundaryConditions().
++//  Here every cell and every patch face receives
++//  muEff[i]*dev2(gradU[i].T()), which applies the same inline primitives
++//  (Tensor::T(), dev2(const Tensor&) and operator*(scalar, VectorSpace))
++//  to the same operands in the same order as the Field loops do, so every
++//  value is unchanged and only the intermediate passes over memory are
++//  removed.
++//
++//  The result field is obtained exactly as T(tmp<volTensorField>) obtains
++//  it (reuseTmpGeometricField: reuse of a movable gradient, otherwise a new
++//  field with the default calculated/constraint patch types), and the patch
++//  values are written through the Field base as the FieldField operations
++//  do, so processor and other constraint patches hold the same values.
++//  The local boundary evaluation that the algebra performs after every
++//  operation depends only on the final values, so it is done once at the
++//  end. The name is the one the algebra builds, since fvc::div selects the
++//  divScheme by it.
++tmp<volTensorField> muEffDev2TGrad
++(
++    const tmp<volScalarField>& tmuEff,
++    const tmp<volTensorField>& tgradU
++)
++{
++    const volScalarField& muEff = tmuEff();
++    const volTensorField& gradU = tgradU();
++
++    const word name
++    (
++        '(' + muEff.name() + '*' + "dev2(T(" + gradU.name() + ")))"
++    );
++    const orientedType oriented(muEff.oriented()*gradU.oriented());
++
++    auto tres = reuseTmpGeometricField<tensor, tensor, fvPatchField, volMesh>
++    ::New
++    (
++        tgradU,
++        name,
++        muEff.dimensions()*gradU.dimensions()
++    );
++    volTensorField& res = tres.ref();
++
++    {
++        tensorField& ires = res.primitiveFieldRef();
++        const scalarField& imuEff = muEff.primitiveField();
++        const tensorField& igradU = gradU.primitiveField();
++
++        forAll(ires, celli)
++        {
++            ires[celli] = imuEff[celli]*dev2(igradU[celli].T());
++        }
++    }
++
++    {
++        volTensorField::Boundary& bres = res.boundaryFieldRef();
++        const volScalarField::Boundary& bmuEff = muEff.boundaryField();
++        const volTensorField::Boundary& bgradU = gradU.boundaryField();
++
++        forAll(bres, patchi)
++        {
++            tensorField& pres = bres[patchi];
++            const scalarField& pmuEff = bmuEff[patchi];
++            const tensorField& pgradU = bgradU[patchi];
++
++            forAll(pres, facei)
++            {
++                pres[facei] = pmuEff[facei]*dev2(pgradU[facei].T());
++            }
++        }
++    }
++
++    res.oriented() = oriented;
++    res.correctLocalBoundaryConditions();
++    if (volTensorField::Boundary::debug)
++    {
++        res.boundaryField().check();
++    }
++
++    tmuEff.clear();
++    tgradU.clear();
++
++    return tres;
++}
++
++} // End anonymous namespace
++} // End namespace Foam
++
++
+ // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+ 
+ template<class BasicTurbulenceModel>
+@@ -111,7 +211,10 @@ Foam::linearViscousStress<BasicTurbulenceModel>::divDevRhoReff
+ {
+     return
+     (
+-      - fvc::div((this->alpha_*this->rho_*this->nuEff())*dev2(T(fvc::grad(U))))
++      - fvc::div
++        (
++            muEffDev2TGrad(this->alpha_*this->rho_*this->nuEff(), fvc::grad(U))
++        )
+       - fvm::laplacian(this->alpha_*this->rho_*this->nuEff(), U)
+     );
+ }
+@@ -127,7 +230,10 @@ Foam::linearViscousStress<BasicTurbulenceModel>::divDevRhoReff
+ {
+     return
+     (
+-      - fvc::div((this->alpha_*rho*this->nuEff())*dev2(T(fvc::grad(U))))
++      - fvc::div
++        (
++            muEffDev2TGrad(this->alpha_*rho*this->nuEff(), fvc::grad(U))
++        )
+       - fvm::laplacian(this->alpha_*rho*this->nuEff(), U)
+     );
+ }

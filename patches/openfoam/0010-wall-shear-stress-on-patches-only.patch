@@ -1,0 +1,73 @@
+diff --git a/src/functionObjects/field/wallShearStress/wallShearStress.C b/src/functionObjects/field/wallShearStress/wallShearStress.C
+index 1a7325e0..b205b750 100644
+--- a/src/functionObjects/field/wallShearStress/wallShearStress.C
++++ b/src/functionObjects/field/wallShearStress/wallShearStress.C
+@@ -31,6 +31,8 @@ License
+ #include "surfaceFields.H"
+ #include "turbulentTransportModel.H"
+ #include "turbulentFluidThermoModel.H"
++#include "nonlinearEddyViscosity.H"
++#include "fvcGrad.H"
+ #include "wallPolyPatch.H"
+ #include "addToRunTimeSelectionTable.H"
+ 
+@@ -209,7 +211,58 @@ bool Foam::functionObjects::wallShearStress::execute()
+ 
+         if (modelPtr)
+         {
+-            calcShearStress(modelPtr->devReff(), wallShearStress);
++            const turbType& turb = *modelPtr;
++
++            // For the linear eddy-viscosity models devReff() is
++            // linearViscousStress::devRhoReff(U), which evaluates
++            //     (-(alpha*rho*nuEff()))*devTwoSymm(fvc::grad(U))
++            // over the whole mesh, while only its values on patchIDs_ are
++            // read.  alpha and rho are geometricOneField and drop out, and
++            // every operation acts element by element, also on the patches
++            // (no patch evaluation changes a non-coupled patch).  Applying
++            // the same operations to the same patch values gives the same
++            // Reff on those patches:
++            //     nuEff(patchi) = nut_.boundaryField()[patchi] + nu(patchi)
++            // and gradU is the same fvc::grad(U) (cached when requested).
++            // Models that override devRhoReff() keep the volume evaluation.
++            if
++            (
++                (
++                    isA<eddyViscosity<incompressible::RASModel>>(turb)
++                && !isA<nonlinearEddyViscosity<incompressible::RASModel>>(turb)
++                )
++             || isA<eddyViscosity<incompressible::LESModel>>(turb)
++            )
++            {
++                tmp<volTensorField> tgradU = fvc::grad(turb.U());
++                const volTensorField& gradU = tgradU();
++
++                wallShearStress.dimensions().reset
++                (
++                    turb.nut()().dimensions()*gradU.dimensions()
++                );
++
++                for (const label patchi : patchIDs_)
++                {
++                    vectorField& ssp =
++                        wallShearStress.boundaryFieldRef()[patchi];
++                    const vectorField& Sfp =
++                        mesh_.Sf().boundaryField()[patchi];
++                    const scalarField& magSfp =
++                        mesh_.magSf().boundaryField()[patchi];
++                    const symmTensorField Reffp
++                    (
++                        (-turb.nuEff(patchi))
++                       *devTwoSymm(gradU.boundaryField()[patchi])
++                    );
++
++                    ssp = (-Sfp/magSfp) & Reffp;
++                }
++            }
++            else
++            {
++                calcShearStress(turb.devReff(), wallShearStress);
++            }
+             return true;
+         }
+     }

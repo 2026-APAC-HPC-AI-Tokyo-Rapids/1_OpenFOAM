@@ -1,0 +1,52 @@
+diff --git a/applications/solvers/incompressible/simpleFoam/createFields.H b/applications/solvers/incompressible/simpleFoam/createFields.H
+index 3c497152..fc631832 100644
+--- a/applications/solvers/incompressible/simpleFoam/createFields.H
++++ b/applications/solvers/incompressible/simpleFoam/createFields.H
+@@ -31,7 +31,14 @@ volVectorField U
+ 
+ label pRefCell = 0;
+ scalar pRefValue = 0.0;
+-setRefCell(p, simple.dict(), pRefCell, pRefValue);
++// Whether p needs a reference level depends only on its patch types, which
++// do not change during the run: decide it once here and let pEqn.H skip the
++// global reduction that needReference() repeats in adjustPhi and
++// setReference every time step. Unused where createFields.H is included
++// without pEqn.H (postProcess.H, porousSimpleFoam), hence maybe_unused.
++[[maybe_unused]]
++const bool pNeedsReference =
++    setRefCell(p, simple.dict(), pRefCell, pRefValue);
+ mesh.setFluxRequired(p.name());
+ 
+ 
+diff --git a/applications/solvers/incompressible/simpleFoam/pEqn.H b/applications/solvers/incompressible/simpleFoam/pEqn.H
+index a8bbb6b7..0a7be5d7 100644
+--- a/applications/solvers/incompressible/simpleFoam/pEqn.H
++++ b/applications/solvers/incompressible/simpleFoam/pEqn.H
+@@ -3,7 +3,12 @@
+     volVectorField HbyA(constrainHbyA(rAU*UEqn.H(), U, p));
+     surfaceScalarField phiHbyA("phiHbyA", fvc::flux(HbyA));
+     MRF.makeRelative(phiHbyA);
+-    adjustPhi(phiHbyA, U, p);
++    // adjustPhi does nothing unless p needs a reference (decided once in
++    // createFields.H)
++    if (pNeedsReference)
++    {
++        adjustPhi(phiHbyA, U, p);
++    }
+ 
+     tmp<volScalarField> rAtU(rAU);
+ 
+@@ -28,7 +33,12 @@
+             fvm::laplacian(rAtU(), p) == fvc::surfaceIntegrateInternal(phiHbyA)
+         );
+ 
+-        pEqn.setReference(pRefCell, pRefValue);
++        // forceReference: pNeedsReference already holds the answer that
++        // setReference would recompute with a global reduction
++        if (pNeedsReference)
++        {
++            pEqn.setReference(pRefCell, pRefValue, true);
++        }
+ 
+         pEqn.solve();
+ 

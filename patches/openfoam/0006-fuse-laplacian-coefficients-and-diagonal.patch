@@ -1,0 +1,33 @@
+diff --git a/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C b/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
+index 6f5a2aae..c4dd1621 100644
+--- a/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
++++ b/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
+@@ -62,8 +62,26 @@ gaussLaplacianScheme<Type, GType>::fvmLaplacianUncorrected
+     );
+     fvMatrix<Type>& fvm = tfvm.ref();
+ 
+-    fvm.upper() = deltaCoeffs.primitiveField()*gammaMagSf.primitiveField();
+-    fvm.negSumDiag();
++    // upper = deltaCoeffs*gammaMagSf and negSumDiag in one face loop, without
++    // the temporary product field and its copy. The new matrix is symmetric,
++    // so negSumDiag subtracts upper on both sides; the operations and their
++    // order per face are those of the two separate steps.
++    {
++        const scalarField& dc = deltaCoeffs.primitiveField();
++        const scalarField& gm = gammaMagSf.primitiveField();
++        scalarField& upper = fvm.upper();
++        scalarField& diag = fvm.diag();
++        const labelUList& l = fvm.lduAddr().lowerAddr();
++        const labelUList& u = fvm.lduAddr().upperAddr();
++
++        for (label face=0; face<l.size(); face++)
++        {
++            const scalar a = dc[face]*gm[face];
++            upper[face] = a;
++            diag[l[face]] -= a;
++            diag[u[face]] -= a;
++        }
++    }
+ 
+     forAll(vf.boundaryField(), patchi)
+     {
