@@ -1,0 +1,275 @@
+Subject: [PATCH 0012] PCG: one reduction per fixed-count DIC-CG iteration
+
+Use preconditioned Chronopoulos/Gear CG only for DIC with
+minIter > 0 && minIter >= maxIter. Keep the original loop for other controls
+or preconditioners. Keep the initial guess, normalisation, initial residual,
+min/max/checkConvergence predicate, singularity test, residual-field hooks,
+setFinished and solverPerformance meanings. The caller GAMG starts the coarse
+correction at zero and only prints the returned performance when requested;
+no GAMG changes are needed. Exactly minIter steps are taken absent breakdown,
+just as before (35 for the intended case).
+
+Reference: Ghysels & Vanroose, Hiding global synchronization latency in the
+preconditioned Conjugate Gradient algorithm, Parallel Computing 40 (2014),
+224-238, doi:10.1016/j.parco.2013.06.001, Algorithm 2, lines 4-13 and Eq. (3)
+(the preconditioned Chronopoulos/Gear form, not the deeper pipelined form).
+
+Let u=M^-1*r, w=A*u, gamma=r.u, delta=w.u. Reduce (gamma,delta,L1(r))
+together with FixedList<solveScalar,3> and sumOp<solveScalar> on the matrix
+communicator, as in GAMGSolver::scale. Use p=u+beta*pOld and
+s=w+beta*sOld=A*p. First eta=delta, then beta=gamma/gammaOld and
+eta=delta-beta*gamma/alphaOld; alpha=gamma/eta. In exact arithmetic,
+eta=p.A*p=delta-beta^2*etaOld, so this is the same DIC-CG iteration.
+The x and r updates are x+=alpha*p and r-=alpha*s as before.
+
+F3 rounding change (not bit-identical): the direct (A*p).p reduction is
+replaced by (A*u).u minus beta*gamma/alphaOld, which can suffer cancellation;
+s is formed by a vector recurrence instead of directly evaluating A*p. The
+same p, x and r recurrences therefore receive different rounded operands.
+Packing the reductions may also change MPI's summation tree. L1 is still a
+sum of abs(r_i), never a squared norm or an inferred recurrence value.
+
+One startup reduction prepares the first step. After each update, the next
+u and w (if needed) are computed and the updated r's L1 norm is packed with
+the next step's products. The check thus sees exactly the same quantity at
+the same iteration as before, without a lag. The final reduction needs only
+L1; the other two entries are zero and no unused preconditioner or Amul is
+performed. A complete N-step solve has N+1 such reductions, versus 3N in the
+old loop, plus unchanged setup reductions. For N=35: 36 versus 105. There
+are still N preconditioner applications and N iteration matrix multiplies.
+The reduction is blocking; no nonblocking overlap is claimed.
+
+With contraction enabled, dot-product sums, s=w+beta*sOld and the unchanged
+p/x/r multiply-add/subtract expressions may use FMA on a suitable target.
+No flags are changed. GCC 13.3 defaults to -ffp-contract=fast with
+-std=c++17; explicit -ffp-contract=off prevents contraction. F3 Cd and
+breakdown/stability validation on the 512-rank case remain necessary.
+
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+index a4316134..3b37aaf4 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+@@ -28,6 +28,7 @@ License
+ 
+ #include "PCG.H"
+ #include "PrecisionAdaptor.H"
++#include "FixedList.H"
+ 
+ // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+ 
+@@ -138,67 +139,177 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+             );
+         }
+ 
+-        // --- Solver iteration
+-        do
++        // Fixed-count DIC solves use Chronopoulos/Gear CG. Keep the general
++        // convergence-controlled path below unchanged.
++        if
++        (
++            minIter_ > 0
++         && minIter_ >= maxIter_
++         && lduMatrix::preconditioner::getName(controlDict_) == "DIC"
++        )
+         {
+-            // --- Store previous wArA
+-            wArAold = wArA;
++            solveScalarField uA(nCells);
++            solveScalar* __restrict__ uAPtr = uA.begin();
++
++            solveScalarField sA(nCells);
++            solveScalar* __restrict__ sAPtr = sA.begin();
++
++            // u = M^-1 r, w = A u. The two products concern the same r,
++            // so they can share a reduction with its L1 norm. On the last
++            // iteration only the norm is needed, with no extra M^-1 or A.
++            const auto reduceSums = [&](const bool nextDirection)
++            {
++                FixedList<solveScalar, 3> sums(Zero);
++
++                if (nextDirection)
++                {
++                    preconPtr_->precondition(uA, rA, cmpt);
++                    matrix_.Amul
++                    (
++                        wA, uA, interfaceBouCoeffs_, interfaces_, cmpt
++                    );
++
++                    for (label cell=0; cell<nCells; cell++)
++                    {
++                        sums[0] += uAPtr[cell]*rAPtr[cell];
++                        sums[1] += wAPtr[cell]*uAPtr[cell];
++                        sums[2] += mag(rAPtr[cell]);
++                    }
++                }
++                else
++                {
++                    sums[2] = sumMag(rA);
++                }
+ 
+-            // --- Precondition residual
+-            preconPtr_->precondition(wA, rA, cmpt);
++                matrix_.mesh().reduce(sums, sumOp<solveScalar>());
++                return sums;
++            };
+ 
+-            // --- Update search directions:
+-            wArA = gSumProd(wA, rA, matrix().mesh().comm());
++            // Startup products for the first step. Subsequent products are
++            // reduced after the update, alongside that step's residual norm.
++            FixedList<solveScalar, 3> sums = reduceSums(true);
++            solveScalar alpha = 0;
+ 
+-            if (solverPerf.nIterations() == 0)
++            // --- Solver iteration
++            do
+             {
++                wArAold = wArA;
++                wArA = sums[0];
++                solveScalar wApA = sums[1];
++
++                if (solverPerf.nIterations() == 0)
++                {
++                    for (label cell=0; cell<nCells; cell++)
++                    {
++                        pAPtr[cell] = uAPtr[cell];
++                        sAPtr[cell] = wAPtr[cell];
++                    }
++                }
++                else
++                {
++                    const solveScalar beta = wArA/wArAold;
++
++                    // Algorithm 2, lines 12-13, Ghysels & Vanroose (2014),
++                    // doi:10.1016/j.parco.2013.06.001. Equation (3) gives
++                    // s = A u + beta*sOld = A p in exact arithmetic.
++                    wApA -= beta*wArA/alpha;
++
++                    for (label cell=0; cell<nCells; cell++)
++                    {
++                        pAPtr[cell] = uAPtr[cell] + beta*pAPtr[cell];
++                        sAPtr[cell] = wAPtr[cell] + beta*sAPtr[cell];
++                    }
++                }
++
++                // --- Test for singularity before dividing, as in PCG
++                if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
++
++                alpha = wArA/wApA;
++
+                 for (label cell=0; cell<nCells; cell++)
+                 {
+-                    pAPtr[cell] = wAPtr[cell];
++                    psiPtr[cell] += alpha*pAPtr[cell];
++                    rAPtr[cell] -= alpha*sAPtr[cell];
+                 }
+-            }
+-            else
++
++                // A fixed-count solve continues until minIter_. Prepare
++                // the next products only if another step will be taken.
++                sums = reduceSums(solverPerf.nIterations() < minIter_ - 1);
++                solverPerf.finalResidual() = sums[2]/normFactor;
++
++            } while
++            (
++                (
++                  ++solverPerf.nIterations() < maxIter_
++                && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
++                )
++             || solverPerf.nIterations() < minIter_
++            );
++        }
++        else
++        {
++            // --- Solver iteration
++            do
+             {
+-                const solveScalar beta = wArA/wArAold;
++                // --- Store previous wArA
++                wArAold = wArA;
+ 
+-                for (label cell=0; cell<nCells; cell++)
++                // --- Precondition residual
++                preconPtr_->precondition(wA, rA, cmpt);
++
++                // --- Update search directions:
++                wArA = gSumProd(wA, rA, matrix().mesh().comm());
++
++                if (solverPerf.nIterations() == 0)
++                {
++                    for (label cell=0; cell<nCells; cell++)
++                    {
++                        pAPtr[cell] = wAPtr[cell];
++                    }
++                }
++                else
+                 {
+-                    pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
++                    const solveScalar beta = wArA/wArAold;
++
++                    for (label cell=0; cell<nCells; cell++)
++                    {
++                        pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
++                    }
+                 }
+-            }
+ 
+ 
+-            // --- Update preconditioned residual
+-            matrix_.Amul(wA, pA, interfaceBouCoeffs_, interfaces_, cmpt);
++                // --- Update preconditioned residual
++                matrix_.Amul(wA, pA, interfaceBouCoeffs_, interfaces_, cmpt);
+ 
+-            solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
++                solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
+ 
+-            // --- Test for singularity
+-            if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
++                // --- Test for singularity
++                if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
+ 
+ 
+-            // --- Update solution and residual:
++                // --- Update solution and residual:
+ 
+-            const solveScalar alpha = wArA/wApA;
++                const solveScalar alpha = wArA/wApA;
+ 
+-            for (label cell=0; cell<nCells; cell++)
+-            {
+-                psiPtr[cell] += alpha*pAPtr[cell];
+-                rAPtr[cell] -= alpha*wAPtr[cell];
+-            }
++                for (label cell=0; cell<nCells; cell++)
++                {
++                    psiPtr[cell] += alpha*pAPtr[cell];
++                    rAPtr[cell] -= alpha*wAPtr[cell];
++                }
+ 
+-            solverPerf.finalResidual() =
+-                gSumMag(rA, matrix().mesh().comm())
+-               /normFactor;
++                solverPerf.finalResidual() =
++                    gSumMag(rA, matrix().mesh().comm())
++                   /normFactor;
+ 
+-        } while
+-        (
++            } while
+             (
+-              ++solverPerf.nIterations() < maxIter_
+-            && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
+-            )
+-         || solverPerf.nIterations() < minIter_
+-        );
++                (
++                  ++solverPerf.nIterations() < maxIter_
++                && !solverPerf.checkConvergence(tolerance_, relTol_, log_)
++                )
++             || solverPerf.nIterations() < minIter_
++            );
++        }
+     }
+ 
+     if (preconPtr_)
