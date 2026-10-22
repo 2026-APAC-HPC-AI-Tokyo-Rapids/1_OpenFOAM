@@ -52,6 +52,13 @@ while :; do
   done
   if [[ "${checked}" == false ]] && (( SECONDS - seen_at >= 60 )); then
     printf 'affinity-keeper host=%s after_60s bound=%d/%d rebinds=%d\n' "${host}" "${bound}" "${#pids[@]}" "${rebinds}"
+    # 計算ノードのtransparent huge pageの設定と、1 rankのRSSのうちhuge pageで裏付けられた量を、jobごとに1回記録する（Issue #69）。
+    thp_enabled=$(tr -d '\n' < /sys/kernel/mm/transparent_hugepage/enabled)
+    sample_pid=${pids[0]}
+    rss_kb=
+    anon_huge_kb=
+    while IFS=$':\t ' read -r key value _; do case "${key}" in Rss) rss_kb=${value} ;; AnonHugePages) anon_huge_kb=${value} ;; esac; done 2>/dev/null < "/proc/${sample_pid}/smaps_rollup"
+    printf 'affinity-keeper host=%s thp enabled=%s pid=%s rss_kb=%s anon_huge_kb=%s\n' "${host}" "${thp_enabled}" "${sample_pid}" "${rss_kb}" "${anon_huge_kb}"
     checked=true
   fi
   if (( SECONDS - seen_at < 60 )); then sleep 0.1; else sleep 2; fi
