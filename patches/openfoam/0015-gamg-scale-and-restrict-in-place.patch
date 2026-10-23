@@ -1,0 +1,238 @@
+Subject: [PATCH 0015] fuse GAMG finest correction addition and residual
+ restriction
+
+Let scale optionally add the updated correction to psi in its final loop.
+Only the finest Vcycle call supplies psi; coarse-level scaling retains the
+original loop via a null default argument. Keep the literal scaling expression
+sf*field[i] + (source[i] - sf*Acf[i])/D[i], store it to field[i], then execute
+the original psi[i] += field[i]. The scale-factor dot products, cell order,
+MPI reduction, stabilisation, Amul, debug output and Jacobi update are
+unchanged. No addition is folded algebraically into the scaling expression.
+When scaleCorrection=false, keep the original standalone addition loop.
+No additional fusion is attempted on coarse corrections that must be smoothed
+before prolongation.
+
+After each Vcycle, when another cycle is permitted by min/max iteration
+limits and level 0 has no processor gather, combine finestResidual=source-Apsi
+with restriction into coarseSources[0]. Keep the stored residual for exactly
+the same gSumMag, scaling and setResidualField hooks. Use the same positive
+zero initialization and resize as restrictField, and for i in ascending fine
+cell order execute coarse[addr[i]] += finestResidual[i]. Each residual is the
+same scalar subtraction on the same operands. Each coarse sum sees identical
+rounded values in precisely the same sequence as GAMGAgglomeration's original
+restrictField. There is no multiplication here to introduce an FMA across the
+new addition. The next Vcycle skips only the already completed restriction.
+
+The first Vcycle still uses the original restriction; the final iteration
+limit avoids unused restriction. If an earlier convergence check succeeds,
+its prepared local coarse field is simply discarded. The convergence check,
+iteration counters, norms and number/order of reductions remain unchanged.
+With a processor gather at level 0 use subtract plus the original restrictField
+in Vcycle, so communication and gather order are untouched. All deeper-level
+restriction is unchanged. In particular, do not substitute Amul plus a new
+subtraction for the pre-smoothing residual method: that would change the
+per-cell accumulation/rounding order.
+
+Official occDrivAerStaticMesh fvSolution: p=GAMG/GaussSeidel, maxIter=12,
+tolerance=relTol=0, coarsestLevelCorr=PCG/DIC with minIter=maxIter=35.
+The default controls enable scaleCorrection for this symmetric pressure
+matrix, nPreSweeps=0 and interpolateCorrection=false. No case dictionaries,
+coarsest PCG code or sweep/iteration counts change.
+
+For a 12-cycle solve without a level-0 processor gather, remove 12 standalone
+finest-grid addition passes and merge 11 residual/restriction passes over
+~65.3M cells globally (~127.5k/rank at 512 ranks). The same coarse zero fills
+and all coarse sums remain. Estimate ~4-6/2396 profile samples (0.17-0.25%):
+parts of scale's 17 self samples, Vcycle's 4 self samples and restriction's
+5 non-memset samples; neither its 3 memset samples nor MPI/Amul time is claimed.
+This estimate is not a measured speedup.
+
+Validation: GCC 13.3 -fsyntax-only with check-all.sh flags/includes passes
+GAMGSolverSolve.C, GAMGSolverScale.C, GAMGSolver.C and GAMGSolverInterpolate.C.
+A standalone GCC -O3 -march=native -ffp-contract=fast probe compares 4,031,568
+values bitwise for separate vs fused scaling/addition and residual/restriction,
+including signed zero, cancellation, wide exponent ranges and empty fields.
+All match. EPYC znver3 assembly generation with contraction enabled also
+succeeds and contains FMA instructions. This supplements the per-value proof;
+the owner still needs the full serial/MPI coefficient.dat identity run.
+---
+ .../lduMatrix/solvers/GAMG/GAMGSolver.H       |  7 ++-
+ .../lduMatrix/solvers/GAMG/GAMGSolverScale.C  | 20 ++++++-
+ .../lduMatrix/solvers/GAMG/GAMGSolverSolve.C  | 58 ++++++++++++++++---
+ 3 files changed, 71 insertions(+), 14 deletions(-)
+
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolver.H b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolver.H
+index 153acb09..3fc0c769 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolver.H
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolver.H
+@@ -260,6 +260,7 @@ class GAMGSolver
+         //  At the same time do a Jacobi iteration on the coarseField using
+         //  the Acf provided after the coarseField values are used for the
+         //  scaling factor.
++        //  Optionally add the updated field to psi in the same pass.
+         void scale
+         (
+             solveScalarField& field,
+@@ -268,7 +269,8 @@ class GAMGSolver
+             const FieldField<Field, scalar>& interfaceLevelBouCoeffs,
+             const lduInterfaceFieldPtrsList& interfaceLevel,
+             const solveScalarField& source,
+-            const direction cmpt
++            const direction cmpt,
++            solveScalarField* psi = nullptr
+         ) const;
+ 
+         //- Initialise the data structures for the V-cycle
+@@ -297,7 +299,8 @@ class GAMGSolver
+ 
+             PtrList<solveScalarField>& coarseCorrFields,
+             PtrList<solveScalarField>& coarseSources,
+-            const direction cmpt=0
++            const direction cmpt=0,
++            const bool finestResidualRestricted=false
+         ) const;
+ 
+         //- Create and return the dictionary to specify the PCG solver
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverScale.C b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverScale.C
+index b616a1bf..3a899417 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverScale.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverScale.C
+@@ -39,7 +39,8 @@ void Foam::GAMGSolver::scale
+     const FieldField<Field, scalar>& interfaceLevelBouCoeffs,
+     const lduInterfaceFieldPtrsList& interfaceLevel,
+     const solveScalarField& source,
+-    const direction cmpt
++    const direction cmpt,
++    solveScalarField* psi
+ ) const
+ {
+     A.Amul
+@@ -82,9 +83,22 @@ void Foam::GAMGSolver::scale
+     const scalarField& D = A.diag();
+     const scalar* const __restrict__ DPtr = D.begin();
+ 
+-    for (label i=0; i<nCells; i++)
++    if (psi)
++    {
++        for (label i=0; i<nCells; i++)
++        {
++            // Keep the scaling expression and its stored result unchanged
++            // before the same addition previously done in Vcycle.
++            fieldPtr[i] = sf*fieldPtr[i] + (sourcePtr[i] - sf*AcfPtr[i])/DPtr[i];
++            (*psi)[i] += fieldPtr[i];
++        }
++    }
++    else
+     {
+-        fieldPtr[i] = sf*fieldPtr[i] + (sourcePtr[i] - sf*AcfPtr[i])/DPtr[i];
++        for (label i=0; i<nCells; i++)
++        {
++            fieldPtr[i] = sf*fieldPtr[i] + (sourcePtr[i] - sf*AcfPtr[i])/DPtr[i];
++        }
+     }
+ }
+ 
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
+index 96e7b04b..d69517a5 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/GAMG/GAMGSolverSolve.C
+@@ -116,6 +116,8 @@ Foam::solverPerformance Foam::GAMGSolver::solve
+             scratch2
+         );
+ 
++        bool finestResidualRestricted = false;
++
+         do
+         {
+             Vcycle
+@@ -132,13 +134,44 @@ Foam::solverPerformance Foam::GAMGSolver::solve
+ 
+                 coarseCorrFields,
+                 coarseSources,
+-                cmpt
++                cmpt,
++                finestResidualRestricted
+             );
+ 
+             // Calculate finest level residual field
+             matrix_.Amul(Apsi, psi, interfaceBouCoeffs_, interfaces_, cmpt);
+-            // One pass instead of a copy followed by a subtraction
+-            subtract(finestResidual, tsource(), Apsi);
++            // Prepare restriction for the next V-cycle while forming the
++            // residual. Keep fine-cell accumulation order and the stored
++            // residual needed by the norm, scaling and residual-field hook.
++            // Processor gathering retains the original restriction path.
++            // Do not restrict if the iteration limits already preclude a
++            // next cycle. An earlier convergence exit can discard this work.
++            finestResidualRestricted =
++                !agglomeration_.hasProcMesh(1)
++             &&
++                (
++                    solverPerf.nIterations() + 1 < maxIter_
++                 || solverPerf.nIterations() + 1 < minIter_
++                );
++
++            if (finestResidualRestricted)
++            {
++                solveScalarField& coarse = coarseSources[0];
++                coarse.resize_nocopy(agglomeration_.nCells(0));
++                coarse = Zero;
++                const labelList& addr = agglomeration_.restrictAddressing(0);
++                const solveScalarField& src = tsource();
++
++                forAll(finestResidual, i)
++                {
++                    finestResidual[i] = src[i] - Apsi[i];
++                    coarse[addr[i]] += finestResidual[i];
++                }
++            }
++            else
++            {
++                subtract(finestResidual, tsource(), Apsi);
++            }
+ 
+             solverPerf.finalResidual() = gSumMag
+             (
+@@ -185,7 +218,8 @@ void Foam::GAMGSolver::Vcycle
+ 
+     PtrList<solveScalarField>& coarseCorrFields,
+     PtrList<solveScalarField>& coarseSources,
+-    const direction cmpt
++    const direction cmpt,
++    const bool finestResidualRestricted
+ ) const
+ {
+     //debug = 2;
+@@ -193,7 +227,10 @@ void Foam::GAMGSolver::Vcycle
+     const label coarsestLevel = matrixLevels_.size() - 1;
+ 
+     // Restrict finest grid residual for the next level up.
+-    agglomeration_.restrictField(coarseSources[0], finestResidual, 0, true);
++    if (!finestResidualRestricted)
++    {
++        agglomeration_.restrictField(coarseSources[0], finestResidual, 0, true);
++    }
+ 
+     if (nPreSweeps_ && ((log_ >= 2) || (debug >= 2)))
+     {
+@@ -444,13 +481,16 @@ void Foam::GAMGSolver::Vcycle
+             interfaceBouCoeffs_,
+             interfaces_,
+             finestResidual,
+-            cmpt
++            cmpt,
++            &psi
+         );
+     }
+-
+-    forAll(psi, i)
++    else
+     {
+-        psi[i] += finestCorrection[i];
++        forAll(psi, i)
++        {
++            psi[i] += finestCorrection[i];
++        }
+     }
+ 
+     smoothers[0].smooth
