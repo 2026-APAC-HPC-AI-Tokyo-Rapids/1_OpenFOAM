@@ -1,0 +1,336 @@
+Subject: [PATCH 0014] skip initialization of overwritten matrix storage and
+ predictor copies
+
+Add upperUninitialised/lowerUninitialised without changing existing lduMatrix
+accessors. These allocate scalarField(n), without zero fill or copying the
+opposite triangle. As with writable accessors, the caller owns subsequent
+writes; the new API explicitly requires complete overwrite before any read.
+Invalidate lowerCSR on allocation, since an old symmetric cache may refer to
+the triangle being replaced.
+
+Use only in newly constructed Gauss convection and laplacian matrices:
+- convection's existing fused loop assigns lower=-w*phi and upper=lower+phi
+  for every internal face before any coefficient read. This removes one
+  lower memset and the former lower-to-upper copy of unneeded values;
+- laplacian's existing fused loop assigns upper=deltaCoeffs*gammaMagSf on
+  every internal face before any read, removing the upper memset;
+- keep diagonal zeros: those loops subtract into the diagonal, including
+  cells with no internal faces. Arithmetic and face traversal are unchanged.
+
+Add an fvMatrix boundaryInit constructor overload; the original constructor
+still zeroes everything. Only Gauss convection and uncorrected Gauss
+laplacian select uninitialised boundary storage. Their complete patch loops
+assign internalCoeffs and boundaryCoeffs on every patch (both coupled and
+uncoupled laplacian branches). Patch expressions do not read matrix storage.
+Empty patches have zero elements. checkImplicit and psi.updateCoeffs only
+inspect/update psi; they do not receive this matrix. Source stays zeroed:
+convection corrections, corrected laplacian, bounded convection, steadyState
+ddt, Sp/SuSp and fvOptions rely on those zeros in +=/-= or as actual values.
+No diagonal initialization is removed from Sp/SuSp or relax either.
+
+Add solveWithSource and use it in simpleFoam's momentum predictor. Restrict
+copy elision to vector with solveScalar == scalar, exact fvMesh (no virtual solve
+override), no implicit/assembled matrix, segregated smoothSolver/GaussSeidel,
+all components valid, and positive nSweeps. These match the existing combined
+component path in solveSegregated: it creates independent component diagonals,
+sources and boundary coefficients. Initial residuals temporarily replace
+diag with each component diagonal, then restore its saved bits. Upper,
+lower and boundary coefficients are read only. maxIter=0 changes nothing.
+Use the identical source += rhs.mesh().V()*rhs.primitiveField() expression
+from operator==, then the same solve(controls). Preserve the original source
+with a copy and restore by transfer (never floating-point subtraction).
+Thus U and solver statistics get identical operands/operations, and UEqn's
+A/H/H1 see exactly the original coefficients AND source after the solve.
+The copied matrix's optional flux-correction field is unused by this path.
+All other cases call the original solve(*this == rhs), retaining its copy.
+The tmp<fvMatrix> operator== overload already transfers ownership; do not
+consume tUEqn since pEqn.H still needs it after the predictor.
+
+Per step, each of three convection matrices loses one face zero fill and
+one face copy, each of four scalar-gamma laplacian matrices (U,p,k,omega)
+loses one face zero fill, and all seven lose two patch-coefficient zero fills.
+The predictor loses diag/upper/lower and boundary coefficient copies, retaining
+one source copy. Estimated profile target: ~20-30 of 2396 samples (0.8-1.3%),
+not all 39 initialization samples: diagonal and source zeros remain necessary.
+Seven lduMatrix copy-constructor samples and the convection upper copy (2)
+are additional evidence for the removed copies, not a measured speedup.
+
+Validation: GCC 13.3 -fsyntax-only with check-all.sh flags/include pattern on
+lduMatrix.C, gaussConvectionSchemes.C, gaussLaplacianSchemes.C, simpleFoam.C
+and turbulentTransportModels.C. Full bit-identity run remains with the owner.
+---
+ .../solvers/incompressible/simpleFoam/UEqn.H  |  2 +-
+ .../matrices/lduMatrix/lduMatrix/lduMatrix.C  | 27 +++++++++++
+ .../matrices/lduMatrix/lduMatrix/lduMatrix.H  |  5 ++
+ .../gaussConvectionScheme.C                   |  8 ++--
+ .../gaussLaplacianScheme.C                    |  6 ++-
+ .../fvMatrices/fvMatrix/fvMatrix.C            | 22 ++++++++-
+ .../fvMatrices/fvMatrix/fvMatrix.H            | 18 +++++++
+ .../fvMatrices/fvMatrix/fvMatrixSolve.C       | 48 +++++++++++++++++++
+ 8 files changed, 128 insertions(+), 8 deletions(-)
+
+diff --git a/applications/solvers/incompressible/simpleFoam/UEqn.H b/applications/solvers/incompressible/simpleFoam/UEqn.H
+index 81e83b55..f689e184 100644
+--- a/applications/solvers/incompressible/simpleFoam/UEqn.H
++++ b/applications/solvers/incompressible/simpleFoam/UEqn.H
+@@ -18,7 +18,7 @@
+ 
+     if (simple.momentumPredictor())
+     {
+-        solve(UEqn == -fvc::grad(p));
++        UEqn.solveWithSource(-fvc::grad(p));
+ 
+         fvOptions.correct(U);
+     }
+diff --git a/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.C b/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.C
+index 8862b3a3..2ccfee10 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.C
++++ b/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.C
+@@ -285,6 +285,33 @@ Foam::scalarField& Foam::lduMatrix::upper()
+ }
+ 
+ 
++Foam::scalarField& Foam::lduMatrix::upperUninitialised()
++{
++    if (!upperPtr_)
++    {
++        // The caller overwrites upper, including any symmetric values.
++        lowerCSRPtr_.reset(nullptr);
++        upperPtr_ =
++            std::make_unique<scalarField>(lduAddr().lowerAddr().size());
++    }
++
++    return *upperPtr_;
++}
++
++
++Foam::scalarField& Foam::lduMatrix::lowerUninitialised()
++{
++    if (!lowerPtr_)
++    {
++        lowerCSRPtr_.reset(nullptr);
++        lowerPtr_ =
++            std::make_unique<scalarField>(lduAddr().lowerAddr().size());
++    }
++
++    return *lowerPtr_;
++}
++
++
+ Foam::scalarField& Foam::lduMatrix::upper(label nCoeffs)
+ {
+     if (!upperPtr_)
+diff --git a/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.H b/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.H
+index 40179089..5e1ac9e4 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.H
++++ b/src/OpenFOAM/matrices/lduMatrix/lduMatrix/lduMatrix.H
+@@ -673,6 +673,11 @@ public:
+         scalarField& upper();
+         scalarField& lower();
+ 
++        //- Allocate without zeroing or copying the opposite triangle.
++        //  Caller must overwrite every coefficient before any matrix read.
++        scalarField& upperUninitialised();
++        scalarField& lowerUninitialised();
++
+         // Size with externally provided sizes
+         // (for constructing with 'fake' mesh in GAMG)
+ 
+diff --git a/src/finiteVolume/finiteVolume/convectionSchemes/gaussConvectionScheme/gaussConvectionScheme.C b/src/finiteVolume/finiteVolume/convectionSchemes/gaussConvectionScheme/gaussConvectionScheme.C
+index 801fd20a..f695eb00 100644
+--- a/src/finiteVolume/finiteVolume/convectionSchemes/gaussConvectionScheme/gaussConvectionScheme.C
++++ b/src/finiteVolume/finiteVolume/convectionSchemes/gaussConvectionScheme/gaussConvectionScheme.C
+@@ -89,7 +89,8 @@ gaussConvectionScheme<Type>::fvmDiv
+         new fvMatrix<Type>
+         (
+             vf,
+-            faceFlux.dimensions()*vf.dimensions()
++            faceFlux.dimensions()*vf.dimensions(),
++            fvMatrix<Type>::boundaryInit::uninitialised
+         )
+     );
+     fvMatrix<Type>& fvm = tfvm.ref();
+@@ -98,8 +99,9 @@ gaussConvectionScheme<Type>::fvmDiv
+     // the faces, with the same expressions and the same order of the
+     // diagonal updates
+     {
+-        scalarField& lower = fvm.lower();
+-        scalarField& upper = fvm.upper();
++        // Every face is assigned below; no zero fill or lower-to-upper copy.
++        scalarField& lower = fvm.lowerUninitialised();
++        scalarField& upper = fvm.upperUninitialised();
+         scalarField& diag = fvm.diag();
+         const labelUList& l = fvm.lduAddr().lowerAddr();
+         const labelUList& u = fvm.lduAddr().upperAddr();
+diff --git a/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C b/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
+index c4dd1621..5c43303d 100644
+--- a/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
++++ b/src/finiteVolume/finiteVolume/laplacianSchemes/gaussLaplacianScheme/gaussLaplacianScheme.C
+@@ -57,7 +57,8 @@ gaussLaplacianScheme<Type, GType>::fvmLaplacianUncorrected
+         new fvMatrix<Type>
+         (
+             vf,
+-            deltaCoeffs.dimensions()*gammaMagSf.dimensions()*vf.dimensions()
++            deltaCoeffs.dimensions()*gammaMagSf.dimensions()*vf.dimensions(),
++            fvMatrix<Type>::boundaryInit::uninitialised
+         )
+     );
+     fvMatrix<Type>& fvm = tfvm.ref();
+@@ -69,7 +70,8 @@ gaussLaplacianScheme<Type, GType>::fvmLaplacianUncorrected
+     {
+         const scalarField& dc = deltaCoeffs.primitiveField();
+         const scalarField& gm = gammaMagSf.primitiveField();
+-        scalarField& upper = fvm.upper();
++        // Every face is assigned below, before any matrix read.
++        scalarField& upper = fvm.upperUninitialised();
+         scalarField& diag = fvm.diag();
+         const labelUList& l = fvm.lduAddr().lowerAddr();
+         const labelUList& u = fvm.lduAddr().upperAddr();
+diff --git a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.C b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.C
+index 89088f21..8bc05cc0 100644
+--- a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.C
++++ b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.C
+@@ -359,6 +359,18 @@ Foam::fvMatrix<Type>::fvMatrix
+     const GeometricField<Type, fvPatchField, volMesh>& psi,
+     const dimensionSet& ds
+ )
++:
++    fvMatrix(psi, ds, boundaryInit::zero)
++{}
++
++
++template<class Type>
++Foam::fvMatrix<Type>::fvMatrix
++(
++    const GeometricField<Type, fvPatchField, volMesh>& psi,
++    const dimensionSet& ds,
++    const boundaryInit init
++)
+ :
+     lduMatrix(psi.mesh()),
+     psi_(psi),
+@@ -380,14 +392,20 @@ Foam::fvMatrix<Type>::fvMatrix
+         internalCoeffs_.set
+         (
+             patchi,
+-            new Field<Type>(psi.mesh().boundary()[patchi].size(), Zero)
++            new Field<Type>(psi.mesh().boundary()[patchi].size())
+         );
+ 
+         boundaryCoeffs_.set
+         (
+             patchi,
+-            new Field<Type>(psi.mesh().boundary()[patchi].size(), Zero)
++            new Field<Type>(psi.mesh().boundary()[patchi].size())
+         );
++
++        if (init == boundaryInit::zero)
++        {
++            internalCoeffs_[patchi] = Zero;
++            boundaryCoeffs_[patchi] = Zero;
++        }
+     }
+ 
+     auto& psiRef = this->psi(0);
+diff --git a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.H b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.H
+index b56b7ebc..34da007a 100644
+--- a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.H
++++ b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrix.H
+@@ -296,6 +296,10 @@ public:
+ 
+     // Constructors
+ 
++        //- Initialisation of boundary coefficient storage. Uninitialised
++        //  requires complete assignment of both fields on every patch.
++        enum class boundaryInit { zero, uninitialised };
++
+         //- Construct given a field to solve for
+         fvMatrix
+         (
+@@ -303,6 +307,13 @@ public:
+             const dimensionSet& ds
+         );
+ 
++        fvMatrix
++        (
++            const GeometricField<Type, fvPatchField, volMesh>& psi,
++            const dimensionSet& ds,
++            const boundaryInit init
++        );
++
+         //- Copy construct
+         fvMatrix(const fvMatrix<Type>&);
+ 
+@@ -630,6 +641,13 @@ public:
+             //  Uses \p name solver controls from fvSolution
+             SolverPerformance<Type> solve(const word& name);
+ 
++            //- Solve with an explicit RHS, preserving this matrix's values.
++            //  Avoid coefficient copies for the vector GaussSeidel path.
++            SolverPerformance<Type> solveWithSource
++            (
++                const tmp<GeometricField<Type, fvPatchField, volMesh>>& rhs
++            );
++
+             //- Solve returning the solution statistics.
+             //  Solver controls read from fvSolution
+             SolverPerformance<Type> solve();
+diff --git a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
+index 5e444df6..76fbce77 100644
+--- a/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
++++ b/src/finiteVolume/fvMatrices/fvMatrix/fvMatrixSolve.C
+@@ -499,6 +499,54 @@ Foam::SolverPerformance<Type> Foam::fvMatrix<Type>::fvSolver::solve()
+ }
+ 
+ 
++template<class Type>
++Foam::SolverPerformance<Type> Foam::fvMatrix<Type>::solveWithSource
++(
++    const tmp<GeometricField<Type, fvPatchField, volMesh>>& rhs
++)
++{
++    checkMethod(*this, rhs(), "==");
++
++    if constexpr
++    (
++        std::is_same<Type, vector>::value
++     && std::is_same<solveScalar, scalar>::value
++    )
++    {
++        const dictionary& controls = solverDict();
++
++        // Exactly the component-combined solveSegregated path above: it
++        // builds separate component diagonals and restores diag after
++        // initial residuals; all other coefficients are read only.
++        // Exclude virtual fvMesh::solve overrides.
++        if
++        (
++            !useImplicit_
++         && !nMatrix_
++         && isType<fvMesh>(psi_.mesh())
++         && controls.getOrDefault<word>("type", "segregated") == "segregated"
++         && cmptMin(psi_.mesh().template validComponents<Type>()) != -1
++         && controls.get<word>("solver") == smoothSolver::typeName
++         && lduMatrix::smoother::getName(controls)
++            == GaussSeidelSmoother::typeName
++         && controls.getOrDefault<label>("nSweeps", 1) > 0
++        )
++        {
++            // Preserve the source by copying it, just as operator== does.
++            // Restore by transfer, not by subtracting the RHS (roundoff).
++            Field<Type> savedSource(source_);
++            source_ += rhs().mesh().V()*rhs().primitiveField();
++            rhs.clear();
++            const auto perf = solve(controls);
++            source_.transfer(savedSource);
++            return perf;
++        }
++    }
++
++    return Foam::solve(*this == rhs);
++}
++
++
+ template<class Type>
+ Foam::SolverPerformance<Type> Foam::fvMatrix<Type>::solve(const word& name)
+ {
