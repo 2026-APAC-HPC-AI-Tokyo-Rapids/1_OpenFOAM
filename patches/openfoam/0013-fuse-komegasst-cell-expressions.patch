@@ -1,0 +1,537 @@
+Subject: [PATCH 0013] SST: fuse pointwise algebra inside the base helpers
+
+kOmegaSSTBase::correct creates long chains of scalar field temporaries.
+Evaluate F1, F2, S2, GbyNu0, GbyNu, Pk, coefficient blends, effective
+diffusivities and the final correctNut quotient with one cell traversal per
+helper. Fuse the CDkOmega dot product, scaling and division as well. For
+incompressible SST with F3 disabled, this replaces 80 algebra traversals
+with 13, excluding unchanged mu/rho and nu acquisition, assignments and
+source/matrix expressions. Intermediate temporaries and their memory
+traffic disappear; temporary storage was already reused by many of the
+old field operators, so this is not a claim of 67 fewer allocations.
+
+Keep the scalar expression trees and operand order: in particular
+(cBeta*k)*omega, (b1*F23)*sqrt(S2), (cBeta*omega)*max(...), and
+coefficient*(gradK & gradOmega)/omega. Obtain dimensioned coefficient
+values through the original dimensioned operations, and retain mu/rho
+rather than substituting nu. Use the same Foam scalar and tensor inline
+primitives. The tensor components feed multiplication operands, so fusing
+symm/magSqr and devTwoSymm/dot does not create an extra multiply-add
+boundary. Blending and diffusivity DO have separate multiply/add field
+passes; volatile scalar products explicitly preserve rounding there with
+GCC's default -ffp-contract=fast. No compiler flags or precision change.
+
+Populate every patch face from the original stored patch operands through
+the Field base, including processor patches: do not exchange the result.
+Allocate calculated/constraint patch types as the original operators do.
+Processor evaluateLocal is a no-op; other coupled patches can reevaluate
+intermediate expressions, so keep the original geometric expression trees
+whenever local boundary consistency is enabled and such a patch exists.
+Keep correctLocalBoundaryConditions on the final result, as well as the
+original nut boundary correction and fvOptions correction. DkEff and
+DomegaEff retain their names for laplacian scheme selection.
+
+All original virtual calls remain: the changes are within base helper
+bodies, not a replacement of their call sites by base-qualified formulas.
+LM, SAS and DES overrides (including F1, F23, S2, GbyNu0, GbyNu, Pk,
+epsilonByk, sources and correctNut) still run, including their calls back
+into the base implementations. The arithmetic is generic in the supplied
+coefficients and mu/rho; no default-coefficient or incompressible-only
+shortcut is introduced. F3 and decay control are still handled by their
+original paths. Their constructor defaults are both false.
+
+Keep gradient calls at their original point, with grad(k) and grad(omega)
+as the same ordered argument pair (GCC 13 evaluates omega first in both
+forms). Leave fvm calls, matrix expression assembly, solves, boundary
+updates, bound, epsilonByk and solve-separated source evaluation alone.
+
+Validation: GCC 13.3 -fsyntax-only with check-all.sh flags on the complete
+incompressible and compressible turbulence-model registration TUs,
+including LM/SAS/DES instantiations. Optimized scalar probes match staged arithmetic on two
+million tuples and tensor probes match separate primitive field passes on
+4,194,304 tensors, on both generic x86-64 and -march=znver3 at -O3 with
+default contraction. Full case coefficient.dat equality is still to be
+checked by the prepared serial/MPI harness; no speedup has been measured.
+---
+ .../Base/kOmegaSST/kOmegaSSTBase.C            | 331 +++++++++++++++++-
+ .../Base/kOmegaSST/kOmegaSSTBase.H            |  36 +-
+ 2 files changed, 335 insertions(+), 32 deletions(-)
+
+diff --git a/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.C b/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.C
+index f27e41e9..38fde6ee 100644
+--- a/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.C
++++ b/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.C
+@@ -31,20 +31,259 @@ License
+ #include "fvOptions.H"
+ #include "bound.H"
+ #include "wallDist.H"
++#include "processorFvPatch.H"
+ 
+ // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+ 
+ namespace Foam
+ {
+ 
++namespace
++{
++
++// Algebra on processor patches uses the stored patch values, not an exchange.
++// Other coupled patches can evaluateLocal() after every operator. Keep their
++// original expression trees: evaluating only the final result is not equivalent.
++inline bool sstCellAlgebra(const fvMesh& mesh)
++{
++    if (FieldBase::localBoundaryConsistency())
++    {
++        for (const fvPatch& patch : mesh.boundary())
++        {
++            if (patch.coupled() && !isA<processorFvPatch>(patch))
++            {
++                return false;
++            }
++        }
++    }
++    return true;
++}
++
++
++// One cell pass and one pass over the stored values of each patch. New() uses
++// the same calculated/constraint patch types as the original field operators.
++template<class Op, class... Fields>
++tmp<volScalarField> sstScalarField
++(
++    const word& name,
++    const fvMesh& mesh,
++    const dimensionSet& dimensions,
++    const Op& op,
++    const Fields&... fields
++)
++{
++    auto result = volScalarField::New(name, mesh, dimensions);
++    scalarField& cells = result.ref().primitiveFieldRef();
++    forAll(cells, celli)
++    {
++        cells[celli] = op(fields.primitiveField()[celli]...);
++    }
++
++    auto& boundary = result.ref().boundaryFieldRef();
++    forAll(boundary, patchi)
++    {
++        scalarField& patch = boundary[patchi];
++        forAll(patch, facei)
++        {
++            patch[facei] = op(fields.boundaryField()[patchi][facei]...);
++        }
++    }
++    result.ref().correctLocalBoundaryConditions();
++    if (volScalarField::Boundary::debug)
++    {
++        result().boundaryField().check();
++    }
++    return result;
++}
++
++
++template<class Op, class... Fields>
++tmp<volScalarField::Internal> sstInternalField
++(
++    const word& name,
++    const fvMesh& mesh,
++    const dimensionSet& dimensions,
++    const Op& op,
++    const Fields&... fields
++)
++{
++    auto result = volScalarField::Internal::New(name, mesh, dimensions);
++    scalarField& cells = result.ref();
++    forAll(cells, celli)
++    {
++        cells[celli] = op(fields[celli]...);
++    }
++    return result;
++}
++
++
++// Field multiplication and addition are separate loops in the original.
++// Force the product to round before adding, even with -ffp-contract=fast.
++inline scalar sstBlend(const scalar f, const scalar delta, const scalar psi2)
++{
++    const volatile scalar product = f*delta;
++    return product + psi2;
++}
++
++
++inline tmp<volScalarField> sstCDkOmega
++(
++    const tmp<volVectorField>& tgradK,
++    const tmp<volVectorField>& tgradOmega,
++    const dimensionedScalar& coefficient,
++    const volScalarField& omega
++)
++{
++    if (!sstCellAlgebra(omega.mesh()))
++    {
++        return coefficient*(tgradK & tgradOmega)/omega;
++    }
++
++    auto result = sstScalarField
++    (
++        "CDkOmega", omega.mesh(), dimless/sqr(dimTime),
++        [&](const vector& gk, const vector& go, const scalar w)
++        {
++            return (coefficient.value()*(gk & go))/w;
++        },
++        tgradK(), tgradOmega(), omega
++    );
++    tgradK.clear();
++    tgradOmega.clear();
++    return result;
++}
++
++} // End anonymous namespace
++
++
+ // * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * * //
+ 
++template<class BasicEddyViscosityModel>
++tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::blend
++(
++    const volScalarField& F1,
++    const dimensionedScalar& psi1,
++    const dimensionedScalar& psi2
++) const
++{
++    if (!sstCellAlgebra(this->mesh_))
++    {
++        return F1*(psi1 - psi2) + psi2;
++    }
++    const scalar delta = (psi1 - psi2).value();
++    return sstScalarField
++    (
++        "blend", this->mesh_, psi2.dimensions(),
++        [&](scalar f) { return sstBlend(f, delta, psi2.value()); }, F1
++    );
++}
++
++
++template<class BasicEddyViscosityModel>
++tmp<volScalarField::Internal> kOmegaSSTBase<BasicEddyViscosityModel>::blend
++(
++    const volScalarField::Internal& F1,
++    const dimensionedScalar& psi1,
++    const dimensionedScalar& psi2
++) const
++{
++    const scalar delta = (psi1 - psi2).value();
++    return sstInternalField
++    (
++        "blend", this->mesh_, psi2.dimensions(),
++        [&](scalar f) { return sstBlend(f, delta, psi2.value()); }, F1
++    );
++}
++
++
++template<class BasicEddyViscosityModel>
++tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::diffusivity
++(
++    const word& name,
++    const volScalarField& F1,
++    const dimensionedScalar& psi1,
++    const dimensionedScalar& psi2
++) const
++{
++    if (!sstCellAlgebra(this->mesh_))
++    {
++        return tmp<volScalarField>::New
++        (
++            name, blend(F1, psi1, psi2)*this->nut_ + this->nu()
++        );
++    }
++    const tmp<volScalarField> tnu(this->nu());
++    const scalar delta = (psi1 - psi2).value();
++    return sstScalarField
++    (
++        name, this->mesh_, this->nut_.dimensions(),
++        [&](scalar f, scalar nut, scalar nu)
++        {
++            const scalar alpha = sstBlend(f, delta, psi2.value());
++            const volatile scalar product = alpha*nut;
++            return product + nu;
++        },
++        F1, this->nut_, tnu()
++    );
++}
++
++
++template<class BasicEddyViscosityModel>
++tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::DkEff
++(
++    const volScalarField& F1
++) const
++{
++    return diffusivity("DkEff", F1, alphaK1_, alphaK2_);
++}
++
++
++template<class BasicEddyViscosityModel>
++tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::DomegaEff
++(
++    const volScalarField& F1
++) const
++{
++    return diffusivity("DomegaEff", F1, alphaOmega1_, alphaOmega2_);
++}
++
++
+ template<class BasicEddyViscosityModel>
+ tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::F1
+ (
+     const volScalarField& CDkOmega
+ ) const
+ {
++    if (sstCellAlgebra(this->mesh_))
++    {
++        // Retain mu/rho (also for incompressible geometricOneField rho).
++        const tmp<volScalarField> tnu(this->mu()/this->rho_);
++        const scalar invBeta = (scalar(1)/betaStar_).value();
++        const scalar fourAlpha = (4*alphaOmega2_).value();
++        return sstScalarField
++        (
++            "F1", this->mesh_, dimless,
++            [&](scalar k, scalar w, scalar y, scalar nu, scalar cd)
++            {
++                const scalar arg1 = min
++                (
++                    min
++                    (
++                        max
++                        (
++                            invBeta*sqrt(k)/(w*y),
++                            scalar(500)*nu/(sqr(y)*w)
++                        ),
++                        fourAlpha*k/(max(cd, scalar(1.0e-10))*sqr(y))
++                    ),
++                    scalar(10)
++                );
++                return tanh(pow4(arg1));
++            },
++            k_, omega_, y_, tnu(), CDkOmega
++        );
++    }
++
+     tmp<volScalarField> CDkOmegaPlus = max
+     (
+         CDkOmega,
+@@ -72,6 +311,30 @@ tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::F1
+ template<class BasicEddyViscosityModel>
+ tmp<volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::F2() const
+ {
++    if (sstCellAlgebra(this->mesh_))
++    {
++        const tmp<volScalarField> tnu(this->mu()/this->rho_);
++        const scalar twoBeta = (scalar(2)/betaStar_).value();
++        return sstScalarField
++        (
++            "F2", this->mesh_, dimless,
++            [&](scalar k, scalar w, scalar y, scalar nu)
++            {
++                const scalar arg2 = min
++                (
++                    max
++                    (
++                        twoBeta*sqrt(k)/(w*y),
++                        scalar(500)*nu/(sqr(y)*w)
++                    ),
++                    scalar(100)
++                );
++                return tanh(sqr(arg2));
++            },
++            k_, omega_, y_, tnu()
++        );
++    }
++
+     tmp<volScalarField> arg2 = min
+     (
+         max
+@@ -120,7 +383,26 @@ void kOmegaSSTBase<BasicEddyViscosityModel>::correctNut
+ )
+ {
+     // Correct the turbulence viscosity
+-    this->nut_ = a1_*k_/max(a1_*omega_, b1_*F23()*sqrt(S2));
++    if (sstCellAlgebra(this->mesh_))
++    {
++        const tmp<volScalarField> tF23(F23()); // Preserve virtual dispatch.
++        this->nut_ = sstScalarField
++        (
++            "nutSST", this->mesh_, this->nut_.dimensions(),
++            [&](scalar k, scalar w, scalar f23, scalar s2)
++            {
++                return a1_.value()*k/max
++                (
++                    a1_.value()*w, (b1_.value()*f23)*sqrt(s2)
++                );
++            },
++            k_, omega_, tF23(), S2
++        );
++    }
++    else
++    {
++        this->nut_ = a1_*k_/max(a1_*omega_, b1_*F23()*sqrt(S2));
++    }
+     this->nut_.correctBoundaryConditions();
+     fv::options::New(this->mesh_).correct(this->nut_);
+ }
+@@ -139,6 +421,14 @@ Foam::tmp<Foam::volScalarField> kOmegaSSTBase<BasicEddyViscosityModel>::S2
+     const volTensorField& gradU
+ ) const
+ {
++    if (sstCellAlgebra(this->mesh_))
++    {
++        return sstScalarField
++        (
++            "S2", this->mesh_, sqr(gradU.dimensions()),
++            [](const tensor& g) { return 2*magSqr(symm(g)); }, gradU
++        );
++    }
+     return 2*magSqr(symm(gradU));
+ }
+ 
+@@ -149,7 +439,16 @@ tmp<volScalarField::Internal> kOmegaSSTBase<BasicEddyViscosityModel>::Pk
+     const volScalarField::Internal& G
+ ) const
+ {
+-    return min(G, (c1_*betaStar_)*this->k_()*this->omega_());
++    const scalar cBeta = (c1_*betaStar_).value();
++    return sstInternalField
++    (
++        "Pk", this->mesh_, G.dimensions(),
++        [&](scalar g, scalar k, scalar w)
++        {
++            return min(g, (cBeta*k)*w);
++        },
++        G, k_(), omega_()
++    );
+ }
+ 
+ 
+@@ -171,10 +470,14 @@ tmp<volScalarField::Internal> kOmegaSSTBase<BasicEddyViscosityModel>::GbyNu0
+     const volScalarField& /* S2 not used */
+ ) const
+ {
+-    return tmp<volScalarField::Internal>::New
++    // The same tensor primitives, with their original expression shapes.
++    // No contraction can cross the devTwoSymm/dot boundary: each devTwoSymm
++    // component is an operand of a multiplication in the dot product.
++    return sstInternalField
+     (
+         IOobject::scopedName(this->type(), "GbyNu"),
+-        gradU() && devTwoSymm(gradU())
++        this->mesh_, sqr(gradU.dimensions()),
++        [](const tensor& g) { return g && devTwoSymm(g); }, gradU()
+     );
+ }
+ 
+@@ -187,10 +490,19 @@ tmp<volScalarField::Internal> kOmegaSSTBase<BasicEddyViscosityModel>::GbyNu
+     const volScalarField::Internal& S2
+ ) const
+ {
+-    return min
++    const scalar cBeta = ((c1_/a1_)*betaStar_).value();
++    return sstInternalField
+     (
+-        GbyNu0,
+-        (c1_/a1_)*betaStar_*omega_()*max(a1_*omega_(), b1_*F2*sqrt(S2))
++        "GbyNu", this->mesh_, GbyNu0.dimensions(),
++        [&](scalar g, scalar f2, scalar s2, scalar w)
++        {
++            return min
++            (
++                g,
++                (cBeta*w)*max(a1_.value()*w, (b1_.value()*f2)*sqrt(s2))
++            );
++        },
++        GbyNu0, F2, S2, omega_()
+     );
+ }
+ 
+@@ -554,7 +866,10 @@ void kOmegaSSTBase<BasicEddyViscosityModel>::correct()
+ 
+     const volScalarField CDkOmega
+     (
+-        (2*alphaOmega2_)*(fvc::grad(k_) & fvc::grad(omega_))/omega_
++        sstCDkOmega
++        (
++            fvc::grad(k_), fvc::grad(omega_), 2*alphaOmega2_, omega_
++        )
+     );
+ 
+     const volScalarField F1(this->F1(CDkOmega));
+diff --git a/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.H b/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.H
+index 1a37f53c..6419528b 100644
+--- a/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.H
++++ b/src/TurbulenceModels/turbulenceModels/Base/kOmegaSST/kOmegaSSTBase.H
+@@ -183,6 +183,14 @@ protected:
+ 
+     // Protected Member Functions
+ 
++        tmp<volScalarField> diffusivity
++        (
++            const word& name,
++            const volScalarField& F1,
++            const dimensionedScalar& psi1,
++            const dimensionedScalar& psi2
++        ) const;
++
+         //- Set decay control with kInf and omegaInf
+         void setDecayControl(const dictionary& dict);
+ 
+@@ -197,10 +205,7 @@ protected:
+             const volScalarField& F1,
+             const dimensionedScalar& psi1,
+             const dimensionedScalar& psi2
+-        ) const
+-        {
+-            return F1*(psi1 - psi2) + psi2;
+-        }
++        ) const;
+ 
+         //- Return the internal blended field
+         tmp<volScalarField::Internal> blend
+@@ -208,10 +213,7 @@ protected:
+             const volScalarField::Internal& F1,
+             const dimensionedScalar& psi1,
+             const dimensionedScalar& psi2
+-        ) const
+-        {
+-            return F1*(psi1 - psi2) + psi2;
+-        }
++        ) const;
+ 
+         tmp<volScalarField> alphaK(const volScalarField& F1) const
+         {
+@@ -339,24 +341,10 @@ public:
+         virtual bool read();
+ 
+         //- Return the effective diffusivity for k
+-        tmp<volScalarField> DkEff(const volScalarField& F1) const
+-        {
+-            return tmp<volScalarField>::New
+-            (
+-                "DkEff",
+-                alphaK(F1)*this->nut_ + this->nu()
+-            );
+-        }
++        tmp<volScalarField> DkEff(const volScalarField& F1) const;
+ 
+         //- Return the effective diffusivity for omega
+-        tmp<volScalarField> DomegaEff(const volScalarField& F1) const
+-        {
+-            return tmp<volScalarField>::New
+-            (
+-                "DomegaEff",
+-                alphaOmega(F1)*this->nut_ + this->nu()
+-            );
+-        }
++        tmp<volScalarField> DomegaEff(const volScalarField& F1) const;
+ 
+         //- Return the turbulence kinetic energy
+         virtual tmp<volScalarField> k() const
