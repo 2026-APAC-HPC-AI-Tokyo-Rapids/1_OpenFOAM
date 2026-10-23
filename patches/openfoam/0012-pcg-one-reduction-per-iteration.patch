@@ -1,13 +1,22 @@
-Subject: [PATCH 0012] PCG: one reduction per fixed-count DIC-CG iteration
+Subject: [PATCH 0012] PCG: one reduction per DIC-CG iteration with general convergence
 
-Use preconditioned Chronopoulos/Gear CG only for DIC with
-minIter > 0 && minIter >= maxIter. Keep the original loop for other controls
-or preconditioners. Keep the initial guess, normalisation, initial residual,
-min/max/checkConvergence predicate, singularity test, residual-field hooks,
-setFinished and solverPerformance meanings. The caller GAMG starts the coarse
-correction at zero and only prints the returned performance when requested;
-no GAMG changes are needed. Exactly minIter steps are taken absent breakdown,
-just as before (35 for the intended case).
+Use preconditioned Chronopoulos/Gear CG for every PCG solve selecting DIC,
+including ordinary tolerance-controlled solves. DIC's precondition() is a
+fixed linear operator for the lifetime of the solve. Keep the original
+v2512 PCG loop for every other preconditioner, including GAMG and user-defined
+variable/nonlinear operators; no assumption about those operators is needed.
+The dispatch is independent of minIter/maxIter and the field name.
+
+Relative to v2512, retain the initial guess, normalisation, initial residual,
+outer convergence decision, exact min/max/checkConvergence predicate,
+singularity test, residual-field hooks, setFinished and solverPerformance
+semantics. Each convergence test still sees sum(abs(r_i))/normFactor for the
+residual updated by that iteration, with no lag, squared norm or inferred
+residual. The iteration increment and short-circuit evaluation are unchanged:
+minIter may force steps past maxIter, and a singularity breaks before updating
+psi/r or incrementing nIterations. Floating-point rounding can change the
+reported residuals, stopping iteration and breakdown relative to v2512;
+this preserves the control semantics, not a universal floating-point match.
 
 Reference: Ghysels & Vanroose, Hiding global synchronization latency in the
 preconditioned Conjugate Gradient algorithm, Parallel Computing 40 (2014),
@@ -18,35 +27,56 @@ Let u=M^-1*r, w=A*u, gamma=r.u, delta=w.u. Reduce (gamma,delta,L1(r))
 together with FixedList<solveScalar,3> and sumOp<solveScalar> on the matrix
 communicator, as in GAMGSolver::scale. Use p=u+beta*pOld and
 s=w+beta*sOld=A*p. First eta=delta, then beta=gamma/gammaOld and
-eta=delta-beta*gamma/alphaOld; alpha=gamma/eta. In exact arithmetic,
-eta=p.A*p=delta-beta^2*etaOld, so this is the same DIC-CG iteration.
-The x and r updates are x+=alpha*p and r-=alpha*s as before.
+eta=delta-beta*gamma/alphaOld; alpha=gamma/eta. CG conjugacy gives
+u.A.pOld=-beta*etaOld, hence p.A.p=delta-beta^2*etaOld
+=delta-beta*gamma/alphaOld. With a fixed SPD matrix/preconditioner this is
+the same CG iteration in exact arithmetic. The x and r updates remain
+x+=alpha*p and r-=alpha*s.
 
-F3 rounding change (not bit-identical): the direct (A*p).p reduction is
-replaced by (A*u).u minus beta*gamma/alphaOld, which can suffer cancellation;
-s is formed by a vector recurrence instead of directly evaluating A*p. The
-same p, x and r recurrences therefore receive different rounded operands.
-Packing the reductions may also change MPI's summation tree. L1 is still a
-sum of abs(r_i), never a squared norm or an inferred recurrence value.
+F3 rounding change relative to v2512 (not bit-identical): the direct (A*p).p
+reduction is replaced by (A*u).u minus beta*gamma/alphaOld, which can suffer
+cancellation; s is formed by a vector recurrence instead of directly
+evaluating A*p. The p, x and r recurrences therefore receive different
+rounded operands. Packing reductions may also change MPI's summation tree.
+The L1 norm is still computed directly from the current residual field.
+No reliable equality of stopping counts is claimed for tolerances at rounding
+boundaries, or of breakdown decisions near the singularity threshold.
 
-One startup reduction prepares the first step. After each update, the next
-u and w (if needed) are computed and the updated r's L1 norm is packed with
-the next step's products. The check thus sees exactly the same quantity at
-the same iteration as before, without a lag. The final reduction needs only
-L1; the other two entries are zero and no unused preconditioner or Amul is
-performed. A complete N-step solve has N+1 such reductions, versus 3N in the
-old loop, plus unchanged setup reductions. For N=35: 36 versus 105. There
-are still N preconditioner applications and N iteration matrix multiplies.
-The reduction is blocking; no nonblocking overlap is claimed.
+One startup reduction prepares the first step. After each update, prepare
+next u,w and pack the next gamma,delta with this step's L1 residual, then
+apply the original convergence predicate. An early tolerance exit therefore
+leaves one unused DIC application and one unused Amul. Avoid both when the
+next iteration is already excluded by the bounds: before incrementing n,
+prepare products only if n < maxIter-1 || n < minIter-1. When false, reduce
+(0,0,L1(r)) only. This also preserves minIter > maxIter behaviour. An initial
+convergence exit with minIter=0 needs neither startup nor iteration work.
+
+An N-step solve without breakdown has N+1 reductions in the new path versus
+3N in the old loop, plus unchanged setup reductions. A known final step uses
+N preconditioner applications and N iteration matrix multiplies; an early
+tolerance exit uses N+1 of each. Two extra local vectors hold u and s. The
+reduction is blocking; no nonblocking overlap is claimed.
+
+Relative to the previous fixed-count 0012 (034b3ffd), only dispatch and the
+integer scheduling predicate change. For minIter=maxIter=35, the new predicate
+(n<34 || n<34) equals the old n<34. Thus startup, each floating-point
+expression and operand order, all vector updates and reductions, convergence
+calls and singularity tests remain identical, including the norm-only final
+reduction. There are still 36 versus 105 loop/startup reductions and exactly
+35 preconditioner applications and 35 iteration Amuls, absent breakdown.
 
 With contraction enabled, dot-product sums, s=w+beta*sOld and the unchanged
 p/x/r multiply-add/subtract expressions may use FMA on a suitable target.
-No flags are changed. GCC 13.3 defaults to -ffp-contract=fast with
--std=c++17; explicit -ffp-contract=off prevents contraction. F3 Cd and
-breakdown/stability validation on the 512-rank case remain necessary.
+No flags are changed. Standalone extracted-loop tests with GCC 13.3, -O3,
+-march=native and -ffp-contract=off/fast verify bitwise equality to 034b3ffd
+at all 35 iterates on four random SPD systems. Convergence-controlled tests
+match the original loop's iteration counts and L1 histories within rounding,
+including early convergence, maxIter cut-off, minIter overrides, zero
+iterations and singularity exits. Production MPI/Cd validation remains an
+F3 responsibility; these serial tests are not a cluster result.
 
 diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
-index a4316134..3b37aaf4 100644
+index a4316134..28f0bef1 100644
 --- a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
 +++ b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
 @@ -28,6 +28,7 @@ License
@@ -57,19 +87,17 @@ index a4316134..3b37aaf4 100644
  
  // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
  
-@@ -138,67 +139,177 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+@@ -138,67 +139,181 @@ Foam::solverPerformance Foam::PCG::scalarSolve
              );
          }
  
 -        // --- Solver iteration
 -        do
-+        // Fixed-count DIC solves use Chronopoulos/Gear CG. Keep the general
-+        // convergence-controlled path below unchanged.
++        // DIC is a fixed linear operator, as required by Chronopoulos/Gear
++        // CG. Keep other (possibly variable) preconditioners on the old loop.
 +        if
 +        (
-+            minIter_ > 0
-+         && minIter_ >= maxIter_
-+         && lduMatrix::preconditioner::getName(controlDict_) == "DIC"
++            lduMatrix::preconditioner::getName(controlDict_) == "DIC"
 +        )
          {
 -            // --- Store previous wArA
@@ -166,9 +194,15 @@ index a4316134..3b37aaf4 100644
 -            }
 -            else
 +
-+                // A fixed-count solve continues until minIter_. Prepare
-+                // the next products only if another step will be taken.
-+                sums = reduceSums(solverPerf.nIterations() < minIter_ - 1);
++                // The current residual's convergence is known only after
++                // this reduction. Prepare the next products speculatively,
++                // unless both iteration bounds already force a stop.
++                // minIter_ can require continuing even beyond maxIter_.
++                sums = reduceSums
++                (
++                    solverPerf.nIterations() < maxIter_ - 1
++                 || solverPerf.nIterations() < minIter_ - 1
++                );
 +                solverPerf.finalResidual() = sums[2]/normFactor;
 +
 +            } while
@@ -197,50 +231,50 @@ index a4316134..3b37aaf4 100644
 +                wArA = gSumProd(wA, rA, matrix().mesh().comm());
 +
 +                if (solverPerf.nIterations() == 0)
-+                {
+                 {
+-                    pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
 +                    for (label cell=0; cell<nCells; cell++)
 +                    {
 +                        pAPtr[cell] = wAPtr[cell];
 +                    }
-+                }
+                 }
+-            }
 +                else
-                 {
--                    pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
++                {
 +                    const solveScalar beta = wArA/wArAold;
-+
+ 
 +                    for (label cell=0; cell<nCells; cell++)
 +                    {
 +                        pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
 +                    }
-                 }
--            }
- 
++                }
  
 -            // --- Update preconditioned residual
 -            matrix_.Amul(wA, pA, interfaceBouCoeffs_, interfaces_, cmpt);
+ 
+-            solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
 +                // --- Update preconditioned residual
 +                matrix_.Amul(wA, pA, interfaceBouCoeffs_, interfaces_, cmpt);
  
--            solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
-+                solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
- 
 -            // --- Test for singularity
 -            if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
++                solveScalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
+ 
 +                // --- Test for singularity
 +                if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
  
- 
 -            // --- Update solution and residual:
-+                // --- Update solution and residual:
  
 -            const solveScalar alpha = wArA/wApA;
-+                const solveScalar alpha = wArA/wApA;
++                // --- Update solution and residual:
  
 -            for (label cell=0; cell<nCells; cell++)
 -            {
 -                psiPtr[cell] += alpha*pAPtr[cell];
 -                rAPtr[cell] -= alpha*wAPtr[cell];
 -            }
++                const solveScalar alpha = wArA/wApA;
++
 +                for (label cell=0; cell<nCells; cell++)
 +                {
 +                    psiPtr[cell] += alpha*pAPtr[cell];
