@@ -13,9 +13,9 @@ launcher's binding only), so the change against it is what our optimisations did
 
 | Nodes (ranks, steps) | Baseline | **Basic** | Bonus | Basic against baseline | Bonus against Basic |
 |---|---:|---:|---:|---:|---:|
-| 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 11.668460 (3) | −8.3% | −12.69% |
-| 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 5.640683 (3) | −14.2% | −11.47% |
-| **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.599353 (3)** | **−20.6%** | **−10.29%** |
+| 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 10.233606 (3) | −8.3% | −23.43% |
+| 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 4.992196 (3) | −14.2% | −21.65% |
+| **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.359976 (3)** | **−20.6%** | **−18.56%** |
 
 For reference only: the organisers' vanilla runs on ASPIRE-2A (tasks 4.3) took 3.296 s/step on 4 nodes with `scotch`
 (5 jobs, 3.191 – 3.576) and 3.415 with `hierarchical`. They use the site module, the default MPI transport and no binding,
@@ -23,8 +23,9 @@ so they differ from our runs in more than our optimisations.
 
 - **Basic**: unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A; `scotch` decomposition mapped onto the sockets and NUMA domains
   of each node; every MPI rank pinned to its core, with its memory on that core's NUMA domain.
-- **Bonus**: the same build and runtime, plus a node-aware `multiLevel` decomposition and four source patches that move fewer
-  bytes. `coefficient.dat` is bit-identical to the unpatched baseline at 1, 2 and 4 nodes.
+- **Bonus**: the same build and runtime, plus a node-aware `multiLevel` decomposition and fourteen source patches that move
+  fewer bytes. Eleven keep every operation and its order; three change the order of some floating-point operations. Cd stays
+  within 0.0005% of the unpatched baseline at 1, 2 and 4 nodes (F3 allows ±0.5%).
 
 ## What is in this folder
 
@@ -37,7 +38,7 @@ dicts/               caseDefinition, controlDict and decomposeParDict of the 4-n
 results/<n>node/     logs and coefficient.dat of the fastest Basic run per node count
 scaling/scaling.txt  every run with its PBS job ID, the means, speedup and efficiency
 analysis/            MPI profiles (CrayPAT) and hardware-counter results
-bonus/               the Bonus patches, dictionaries, results and the bit-identity evidence
+bonus/               the Bonus patches, dictionaries, results and the F3 evidence
 figures/             the figures of REPORT.md
 ```
 
@@ -120,6 +121,6 @@ Only what Basic allows (addendum F1):
 ## Provenance
 
 - Repository `2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM` (private): Basic commit `16c62ac1e809a5baed755002d79525dcbc3f330b`
-  (tag `issue63-basic-final-20261016`), Bonus commit `fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892`
-  (tag `issue51-bonus-fused-gradient-20261006`). The scripts here are the directory `submission/openfoam/` of that repository.
+  (tag `issue63-basic-final-20261016`), Bonus commit `1bc34b922496c16ed6015b02d9f9f45989300205`
+  (tag `issue69-bonus-final-20261026`). The scripts here are the directory `submission/openfoam/` of that repository.
 - Every measured run was started by GitHub Actions; their complete raw records are in our artifact archive.

@@ -9,16 +9,16 @@ The figures are in `figures/`; the raw logs are in `results/`, `scaling/`, `anal
 ## 1. Summary
 
 On 4 ASPIRE-2A nodes, the official case takes 3.65 s per step with the case defaults on our own build of v2512. Our
-**Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**, 21% less. Our **Bonus**, which adds four
-source changes that keep every arithmetic operation, takes **2.599 s**, 29% less, with a `coefficient.dat` bit-identical to
-the unpatched run. All three use the same build, scripts and measurement, so the differences are our optimisations. The
-spread between repeated jobs falls from 8% to 0.2%.
+**Basic** submission, unmodified OpenFOAM v2512, takes **2.898 s per step**, 21% less. Our **Bonus**, which adds fourteen
+source changes that remove data movement without changing the iterations, the convergence tests or the discretisation, takes
+**2.360 s**, 35% less, with Cd within 0.0005% of the unpatched run. All three use the same build, scripts and measurement, so
+the differences are our optimisations. The spread between repeated jobs falls from 8% to 0.2 – 0.3%.
 
 | 4 nodes, 150 steps | s/step | Against our baseline |
 |---|---:|---:|
 | Our baseline (case-default `hierarchical`, launcher binding only) | 3.650 | — |
 | **Basic** | **2.898** | **−20.6%** |
-| **Bonus** | **2.599** | **−28.8%** |
+| **Bonus** | **2.360** | **−35.3%** |
 
 For reference, the organisers' vanilla runs on the same machine took 3.30 s per step with `scotch`. They use the site build,
 the default MPI transport and no binding, so we show them as context, not as the comparison (section 5).
@@ -34,10 +34,10 @@ What we found and did:
 3. **After that, memory bandwidth sets the speed.** We cannot read the memory-controller counters, so we moved the ranks
    instead: half the cores on all memory channels change nothing, while the same ranks on half the channels make a step
    2.2× slower, as much as the bandwidth drops.
-4. **Bonus: the same arithmetic, fewer bytes.** A node-aware `multiLevel` split and four source changes remove copies, the
-   second and third pass over the same matrix, boundary values that nobody reads, and temporary face fields. The results are
-   bit-identical, every solver log line is identical, and the cores load 17% fewer cache lines from DRAM: −10.3% against
-   Basic.
+4. **Bonus: the same computation, fewer bytes.** A node-aware `multiLevel` split and fourteen source changes remove copies,
+   repeated passes over the same matrix and cell fields, boundary values that nobody reads, temporary fields, and two of the
+   three global sums per conjugate-gradient iteration on the coarsest level. The first four alone are bit-identical and make
+   the cores load 17% fewer cache lines from DRAM; with all fourteen, Cd moves by at most 0.0005%: −18.6% against Basic.
 5. **The scaling is explained.** The parallel efficiency is 1.15 on 4 nodes because the cell arrays that the sparse-matrix
    kernels gather fit in L3 there: per cell and step, a rank needs 30% fewer refills from DRAM than on 1 node.
 6. **It can be reproduced.** The submitted scripts rebuild everything from public sources and run with plain `qsub`. Running
@@ -274,7 +274,7 @@ To find out whether the cores or the memory system set the speed, we changed onl
 |---|---:|---:|---:|---:|---:|
 | Basic (before the mapping) | 2.920 | 2.887 | 6.347 | 0.99 | 2.20 |
 | Bonus without the patches | 2.869 | 2.874 | 6.321 | 1.00 | 2.20 |
-| Bonus | 2.595 | 2.649 | 5.598 | 1.02 | 2.11 |
+| Bonus with `0001`–`0004` | 2.595 | 2.649 | 5.598 | 1.02 | 2.11 |
 | Triad bandwidth per node, same nodes | 274 GB/s | 279 GB/s | 125 GB/s | | 0.45 |
 
 ![Cores or memory](figures/fig19_cores_or_memory.png)
@@ -298,9 +298,9 @@ cannot read, and the core counters count only demand refills, not the lines that
 
 So the next step has to move fewer bytes.
 
-## 8. Bonus: the same arithmetic with fewer bytes
+## 8. Bonus: the same computation with fewer bytes
 
-The Bonus uses the same build flags, runtime and placement as Basic. Two things change: the decomposition, and four source
+The Bonus uses the same build flags, runtime and placement as Basic. Two things change: the decomposition, and fourteen source
 patches applied to the official v2512 tree before the build. `bonus/README.md` has the full description, and `bonus/patches/`
 the patches.
 
@@ -312,9 +312,10 @@ different decomposition method, so it is Bonus work. Against `scotch` with its d
 between sockets by 34% and between NUMA domains by 26%, and the total by 3.9% (2.81 M). Without the source patches it is
 1.54% faster on 4 nodes (4 jobs each).
 
-### 8.2 Four source changes
+### 8.2 Fourteen source changes
 
-The profiles (call-stack samples of 48 ranks, uProf hotspots) showed where the step reads data that it does not need.
+The profiles (call-stack samples of 48 ranks, uProf hotspots) showed where the step reads data that it does not need. The
+first four changes came first and are bit-identical:
 
 | Change | What it removes | Why the result is the same |
 |---|---|---|
@@ -327,25 +328,61 @@ The profiles (call-stack samples of 48 ranks, uProf hotspots) showed where the s
 
 *Figure 7. The second change: the three components of `U` share one matrix, so one pass over it updates all three.*
 
+A later profile of that Bonus (call-stack samples, then uProf cycles per function on 4 nodes) showed what was left: the
+turbulence model's field algebra (27% of the samples), the Gauss–Seidel sweeps and residuals, and the coarsest GAMG level,
+which is pure latency. Ten more changes followed:
+
+| Change | What it removes | Why the result is the same |
+|---|---|---|
+| Laplacian coefficients with the diagonal (`0006`) | A temporary product field, its copy and a re-read of `upper` | The same operations per face in the same order |
+| Pressure reference decided once (`0008`) | Two patch loops and global reductions per step that did nothing for this case | The same cells get the same modification whenever one is needed |
+| Viscous stress tensor in one pass (`0009`) | Three whole-field passes for `muEff·dev2(T(grad U))` | The same primitives on the same operands in the same order |
+| Wall shear stress on the walls only (`0010`) | A full-volume `devReff()` field, of which only the wall values were read | The same expression on the wall patches, as the `forces` function object uses |
+| Gauss–Seidel without the source copy (`0011`) | A copy of the source into a work array in every sweep | **F3**: the same terms, but the source is added last instead of first |
+| One global sum per CG iteration (`0012`) | Two of the three global sums per iteration of the coarsest-level PCG (Chronopoulos/Gear form) | **F3**: the same iterates in exact arithmetic, rounding differs; the same convergence test for any tolerance |
+| Turbulence-model algebra in single cell loops (`0013`) | 67 of the 80 passes over the cells per kOmegaSST correction | The same primitives in the same association; no new fused multiply-adds |
+| No zero fill of coefficients that are overwritten (`0014`) | Zero fills of face coefficients and a copy of the whole `U` matrix | No arithmetic changes |
+| GAMG correction and restriction in place (`0015`) | Two passes over the finest level per V-cycle | The same operations and summation order |
+| Gauss–Seidel residual from the sweep (`0016`) | One matrix pass and one interface exchange per component and iteration | **F3**: the residual is still formed, summed and tested after every iteration; only the rounding on processor interfaces can change |
+
+None of the fourteen changes the iteration counts, the convergence tests or their meaning, the number of steps or the
+discretisation; every solve does its full work. `bonus/README.md` describes each in detail.
+
 ### 8.3 Proof that it is the same computation
 
 We built the pre-change baseline that the rules require: the same `multiLevel` split, rank counts and node counts, with the
-four patches removed. At 1, 2 and 4 nodes, the Bonus `coefficient.dat` is byte-identical to that baseline's (SHA-256
-`36d35283…`, `2a49a26d…`, `8952a056…`). Because the iteration counts are fixed, an error in a residual or in the continuity
-error would not show in `coefficient.dat`, so we compared the solver logs too: every residual (16 digits), every iteration
-count, the continuity errors and the bounding of `k` and `omega` are identical in all 371, 771 and 1,475 lines. Only host
-names, paths, dates and timings differ. Each patch was also checked on its own against the configuration just before it.
+patches removed. The proof has two steps.
+
+1. **`0001`–`0004` are bit-identical.** At 1, 2 and 4 nodes, `coefficient.dat` with these four patches is byte-identical to
+   the baseline's (SHA-256 `36d35283…`, `2a49a26d…`, `8952a056…`). Because the iteration counts are fixed, an error in a
+   residual or in the continuity error would not show in `coefficient.dat`, so we compared the solver logs too: every
+   residual (16 digits), every iteration count, the continuity errors and the bounding of `k` and `omega` are identical in
+   all 371, 771 and 1,475 lines. Only host names, paths, dates and timings differ. Each of these patches was also checked on
+   its own against the configuration just before it.
+2. **All fourteen stay within ±0.5% (F3).** `0011`, `0012` and `0016` change the order of some floating-point operations, so
+   the last bits of the result can change. Cd at the last step against the baseline:
+
+| Nodes (steps) | Baseline Cd | Bonus Cd (3 jobs, byte-identical) | Difference |
+|---|---:|---:|---:|
+| 1 (40) | 0.43827636195043501 | 0.43827636195094927 | +1.2 × 10⁻¹² (relative) |
+| 2 (80) | 0.32285935413723610 | 0.32285928314184348 | −0.00002% |
+| 4 (150) | 0.29138777754153217 | 0.29138659643758436 | −0.00041% |
+
+The largest difference is more than 1,000 times smaller than the tolerance. On 4 nodes, `0006`, `0008`–`0010` and `0013`–`0016`
+each left `coefficient.dat` byte-identical to the configuration before them; the whole difference comes from `0011` and `0012`.
 
 ### 8.4 Results
 
-| Nodes (steps) | Basic | Bonus | Bonus against Basic | `coefficient.dat` against the pre-change baseline |
-|---|---:|---:|---:|---|
-| 1 (40) | 13.364504 (3 jobs) | 11.668460 (3 jobs) | −12.69% | bit-identical |
-| 2 (80) | 6.371748 (3 jobs) | 5.640683 (3 jobs) | −11.47% | bit-identical |
-| 4 (150) | 2.897638 (5 jobs) | 2.599353 (3 jobs) | −10.29% | bit-identical |
+| Nodes (steps) | Basic | Bonus | Bonus against Basic | Cd against the pre-change baseline |
+|---|---:|---:|---:|---:|
+| 1 (40) | 13.364504 (3 jobs) | 10.233606 (3 jobs) | −23.43% | +1.2 × 10⁻¹² |
+| 2 (80) | 6.371748 (3 jobs) | 4.992196 (3 jobs) | −21.65% | −0.00002% |
+| 4 (150) | 2.897638 (5 jobs) | 2.359976 (3 jobs) | −18.56% | −0.00041% |
 
-Each change against the configuration just before it, in the same period (4 nodes: 3 – 4 jobs each; most 1- and 2-node values
-are single jobs):
+The Bonus jobs ran on 2026-10-26, alternated with the Bonus of `0001`–`0004` only, which gave 11.650451, 5.636920 and
+2.603134 s/step: within 0.15% of its own means of 2026-10-07, so the machine had not changed since the Basic jobs.
+
+Each change against the configuration just before it (4 nodes: 3 – 4 jobs each; most 1- and 2-node values are single jobs):
 
 | Change | 1 node | 2 nodes | 4 nodes |
 |---|---:|---:|---:|
@@ -354,11 +391,19 @@ are single jobs):
 | + U components in one pass | −6.39% | −4.13% | −2.29% |
 | + no unused boundary updates | −1.40% | −1.88% | −1.31% |
 | + fused face loops | −2.88% | −2.29% | −2.82% |
+| + `0006`, `0008`–`0010` | | | −1.99% |
+| + `0011` | | | −1.04% |
+| + `0012` | | | −0.30% |
+| + `0013`–`0015` | | | −2.48% \* |
+| + `0016` | | | −3.80% \* |
+| `0006`–`0016` together, alternated | −12.16% | −11.44% | −9.34% |
+
+\* Measured a few days after the configuration it is compared with, not alternated with it.
 
 ### 8.5 Why the changes help
 
-**Hardware counters, 1 node.** AMD uProf (`data_access`) on one rank per NUMA domain, the final Bonus build against the same
-build without the patches, 2 jobs each, computation only (MPI, UCX and `Pstream` left out):
+**Hardware counters, 1 node.** AMD uProf (`data_access`) on one rank per NUMA domain, the Bonus build with `0001`–`0004`
+against the same build without the patches, 2 jobs each, computation only (MPI, UCX and `Pstream` left out):
 
 | Per rank, whole run | Without the patches | With the patches | Change |
 |---|---:|---:|---:|
@@ -369,30 +414,34 @@ build without the patches, 2 jobs each, computation only (MPI, UCX and `Pstream`
 | L2 accesses, including prefetches | 6.35 G | 5.74 G | −9.6% |
 | IPC | 0.360 | 0.388 | +7.5% |
 
-The patches remove little arithmetic (4% of the instructions) and much data movement (17% of the refills from DRAM).
+These four patches remove little arithmetic (4% of the instructions) and much data movement (17% of the refills from DRAM).
 
 ![Counters with and without the patches](figures/fig17_counters.png)
 
 *Figure 8. The same math with less data moved: cycles follow the DRAM refills, not the instructions.*
 
-**CrayPAT, 4 nodes.** From the first patch alone to the final Bonus, the computation per rank falls from 104.2 to 94.9 s
+**CrayPAT, 4 nodes.** From the first patch alone to `0001`–`0004`, the computation per rank falls from 104.2 to 94.9 s
 (40 steps) while the MPI time stays at about 23.5 s: the patches shorten the computation and leave the communication as it was.
 
-**Less memory per core, more gain.** In the placement experiment of section 7, the patches gain 7.9% on all 16 channels and
+**Less memory per core, more gain.** In the placement experiment of section 7, `0001`–`0004` gain 7.9% on all 16 channels and
 11.4% on 8 channels. They help most where bandwidth is scarcest, which is what removing memory traffic predicts. They also
-gain most on 1 node (U in one pass: −6.4% on 1 node, −2.3% on 4), where each rank holds four times more data.
+gain most on 1 node (U in one pass: −6.4% on 1 node, −2.3% on 4), where each rank holds four times more data. `0006`–`0016`
+together follow the same pattern: −12.2% on 1 node, −11.4% on 2 and −9.3% on 4. We have not measured them with counters.
 
 ## 9. Scaling
 
 | Nodes | Baseline | Efficiency | Basic | Efficiency | Bonus | Efficiency |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1 | 14.57 | 1.00 | 13.365 | 1.000 | 11.668 | 1.000 |
-| 2 | 7.43 | 0.98 | 6.372 | 1.049 | 5.641 | 1.034 |
-| 4 | 3.65 | 1.00 | 2.898 | 1.153 | 2.599 | 1.122 |
+| 1 | 14.57 | 1.00 | 13.365 | 1.000 | 10.234 | 1.000 |
+| 2 | 7.43 | 0.98 | 6.372 | 1.049 | 4.992 | 1.025 |
+| 4 | 3.65 | 1.00 | 2.898 | 1.153 | 2.360 | 1.084 |
 
 ![Before and after, 1 / 2 / 4 nodes](figures/fig22_before_after_scaling.png)
 
 *Figure 9. Faster at every node count; the parallel efficiency of Basic rises from 1.00 to 1.15.*
+
+The Bonus scales less well than Basic (1.08 on 4 nodes) because its patches remove memory traffic, and memory traffic costs most
+where it fits least in cache, on 1 node: the Bonus gains 23% over Basic on 1 node and 19% on 4.
 
 The efficiency above 1 comes from the caches. We profiled Basic (before the mapping) at 1, 2 and 4 nodes with uProf
 (`data_access`, one rank per NUMA domain) and normalised by the number of ranks, steps and cells per rank:
@@ -421,7 +470,7 @@ from DRAM. How well each subdomain's data fits in cache sets its speed.
 | `-march=znver3`, AOCC 5.0, `-O2`, LTO (Basic) | within ±0.1% | The loops wait on memory, not on instructions |
 | GCC profile-guided optimisation (Basic) | +0.13% (+0.08% on 1 node), Cd bit-identical | The same |
 | Default OFI transport with the organisers' workarounds (Basic) | +0.77% (3 v 3), +0.50% (1 v 1); same Cd, no SIGBUS | Not faster than UCX |
-| UCX over RC instead of UD between nodes | −0.01% (Basic), −0.16% (Bonus), 4 v 4 | IMB bandwidth rose 55%, but a step does not wait on transfers |
+| UCX over RC instead of UD between nodes | −0.01% (Basic), −0.16% (Bonus with `0001`–`0004`), 4 v 4 | IMB bandwidth rose 55%, but a step does not wait on transfers |
 | OpenFOAM communication switches (`topoControl`, `nbx.tuning`, `pbufs.tuning`) | no gain; `commsType scheduled` crashed in GAMG | MPI time is waiting for the slowest rank |
 | Rank reordering (`MPICH_RANK_REORDER_METHOD=3`) | +0.1%, with 92% fewer faces between nodes | Fewer bytes between nodes do not shorten the wait |
 | GAMG coarsest level on fewer ranks (Bonus) | −0.25% to +4.95% | 81% of the global sums, but about 0.6% of the time |
@@ -429,6 +478,7 @@ from DRAM. How well each subdomain's data fits in cache sets its speed.
 | glibc `malloc` thresholds (Basic) | −0.4% (3 jobs) | Too small to separate from the spread with 3 jobs; not re-tested |
 | SMT, 2 ranks per core (Basic) | about 5.7× slower | Stalls of minutes; cause not isolated |
 | Overlapping halo exchange with computation | under 1% available (call-stack samples) | Led to skipping the unused exchanges instead (`0003`) |
+| Gauss–Seidel sweep of the interior cells while the interface values are in flight (Bonus) | +8.32% (3 v 3), Cd −1.20% | Fails F3: the changed update order moves Cd far beyond rounding on 512 ranks |
 | File I/O in the timed steps | about 0.01% of a step | Not a factor |
 
 Two further numbers from the profiles support the table. One 8-byte global sum over 512 ranks takes about 12 µs, so the
@@ -447,7 +497,8 @@ At 40, 80 and 150 steps the flow has not converged, and Cd depends on the decomp
 | 80 | 0.334 – 0.345 | 0.33733 | 0.32714 | **0.33410** | 0.32286 |
 | 150 | 0.284 – 0.292 | 0.27356 | 0.28405 | **0.29302** | 0.29139 |
 
-- Every column except the Bonus uses unmodified source; the Bonus is bit-identical to its unmodified baseline (section 8.3).
+- Every column except the Bonus uses unmodified source; the Bonus differs from its unmodified baseline by at most 0.0005%
+  (section 8.3), so it shows the same values to five digits.
   The mapping moves Cd by +0.8%, +2.1% and +3.2% from `scotch` with its defaults, within what the organisers report for a
   change of method.
 - With the same decomposition, our Cd at 150 steps (0.284049, `scotch` defaults) differs from the organisers' (0.283983) by a
@@ -466,13 +517,15 @@ solver). We re-ran them twice from the public sources, exactly as `README.md` de
 | Basic (2026-10-16) | 1 | 25838142, 25838143 | 13.413150 | 13.364504 | +0.36% | identical |
 | Basic (2026-10-16) | 2 | 25838144, 25838145 | 6.390324 | 6.371748 | +0.29% | identical |
 | Basic (2026-10-16) | 4 | 25838146, 25838147 | 2.904620 | 2.897638 | +0.24% | identical |
-| Bonus (2026-10-07) | 1 | 25714175, 25714176 | 11.644042 | 11.668460 | −0.21% | identical |
-| Bonus (2026-10-07) | 2 | 25714177, 25714178 | 5.649779 | 5.640683 | +0.16% | identical |
-| Bonus (2026-10-07) | 4 | 25714179, 25714180 | 2.600607 | 2.599353 | +0.05% | identical |
+| Bonus `0001`–`0004` (2026-10-07) | 1 | 25714175, 25714176 | 11.644042 | 11.668460 | −0.21% | identical |
+| Bonus `0001`–`0004` (2026-10-07) | 2 | 25714177, 25714178 | 5.649779 | 5.640683 | +0.16% | identical |
+| Bonus `0001`–`0004` (2026-10-07) | 4 | 25714179, 25714180 | 2.600607 | 2.599353 | +0.05% | identical |
 
 Every step of every job ended with `End` and returned 0, and every solve job reported `bound=128/128` on every node. The
 Basic re-run ran on other hosts on another day and is 0.24 – 0.36% slower than our means, within the ±0.5% in which most of
-our October jobs lie. Every recorded job, with its PBS job ID, is listed in `scaling/scaling.txt`.
+our October jobs lie. Every recorded job, with its PBS job ID, is listed in `scaling/scaling.txt`. The Bonus re-run was made
+with `0001`–`0004`; the fourteen-patch Bonus was measured with our pipeline (section 4), and has not been re-run with these
+scripts.
 
 ## 13. Limitations and next steps
 
@@ -483,9 +536,11 @@ our October jobs lie. Every recorded job, with its PBS job ID, is listed in `sca
   mostly waiting. The counters tie it to how much each rank reads from DRAM (section 9), not to its cells, so a better
   balance would have to come from data locality per subdomain (renumbering, or weights from measured per-rank times), not
   from equal cell counts.
-- **Remaining source changes.** Fusing the assembly of `U`, `k` and `omega` across terms, the GAMG residual with its
-  restriction, or the Laplacian coefficients with the diagonal would each remove a pass or two over the face arrays. We expect
-  a few per cent from them together. Gains of 10% would need a different computation, which the rules prohibit.
+- **Remaining source changes.** `0006`–`0016` did what we had listed here before (the Laplacian coefficients with the
+  diagonal, the GAMG residual with its restriction, the turbulence model's field algebra) and more, for −9.3% on 4 nodes.
+  Fusing the assembly of `U`, `k` and `omega` across terms would remove a few more passes over the face arrays. Overlapping
+  the Gauss–Seidel sweep with its interface exchange failed F3 (section 10). Larger gains would need a different
+  computation, which the rules prohibit.
 
 ## 14. Conclusion
 
@@ -493,9 +548,9 @@ Within the rules — the same case, the same math, the same work per step — th
 turn. First by placement and balance: the launcher's binding is lost at `MPI_Init`, and the case-default split gives the ranks
 near the car more work. Putting the binding back and using a `scotch` split mapped onto the node made Basic 2.898 s per step,
 21% below our baseline, with a 0.2% spread between jobs. Then by memory bandwidth, shown by moving ranks
-rather than by counters we cannot read: the Bonus moves fewer bytes for the same arithmetic and reaches 2.599 s, bit-identical
-to its unmodified baseline. Every number here comes from alternated, repeated benchmark jobs, and the submitted scripts
-reproduce them from public sources.
+rather than by counters we cannot read: the Bonus moves fewer bytes for the same computation and reaches 2.360 s, with Cd
+within 0.0005% of its unmodified baseline. Every number here comes from alternated, repeated benchmark jobs, and the
+submitted scripts reproduced Basic and the four-patch Bonus from public sources.
 
 ## Appendix A. Not counted: residual norms that the fixed iterations never use
 
@@ -504,14 +559,15 @@ reproduce them from public sources.
 `fvSolution.fixedIter` sets `tolerance 0` and `relTol 0` for `U`, `k` and `omega`, and `minIter = maxIter = 35` for the
 coarsest-level PCG of `p`. The convergence check can then never stop a solve early, so the residual norm that the solvers
 compute after every sweep — a residual pass and a global sum — is used only after the last one. A patch that computes it once,
-after the last iteration, gave 2.250 s/step against 2.595 for the final Bonus on 4 nodes (−13.3%, 3 jobs each, ranges not
-overlapping). `coefficient.dat` was bit-identical at 1, 2 and 4 nodes, and all 1,323 solver log lines were identical.
+after the last iteration, gave 2.250 s/step against 2.595 for the Bonus with `0001`–`0004` on 4 nodes (−13.3%, 3 jobs each,
+ranges not overlapping). `coefficient.dat` was bit-identical at 1, 2 and 4 nodes, and all 1,323 solver log lines were identical.
 
 We do not count it. It helps only the benchmark's fixed-iteration setting: the case's other dictionary, `fvSolution.fixedTol`,
 which uses ordinary tolerances, runs the original code. The rules also prohibit "less work per step", and the skipped norms
 could be read as work. The idea itself exists in OpenFOAM: with a negative `nSweeps`, v2512's `smoothSolver` runs a fixed
 number of sweeps and computes no residual. What the result does show is the cost of convergence checking at this scale:
-about 13% of a Bonus step on 512 ranks.
+about 13% of a step of the Bonus with `0001`–`0004` on 512 ranks. The counted patch `0016` later removed part of that cost
+while keeping every check: it forms the residual inside the last sweep instead of skipping it.
 
 ## Appendix B. Where the evidence is
 
