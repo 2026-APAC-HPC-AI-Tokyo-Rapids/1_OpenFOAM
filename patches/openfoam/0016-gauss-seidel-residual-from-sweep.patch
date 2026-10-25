@@ -1,0 +1,821 @@
+Subject: [PATCH 0016] smoothSolver: form GaussSeidel residual from the final
+ sweep
+
+F3 rounding change; not bit-identical. No solver iteration is elided and no
+choice depends on the benchmark's iteration limits. Apply to smoothSolver
+with the GaussSeidel smoother, positive nSweeps and nonBlocking comms, on
+symmetric or asymmetric matrices with ordinary processor interfaces (or no
+interfaces). Both scalar solve() and solveGaussSeidelComponents() use the
+same templated sweep. Other smoothers, non-positive nSweeps and unsupported
+interfaces/comms retain the original sweep plus explicit residual path.
+
+Let x be the solution before the last forward sweep, y after it, and B(x)
+the RHS interface sum produced by init/updateMatrixInterfaces(false).
+OpenFOAM processor fields use !add when accumulating their coefficients,
+so this flag gives +coeff*receivedPsi; the complete operator is
+A = D + L + U - B. With lowerAddr[f] < upperAddr[f], upper[f] belongs to
+the owner row and lower[f] to the neighbour row. The sweep computes
+
+  n_i = b_i + B(x)_i - sum(j<i) L_ij*y_j - sum(j>i) U_ij*x_j
+  y_i = n_i/D_i
+  r_i = (n_i - D_i*y_i) - sum(j>i) U_ij*(y_j-x_j) + B(y)_i-B(x)_i.
+
+The last expression is b-A*y in exact arithmetic. Retain the local
+division defect n_i-D_i*y_i, rather than assuming the division is exact.
+Row-formation roundoff and the residual additions are reassociated, so
+very small residuals can differ at the floating-point noise floor. This
+is a fresh residual construction every iteration, not a recurrence over
+previous residuals. Compiler FMA contraction settings are unchanged.
+
+Keep the existing source/interface/lower accumulator operations, upper
+subtractions, division and lower scatter for psi. When y_i is available,
+use losortStart/losortAddr to visit incoming faces and scatter
+-upper[f]*(y_i-x_i) into already-initialised owner residuals. Every target
+has an index below i and will not be reset later. The owner-row layout
+cannot scatter these corrections in the existing outgoing-face loop:
+there is still a U-only incoming traversal. It replaces the separate
+D/b cell pass and U/L residual face pass, not all residual memory traffic.
+For one sweep, coefficient streams fall from 4*faces to 3*faces; the extra
+losort traversal and its addressing must be included in performance tests.
+Move the existing component sweep into a private header so both scalar
+and batched paths share this kernel and the standalone test can exercise
+exactly the production implementation.
+
+Keep B(psi) in a solve-local field, and keep old boundary-cell sums in a
+compact array during exchange. Only distinct boundary cells are reset,
+seeded and completed: repeated faces or patches must not duplicate a sum.
+After the final sweep, exchange psi_new, add Bnew-Bold to the residual,
+and leave Bnew ready to seed the next sweep. Thus N iterations of s sweeps
+use N*s+1 interface exchanges per component instead of N*(s+1), excluding
+the unchanged initial Amul. Earlier sweeps of an iteration remain ordinary
+GS sweeps. The first iteration still has its startup exchange. State is
+never reused across solves or component fields.
+
+Support is checked for every component, with one communicator-wide AND
+before using the new exchange schedule. A local-only fallback could
+mismatch neighbours' exchanges. Restrict interface types to the ordinary
+"processor" implementation, whose updates are additive and touch only
+patch-addressed cells; cyclic, AMI, overset, custom interfaces and other
+communication modes retain the original path. The scalar path avoids
+constructing an unused GaussSeidelSmoother/accumulator when fused.
+
+Initial Amul, normalisation, initial residual, setResidualField hooks,
+gSumMag communicator reductions, convergence tests, nSweeps increments,
+minIter/maxIter handling, and per-component active states remain in their
+existing positions. The final field hook receives the complete new
+residual. Components can converge separately and switch from the N=3 to
+N=1 kernel. Tolerance-controlled solves do the same numerical work, up
+to rounding in the residual, as fixed-limit solves.
+
+Validation: GCC 13.3 -fsyntax-only on smoothSolver.C (all sweep template
+instantiations) and simpleFoam.C (fvMatrix/vector call site). Standalone
+random diagonally dominant systems: 6400 cases per FMA setting, scalar
+and three components, one/two sweeps, symmetric/asymmetric coefficients,
+uncoupled/fake two-rank interfaces, repeated boundary cells, empty face
+rows, separate component convergence, absolute/relative tolerances and
+minIter. Both -ffp-contract=off and fast give identical psi iterates and
+identical stopping counts; maximum normalised residual-norm differences
+are 1.83e-15 and 1.64e-15. Full OpenFOAM serial and 1/2/4-node Cd checks
+remain external acceptance tests; the required bound is +/-0.5 percent.
+---
+ .../solvers/smoothSolver/smoothSolver.C       | 470 ++++++++++++------
+ .../solvers/smoothSolver/smoothSolver.H       |   8 +-
+ .../smoothSolver/smoothSolverGaussSeidel.H    | 145 ++++++
+ 3 files changed, 476 insertions(+), 147 deletions(-)
+ create mode 100644 src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolverGaussSeidel.H
+
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+index 9731e572..550a4de0 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -30,6 +30,8 @@ License
+ #include "profiling.H"
+ #include "PrecisionAdaptor.H"
+ #include "GaussSeidelSmoother.H"
++#include "smoothSolverGaussSeidel.H"
++#include "DynamicList.H"
+ #include <type_traits>
+ 
+ // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+@@ -51,76 +53,121 @@ namespace Foam
+ namespace
+ {
+ 
+-// One GaussSeidel sweep of N components that share the off-diagonal
+-// coefficients and the addressing. Per component the operations and their
+-// order are those of GaussSeidelSmoother::smooth.
+-template<int N>
+-void gaussSeidelSweep
++// Cache only the additive RHS contribution B(psi) on ordinary processor
++// interfaces. Other interface implementations may modify arbitrary result
++// entries (eg, overset); they retain the original path on every rank.
++bool residualFromSweep
+ (
+-    const Foam::label nCells,
+-    const Foam::label* const __restrict__ ownStartPtr,
+-    const Foam::label* const __restrict__ uPtr,
+-    const Foam::scalar* const __restrict__ upperPtr,
+-    const Foam::scalar* const __restrict__ lowerPtr,
+-    const Foam::scalar* const diagPtr[N],
+-    Foam::solveScalar* const psiPtr[N],
+-    const Foam::solveScalar* const sourcePtr[N],
+-    Foam::solveScalar* const accPtr[N]
++    const Foam::lduInterfaceFieldPtrsList& interfaces,
++    bool eligible
+ )
+ {
+     using namespace Foam;
+-
+-    solveScalar psii[N];
+-    label fStart;
+-    label fEnd = ownStartPtr[0];
+-
+-    for (label celli=0; celli<nCells; celli++)
++    eligible = eligible
++        && UPstream::defaultCommsType == UPstream::commsTypes::nonBlocking;
++    forAll(interfaces, i)
+     {
+-        // Start and end of this row
+-        fStart = fEnd;
+-        fEnd = ownStartPtr[celli + 1];
+-
+-        // Consume and reset after all interface and lower-neighbour terms.
+-        for (int k=0; k<N; k++)
++        if
++        (
++            interfaces.set(i)
++         && interfaces[i].interfaceFieldType() != "processor"
++        )
+         {
+-            psii[k] = sourcePtr[k][celli] + accPtr[k][celli];
+-            accPtr[k][celli] = 0;
++            eligible = false;
+         }
++    }
++    return eligible;
++}
++
+ 
+-        // Accumulate the owner product side
+-        for (label facei=fStart; facei<fEnd; facei++)
++class sweepInterfaces
++{
++    Foam::labelList cells_;
++    Foam::solveScalarField previous_;
++    bool ready_ = false;
++    Foam::solveScalarField sum_;
++
++public:
++    sweepInterfaces
++    (
++        const Foam::lduMatrix& matrix,
++        const Foam::lduInterfaceFieldPtrsList& interfaces
++    )
++    :
++        sum_(matrix.diag().size(), Foam::Zero)
++    {
++        using namespace Foam;
++        boolList seen(sum_.size(), false);
++        DynamicList<label> cells;
++        forAll(interfaces, i)
+         {
+-            const scalar a = upperPtr[facei];
+-            const label j = uPtr[facei];
+-            for (int k=0; k<N; k++)
++            if (!interfaces.set(i)) continue;
++            for (const label cell : matrix.lduAddr().patchAddr(i))
+             {
+-                psii[k] -= a*psiPtr[k][j];
++                if (!seen[cell])
++                {
++                    seen[cell] = true;
++                    cells.append(cell);
++                }
+             }
+         }
++        cells_.transfer(cells);
++        previous_.setSize(cells_.size());
++    }
+ 
+-        // Finish psi for this cell
+-        for (int k=0; k<N; k++)
++    void exchange
++    (
++        const Foam::lduMatrix& matrix,
++        const Foam::FieldField<Foam::Field, Foam::scalar>& coeffs,
++        const Foam::lduInterfaceFieldPtrsList& interfaces,
++        const Foam::solveScalarField& psi,
++        const Foam::direction cmpt
++    )
++    {
++        using namespace Foam;
++        forAll(cells_, i)
+         {
+-            psii[k] /= diagPtr[k][celli];
++            const label cell = cells_[i];
++            previous_[i] = sum_[cell];
++            sum_[cell] = 0;
+         }
++        const label startRequest = UPstream::nRequests();
++        matrix.initMatrixInterfaces(false, coeffs, interfaces, psi, sum_, cmpt);
++        matrix.updateMatrixInterfaces
++        (
++            false, coeffs, interfaces, psi, sum_, cmpt, startRequest
++        );
++        ready_ = true;
++    }
+ 
+-        // Distribute the neighbour side using psi for this cell
+-        for (label facei=fStart; facei<fEnd; facei++)
+-        {
+-            const scalar a = lowerPtr[facei];
+-            const label j = uPtr[facei];
+-            for (int k=0; k<N; k++)
+-            {
+-                accPtr[k][j] -= a*psii[k];
+-            }
+-        }
++    void seed
++    (
++        const Foam::lduMatrix& matrix,
++        const Foam::FieldField<Foam::Field, Foam::scalar>& coeffs,
++        const Foam::lduInterfaceFieldPtrsList& interfaces,
++        const Foam::solveScalarField& psi,
++        const Foam::direction cmpt,
++        Foam::solveScalarField& acc
++    )
++    {
++        if (!ready_) exchange(matrix, coeffs, interfaces, psi, cmpt);
++        // The accumulator is zero between sweeps. Copy each boundary cell
++        // once, even if it appears on several patches/faces.
++        for (const Foam::label cell : cells_) acc[cell] = sum_[cell];
++        ready_ = false;
++    }
+ 
+-        for (int k=0; k<N; k++)
++    void complete(Foam::solveScalarField& residual) const
++    {
++        forAll(cells_, i)
+         {
+-            psiPtr[k][celli] = psii[k];
++            const Foam::label cell = cells_[i];
++            // Difference first: avoid burying small internal corrections
++            // between the subtraction and addition of two large B terms.
++            residual[cell] += sum_[cell] - previous_[i];
+         }
+     }
+-}
++};
+ 
+ 
+ // The internal part of lduMatrix::residual for N components that share the
+@@ -289,38 +336,106 @@ Foam::solverPerformance Foam::smoothSolver::solve
+         {
+             addProfiling(solve, "lduMatrix::smoother.", fieldName_);
+ 
+-            autoPtr<lduMatrix::smoother> smootherPtr = lduMatrix::smoother::New
+-            (
+-                fieldName_,
+-                matrix_,
+-                interfaceBouCoeffs_,
+-                interfaceIntCoeffs_,
+-                interfaces_,
+-                controlDict_
+-            );
++            bool fused =
++                nSweeps_ > 0
++             && lduMatrix::smoother::getName(controlDict_)
++                == GaussSeidelSmoother::typeName
++             && UPstream::defaultCommsType == UPstream::commsTypes::nonBlocking;
++            if (fused)
++            {
++                fused = residualFromSweep(interfaces_, fused);
++                // Controls/commsType are common to the solve. Interface
++                // support is rank-local and needs a collective decision.
++                matrix_.mesh().reduce(fused, andOp<bool>());
++            }
++            autoPtr<lduMatrix::smoother> smootherPtr;
++            if (!fused)
++            {
++                smootherPtr = lduMatrix::smoother::New
++                (
++                    fieldName_, matrix_, interfaceBouCoeffs_,
++                    interfaceIntCoeffs_, interfaces_, controlDict_
++                );
++            }
++            autoPtr<sweepInterfaces> boundary;
++            solveScalarField acc;
++            if (fused)
++            {
++                boundary.reset(new sweepInterfaces(matrix_, interfaces_));
++                acc.setSize(psi.size(), Zero);
++            }
+ 
+             // Smoothing loop
+             do
+             {
+-                smootherPtr->smooth
+-                (
+-                    psi,
+-                    source,
+-                    cmpt,
+-                    nSweeps_
+-                );
++                if (fused)
++                {
++                    const lduAddressing& addr = matrix_.lduAddr();
++                    const scalar* d[1] = {matrix_.diag().cdata()};
++                    solveScalar* p[1] = {psi.data()};
++                    const solveScalar* b[1] = {tsource().cdata()};
++                    solveScalar* a[1] = {acc.data()};
++                    solveScalar* r[1] = {residual.data()};
++                    for (label sweep=0; sweep<nSweeps_; ++sweep)
++                    {
++                        boundary->seed
++                        (
++                            matrix_, interfaceBouCoeffs_, interfaces_, psi,
++                            cmpt, acc
++                        );
++                        if (sweep + 1 == nSweeps_)
++                        {
++                            smoothSolverDetail::gaussSeidelSweep<1, true>
++                            (
++                                psi.size(), addr.ownerStartAddr().cdata(),
++                                addr.upperAddr().cdata(),
++                                matrix_.upper().cdata(), matrix_.lower().cdata(),
++                                d, p, b, a, addr.losortStartAddr().cdata(),
++                                addr.losortAddr().cdata(),
++                                addr.lowerAddr().cdata(), r
++                            );
++                        }
++                        else
++                        {
++                            smoothSolverDetail::gaussSeidelSweep<1>
++                            (
++                                psi.size(), addr.ownerStartAddr().cdata(),
++                                addr.upperAddr().cdata(),
++                                matrix_.upper().cdata(), matrix_.lower().cdata(),
++                                d, p, b, a
++                            );
++                        }
++                    }
++                    // B(psi_new) completes r = -U*delta + Bnew - Bold.
++                    // It also seeds the next iteration, with no new exchange.
++                    boundary->exchange
++                    (
++                        matrix_, interfaceBouCoeffs_, interfaces_, psi, cmpt
++                    );
++                    boundary->complete(residual);
++                }
++                else
++                {
++                    smootherPtr->smooth
++                    (
++                        psi,
++                        source,
++                        cmpt,
++                        nSweeps_
++                    );
+ 
+-                // Evaluate in place: the tmp-returning overload allocates a
+-                // new field and the assignment then copies it into residual
+-                matrix_.residual
+-                (
+-                    residual,
+-                    psi,
+-                    source,
+-                    interfaceBouCoeffs_,
+-                    interfaces_,
+-                    cmpt
+-                );
++                    // Evaluate in place: the tmp-returning overload allocates a
++                    // new field and the assignment then copies it into residual
++                    matrix_.residual
++                    (
++                        residual,
++                        psi,
++                        source,
++                        interfaceBouCoeffs_,
++                        interfaces_,
++                        cmpt
++                    );
++                }
+ 
+                 // Calculate the residual to check convergence
+                 solverPerf.finalResidual() =
+@@ -455,6 +570,26 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+         acc.set(k, new solveScalarField(nCells, Zero));
+     }
+ 
++    bool fused = nSweeps > 0;
++    for (label k=0; k<nCmpt; ++k)
++    {
++        fused = residualFromSweep(solvers[k]->interfaces_, fused);
++    }
++    // All ranks must use the same exchange schedule, including fallback.
++    matrix.mesh().reduce(fused, andOp<bool>());
++    PtrList<sweepInterfaces> boundary(nCmpt);
++    if (fused)
++    {
++        for (label k=0; k<nCmpt; ++k)
++        {
++            boundary.set(k, new sweepInterfaces(matrix, solvers[k]->interfaces_));
++        }
++    }
++    const label* loStartPtr =
++        fused ? cmatrix.lduAddr().losortStartAddr().cdata() : nullptr;
++    const label* losortPtr =
++        fused ? cmatrix.lduAddr().losortAddr().cdata() : nullptr;
++
+     while (active[0] || active[1] || active[2])
+     {
+         // All three components share one pass while all of them smooth; once
+@@ -470,28 +605,39 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+                 const smoothSolver& s = *solvers[k];
+ 
+-                const label startRequest = UPstream::nRequests();
++                if (fused)
++                {
++                    boundary[k].seed
++                    (
++                        matrix, s.interfaceBouCoeffs_, s.interfaces_,
++                        *psi[k], k, acc[k]
++                    );
++                }
++                else
++                {
++                    const label startRequest = UPstream::nRequests();
+ 
+-                matrix.initMatrixInterfaces
+-                (
+-                    false,
+-                    s.interfaceBouCoeffs_,
+-                    s.interfaces_,
+-                    *psi[k],
+-                    acc[k],
+-                    k
+-                );
++                    matrix.initMatrixInterfaces
++                    (
++                        false,
++                        s.interfaceBouCoeffs_,
++                        s.interfaces_,
++                        *psi[k],
++                        acc[k],
++                        k
++                    );
+ 
+-                matrix.updateMatrixInterfaces
+-                (
+-                    false,
+-                    s.interfaceBouCoeffs_,
+-                    s.interfaces_,
+-                    *psi[k],
+-                    acc[k],
+-                    k,
+-                    startRequest
+-                );
++                    matrix.updateMatrixInterfaces
++                    (
++                        false,
++                        s.interfaceBouCoeffs_,
++                        s.interfaces_,
++                        *psi[k],
++                        acc[k],
++                        k,
++                        startRequest
++                    );
++                }
+             }
+ 
+             if (together)
+@@ -508,10 +654,22 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                 {
+                     acc[0].data(), acc[1].data(), acc[2].data()
+                 };
+-                gaussSeidelSweep<3>
+-                (
+-                    nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
+-                );
++                if (fused && sweep + 1 == nSweeps)
++                {
++                    solveScalar* r[3] = {residual[0].data(), residual[1].data(), residual[2].data()};
++                    smoothSolverDetail::gaussSeidelSweep<3, true>
++                    (
++                        nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a,
++                        loStartPtr, losortPtr, lPtr, r
++                    );
++                }
++                else
++                {
++                    smoothSolverDetail::gaussSeidelSweep<3>
++                    (
++                        nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
++                    );
++                }
+             }
+             else
+             {
+@@ -522,34 +680,49 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                     solveScalar* p[1] = {psi[k]->data()};
+                     const solveScalar* s[1] = {source[k]->cdata()};
+                     solveScalar* a[1] = {acc[k].data()};
+-                    gaussSeidelSweep<1>
+-                    (
+-                        nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
+-                    );
++                    if (fused && sweep + 1 == nSweeps)
++                    {
++                        solveScalar* r[1] = {residual[k].data()};
++                        smoothSolverDetail::gaussSeidelSweep<1, true>
++                        (
++                            nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a,
++                            loStartPtr, losortPtr, lPtr, r
++                        );
++                    }
++                    else
++                    {
++                        smoothSolverDetail::gaussSeidelSweep<1>
++                        (
++                            nCells, ownStartPtr, uPtr, upperPtr, lowerPtr, d, p, s, a
++                        );
++                    }
+                 }
+             }
+         }
+ 
+-        // Residuals: internal part for all active components, then the
+-        // interface contributions of each component in turn
+-        if (together)
++        if (!fused)
+         {
+-            const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
+-            const solveScalar* p[3] = {psi[0]->cdata(), psi[1]->cdata(), psi[2]->cdata()};
+-            const solveScalar* b[3] = {source[0]->cdata(), source[1]->cdata(), source[2]->cdata()};
+-            solveScalar* r[3] = {residual[0].data(), residual[1].data(), residual[2].data()};
+-            internalResidual<3>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
+-        }
+-        else
+-        {
+-            for (label k=0; k<nCmpt; k++)
++            // Residuals: internal part for all active components, then the
++            // interface contributions of each component in turn
++            if (together)
+             {
+-                if (!active[k]) continue;
+-                const scalar* d[1] = {diag[k]->cdata()};
+-                const solveScalar* p[1] = {psi[k]->cdata()};
+-                const solveScalar* b[1] = {source[k]->cdata()};
+-                solveScalar* r[1] = {residual[k].data()};
+-                internalResidual<1>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
++                const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
++                const solveScalar* p[3] = {psi[0]->cdata(), psi[1]->cdata(), psi[2]->cdata()};
++                const solveScalar* b[3] = {source[0]->cdata(), source[1]->cdata(), source[2]->cdata()};
++                solveScalar* r[3] = {residual[0].data(), residual[1].data(), residual[2].data()};
++                internalResidual<3>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
++            }
++            else
++            {
++                for (label k=0; k<nCmpt; k++)
++                {
++                    if (!active[k]) continue;
++                    const scalar* d[1] = {diag[k]->cdata()};
++                    const solveScalar* p[1] = {psi[k]->cdata()};
++                    const solveScalar* b[1] = {source[k]->cdata()};
++                    solveScalar* r[1] = {residual[k].data()};
++                    internalResidual<1>(nCells, nFaces, lPtr, uPtr, upperPtr, lowerPtr, d, p, b, r);
++                }
+             }
+         }
+ 
+@@ -558,28 +731,39 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+             if (!active[k]) continue;
+ 
+             const smoothSolver& s = *solvers[k];
+-            const label startRequest = UPstream::nRequests();
++            if (fused)
++            {
++                boundary[k].exchange
++                (
++                    matrix, s.interfaceBouCoeffs_, s.interfaces_, *psi[k], k
++                );
++                boundary[k].complete(residual[k]);
++            }
++            else
++            {
++                const label startRequest = UPstream::nRequests();
+ 
+-            matrix.initMatrixInterfaces
+-            (
+-                false,
+-                s.interfaceBouCoeffs_,
+-                s.interfaces_,
+-                *psi[k],
+-                residual[k],
+-                k
+-            );
++                matrix.initMatrixInterfaces
++                (
++                    false,
++                    s.interfaceBouCoeffs_,
++                    s.interfaces_,
++                    *psi[k],
++                    residual[k],
++                    k
++                );
+ 
+-            matrix.updateMatrixInterfaces
+-            (
+-                false,
+-                s.interfaceBouCoeffs_,
+-                s.interfaces_,
+-                *psi[k],
+-                residual[k],
+-                k,
+-                startRequest
+-            );
++                matrix.updateMatrixInterfaces
++                (
++                    false,
++                    s.interfaceBouCoeffs_,
++                    s.interfaces_,
++                    *psi[k],
++                    residual[k],
++                    k,
++                    startRequest
++                );
++            }
+         }
+ 
+         for (label k=0; k<nCmpt; k++)
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
+index 39256b12..f035487f 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.H
+@@ -109,10 +109,10 @@ public:
+         //- Solve the components of one equation together with the
+         //- GaussSeidel smoother. solvers[k] is the solver of component k
+         //- on matrix (its controls, interface coefficients and interfaces)
+-        //- and diag[k] the diagonal of component k. Each component gets the
+-        //- operations of solve(), in the same order; the sweeps and residuals
+-        //- of all components share one pass over the off-diagonal
+-        //- coefficients and the addressing.
++        //- and diag[k] the diagonal of component k. Components share the
++        //- coefficient/addressing traversals and retain the convergence
++        //- checks of solve(). Where supported, the last sweep also forms
++        //- the residual from corrections (an F3 rounding change).
+         static void solveGaussSeidelComponents
+         (
+             lduMatrix& matrix,
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolverGaussSeidel.H b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolverGaussSeidel.H
+new file mode 100644
+index 00000000..623facdd
+--- /dev/null
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolverGaussSeidel.H
+@@ -0,0 +1,145 @@
++/*---------------------------------------------------------------------------*\
++  =========                 |
++  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
++   \\    /   O peration     |
++    \\  /    A nd           | www.openfoam.com
++     \\/     M anipulation  |
++-------------------------------------------------------------------------------
++    Copyright (C) 2011-2014 OpenFOAM Foundation
++    Copyright (C) 2016-2021 OpenCFD Ltd.
++-------------------------------------------------------------------------------
++License
++    This file is part of OpenFOAM.
++
++    OpenFOAM is free software: you can redistribute it and/or modify it
++    under the terms of the GNU General Public License as published by
++    the Free Software Foundation, either version 3 of the License, or
++    (at your option) any later version.
++
++    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
++    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++    for more details.
++
++    You should have received a copy of the GNU General Public License
++    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
++
++\*---------------------------------------------------------------------------*/
++
++#ifndef smoothSolverGaussSeidel_H
++#define smoothSolverGaussSeidel_H
++
++// Internal kernel; included after the OpenFOAM scalar/label declarations.
++namespace Foam
++{
++namespace smoothSolverDetail
++{
++
++// One GaussSeidel sweep of N components that share the off-diagonal
++// coefficients and the addressing. The solution update retains the operations
++// of GaussSeidelSmoother::smooth. On the final sweep, optionally form the
++// residual from upper-neighbour corrections, without a separate L/D/b pass.
++// This is an F3 rounding change: row-formation roundoff is reassociated.
++template<int N, bool Residual = false>
++void gaussSeidelSweep
++(
++    const Foam::label nCells,
++    const Foam::label* const __restrict__ ownStartPtr,
++    const Foam::label* const __restrict__ uPtr,
++    const Foam::scalar* const __restrict__ upperPtr,
++    const Foam::scalar* const __restrict__ lowerPtr,
++    const Foam::scalar* const diagPtr[N],
++    Foam::solveScalar* const psiPtr[N],
++    const Foam::solveScalar* const sourcePtr[N],
++    Foam::solveScalar* const accPtr[N],
++    const Foam::label* const loStartPtr = nullptr,
++    const Foam::label* const losortPtr = nullptr,
++    const Foam::label* const lPtr = nullptr,
++    Foam::solveScalar* const residualPtr[N] = nullptr
++)
++{
++    using namespace Foam;
++
++    solveScalar psii[N];
++    solveScalar delta[N];
++    label fStart;
++    label fEnd = ownStartPtr[0];
++
++    for (label celli=0; celli<nCells; celli++)
++    {
++        // Start and end of this row
++        fStart = fEnd;
++        fEnd = ownStartPtr[celli + 1];
++
++        // Consume and reset after all interface and lower-neighbour terms.
++        for (int k=0; k<N; k++)
++        {
++            psii[k] = sourcePtr[k][celli] + accPtr[k][celli];
++            accPtr[k][celli] = 0;
++        }
++
++        // Accumulate the owner product side
++        for (label facei=fStart; facei<fEnd; facei++)
++        {
++            const scalar a = upperPtr[facei];
++            const label j = uPtr[facei];
++            for (int k=0; k<N; k++)
++            {
++                psii[k] -= a*psiPtr[k][j];
++            }
++        }
++
++        // Finish psi for this cell
++        for (int k=0; k<N; k++)
++        {
++            const solveScalar numerator = psii[k];
++            psii[k] /= diagPtr[k][celli];
++            if constexpr (Residual)
++            {
++                delta[k] = psii[k] - psiPtr[k][celli];
++                // Keep the local division defect as well as -U*delta.
++                // The caller adds B(psi_new)-B(psi_old) afterwards.
++                residualPtr[k][celli] =
++                    numerator - diagPtr[k][celli]*psii[k];
++            }
++        }
++
++        // Distribute the neighbour side using psi for this cell
++        for (label facei=fStart; facei<fEnd; facei++)
++        {
++            const scalar a = lowerPtr[facei];
++            const label j = uPtr[facei];
++            for (int k=0; k<N; k++)
++            {
++                accPtr[k][j] -= a*psii[k];
++            }
++        }
++
++        if constexpr (Residual)
++        {
++            // Incoming faces have owners < celli. Their residuals are
++            // already initialised and will never be reset by this sweep.
++            for (label i=loStartPtr[celli]; i<loStartPtr[celli+1]; ++i)
++            {
++                const label facei = losortPtr[i];
++                const label owner = lPtr[facei];
++                const scalar a = upperPtr[facei];
++                for (int k=0; k<N; k++)
++                {
++                    residualPtr[k][owner] -= a*delta[k];
++                }
++            }
++        }
++
++        for (int k=0; k<N; k++)
++        {
++            psiPtr[k][celli] = psii[k];
++        }
++    }
++}
++
++
++} // End namespace smoothSolverDetail
++} // End namespace Foam
++
++#endif
