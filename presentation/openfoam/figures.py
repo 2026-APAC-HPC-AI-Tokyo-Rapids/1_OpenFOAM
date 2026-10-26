@@ -59,6 +59,19 @@ def change(candidate, control):
     return (statistics.fmean(candidate) / statistics.fmean(control) - 1) * 100
 
 
+# Cd at the last step of the pre-change baseline (multiLevel, unmodified source; bonus/f3-baseline/ of the submission), which
+# the Bonus of the first four changes reproduces bit for bit, and the SHA-256 prefix of the final Bonus' coefficient.dat
+# (Issue #69, the same for all three runs of a node count)
+PRE_CHANGE_CD = {1: 0.43827636195043501, 2: 0.32285935413723610, 4: 0.29138777754153217}
+FINAL_BONUS_SHA = {1: "00d481ab…", 2: "d9fe4e04…", 4: "34749b4c…"}
+
+
+def cd_difference(cd, nodes):
+    """Cd against the pre-change baseline as the report writes it: a tiny difference as a relative number, otherwise in %."""
+    relative = cd / PRE_CHANGE_CD[nodes] - 1
+    return f"{relative:+.1e} (relative)" if abs(relative) < 1e-9 else f"{relative * 100:+.5f}%"
+
+
 def final_runs(output):
     runs = defaultdict(list)
     for row in read("final_runs.csv"):
@@ -80,7 +93,7 @@ def final_runs(output):
         high = max(runs[("Basic", nodes)])
         axis.set_ylim(low - (high - low) * 0.15, high + (high - low) * 0.15)
     axes[0].set_ylabel("Average wall-clock time per time step (s)")
-    figure.text(0.5, -0.04, "Each point is one job (official metric, steps 2 to N). Lines are means; y-axes do not start at 0. ASPIRE-2A, Basic 2026-10-15/16, Bonus 2026-10-06.", ha="center", fontsize=11)
+    figure.text(0.5, -0.04, "Each point is one job (official metric, steps 2 to N). Lines are means; y-axes do not start at 0. ASPIRE-2A, Basic 2026-10-15/16, Bonus 2026-10-26.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig01_final_runs")
 
@@ -148,7 +161,7 @@ def changes_4node(output):
     axis.set_ylabel("4 nodes, s/step")
     axis.set_ylim(2.57, 2.98)
     axis.legend(frameon=False, loc="lower left")
-    figure.text(0.5, -0.03, "Each change against the configuration just before it, measured in the same period (4 nodes, 512 ranks, 150 steps).\nSeparate experiments: the percentages are not added up. coefficient.dat bit-identical for every source change.", ha="center", fontsize=11)
+    figure.text(0.5, -0.03, "Each change against the configuration just before it, measured in the same period (4 nodes, 512 ranks, 150 steps).\nSeparate experiments: the percentages are not added up. coefficient.dat bit-identical for each of the first four source changes shown here.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig03_changes_4node")
 
@@ -281,7 +294,8 @@ def variability(output):
 def mpi_breakdown(output):
     rows = read("craypat_summary.csv")
     figure, axis = plt.subplots(figsize=(12.8, 5.2))
-    labels = [{"Bonus before 0002-0004": "Bonus before the\nlast three changes"}.get(row["configuration"], row["configuration"]) for row in rows]
+    # "Final Bonus" in the CSV is fa4f5b0, the Bonus of the first four source changes; the final Bonus has no CrayPAT profile
+    labels = [{"Bonus before 0002-0004": "Bonus with the\nfirst change only", "Final Bonus": "Bonus with the\nfirst four changes"}.get(row["configuration"], row["configuration"]) for row in rows]
     parts = [("computation (process − MPI)", lambda row: float(row["process_s"]) - float(row["mpi_s"]), "#bcbddc"), ("MPI_Allreduce", lambda row: float(row["allreduce_s"]), "#e6550d"), ("MPI_Waitall", lambda row: float(row["waitall_s"]), "#fdae6b"), ("other MPI", lambda row: float(row["mpi_s"]) - float(row["allreduce_s"]) - float(row["waitall_s"]), "#fdd0a2")]
     left = [0.0] * len(rows)
     for name, value, color in parts:
@@ -307,7 +321,7 @@ def rank_compute(output):
     before = sorted(float(row["before_0002_0004_s"]) for row in rows)
     after = sorted(float(row["final_bonus_s"]) for row in rows)
     figure, axis = plt.subplots(figsize=WIDE)
-    for values, color, label in ((before, CONTROL, "before the last three source changes"), (after, BONUS, "final Bonus")):
+    for values, color, label in ((before, CONTROL, "Bonus with the first source change only"), (after, BONUS, "Bonus with the first four source changes")):
         median = statistics.median(values)
         axis.plot(range(len(values)), values, color=color, linewidth=2.5, label=f"{label}: median {median:.1f} s, max {max(values):.1f} s (max/median {max(values) / median:.3f})")
     axis.set_xlabel("Ranks sorted by computation time")
@@ -368,14 +382,14 @@ def counters(output):
     axis.set_yticks(range(len(rows)), [metric for metric, _, _ in rows], fontsize=13)
     axis.invert_yaxis()
     axis.set_xlim(-22, 4.5)
-    axis.set_xlabel("The four source changes against the same build without them (%)")
+    axis.set_xlabel("The first four source changes against the same build without them (%)")
     figure.text(0.5, -0.06, "1 node, 128 ranks, 40 steps, multiLevel (2 4 16). AMD uProf data_access on one rank per NUMA domain (rank 0 left out: it also writes the output);\ncomputation only (MPI, UCX and Pstream left out). Bars: mean of 2 runs per side; dots: the 4 run pairs. Refills count demand misses only;\nhardware prefetches are in the L2 accesses. Instructions fall 4% while DRAM refills fall 17%: the same math with less data moved.", ha="center", fontsize=10.5)
     figure.tight_layout()
     save(figure, output, "fig17_counters")
 
 
 PLACEMENT_CONFIGS = {"Basic": BASIC, "baseline": CONTROL, "Bonus": BONUS}
-PLACEMENT_NAMES = {"Basic": "Basic", "baseline": "Bonus without the patches", "Bonus": "Bonus"}
+PLACEMENT_NAMES = {"Basic": "Basic", "baseline": "Bonus without the patches", "Bonus": "Bonus with the first four changes"}
 
 
 def placement_runs():
@@ -433,7 +447,7 @@ def memory_placement(output):
     axis.set_ylim(0, 7.4)
     axis.set_ylabel("4 nodes, s/step")
     axis.legend(loc="upper left", frameon=False)
-    figure.text(0.5, -0.05, "Official metric, 150 steps; each dot is one job, the bar its mean. 'Bonus without the patches': the final Bonus (same multiLevel split) with the four source changes removed.\n'patches': Bonus against that baseline at the same placement. coefficient.dat is bit-identical between spread64 and packed64 of each configuration,\nand between the baseline and the Bonus at each placement.", ha="center", fontsize=10.5)
+    figure.text(0.5, -0.05, "Official metric, 150 steps; each dot is one job, the bar its mean. 'Bonus without the patches': the Bonus of the first four source changes (same multiLevel split) with them removed.\n'patches': that Bonus against its baseline at the same placement. coefficient.dat is bit-identical between spread64 and packed64 of each configuration,\nand between the baseline and the Bonus at each placement.", ha="center", fontsize=10.5)
     figure.tight_layout()
     save(figure, output, "fig20_memory_placement")
 
@@ -599,7 +613,7 @@ def solver_flow(output):
         ("no unused updates", "no boundary values or exchanges where only the cell values are used"),
         ("fused loops", "face values and face products formed inside the summation loops"),
     ]
-    axis.text(0.01, 0.255, "Bonus source changes (same expressions and order; bit-identical coefficient.dat):", fontsize=12, fontweight="bold")
+    axis.text(0.01, 0.255, "The first four Bonus source changes (same expressions and order; bit-identical coefficient.dat):", fontsize=12, fontweight="bold")
     for index, (name, meaning) in enumerate(legend):
         axis.text(0.02, 0.19 - index * 0.05, f"{name:<19}{meaning}", fontsize=11.5, family="monospace")
     save(figure, output, "fig13_solver_flow")
@@ -855,7 +869,7 @@ def u_in_one_pass(output):
     arrow(axis, (0.735, 0.55), (0.795, 0.55))
     box(axis, 0.8, 0.31, 0.17, 0.48, "sweep Ux\n\nsweep Uy\n\nsweep Uz", "#fff4e6", size=13)
     axis.text(0.75, 0.2, "the matrix is read once", ha="center", fontsize=14, fontweight="bold", color=CANDIDATE)
-    axis.text(0.5, 0.07, "Each component still gets the same operations in the same order, so coefficient.dat is bit-identical. The other source changes follow the same idea:\nno temporary copies in the solvers, no boundary updates whose result is thrown away, face values formed inside the summation loops.", ha="center", va="center", fontsize=11.5, color="#333333")
+    axis.text(0.5, 0.07, "Each component still gets the same operations in the same order, so coefficient.dat is bit-identical. The other source changes follow the same idea:\nno copies or zero fills, no values that nobody reads, fewer passes over the same arrays.", ha="center", va="center", fontsize=11.5, color="#333333")
     save(figure, output, "fig25_u_in_one_pass")
 
 
@@ -902,11 +916,12 @@ def deck_tables(output):
     ]
     table(output, "tab10_basic_before_after", ["4 nodes", "Baseline", "Basic"], basic_rows, [0.52, 0.2, 0.28], fontsize=14)
 
+    bonus_cd = {int(row["nodes"]): float(row["cd"]) for row in read("final_runs.csv") if row["configuration"] == "Bonus"}
     bonus_rows = []
     for nodes, steps in ((1, 40), (2, 80), (4, 150)):
         basic, bonus = final[("Basic", nodes)], final[("Bonus", nodes)]
-        bonus_rows.append([f"{nodes} ({steps})", f"{statistics.fmean(basic):.3f} ({len(basic)} jobs)", f"{statistics.fmean(bonus):.3f} ({len(bonus)} jobs)", f"{change(bonus, basic):.1f}%", "bit-identical"])
-    table(output, "tab11_bonus_results", ["Nodes (steps)", "Basic s/step", "Bonus s/step", "Bonus vs Basic", "coefficient.dat vs the pre-change baseline"], bonus_rows, [0.15, 0.2, 0.2, 0.16, 0.29], fontsize=14)
+        bonus_rows.append([f"{nodes} ({steps})", f"{statistics.fmean(basic):.3f} ({len(basic)} jobs)", f"{statistics.fmean(bonus):.3f} ({len(bonus)} jobs)", f"{change(bonus, basic):.1f}%", cd_difference(bonus_cd[nodes], nodes)])
+    table(output, "tab11_bonus_results", ["Nodes (steps)", "Basic s/step", "Bonus s/step", "Bonus vs Basic", "Cd vs the pre-change baseline (F3 allows ±0.5%)"], bonus_rows, [0.15, 0.2, 0.2, 0.16, 0.29], fontsize=14)
 
     not_worked_rows = [
         ["Compiler flags (-march=znver3, AOCC, -O2, LTO), GCC PGO", "within ±0.13%", "The loops wait on memory, not on instructions"],
@@ -916,11 +931,12 @@ def deck_tables(output):
         ["Weighted cells (×2, ×12), METIS with two constraints", "+1.5% to +6.1%", "Uneven cell counts, or more processor faces"],
         ["malloc thresholds", "−0.4% (3 runs)", "Too small to separate with 3 runs; not re-tested"],
         ["SMT (2 ranks per core)", "5.7× slower", "Stalls of minutes; cause not isolated"],
+        ["Gauss–Seidel sweep overlapped with its halo exchange (Bonus)", "+8.3% (3 runs), Cd −1.2%", "The new update order fails F3, and it is slower"],
     ]
     table(output, "tab12_not_worked", ["Idea", "Result (4 nodes)", "Why it did not help"], not_worked_rows, [0.43, 0.19, 0.38], fontsize=14)
 
     network_rows = [
-        ["UCX over RC instead of UD between nodes", "IMB bandwidth (1 MiB Sendrecv) 6.7 → 10.4 GB/s, +55%", "−0.01% Basic, −0.16% Bonus (4 v 4 runs each)"],
+        ["UCX over RC instead of UD between nodes", "IMB bandwidth (1 MiB Sendrecv) 6.7 → 10.4 GB/s, +55%", "−0.01% Basic, −0.16% Bonus with the first four changes (4 v 4 runs each)"],
         ["Rank reordering, hierarchical split", "92% fewer faces between nodes", "+0.1%"],
         ["OFI instead of UCX, with the organisers' two workarounds", "Another transport and provider", "+0.77% (3 v 3), +0.50% (1 v 1)"],
         ["GAMG coarsest level solved on 32 ranks instead of 512", "Fewer ranks in 81% of the global sums", "−0.25% (1 v 1)"],
@@ -964,22 +980,29 @@ def tables(output):
         bonus = runs[("Bonus", nodes)]
         rows.append([f"{nodes} ({nodes * 128} ranks, {dict([(1, 40), (2, 80), (4, 150)])[nodes]} steps)", f"{statistics.fmean(basic):.3f}  (n={len(basic)}, range {(max(basic) - min(basic)) / statistics.fmean(basic) * 100:.2f}%)", f"{statistics.fmean(bonus):.3f}  (n={len(bonus)}, range {(max(bonus) - min(bonus)) / statistics.fmean(bonus) * 100:.2f}%)", f"{change(bonus, basic):+.2f}%", f"{statistics.fmean(basic) / statistics.fmean(bonus):.3f} ×"])
     table(output, "tab01_final_results", ["Nodes", "Basic s/step (mean)", "Bonus s/step (mean)", "Bonus vs Basic", "Speedup"], rows, [0.22, 0.27, 0.27, 0.13, 0.11])
-    f3_rows = [
-        ["1 (40)", "25682093", "25709674, 25706195, 25709663", "bit-identical (SHA-256 36d35283…)", "0.43827636195043501"],
-        ["2 (80)", "25682094", "25709665, 25706306, 25709682", "bit-identical (SHA-256 2a49a26d…)", "0.32285935413723610"],
-        ["4 (150)", "25682211", "25706165, 25706131, 25706125", "bit-identical (SHA-256 8952a056…)", "0.29138777754153217"],
-    ]
-    table(output, "tab02_f3_check", ["Nodes (steps)", "Pre-change baseline (PBS job)", "Bonus runs (PBS jobs)", "coefficient.dat", "Cd at last step"], f3_rows, [0.12, 0.19, 0.25, 0.25, 0.19])
+    bonus_jobs = defaultdict(list)
+    bonus_cd = {}
+    for row in read("final_runs.csv"):
+        if row["configuration"] == "Bonus":
+            bonus_jobs[int(row["nodes"])].append(row["pbs_job"].split(".")[0])
+            bonus_cd[int(row["nodes"])] = float(row["cd"])
+    f3_rows = [[f"{nodes} ({steps})", f"{job}, Cd {PRE_CHANGE_CD[nodes]:.17f}", ", ".join(bonus_jobs[nodes]), f"{bonus_cd[nodes]:.17f} (SHA-256 {FINAL_BONUS_SHA[nodes]})", cd_difference(bonus_cd[nodes], nodes)] for nodes, steps, job in ((1, 40, "25682093"), (2, 80, "25682094"), (4, 150, "25682211"))]
+    table(output, "tab02_f3_check", ["Nodes (steps)", "Pre-change baseline: PBS job, Cd at the last step", "Bonus runs (PBS jobs)", "Bonus Cd, all runs byte-identical", "Difference (F3 allows ±0.5%)"], f3_rows, [0.11, 0.25, 0.22, 0.24, 0.18])
     data = changes_by_role()
-    measured = {key: f"{change(data[(key, 4, 'candidate')], data[(key, 4, 'control')]):+.2f}%  ({len(data[(key, 4, 'control')])} v {len(data[(key, 4, 'candidate')])})" for key, _ in CHANGES}
+    measured = {key: f"{change(data[(key, 4, 'candidate')], data[(key, 4, 'control')]):+.2f}%  ({len(data[(key, 4, 'control')])} v {len(data[(key, 4, 'candidate')])})" for key in [key for key, _ in CHANGES] + ["0006-0010", "0011", "0012", "0013-0015", "0016"]}
     change_rows = [
         ["multiLevel decomposition", "Partition follows node / socket / NUMA / core", "Decomposition only; unmodified source", measured["multiLevel"]],
-        ["No copies in the solvers", "Temporary residual field and its copy (smoothSolver); copy + subtract (GAMG)", "Same function, same per-cell subtraction", measured["0001"]],
-        ["U components in one pass", "Three passes over the shared matrix arrays for Ux, Uy, Uz", "Components are independent; each sees the same operations in the same order", measured["0002"]],
-        ["No unused boundary updates", "Boundary values and processor exchanges that six callers threw away; extra face loops in convection", "Internal values from the same loop; fused loop uses the same expressions and order", measured["0003"]],
-        ["Fused face loops", "Interpolated surface field and product field built before summation", "Same face expressions, summed in the same face order", measured["0004"]],
+        ["No copies in the solvers (0001)", "Temporary residual field and its copy (smoothSolver); copy + subtract (GAMG)", "Same function, same per-cell subtraction", measured["0001"]],
+        ["U components in one pass (0002)", "Three passes over the shared matrix arrays for Ux, Uy, Uz", "Components are independent; each sees the same operations in the same order", measured["0002"]],
+        ["No unused boundary updates (0003)", "Boundary values and processor exchanges that six callers threw away; extra face loops in convection", "Internal values from the same loop; fused loop uses the same expressions and order", measured["0003"]],
+        ["Fused face loops (0004)", "Interpolated surface field and product field built before summation", "Same face expressions, summed in the same face order", measured["0004"]],
+        ["Laplacian, pressure reference, viscous stress, wall stress (0006, 0008–0010)", "A product field and its copy; patch loops and a global sum per step; three tensor passes; a full-volume stress field read only on the walls", "Same operations in the same order; the same expression on the wall patches", measured["0006-0010"]],
+        ["Gauss–Seidel without the source copy (0011)", "A copy of the source into a work array in every sweep", "F3: the same terms, but the source is added last", measured["0011"]],
+        ["One global sum per CG iteration (0012)", "Two of the three global sums per iteration on the coarsest level", "F3: the same iterates in exact arithmetic; the same convergence test", measured["0012"]],
+        ["Turbulence model, zero fills, GAMG in place (0013–0015)", "67 of 80 cell passes per k-ω SST update; zero fills that are overwritten and a U matrix copy; two finest-level passes per V-cycle", "Same operations and association; no arithmetic in the zero fills", measured["0013-0015"] + " *"],
+        ["Gauss–Seidel residual from the sweep (0016)", "A matrix pass and an interface exchange per component and iteration", "F3: the residual is still formed and tested every iteration", measured["0016"] + " *"],
     ]
-    table(output, "tab03_bonus_changes", ["Change", "What it removes", "Why the result is the same", "4 nodes (runs before v after)"], change_rows, [0.19, 0.33, 0.31, 0.17])
+    table(output, "tab03_bonus_changes", ["Change", "What it removes", "Why the result is the same", "4 nodes (runs before v after; * a few days after the control)"], change_rows, [0.19, 0.33, 0.31, 0.17])
     rejected_rows = [
         ["Compiler: -march=znver3, AOCC 5.0, -O2, LTO (Basic)", "Within ±0.1% of the control", "Code generation does not limit the run time"],
         ["GCC profile-guided optimisation (Basic)", "+0.13% (1 v 1, same period), +0.08% at 1 node; Cd bit-identical", "The hot loops wait on memory and on other ranks"],
@@ -987,8 +1010,10 @@ def tables(output):
         ["METIS two-constraint partition (Bonus)", "+1.46%", "Better face balance, but 18% more processor faces"],
         ["OpenFOAM comm switches (Basic)", "No gain; commsType scheduled crashed in GAMG", "MPI time is mostly waiting for slower ranks"],
         ["OFI instead of UCX, with FI_OFI_RXM_USE_SRX=0 or FI_VERBS_PREFER_XRC=0 (Basic)", "SRX=0: +0.77% (3 v 3); XRC=0: +0.50% (1 v 1)", "Same Cd and no SIGBUS, but not faster; UCX stays"],
-        ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01% Basic, −0.16% Bonus (4 v 4 each)", "IMB bandwidth +55%, yet a step does not wait on inter-node transfer"],
+        ["UCX over RC instead of UD between nodes (Basic, Bonus)", "−0.01% Basic, −0.16% Bonus with the first four changes (4 v 4 each)", "IMB bandwidth +55%, yet a step does not wait on inter-node transfer"],
         ["GAMG coarsest level on fewer ranks (Bonus)", "One master: +4.95% (40 steps); per node +1.02%, per NUMA −0.25% (1 v 1)", "It issues 81% of the Allreduce calls, but the wait is for slower ranks"],
+        ["Gauss–Seidel sweep of the interior cells while the interface values are in flight (Bonus)", "+8.32% (3 v 3); Cd −1.20%", "Fails F3: on 512 ranks the changed update order moves Cd far beyond rounding"],
+        ["bound() averaging only over the cells it bounds (Bonus)", "Not run", "It needs an extra global reduction per call, which costs more than it saves"],
         ["SMT, 2 ranks per core (Basic)", "About 5.7 × slower (stopped after 22 steps)", "More ranks on the same cores do not help this solver"],
         ["Overlap of halo exchange and computation", "Under 1% available (stack samples)", "Led to skipping the unused boundary exchanges instead"],
         ["File I/O in the timed steps", "About 0.01% of the run time", "Not a factor"],
