@@ -1,0 +1,438 @@
+From 9abe5060eda03dfa5be423e1e58bb2c8ef6534c4 Mon Sep 17 00:00:00 2001
+From: Tomokazu Katayama <s231143s@st.go.tuat.ac.jp>
+Date: Mon, 26 Oct 2026 14:02:08 +0900
+Subject: [PATCH 0019] PCG/smoothSolver: skip unused convergence residuals
+
+Issue #68, port of the 0005 idea onto Bonus 7e246ee5 (including general
+one-reduction DIC-PCG and final-sweep GaussSeidel residuals). This is a
+FIXED-ITERATION REFERENCE EXPERIMENT ONLY, shown separately and not counted
+in Bonus. It relies on the benchmark's fixed iteration controls; it is not
+an unconditional optimization for convergence-controlled solves.
+
+Select smoothSolver only with tolerance == 0, relTol == 0 and positive
+nSweeps. Select PCG only with minIter >= maxIter > 0, for either DIC or the
+ordinary PCG branch. Do not broaden PCG to zero-tolerance solves with other
+bounds, or smoothSolver to positive-tolerance min/max-forced solves. Keep
+initial Amul, normalisation, initial residual and initial convergence check,
+all solution updates, preconditioner calls, iteration increments and the
+original loop predicates. Non-selected controls retain the current work.
+Also retain the original work when log >= 2 or solverPerformance::debug >= 2:
+checkConvergence then prints intermediate residuals, making them observable.
+
+For smoothSolver, determine whether the upcoming nSweeps batch is the last
+one using both iteration bounds. Nonfinal fixed batches skip residual
+formation and gSumMag. The final batch uses exactly the current residual
+path: the 0016 fused sweep and Bnew-Bold completion when eligible, otherwise
+the existing matrix.residual/internalResidual plus interface updates.
+Never substitute an explicit b-A*psi evaluation for 0016's fused final norm:
+its reassociated rounding is already part of the current Bonus baseline.
+
+For fused GS, use gaussSeidelSweep<N,false> when no active component needs
+a residual. This removes the division-defect/delta work, incoming U-only
+correction traversal, residual writes and boundary completion, as well as
+the separate sumMag pass and global reduction. Keep every cached interface
+exchange: B(psi_new) still seeds the next sweep. The final exchange is also
+needed to complete the reported residual. Thus N batches of s sweeps still
+use N*s+1 exchanges per component, excluding the unchanged initial Amul.
+For unfused smoothers, omit the entire unused explicit residual evaluation,
+including its interface exchange; leave the smoother's own work unchanged.
+
+Keep the current N=3/N=1 sweep grouping and each component's active state.
+If all three components still smooth and only some need a residual, retain
+the N=3 residual kernel (including unused accumulation for the other
+components), but complete/reduce only the residuals that are needed.
+Splitting such a sweep into N=1 kernels caused a bit mismatch with GCC 13
+and -ffp-contract=fast in the standalone test; retaining grouping avoids it.
+The final residual field is freshly initialized by the same kernel and
+completed in the same order, independently of stale intermediate fields.
+
+For DIC-PCG, omit the unused local L1 additions from the startup and
+nonfinal product loops. Keep the two dot-product statements, all CG
+recurrences, and the FixedList<solveScalar,3> reduction type/count/op and
+communicator. Supply zero in the unused L1 slot. Shrinking the collective
+to two scalars could change MPI's algorithm/summation tree and hence CG
+rounding, which cannot be ruled out for Cray MPICH here. No DIC collective
+is removed: an N-step solve still uses N+1 packed reductions, plus setup.
+The final (0,0,sumMag(rA)) reduction is identical to the current code.
+For ordinary PCG, defer the standalone gSumMag to solve exit, removing N-1
+norm passes and reductions for an N-step zero-tolerance fixed solve.
+
+checkConvergence also writes solverPerformance.converged(). With positive
+PCG tolerances retain the norm at its last scheduled check, maxIter-1,
+although it cannot end the solve. Earlier checks may see a stale finalResidual
+but cannot affect the fixed count, and their flags are overwritten before
+return. On an early singularity break, lazily evaluate the last successful
+update's residual and restore its convergence flag when that check was
+scheduled. DIC uses the same three-scalar collective and sumMag cell order
+for this recovery (one extra collective only on such a breakdown); ordinary
+PCG uses gSumMag. A break before any update preserves the initial residual.
+Initial/final residuals, nIterations, converged/singular flags, final residual
+field hooks, setFinished and solver residual log lines thus retain their
+baseline values. Timing and communication-debug traces naturally differ.
+
+Expected bit-identical coefficient.dat and solver residual lines against
+7e246ee5 under identical compiler/MPI settings, not against unpatched v2512.
+No floating-point solution expression is reassociated and no precision or
+compiler flags change. Keeping MPI payload size preserves the conditions
+for the same reduction tree; actual cluster identity still needs validation.
+
+Validation: GCC 13.3 -fsyntax-only on PCG.C, smoothSolver.C (instantiating
+all used sweep kernels) and simpleFoam.C, using b2-COMMON/check-all flags.
+Standalone tests with both -ffp-contract=off and fast at -O3 -march=native:
+43,200 cases per mode execute baseline/patched production PCG scalarSolve
+bodies with mock matrix/preconditioner/serial collectives and compare psi,
+residual fields, CG products, every returned performance field and logs
+bitwise. Forced breakdown, min/max, positive/zero tolerances and diagnostic
+fallbacks are covered. 30,720 scalar/batched GS cases per mode reuse the
+production sweep and fake two-rank interfaces, with 225,628 per-sweep bit
+comparisons; final fields/norms, counts, flags, logs and work counts agree.
+These are local standalone checks, not full OpenFOAM/MPI timing or Cd runs.
+---
+ .../matrices/lduMatrix/solvers/PCG/PCG.C      | 69 +++++++++++---
+ .../solvers/smoothSolver/smoothSolver.C       | 94 ++++++++++++++-----
+ 2 files changed, 128 insertions(+), 35 deletions(-)
+
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+index 28f0bef1..84214760 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/PCG/PCG.C
+@@ -139,6 +139,20 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+             );
+         }
+ 
++        // Reference experiment: the bounds alone force the iteration count.
++        // Verbose convergence logging still needs every intermediate norm.
++        const bool fixedIter = minIter_ >= maxIter_ && maxIter_ > 0
++            && log_ < 2 && solverPerformance::debug < 2;
++        bool residualCurrent = true;
++        // checkConvergence also sets converged(). With nonzero tolerances,
++        // preserve its last observable value (at maxIter-1, or breakdown).
++        const auto needResidual = [&]()
++        {
++            return !fixedIter
++                || ((tolerance_ > 0 || relTol_ > 0)
++                 && solverPerf.nIterations() == maxIter_ - 2);
++        };
++
+         // DIC is a fixed linear operator, as required by Chronopoulos/Gear
+         // CG. Keep other (possibly variable) preconditioners on the old loop.
+         if
+@@ -155,7 +169,8 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+             // u = M^-1 r, w = A u. The two products concern the same r,
+             // so they can share a reduction with its L1 norm. On the last
+             // iteration only the norm is needed, with no extra M^-1 or A.
+-            const auto reduceSums = [&](const bool nextDirection)
++            const auto reduceSums =
++            [&](const bool nextDirection, const bool residualNeeded)
+             {
+                 FixedList<solveScalar, 3> sums(Zero);
+ 
+@@ -171,21 +186,23 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                     {
+                         sums[0] += uAPtr[cell]*rAPtr[cell];
+                         sums[1] += wAPtr[cell]*uAPtr[cell];
+-                        sums[2] += mag(rAPtr[cell]);
++                        if (residualNeeded) sums[2] += mag(rAPtr[cell]);
+                     }
+                 }
+-                else
++                else if (residualNeeded)
+                 {
+                     sums[2] = sumMag(rA);
+                 }
+ 
++                // Keep count/type/op/communicator identical: shrinking 3 to
++                // 2 can select a different MPI summation tree for CG scalars.
+                 matrix_.mesh().reduce(sums, sumOp<solveScalar>());
+                 return sums;
+             };
+ 
+             // Startup products for the first step. Subsequent products are
+             // reduced after the update, alongside that step's residual norm.
+-            FixedList<solveScalar, 3> sums = reduceSums(true);
++            FixedList<solveScalar, 3> sums = reduceSums(true, !fixedIter);
+             solveScalar alpha = 0;
+ 
+             // --- Solver iteration
+@@ -234,12 +251,15 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                 // this reduction. Prepare the next products speculatively,
+                 // unless both iteration bounds already force a stop.
+                 // minIter_ can require continuing even beyond maxIter_.
+-                sums = reduceSums
+-                (
++                const bool nextDirection =
+                     solverPerf.nIterations() < maxIter_ - 1
+-                 || solverPerf.nIterations() < minIter_ - 1
+-                );
+-                solverPerf.finalResidual() = sums[2]/normFactor;
++                 || solverPerf.nIterations() < minIter_ - 1;
++                residualCurrent = needResidual() || !nextDirection;
++                sums = reduceSums(nextDirection, residualCurrent);
++                if (residualCurrent)
++                {
++                    solverPerf.finalResidual() = sums[2]/normFactor;
++                }
+ 
+             } while
+             (
+@@ -249,6 +269,10 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                 )
+              || solverPerf.nIterations() < minIter_
+             );
++            if (!residualCurrent)
++            {
++                solverPerf.finalResidual() = reduceSums(false, true)[2]/normFactor;
++            }
+         }
+         else
+         {
+@@ -301,9 +325,13 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                     rAPtr[cell] -= alpha*wAPtr[cell];
+                 }
+ 
+-                solverPerf.finalResidual() =
+-                    gSumMag(rA, matrix().mesh().comm())
+-                   /normFactor;
++                residualCurrent = needResidual();
++                if (residualCurrent)
++                {
++                    solverPerf.finalResidual() =
++                        gSumMag(rA, matrix().mesh().comm())
++                       /normFactor;
++                }
+ 
+             } while
+             (
+@@ -313,6 +341,23 @@ Foam::solverPerformance Foam::PCG::scalarSolve
+                 )
+              || solverPerf.nIterations() < minIter_
+             );
++
++            if (!residualCurrent)
++            {
++                solverPerf.finalResidual() =
++                    gSumMag(rA, matrix().mesh().comm())/normFactor;
++            }
++        }
++
++        if
++        (
++            fixedIter && !residualCurrent
++         && solverPerf.nIterations() > 0
++         && solverPerf.nIterations() < maxIter_
++        )
++        {
++            // A singularity break may expose an earlier convergence flag.
++            solverPerf.checkConvergence(tolerance_, relTol_, log_);
+         }
+     }
+ 
+diff --git a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+index 550a4de0..dfdfb8e1 100644
+--- a/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
++++ b/src/OpenFOAM/matrices/lduMatrix/solvers/smoothSolver/smoothSolver.C
+@@ -212,6 +212,21 @@ void internalResidual
+     }
+ }
+ 
++// With zero tolerances no residual can end the loop. Retain intermediate
++// residuals when checkConvergence prints them. Non-positive nSweeps keeps
++// its existing (including negative fixed-sweep) semantics.
++bool fixedIterations
++(
++    const Foam::scalar tolerance,
++    const Foam::scalar relTol,
++    const Foam::label nSweeps,
++    const int log
++)
++{
++    return nSweeps > 0 && tolerance == 0 && relTol == 0
++        && log < 2 && Foam::solverPerformance::debug < 2;
++}
++
+ } // End anonymous namespace
+ 
+ 
+@@ -365,9 +380,16 @@ Foam::solverPerformance Foam::smoothSolver::solve
+                 acc.setSize(psi.size(), Zero);
+             }
+ 
++            const bool fixedIter =
++                fixedIterations(tolerance_, relTol_, nSweeps_, log_);
++
+             // Smoothing loop
+             do
+             {
++                const label nextIter = solverPerf.nIterations() + nSweeps_;
++                const bool needResidual =
++                    !fixedIter || (nextIter >= maxIter_ && nextIter >= minIter_);
++
+                 if (fused)
+                 {
+                     const lduAddressing& addr = matrix_.lduAddr();
+@@ -383,7 +405,7 @@ Foam::solverPerformance Foam::smoothSolver::solve
+                             matrix_, interfaceBouCoeffs_, interfaces_, psi,
+                             cmpt, acc
+                         );
+-                        if (sweep + 1 == nSweeps_)
++                        if (needResidual && sweep + 1 == nSweeps_)
+                         {
+                             smoothSolverDetail::gaussSeidelSweep<1, true>
+                             (
+@@ -412,7 +434,7 @@ Foam::solverPerformance Foam::smoothSolver::solve
+                     (
+                         matrix_, interfaceBouCoeffs_, interfaces_, psi, cmpt
+                     );
+-                    boundary->complete(residual);
++                    if (needResidual) boundary->complete(residual);
+                 }
+                 else
+                 {
+@@ -426,20 +448,26 @@ Foam::solverPerformance Foam::smoothSolver::solve
+ 
+                     // Evaluate in place: the tmp-returning overload allocates a
+                     // new field and the assignment then copies it into residual
+-                    matrix_.residual
+-                    (
+-                        residual,
+-                        psi,
+-                        source,
+-                        interfaceBouCoeffs_,
+-                        interfaces_,
+-                        cmpt
+-                    );
++                    if (needResidual)
++                    {
++                        matrix_.residual
++                        (
++                            residual,
++                            psi,
++                            source,
++                            interfaceBouCoeffs_,
++                            interfaces_,
++                            cmpt
++                        );
++                    }
+                 }
+ 
+-                // Calculate the residual to check convergence
+-                solverPerf.finalResidual() =
+-                    gSumMag(residual, matrix().mesh().comm())/normFactor;
++                if (needResidual)
++                {
++                    // Final fixed-count norm, or a convergence-test norm
++                    solverPerf.finalResidual() =
++                        gSumMag(residual, matrix().mesh().comm())/normFactor;
++                }
+             } while
+             (
+                 (
+@@ -542,12 +570,15 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+     // Components that still smooth, decided as in solve()
+     List<bool> active(nCmpt);
++    List<bool> fixedIter(nCmpt);
+     for (label k=0; k<nCmpt; k++)
+     {
+         const smoothSolver& s = *solvers[k];
+         active[k] =
+             s.minIter_ > 0
+          || !solverPerf[k].checkConvergence(s.tolerance_, s.relTol_, s.log_);
++        fixedIter[k] =
++            fixedIterations(s.tolerance_, s.relTol_, s.nSweeps_, s.log_);
+     }
+ 
+     // Coefficients and addressing through the const matrix, as the smoother
+@@ -590,11 +621,26 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+     const label* losortPtr =
+         fused ? cmatrix.lduAddr().losortAddr().cdata() : nullptr;
+ 
++    List<bool> needResidual(nCmpt);
+     while (active[0] || active[1] || active[2])
+     {
++        for (label k=0; k<nCmpt; k++)
++        {
++            const smoothSolver& s = *solvers[k];
++            const label nextIter = solverPerf[k].nIterations() + nSweeps;
++            needResidual[k] = active[k]
++                && (!fixedIter[k]
++                 || (nextIter >= s.maxIter_ && nextIter >= s.minIter_));
++        }
++        const bool allResiduals =
++            needResidual[0] && needResidual[1] && needResidual[2];
++        const bool anyResiduals =
++            needResidual[0] || needResidual[1] || needResidual[2];
+         // All three components share one pass while all of them smooth; once
+         // some have converged, the others go through the same kernels one at
+         // a time (the operations per component do not depend on the grouping)
++        // Keep N=3 even for mixed residual needs: switching to N=1 can
++        // change compiler FMA choices in the solution update.
+         const bool together = active[0] && active[1] && active[2];
+ 
+         for (label sweep=0; sweep<nSweeps; sweep++)
+@@ -654,7 +700,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                 {
+                     acc[0].data(), acc[1].data(), acc[2].data()
+                 };
+-                if (fused && sweep + 1 == nSweeps)
++                if (fused && anyResiduals && sweep + 1 == nSweeps)
+                 {
+                     solveScalar* r[3] = {residual[0].data(), residual[1].data(), residual[2].data()};
+                     smoothSolverDetail::gaussSeidelSweep<3, true>
+@@ -680,7 +726,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                     solveScalar* p[1] = {psi[k]->data()};
+                     const solveScalar* s[1] = {source[k]->cdata()};
+                     solveScalar* a[1] = {acc[k].data()};
+-                    if (fused && sweep + 1 == nSweeps)
++                    if (fused && needResidual[k] && sweep + 1 == nSweeps)
+                     {
+                         solveScalar* r[1] = {residual[k].data()};
+                         smoothSolverDetail::gaussSeidelSweep<1, true>
+@@ -704,7 +750,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+         {
+             // Residuals: internal part for all active components, then the
+             // interface contributions of each component in turn
+-            if (together)
++            if (allResiduals)
+             {
+                 const scalar* d[3] = {diag[0]->cdata(), diag[1]->cdata(), diag[2]->cdata()};
+                 const solveScalar* p[3] = {psi[0]->cdata(), psi[1]->cdata(), psi[2]->cdata()};
+@@ -716,7 +762,7 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+             {
+                 for (label k=0; k<nCmpt; k++)
+                 {
+-                    if (!active[k]) continue;
++                    if (!needResidual[k]) continue;
+                     const scalar* d[1] = {diag[k]->cdata()};
+                     const solveScalar* p[1] = {psi[k]->cdata()};
+                     const solveScalar* b[1] = {source[k]->cdata()};
+@@ -737,9 +783,9 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+                 (
+                     matrix, s.interfaceBouCoeffs_, s.interfaces_, *psi[k], k
+                 );
+-                boundary[k].complete(residual[k]);
++                if (needResidual[k]) boundary[k].complete(residual[k]);
+             }
+-            else
++            else if (needResidual[k])
+             {
+                 const label startRequest = UPstream::nRequests();
+ 
+@@ -772,9 +818,11 @@ void Foam::smoothSolver::solveGaussSeidelComponents
+ 
+             const smoothSolver& s = *solvers[k];
+ 
+-            // Calculate the residual to check convergence
+-            solverPerf[k].finalResidual() =
+-                gSumMag(residual[k], comm)/normFactor[k];
++            if (needResidual[k])
++            {
++                solverPerf[k].finalResidual() =
++                    gSumMag(residual[k], comm)/normFactor[k];
++            }
+ 
+             active[k] =
+             (
+-- 
+2.43.0
+
