@@ -510,7 +510,7 @@ At 40, 80 and 150 steps the flow has not converged, and Cd depends on the decomp
 
 The scripts in `build/` and `run/` do exactly what our measured runs did to the case and to the processes, in the same order
 and with the same flags; they leave out only what measured or checked (placement records, `ldd` checks, an IMB test after the
-solver). We re-ran them twice from the public sources, exactly as `README.md` describes:
+solver). We re-ran them three times from the public sources, exactly as `README.md` describes:
 
 | Configuration | Nodes | PBS jobs (prepare, solve) | s/step | Recorded mean | Change | `coefficient.dat` |
 |---|---:|---|---:|---:|---:|---|
@@ -520,12 +520,15 @@ solver). We re-ran them twice from the public sources, exactly as `README.md` de
 | Bonus `0001`–`0004` (2026-10-07) | 1 | 25714175, 25714176 | 11.644042 | 11.668460 | −0.21% | identical |
 | Bonus `0001`–`0004` (2026-10-07) | 2 | 25714177, 25714178 | 5.649779 | 5.640683 | +0.16% | identical |
 | Bonus `0001`–`0004` (2026-10-07) | 4 | 25714179, 25714180 | 2.600607 | 2.599353 | +0.05% | identical |
+| **Bonus** (2026-10-26) | 1 | 25992065, 25992066 | 10.201813 | 10.233606 | −0.31% | identical |
+| **Bonus** (2026-10-26) | 2 | 25992067, 25992068 | 4.980185 | 4.992196 | −0.24% | identical |
+| **Bonus** (2026-10-26) | 4 | 25992069, 25992070 | 2.365118 | 2.359976 | +0.22% | identical |
 
 Every step of every job ended with `End` and returned 0, and every solve job reported `bound=128/128` on every node. The
 Basic re-run ran on other hosts on another day and is 0.24 – 0.36% slower than our means, within the ±0.5% in which most of
-our October jobs lie. Every recorded job, with its PBS job ID, is listed in `scaling/scaling.txt`. The Bonus re-run was made
-with `0001`–`0004`; the fourteen-patch Bonus was measured with our pipeline (section 4), and has not been re-run with these
-scripts.
+our October jobs lie. The re-run of the final Bonus built the fourteen patches of `bonus/patches/` into the public sources
+(PBS build job 25990973) and is within 0.31% of our means at every node count. Every recorded job, with its PBS job ID, is
+listed in `scaling/scaling.txt`.
 
 ## 13. Limitations and next steps
 
@@ -550,7 +553,7 @@ near the car more work. Putting the binding back and using a `scotch` split mapp
 21% below our baseline, with a 0.2% spread between jobs. Then by memory bandwidth, shown by moving ranks
 rather than by counters we cannot read: the Bonus moves fewer bytes for the same computation and reaches 2.360 s, with Cd
 within 0.0005% of its unmodified baseline. Every number here comes from alternated, repeated benchmark jobs, and the
-submitted scripts reproduced Basic and the four-patch Bonus from public sources.
+submitted scripts reproduce them from public sources.
 
 ## Appendix A. Not counted: residual norms that the fixed iterations never use
 

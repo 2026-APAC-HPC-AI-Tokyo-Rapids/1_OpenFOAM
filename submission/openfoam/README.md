@@ -91,6 +91,9 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
 - We re-ran exactly these scripts from the public sources on 2026-10-16, on other hosts: `coefficient.dat` was byte-identical
   at every node count, and the time was 0.24 – 0.36% above our means (4 nodes: 2.904620 s/step). Most of our October runs lie
   within ±0.5% of the median of their configuration, so expect about that spread.
+- The Bonus (`run/submit.sh <nodes> bonus` on the build with `bonus/patches`) re-ran the same way on 2026-10-26:
+  `coefficient.dat` was byte-identical to `bonus/results/<n>node/coefficient.dat` at every node count, at 10.2018, 4.9802 and
+  2.3651 s/step (−0.31%, −0.24% and +0.22% against our means).
 - The PBS output of the second job prints `bound=128/128` for every node when every rank sits on its own core. If it does not,
   the placement has failed and a step will be 16 – 19% slower (`REPORT.md`, section 6.1).
 - At these step counts the flow has not converged, and Cd depends on the decomposition. Another decomposition gives a Cd a few
