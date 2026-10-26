@@ -6,7 +6,10 @@
 - Each run used 4 nodes and 512 ranks with the same placement as the benchmark runs of its configuration, and ran 40
   `simpleFoam` steps.
 - `pat_run -g mpi` (CrayPAT 22.04.0) traced every MPI call of every rank.
-- In the final Bonus run, `eu-stack` also sampled the call stacks of 48 ranks, which stops those ranks for short moments.
+- In the run of the Bonus with patches 0001 – 0004, `eu-stack` also sampled the call stacks of 48 ranks, which stops those
+  ranks for short moments.
+- The final Bonus (fourteen patches, `../bonus/README.md`) has no report here; the reports end with the Bonus of
+  2026-10-07, patches 0001 – 0004.
 - `pat-report-*.txt` are the `pat_report` text outputs.
 - `pat-report-baseline-calls.txt` is the baseline profile read again with `pat_report -T -O profile`, which lists every MPI
   function. The default reports leave out functions that take little time, such as `MPI_Irecv` and `MPI_Test`.
@@ -16,7 +19,7 @@
 | `pat-report-baseline.txt` | Baseline: the case's own `hierarchical` split and the launcher's binding only, unmodified v2512 | `7a77cc9` | 38219766511 | 3.850 |
 | `pat-report-basic.txt` | Basic before the mapping: `scotch` with its defaults, unmodified v2512 | `718acb3` | 37176272426 | 3.063 |
 | `pat-report-bonus-before.txt` | multiLevel + patch 0001 | `e2730db` + profiling changes (`34f4c5d`) | 37261721692 | 2.874 |
-| `pat-report-bonus-final.txt` | final Bonus: multiLevel + patches 0001 – 0004 | `fa4f5b0` + profiling changes (`ba5ba1b`) | 37529785072 | 2.712 |
+| `pat-report-bonus-final.txt` | Bonus of 2026-10-07: multiLevel + patches 0001 – 0004 | `fa4f5b0` + profiling changes (`ba5ba1b`) | 37529785072 | 2.712 |
 
 ## Other measurements we used
 
@@ -26,8 +29,8 @@ Each of these ran only in diagnostic runs or outside the timed steps. None of th
   which phase of the step each rank is in, and whether it is inside MPI. They pointed to the residual copy in `smoothSolver`
   (patch 0001) and to boundary exchanges whose result is discarded (patch 0003).
 - **AMD uProf 5.3** (timer-based hotspots): one rank per NUMA domain, CPU time per function.
-- **AMD uProf 5.3, `data_access`** (core hardware counters): the Bonus patches against the same build without them, on 1 node,
-  and Basic at 1, 2 and 4 nodes. See the two "Hardware counters" sections below.
+- **AMD uProf 5.3, `data_access`** (core hardware counters): Bonus patches 0001 – 0004 against the same build without them, on
+  1 node, and Basic at 1, 2 and 4 nodes. See the two "Hardware counters" sections below.
 - **`/proc` sampler inside the job**: CPU affinity, NUMA page placement, I/O bytes and context switches per rank. It showed that
   the launcher's CPU binding is removed during `MPI_Init`. It also showed that file I/O in the timed steps is about 0.01% of
   the run time.
@@ -46,7 +49,7 @@ A profile run is a mode of the normal job scripts (`../README.md`, "How to run i
 
 ```bash
 ../run/submit.sh 4 basic craypat    # the current Basic (pat-report-basic.txt was made before the mapping), Basic build
-../run/submit.sh 4 bonus craypat    # like pat-report-bonus-final.txt: multiLevel, Bonus build
+../run/submit.sh 4 bonus craypat    # multiLevel, Bonus build (pat-report-bonus-final.txt: with patches 0001 – 0004 only)
 ```
 
 It runs the same Allrun chain with the same placement as a benchmark run, with three differences:
@@ -68,9 +71,10 @@ pat_report -i <OPENFOAM_DIR>/OpenFOAM/platforms/linux64GccDPInt32Opt/bin/simpleF
 The profile of `pat-report-bonus-before.txt` needs a build with patch 0001 only: a `PATCH_DIR` that holds only
 `../bonus/patches/0001-drop-redundant-solver-copies.patch`.
 
-The reports here were made through our CI. Its profile runs also recorded rank placement and hardware information, and
-the final Bonus run sampled the call stacks of 48 ranks with `eu-stack`. None of these change the solver run that CrayPAT
-measures. The scripts here have no baseline mode: the baseline profile ran the case's own settings from commit `7a77cc9`.
+The reports here were made through our CI. Its profile runs also recorded rank placement and hardware information, and the
+run of the Bonus with patches 0001 – 0004 sampled the call stacks of 48 ranks with `eu-stack`. None of these change the solver
+run that CrayPAT measures. The scripts here have no baseline mode: the baseline profile ran the case's own settings from commit
+`7a77cc9`.
 `pat-report-baseline-calls.txt` was made on a login node from the stored data of that run:
 
 ```bash
@@ -78,9 +82,10 @@ pat_report -T -i <the run's simpleFoam> -O profile -o pat-report-baseline-calls.
 ```
 
 We ran both profile modes with these scripts on 2026-10-07 (PBS 25714173 and 25714174 for Basic, then still without the
-mapping, and 25714181 and 25714182 for the final Bonus), and made the reports with the `pat_report` command above:
+mapping, and 25714181 and 25714182 for the Bonus, then with patches 0001 – 0004), and made the reports with the `pat_report`
+command above:
 
-| Per rank | Basic: report here | Basic: re-run | Final Bonus: report here | Final Bonus: re-run |
+| Per rank | Basic: report here | Basic: re-run | Bonus 0001 – 0004: report here | Bonus 0001 – 0004: re-run |
 |---|---:|---:|---:|---:|
 | s/step under CrayPAT | 3.063 | 3.065 | 2.712 | 2.701 |
 | Process time | 137.57 s | 132.15 s | 118.46 s | 120.45 s |
@@ -117,7 +122,7 @@ totals over the 512 ranks.
 The values below are means over the 512 ranks, from Tables 1, 2 and 4 of each report. MPI time is the `MPI` group of Table 2. Times are for the whole process, including
 the mesh read and solver set-up.
 
-| | Basic | Bonus before 0002 – 0004 | Final Bonus |
+| | Basic | Bonus before 0002 – 0004 | Bonus with 0001 – 0004 |
 |---|---:|---:|---:|
 | Process time | 137.57 s | 127.64 s | 118.46 s |
 | MPI time | 26.75 s (19.4%) | 23.39 s (18.3%) | 23.52 s (19.9%) |
@@ -136,18 +141,21 @@ the mesh read and solver set-up.
     slowest one at the next exchange or reduction.
   - Tuning the MPI library cannot remove that part of the wait. Only better balance, or less work on the slowest ranks, can.
   - The OpenFOAM communication switches we tried gave no gain (`../REPORT.md`, section 10).
-- **The Bonus patches shorten the computation and leave MPI as it was.** From "before 0002 – 0004" to the final Bonus, the
-  computation drops by 8.9% (104.25 s to 94.93 s). The MPI time stays at about 23.5 s. That is what the patches aim at: they
-  remove passes over large arrays, copies and discarded boundary exchanges. They do not change the communication pattern.
+- **Patches 0002 – 0004 shorten the computation and leave MPI as it was.** From "before 0002 – 0004" to the Bonus with
+  0001 – 0004, the computation drops by 8.9% (104.25 s to 94.93 s). The MPI time stays at about 23.5 s. That is what the
+  patches aim at: they remove passes over large arrays, copies and discarded boundary exchanges. They do not change the
+  communication pattern. (The later patches `0012` and `0016` also remove global sums and interface exchanges; there is no
+  CrayPAT report of the final Bonus.)
 - **Why we treat the solver as memory-bound.** The patches that remove array passes gain most on 1 node and least on 4 nodes. For
-  example, 0002 gives −6.4% on 1 node and −2.3% on 4 nodes (see `../bonus/README.md`). With fewer nodes, more data per rank has
-  to come from DRAM. On 1 node the hardware counters confirm it (below): with the patches, the demand refills from DRAM fall
-  by 17% while the instruction count falls by only 4%. Across node counts the counters show the same thing from the other
-  side: on 4 nodes, the refills from DRAM per cell and step are 30% fewer than on 1 node (below).
+  example, 0002 gives −6.4% on 1 node and −2.3% on 4 nodes, and 0006 – 0016 together −12.2% and −9.3% (see
+  `../bonus/README.md`). With fewer nodes, more data per rank has to come from DRAM. On 1 node the hardware counters confirm
+  it for 0001 – 0004 (below): with these patches, the demand refills from DRAM fall by 17% while the instruction count falls
+  by only 4%. Across node counts the counters show the same thing from the other side: on 4 nodes, the refills from DRAM per
+  cell and step are 30% fewer than on 1 node (below).
 
 ## Hardware counters (AMD uProf, 1 node)
 
-Do the patches move less data? We compared the final Bonus build (patches 0001 – 0004) with the same build without the patches,
+Do the patches move less data? We compared the Bonus build with patches 0001 – 0004 with the same build without the patches,
 in profile runs on 1 node (128 ranks, 40 steps, `multiLevel (2 4 16)`), 2 runs each. AMD uProf 5.3 (`data_access`) sampled the
 core counters of one rank per NUMA domain. Rank 0 is left out, because it also writes the output. The values below are for the
 computation: the whole process minus the MPI, UCX and `Pstream` libraries, whose time is mostly waiting. Each value is the mean
