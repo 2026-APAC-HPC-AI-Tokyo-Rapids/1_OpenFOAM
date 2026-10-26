@@ -466,10 +466,12 @@ def journey(output):
     changes = changes_by_role()
     organisers = [float(row["s_per_step"]) for row in read("organiser_reference_aspire2a.csv") if row["method"] == "scotch" and row["nodes"] == "4" and row["setting"] == "defaults"]
     start = [float(row["s_per_step"]) for row in read("start_unpinned.csv")]
-    steps = [("Start:\nhierarchical,\nbinding lost", start, CONTROL, None), ("+ CPU and\nNUMA pinning", methods[(4, "hierarchical")], BASIC, change(methods[(4, "hierarchical")], start)), ("+ scotch", methods[(4, "scotch")], BASIC, change(methods[(4, "scotch")], methods[(4, "hierarchical")])), ("+ mapped onto\nthe node\n= Basic", final[("Basic", 4)], BASIC, change(changes[("mapping", 4, "candidate")], changes[("mapping", 4, "control")]))]
-    for key, label in (("multiLevel", "+ multiLevel\n(4 2 4 16)"), ("0001", "+ no copies\nin the solvers"), ("0002", "+ U components\nin one pass"), ("0003", "+ no unused\nboundary updates"), ("0004", "+ fused face loops\n= Bonus")):
+    steps = [("Start:\nhierarchical,\nbinding\nlost", start, CONTROL, None), ("+ CPU and\nNUMA\npinning", methods[(4, "hierarchical")], BASIC, change(methods[(4, "hierarchical")], start)), ("+ scotch", methods[(4, "scotch")], BASIC, change(methods[(4, "scotch")], methods[(4, "hierarchical")])), ("+ mapped\nonto the\nnode\n= Basic", final[("Basic", 4)], BASIC, change(changes[("mapping", 4, "candidate")], changes[("mapping", 4, "control")]))]
+    for key, label in (("multiLevel", "+ multiLevel\n(4 2 4 16)"), ("0001", "+ no copies\nin the\nsolvers"), ("0002", "+ U\ncomponents\nin one pass"), ("0003", "+ no unused\nboundary\nupdates"), ("0004", "+ fused\nface loops"), ("0006-0010", "+ Laplacian,\np reference,\nstress, walls"), ("0011", "+ Gauss–\nSeidel\nwithout copy"), ("0012", "+ one global\nsum per CG\niteration"), ("0013-0015", "+ turbulence\nalgebra,\nzero fills,\nGAMG *"), ("0016", "+ residual\nfrom the\nsweep *")):
         steps.append((label, changes[(key, 4, "candidate")], BONUS, change(changes[(key, 4, "candidate")], changes[(key, 4, "control")])))
-    figure, axis = plt.subplots(figsize=WIDE)
+    # The last point is the final Bonus as measured alternated with its control, the value the report gives.
+    steps[-1] = (steps[-1][0] + "\n= Bonus", final[("Bonus", 4)], BONUS, steps[-1][3])
+    figure, axis = plt.subplots(figsize=(17, 6.4))
     axis.axhline(statistics.fmean(organisers), color=CONTROL, linestyle="--", linewidth=1.5)
     axis.text(len(steps) - 0.45, statistics.fmean(organisers) + 0.012, f"organisers' vanilla scotch, mean of {len(organisers)}: {statistics.fmean(organisers):.3f}", ha="right", fontsize=12, color="#555555")
     means = [statistics.fmean(values) for _, values, _, _ in steps]
@@ -480,11 +482,11 @@ def journey(output):
         axis.annotate(f"{means[index]:.3f}", (index, min(values)), textcoords="offset points", xytext=(0, -24), ha="center", fontsize=12, color=color, fontweight="bold")
         if percent is not None:
             axis.text(index - 0.45, (means[index - 1] + means[index]) / 2 + 0.035, f"{percent:+.1f}%", ha="left", fontsize=13, fontweight="bold", color=ACCENT)
-    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=10)
+    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=9)
     axis.set_xlim(-0.5, len(steps) - 0.4)
-    axis.set_ylim(2.5, 3.78)
+    axis.set_ylim(2.25, 3.78)
     axis.set_ylabel("4 nodes, s/step (each point is one job)")
-    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period; not added up.\nStart to Basic: {change(steps[3][1], start):+.1f}%. Basic {means[3]:.3f} (n = {len(steps[3][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[3][1]):+.1f}%. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
+    figure.text(0.5, -0.06, f"Grey: where we started. Blue: Basic (unmodified v2512). Orange: Bonus. Red: each change against its own control, run in the same period (* a few days later); not added up.\nStart to Basic: {change(steps[3][1], start):+.1f}%. Basic {means[3]:.3f} (n = {len(steps[3][1])}) to Bonus {means[-1]:.3f} (n = {len(steps[-1][1])}): {change(steps[-1][1], steps[3][1]):+.1f}%. The y-axis does not start at 0.\nThe pinned hierarchical runs pinned with an LD_PRELOAD interposer; Basic pins with numactl and taskset, at the same speed.", ha="center", fontsize=11)
     figure.tight_layout()
     save(figure, output, "fig16_journey")
 
@@ -738,11 +740,11 @@ def before_after_scaling(output):
     right.set_xticks(range(3), ["1", "2", "4"])
     right.set_xlabel("Nodes")
     right.set_ylabel("s/step against our baseline (%)")
-    right.set_ylim(-36, 0)
+    right.set_ylim(-40, 0)
     right.legend(frameon=False, loc="lower left")
     efficiency = {name: statistics.fmean(runs[(name, 1)]) / (4 * statistics.fmean(runs[(name, 4)])) for name, _, _ in series}
     counts = {name: "/".join(str(len(runs[(name, n)])) for n in nodes) for name, _, _ in series}
-    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline 2026-10-12 (Issue #62), Basic 2026-10-15/16 (Issue #63), Bonus 2026-10-06; controls repeated on 10-12 and 10-15 agree within 0.2%.", ha="center", fontsize=10.5, color="#333333")
+    figure.text(0.5, -0.07, f"Parallel efficiency on 4 nodes against 1 node: baseline {efficiency['Baseline']:.2f}, Basic {efficiency['Basic']:.2f}, Bonus {efficiency['Bonus']:.2f}. Jobs per point (1/2/4 nodes): baseline {counts['Baseline']}, Basic {counts['Basic']}, Bonus {counts['Bonus']}.\nBaseline 2026-10-12 (Issue #62), Basic 2026-10-15/16 (Issue #63), Bonus 2026-10-26 (Issue #69); controls repeated on 10-12, 10-15 and 10-26 agree within 0.2%.", ha="center", fontsize=10.5, color="#333333")
     figure.tight_layout()
     save(figure, output, "fig22_before_after_scaling")
 

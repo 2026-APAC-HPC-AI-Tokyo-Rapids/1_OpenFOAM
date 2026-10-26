@@ -258,8 +258,8 @@ as shared libraries and MPI's shared buffers, which can live on only one domain;
 
 ![The path on 4 nodes](figures/fig16_journey.png)
 
-*Figure 5. Each change on 4 nodes, against its own control in the same period. The changes are separate experiments and are
-not added up.*
+*Figure 5. Each change on 4 nodes, against its own control in the same period (the two marked * a few days later). The
+changes are separate experiments and are not added up. The last point is the final Bonus from the alternated final runs.*
 
 ## 7. What limits the speed after Basic
 
