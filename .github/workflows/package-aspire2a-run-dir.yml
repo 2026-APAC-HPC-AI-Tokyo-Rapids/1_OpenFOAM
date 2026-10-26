@@ -1,0 +1,135 @@
+name: ASPIRE-2A run directory packaging recovery
+
+# 一時的な回収用（Issue #69）。計算は終わったが、runnerからASPIRE-2Aへのsshが切れて「OpenFOAMを実行」の途中から先が
+# 失敗したrunについて、元のrunと同じcommitのexperiment-metricsで同じ梱包処理を流し、通常の保管と同じ配置・照合で
+# 自宅サーバーへ置き、ASPIRE-2Aのrun directoryを削除する。8b8acabで削除したものを戻した。回収後に削除する。
+on:
+  workflow_dispatch:
+    inputs:
+      actions_run_id:
+        description: 元のActions run ID
+        required: true
+        type: string
+      run_attempt:
+        description: 元のrunの試行番号
+        required: true
+        type: string
+      source_ref:
+        description: 元のrunのcommit
+        required: true
+        type: string
+      run_dir:
+        description: ASPIRE-2A上のrun directory（runs/runs/r-…）
+        required: true
+        type: string
+      pbs_job_id:
+        description: 元のrunのPBS job ID
+        required: true
+        type: string
+      experiment_preset:
+        description: 元のrunのprotocol preset
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: 計測記録を確定して梱包し、自宅サーバーへ保管
+    runs-on: [self-hosted, home-lab]
+    defaults:
+      run:
+        shell: aspire2a-shell --github-shell {0}
+    env:
+      OPENFOAM_ARTIFACT_ARCHIVE_ROOT: /hdd_raid/samba/net_share/openfoam-artifacts
+      ACTIONS_RUN_ID: ${{ inputs.actions_run_id }}
+      RUN_ATTEMPT: ${{ inputs.run_attempt }}
+      RUN_DIR: ${{ inputs.run_dir }}
+      RUN_MANIFEST: ${{ inputs.run_dir }}/control/run-manifest.json
+      PBS_JOB_ID: ${{ inputs.pbs_job_id }}
+      EXPERIMENT_PRESET: ${{ inputs.experiment_preset }}
+    steps:
+      - name: 元のrunのcommitを取得
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: 計測記録を確定して成果物を梱包
+        env:
+          METRICS_CREDENTIAL_JSON: ${{ secrets.EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          [[ "${ACTIONS_RUN_ID}" =~ ^[0-9]+$ && "${RUN_ATTEMPT}" =~ ^[0-9]+$ ]]
+          [[ "${RUN_DIR}" =~ ^/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/runs/runs/r-[0-9a-f]+$ ]]
+          test -f "${RUN_DIR}/run-success"
+          test ! -e "${RUN_DIR}/run-artifacts.tar.zst"
+          test -n "${METRICS_CREDENTIAL_JSON}"
+          work=$(mktemp -d "/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/provision/recover-${GITHUB_RUN_ID}.XXXXXXXX")
+          credential_file=$(mktemp "/tmp/openfoam-bigquery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.XXXXXXXX.json")
+          trap 'rm -f -- "${credential_file}"; rm -rf -- "${work}"' EXIT
+          printf '%s' "${METRICS_CREDENTIAL_JSON}" > "${credential_file}"
+          install -d "${work}/benchmark"
+          install -m 0755 benchmark/parse_result.sh "${work}/benchmark/"
+          cp -a benchmark/occDrivAerStaticMesh "${work}/benchmark/"
+          install -m 0644 benchmark/profile.json "${work}/benchmark/profile.json"
+          install -m 0644 benchmark/workload.json "${work}/benchmark/workload.json"
+          cp -a experiment-metrics "${work}/experiment-metrics"
+          uv sync --project "${work}/experiment-metrics" --frozen --no-dev --extra publish
+          export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"
+          export EXPERIMENT_METRICS_BIGQUERY_CONFIG="${work}/experiment-metrics/pyproject.toml"
+          OPENFOAM_PROTOCOL_PATH="${work}/experiment-metrics/registry/openfoam-v2-protocol-${EXPERIMENT_PRESET}.toml"
+          test -f "${OPENFOAM_PROTOCOL_PATH}"
+          metrics="${work}/experiment-metrics/.venv/bin/experiment-metrics"
+          # 以下は.github/workflows/aspire2a.ymlの「計測記録を確定して成果物を梱包」と同じ処理（通常計測、profileなし）。
+          "${metrics}" record-pbs-terminal --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --job-id "${PBS_JOB_ID}" || true
+          if jq -e '.diagnostic_iterations == 0' "${RUN_DIR}/control/scheduler-request.json" >/dev/null; then
+            "${metrics}" record-solver-log --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --log "${RUN_DIR}/logs/solver.log" --protocol "${OPENFOAM_PROTOCOL_PATH}" --coefficient "${RUN_DIR}/results/coefficient.dat" || true
+          fi
+          "${metrics}" record-execution-context --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}" --protocol "${OPENFOAM_PROTOCOL_PATH}" --host-snapshot "${RUN_DIR}/source/env/host-exec.snapshot" --placement-root "${RUN_DIR}/source/placement" --scheduler-request "${RUN_DIR}/control/scheduler-request.json" --scheduler-accounting "${RUN_DIR}/control/scheduler-accounting.json" --decompose-dict "${RUN_DIR}/source/mesh/decomposeParDict" --solver-log "${RUN_DIR}/logs/solver.log" || true
+          args=(package --manifest "${RUN_MANIFEST}")
+          result_member_role=official_result
+          if jq -e '.diagnostic_iterations > 0' "${RUN_DIR}/control/scheduler-request.json" >/dev/null; then result_member_role=postrun_source; fi
+          for pair in 'control/run-manifest.json:run_manifest' 'control/instrumentation-bundle.json:instrumentation_bundle' 'control/build-sidecar.json:build_sidecar' 'control/build-provision-validation.json:build_provision_validation' 'control/job-entry.json:job_entry' 'control/scheduler-accounting.json:scheduler_accounting' 'control/scheduler-request.json:scheduler_request' 'control/scheduler-terminal.json:scheduler_terminal' 'control/submission-result.json:scheduler_submission_result' 'logs/checkMesh.log:check_mesh_log' 'logs/imb-mpi1-ldd.log:postrun_source' 'logs/minimal-hardware-capture.log:postrun_source' 'logs/profile-hardware-capture.log:postrun_source' 'logs/rank-placement.log:postrun_source' 'logs/decomposePar.log:decompose_par_log' 'logs/renumberMesh.log:renumber_mesh_log' 'logs/potentialFoam.log:potential_foam_log' 'logs/applyBoundaryLayer.log:apply_boundary_layer_log' 'logs/profile-warmup.log:postrun_source' 'logs/pbs.log:pbs_log' 'logs/solver.log:solver_log' 'results/coefficient.dat:force_coefficients' 'results/coefficient-source.json:postrun_source' 'source/env/host-exec.snapshot:host_exec_environment' 'source/env/job-entry.snapshot:job_entry_environment' 'source/network/imb-mpi1/argv.json:imb_mpi1_argv' 'source/network/imb-mpi1/stderr.txt:imb_mpi1_stderr' 'source/network/imb-mpi1/stdout.txt:imb_mpi1_stdout' 'source/scheduler/accounting.stderr:scheduler_accounting_stderr' 'source/scheduler/accounting.stdout:scheduler_accounting_stdout' 'source/scheduler/submission.stderr:scheduler_submission_stderr' 'source/scheduler/submission.stdout:scheduler_submission_stdout'; do relative=${pair%%:*}; [[ -f "${RUN_DIR}/${relative}" ]] && args+=(--member "${pair}"); done
+          [[ -f "${RUN_DIR}/results/result.txt" ]] && args+=(--member "results/result.txt:${result_member_role}")
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:rank_placement"); done < <(find "${RUN_DIR}/source/placement" -type f -name 'rank-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:minimal_hardware"); done < <(find "${RUN_DIR}/source/hardware" -type f -name 'node-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:postrun_source"); done < <(find "${RUN_DIR}/source/hardware" -type f ! -name 'node-*.json' -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:postrun_source"); done < <(find "${RUN_DIR}/source/mesh" "${RUN_DIR}/source/build-provision" -type f -print0 | sort -z)
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:build_raw"); done < <(find "${RUN_DIR}/control/build-raw" -type f -print0 | sort -z)
+          args+=(--member 'source/workload-manifest.json:workload_manifest')
+          while IFS= read -r -d '' path; do args+=(--member "${path#"${RUN_DIR}/"}:workload_member"); done < <(find "${RUN_DIR}/source/workload" -type f -print0 | sort -z)
+          "${metrics}" "${args[@]}"
+          "${metrics}" send-fragments --manifest "${RUN_MANIFEST}" --runtime-dir "${RUN_DIR}"
+
+      - name: 梱包した成果物を自宅サーバーへ配置
+        shell: home-lab-shell {0}
+        run: |
+          base="${OPENFOAM_ARTIFACT_ARCHIVE_ROOT}/${ACTIONS_RUN_ID}/aspire2a"
+          destination="${base}/openfoam-aspire2a-v2-$(basename "${RUN_DIR}")"
+          result_destination="${base}/openfoam-aspire2a-occdrivaer-65m-result-${ACTIONS_RUN_ID}-${RUN_ATTEMPT}"
+          test ! -e "${destination}"
+          test ! -e "${result_destination}"
+          install -d -m 0750 "${destination}" "${result_destination}"
+          aspire2a-shell --pull "${RUN_DIR}/artifact-manifest.json" "${destination}"
+          aspire2a-shell --pull "${RUN_DIR}/run-artifacts.tar.zst" "${destination}"
+          # 通常の流れでは results/ をまとめて結果のGitHub成果物にし、その中身を保管するので、同じ中身を置く。
+          aspire2a-shell --pull "${RUN_DIR}/results" "${RUNNER_TEMP}/openfoam-aspire2a-run"
+          cp -a "${RUNNER_TEMP}/openfoam-aspire2a-run/results/." "${result_destination}/"
+          echo "DESTINATION=${destination}" >> "${GITHUB_ENV}"
+
+      - name: 保管済み成果物をマニフェストと照合
+        id: archive_verify
+        shell: home-lab-shell {0}
+        run: |
+          set -euo pipefail
+          manifest="${DESTINATION}/artifact-manifest.json"
+          jq -e '.schema_version == "artifact-manifest/v1" and ([.files[].role] | sort) == ["run_bundle"]' "${manifest}" >/dev/null
+          while IFS=$'\t' read -r role expected_size expected_sha; do
+            test "$(stat -c '%s' "${DESTINATION}/run-artifacts.tar.zst")" = "${expected_size}"
+            test "$(sha256sum "${DESTINATION}/run-artifacts.tar.zst" | awk '{print $1}')" = "${expected_sha}"
+          done < <(jq -r '.files[] | [.role, .size_bytes, .sha256] | @tsv' "${manifest}")
+
+      - name: 保管済みのクラスタruntimeを削除
+        if: steps.archive_verify.outcome == 'success'
+        shell: home-lab-shell {0}
+        run: scripts/remove-openfoam-runtime.sh --cluster aspire2a --connection aspire2a-shell --run-dir "${RUN_DIR}"
