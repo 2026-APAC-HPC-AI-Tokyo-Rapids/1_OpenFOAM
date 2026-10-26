@@ -30,7 +30,7 @@ spec = importlib.util.spec_from_file_location("team_figures", sys.argv[1])
 F = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(F)
 OUT = Path(sys.argv[2])
-BASE, BASIC, BONUS, BAD, NAVY, INK, MUTED, FAINT, GRID = ("#" + getattr(palette, name) for name in ("BASE", "BASIC", "BONUS", "BAD", "NAVY", "INK", "MUTED", "FAINT", "GRID"))
+BASE, BASIC, BONUS, BONUS_LIGHT, BAD, NAVY, INK, MUTED, FAINT, GRID = ("#" + getattr(palette, name) for name in ("BASE", "BASIC", "BONUS", "BONUS_LIGHT", "BAD", "NAVY", "INK", "MUTED", "FAINT", "GRID"))
 plt.rcParams.update({"font.size": 12, "axes.titlesize": 12.5, "axes.labelsize": 12, "xtick.labelsize": 11.5, "ytick.labelsize": 11.5, "legend.fontsize": 11.5, "axes.spines.top": False, "axes.spines.right": False, "axes.edgecolor": MUTED, "axes.labelcolor": INK, "xtick.color": INK, "ytick.color": INK, "text.color": INK})
 NODES = (1, 2, 4)
 STEPS = {1: 40, 2: 80, 4: 150}
@@ -170,8 +170,11 @@ def basic_4node():
 
 
 def bonus():
-    """Slide 15: Basic, the Bonus split with the source unchanged (the pre-change baseline), and the Bonus."""
-    groups = [("Basic", lambda n: FINAL[("Basic", n)], BASIC, False), ("multiLevel,\nsource unchanged", lambda n: CHANGES[("multiLevel", n, "candidate")], BONUS, True), ("Bonus", lambda n: FINAL[("Bonus", n)], BONUS, False)]
+    """Slide 16: Basic, the Bonus split with the source unchanged (the pre-change baseline), the first four changes and the Bonus.
+
+    The first four changes are the control jobs of the final measurement, alternated with the Bonus jobs.
+    """
+    groups = [("Basic", lambda n: FINAL[("Basic", n)], BASIC, False), ("multiLevel\nonly", lambda n: CHANGES[("multiLevel", n, "candidate")], BONUS, True), ("first four\nchanges", lambda n: CHANGES[("0006-0016", n, "control")], BONUS_LIGHT, False), ("Bonus", lambda n: FINAL[("Bonus", n)], BONUS, False)]
     figure, axes = plt.subplots(1, 3, figsize=(11.9, 2.95), layout="constrained")
     for axis, n in zip(axes, NODES):
         everything = []
@@ -181,10 +184,10 @@ def bonus():
             mean = jobs(axis, x, values, color, hollow=hollow)
             axis.annotate(f"{mean:.3f}\n{jobs_label(len(values))}", (x, max(values)), textcoords="offset points", xytext=(0, 7), ha="center", va="bottom", fontsize=10.5, color=INK, linespacing=1.0)
         basic, bonus_values = FINAL[("Basic", n)], FINAL[("Bonus", n)]
-        axis.text(2.0, (statistics.fmean(basic) + statistics.fmean(bonus_values)) / 2, f"{percent(bonus_values, basic)}\nvs Basic", ha="center", va="center", fontsize=12, fontweight="bold", color=NAVY, linespacing=1.0)
+        axis.text(3.0, (statistics.fmean(basic) + statistics.fmean(bonus_values)) / 2, f"{percent(bonus_values, basic)}\nvs Basic", ha="center", va="center", fontsize=12, fontweight="bold", color=NAVY, linespacing=1.0)
         axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups], fontsize=10.5)
-        colour_ticks(axis.get_xticklabels(), [BASIC, INK, BONUS])
-        axis.set_xlim(-0.5, 2.5)
+        colour_ticks(axis.get_xticklabels(), [BASIC, INK, INK, BONUS])
+        axis.set_xlim(-0.55, 3.55)
         axis.set_title(f"{n} node{'s' if n > 1 else ''} ({128 * n} ranks, {STEPS[n]} steps)")
         span = max(everything) - min(everything)
         axis.set_ylim(min(everything) - span * 0.1, max(everything) + span * 0.42)
@@ -194,7 +197,7 @@ def bonus():
 
 
 def scaling():
-    """Slide 17: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on log axes where ideal scaling is a straight line."""
+    """Slide 18: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on log axes where ideal scaling is a straight line."""
     series = [("baseline", BASELINE, BASE, 0.87), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC, 1.0), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS, 1.15)]
     figure, axis = plt.subplots(figsize=(6.45, 4.95), layout="constrained")
     handles = []
@@ -218,7 +221,7 @@ def scaling():
     axis.set_yticks([2.5, 3, 4, 6, 8, 10, 15], ["2.5", "3", "4", "6", "8", "10", "15"])
     axis.minorticks_off()
     axis.set_xlim(0.72, 5.6)
-    axis.set_ylim(2.3, 17.5)
+    axis.set_ylim(2.1, 17.5)
     axis.set_xlabel("Nodes (128 ranks per node)")
     axis.set_ylabel("s/step, each job (log scale)")
     axis.grid(axis="y", color=GRID, linewidth=0.8)
@@ -252,23 +255,62 @@ def reference():
     save(figure, "ps_reference")
 
 
+# Every Bonus change on 4 nodes in the order it was added, by patch number; the table beside the plot names them.
+# * marks the two candidates that ran a few days after their control instead of alternated with it.
+EACH = [("multiLevel", "multi-\nLevel"), ("0001", "0001"), ("0002", "0002"), ("0003", "0003"), ("0004", "0004"), ("0006-0010", "0006,\n08–10"), ("0011", "0011"), ("0012", "0012"), ("0013-0015", "0013–\n15 *"), ("0016", "0016 *")]
+
+
 def each_change():
-    """Supporting slide: each Bonus change against the configuration just before it, 4 nodes, each job."""
+    """Supporting slide: each Bonus change against the configuration just before it, 4 nodes, each job against its control's mean."""
     figure, axis = plt.subplots(figsize=(6.4, 4.85), layout="constrained")
-    for index, (key, label) in enumerate(F.CHANGES):
+    axis.axhline(0, color=MUTED, linewidth=0.9, zorder=1)
+    for index, (key, _) in enumerate(EACH):
         control, candidate = CHANGES[(key, 4, "control")], CHANGES[(key, 4, "candidate")]
-        before = jobs(axis, index - 0.2, control, FAINT, width=0.14)
-        after = jobs(axis, index + 0.2, candidate, BONUS, width=0.14)
-        axis.annotate("", xy=(index + 0.12, after), xytext=(index - 0.12, before), arrowprops={"arrowstyle": "->", "color": INK, "linewidth": 1})
-        axis.text(index, max(control) + 0.014, f"{percent(candidate, control)}\n{len(control)} v {len(candidate)}", ha="center", va="bottom", fontsize=10.5, linespacing=1.05, color=NAVY)
-    axis.set_xticks(range(len(F.CHANGES)), [label for _, label in F.CHANGES], fontsize=9.5)
-    axis.set_xlim(-0.55, len(F.CHANGES) - 0.45)
-    axis.set_ylim(2.56, 3.0)
+        mean = statistics.fmean(control)
+        jobs(axis, index - 0.17, [(value / mean - 1) * 100 for value in control], FAINT, width=0.13)
+        after = jobs(axis, index + 0.17, [(value / mean - 1) * 100 for value in candidate], BONUS, width=0.13)
+        axis.text(index + 0.17, after - 0.28, percent(candidate, control), ha="center", va="top", fontsize=10.5, fontweight="bold", color=NAVY)
+        axis.text(index, 0.42, f"{len(control)} v {len(candidate)}", ha="center", va="bottom", fontsize=9, color=MUTED)
+    axis.set_xticks(range(len(EACH)), [label for _, label in EACH], fontsize=9.5)
+    axis.set_xlim(-0.6, len(EACH) - 0.3)
+    axis.set_ylim(-4.6, 0.95)
+    axis.set_ylabel("Each job against the mean of its control (%)")
+    axis.grid(axis="y", color=GRID, linewidth=0.8)
+    axis.set_axisbelow(True)
+    axis.legend(handles=[Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.45, label="before (control)"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=BONUS, markeredgecolor="black", markeredgewidth=0.45, label="after (candidate)")], frameon=False, loc="lower left", ncols=2)
+    save(figure, "ps_each")
+
+
+def path():
+    """Supporting slide: the path on 4 nodes, from the start to the Bonus, each step against its own control; figures.py's
+    fig16_journey with the same data, drawn at slide size."""
+    methods = runs("decomposition_basic.csv", "nodes", "method")
+    start = [float(row["s_per_step"]) for row in F.read("start_unpinned.csv")]
+    organisers = ORGANISERS[("scotch", 4)]
+    steps = [("start:\nbinding\nlost", start, BASE, None), ("+ CPU and\nNUMA\npinning", methods[(4, "hierarchical")], BASIC, percent(methods[(4, "hierarchical")], start)), ("+ scotch", methods[(4, "scotch")], BASIC, percent(methods[(4, "scotch")], methods[(4, "hierarchical")])), ("+ node\nmapping\n= Basic", FINAL[("Basic", 4)], BASIC, percent(CHANGES[("mapping", 4, "candidate")], CHANGES[("mapping", 4, "control")]))]
+    labels = {"multiLevel": "+ multi-\nLevel", "0001": "+ no\ncopies", "0002": "+ U in\none pass", "0003": "+ no unused\nboundary\nvalues", "0004": "+ fused\nface loops", "0006-0010": "+ Laplacian,\np reference,\nstress,\nwalls", "0011": "+ Gauss–\nSeidel\nno copy", "0012": "+ one sum\nper CG\niteration", "0013-0015": "+ k-ω SST,\nzero fills,\nGAMG *", "0016": "+ residual\nfrom the\nsweep *"}
+    for key, _ in EACH:
+        steps.append((labels[key], CHANGES[(key, 4, "candidate")], BONUS, percent(CHANGES[(key, 4, "candidate")], CHANGES[(key, 4, "control")])))
+    # the last point is the final Bonus from its alternated final runs, the value the report gives
+    steps[-1] = (steps[-1][0] + "\n= Bonus", FINAL[("Bonus", 4)], BONUS, steps[-1][3])
+    figure, axis = plt.subplots(figsize=(11.9, 4.6), layout="constrained")
+    axis.axhline(statistics.fmean(organisers), color=MUTED, linestyle="--", linewidth=1.2)
+    axis.text(len(steps) - 0.45, statistics.fmean(organisers) + 0.015, f"organisers' scotch, mean of {len(organisers)}: {statistics.fmean(organisers):.3f}", ha="right", fontsize=10.5, color=MUTED)
+    means = [statistics.fmean(values) for _, values, _, _ in steps]
+    axis.plot(range(len(steps)), means, color=MUTED, linewidth=1.0, zorder=1)
+    for index, (_, values, color, change) in enumerate(steps):
+        jobs(axis, index, values, color, width=0.3)
+        axis.annotate(f"{means[index]:.3f}", (index, min(values)), textcoords="offset points", xytext=(0, -7), ha="center", va="top", fontsize=10, fontweight="bold", color=color)
+        if change is not None:
+            axis.annotate(change, (index, max(values)), textcoords="offset points", xytext=(0, 7), ha="center", va="bottom", fontsize=10.5, fontweight="bold", color=NAVY, bbox={"boxstyle": "square,pad=0.05", "facecolor": "white", "edgecolor": "none"})
+    axis.set_xticks(range(len(steps)), [label for label, _, _, _ in steps], fontsize=9)
+    colour_ticks(axis.get_xticklabels(), [BASE] + [BASIC] * 3 + [BONUS] * (len(steps) - 4))
+    axis.set_xlim(-0.55, len(steps) - 0.45)
+    axis.set_ylim(2.25, 3.8)
     axis.set_ylabel("s/step on 4 nodes, each job")
     axis.grid(axis="y", color=GRID, linewidth=0.8)
     axis.set_axisbelow(True)
-    axis.legend(handles=[Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.45, label="before (control)"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=BONUS, markeredgecolor="black", markeredgewidth=0.45, label="after (candidate)")], frameon=False, loc="lower left")
-    save(figure, "ps_each")
+    save(figure, "ps_path")
 
 
 baseline_scaling()
@@ -279,3 +321,4 @@ bonus()
 scaling()
 reference()
 each_change()
+path()
