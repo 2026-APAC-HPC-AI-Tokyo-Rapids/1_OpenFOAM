@@ -156,14 +156,16 @@ def slide_overview():
     figure_caption(s, "Flow around the car (ParaView, a separate run)", xr, 1.66 + flow_h, wr)
     figure_caption(s, "Mesh: refinement level of the 65,334,765 cells", xr, 6.76, wr, h=0.26)
     card(s, X0, 4.98, 6.35, 2.02)
-    add_text(s, X0 + 0.25, 5.14, 5.9, 0.34, [[("Our result on 4 nodes", {"b": True, "color": NAVY}), ("   s/step, lower is better", {"color": MUTED, "size": 12})]], size=15)
+    add_text(s, X0 + 0.25, 5.08, 5.9, 0.34, [[("Our result on 4 nodes", {"b": True, "color": NAVY}), ("   s/step, lower is better", {"color": MUTED, "size": 12})]], size=15)
     for i, (number_text, name, delta, color) in enumerate([("3.65", "Baseline", "", BASE), ("2.90", "Basic", "−21%", BASIC), ("2.36", "Bonus", "−35%", BONUS)]):
         x = X0 + 0.25 + i * 2.05
-        add_text(s, x, 5.48, 1.5, 0.62, [number_text], size=34, color=color, bold=True)
-        add_text(s, x, 6.12, 1.85, 0.34, [[(name + "  ", {"b": True}), (delta, {"color": color, "b": True})]], size=14)
+        add_text(s, x, 5.38, 1.5, 0.62, [number_text], size=34, color=color, bold=True)
+        add_text(s, x, 6.02, 1.85, 0.34, [[(name + "  ", {"b": True}), (delta, {"color": color, "b": True})]], size=14)
         if i < 2:
-            block_arrow(s, x + 1.45, 5.64, 0.4, 0.32, color="B8C2D3")
-    add_text(s, X0 + 0.25, 6.56, 5.9, 0.36, [[("1.55× faster", {"b": True, "color": NAVY}), (" with the same build, scripts and measurement", {"color": MUTED})]], size=13)
+            block_arrow(s, x + 1.45, 5.54, 0.4, 0.32, color="B8C2D3")
+    add_text(s, X0 + 0.25, 6.38, 5.9, 0.3, [[("1.55× faster", {"b": True, "color": NAVY}), (" with the same build, scripts and measurement", {"color": MUTED})]], size=13)
+    # "5. Common Baselines" (official repository, 2026-10-20) asks every team to show this next to its own result
+    add_text(s, X0 + 0.25, 6.68, 5.9, 0.26, [[("Organisers' common baseline:", {"b": True}), (" hierarchical 3.415, scotch 3.576 s/step", {})]], size=11, color=MUTED)
     set_notes(s, NOTES["overview"])
     return s
 

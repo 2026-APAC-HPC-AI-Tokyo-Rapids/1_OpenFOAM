@@ -42,9 +42,9 @@ _CHAIN = re.compile(r"([\d%]) (/|→|to|v) (?=[\d−+])")
 _COMPOUND = re.compile(r"\b(bit|case|pre|fixed|run|node|re|off|non|two|same)-(?=[a-z])|\b(\d+)-(?=(?:node|core|step|byte)s?\b)")
 _PAIRS = re.compile(r"\b(max|slowest|r|R²) (/|=) (?=[\w+−])")
 TIER_COLOURS = {"baseline": BASE, "basic": BASIC, "bonus": BONUS}
-# "pre-change baseline" and "its own baseline" (the Bonus build without its patches), and "the new baseline", are not our
-# baseline configuration
-_TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
+# "pre-change baseline" and "its own baseline" (the Bonus build without its patches), "the new baseline", and the organisers'
+# "common baseline" are not our baseline configuration
+_TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )(?<!common )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
 
 
 def tidy(text):

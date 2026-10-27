@@ -17,9 +17,10 @@ launcher's binding only), so the change against it is what our optimisations did
 | 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 4.992196 (3) | −14.2% | −21.65% |
 | **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.359976 (3)** | **−20.6%** | **−18.56%** |
 
-For reference only: the organisers' vanilla runs on ASPIRE-2A (tasks 4.3) took 3.296 s/step on 4 nodes with `scotch`
-(5 jobs, 3.191 – 3.576) and 3.415 with `hierarchical`. They use the site module, the default MPI transport and no binding,
-so they differ from our runs in more than our optimisations.
+For reference only: the organisers' common baseline for ASPIRE-2A ("5. Common Baselines": site module, case defaults, full
+chain, one job per method) is 3.415 s/step on 4 nodes with `hierarchical` and 3.576 with `scotch`; their five 4-node `scotch`
+jobs ranged from 3.191 to 3.576 (mean 3.296). They also use the default MPI transport and no binding, so they differ from our
+runs in more than our optimisations.
 
 - **Basic**: unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A; `scotch` decomposition mapped onto the sockets and NUMA domains
   of each node; every MPI rank pinned to its core, with its memory on that core's NUMA domain.

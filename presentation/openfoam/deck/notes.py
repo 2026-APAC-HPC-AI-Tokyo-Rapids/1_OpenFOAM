@@ -20,7 +20,10 @@ EN: The task is a steady simulation of the air around a car, on a fixed mesh of 
 JP:
 - 反復回数は固定（fvSolution.fixedIter：pはGAMGで12サイクル、最粗段はPCG 35回、Uは3成分それぞれGauss-Seidel 15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均で比べられる。
 - 動画は場を書き出すための別runで、計測runではない（計測runは controlDict.noWrite で場を書かない）。Q22：同じ公式ケースに出力のfunction objectだけ足して流した。Cdは同じ機械・同じ分割の公式runと全桁一致。
-- 比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaseline。主催者の値は5枚目で参考として出すだけ。
+- 比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaseline。主催者の値は、この枚の一番下の行と5枚目（各ジョブ）で参考として出すだけ。
+- 一番下の行は主催者の共通ベースライン（公式リポジトリの「5. Common Baselines」、10/20追加。全チーム共通の出発点を、自分の結果の横に示すよう求めている）。ASPIRE-2Aの4ノードで、サイトのOpenFOAM/2512モジュール・ケース既定・Allrun一式を1ジョブずつ：hierarchical 3.415、scotch 3.576 s/step（出典は4.3 Application Notesの「Reference results」）。
+- （言うなら）The organisers' common baseline is on the last line: 3.415 seconds with hierarchical, 3.576 with scotch.
+- （聞かれたら）共通ベースラインに対して、Basic 2.898はhierarchical比−15%、scotch比−19%。Bonus 2.360は−31%、−34%。主催者のscotchは5本で3.191〜3.576（平均3.296）とばらつき、共通ベースラインはそのうちAllrun一式を1ジョブで流した値。私たちのbaseline 3.65がhierarchicalの3.415より遅い理由はQ27。
 - Bonusは10/26の最終版（14の変更、1bc34b9、#69）：4ノード2.359976 s/step（3本、0001〜0004までの版と交互）。baselineの3.650から−35.3%、1.546倍。
 """
 

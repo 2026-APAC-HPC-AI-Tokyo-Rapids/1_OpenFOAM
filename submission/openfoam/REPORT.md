@@ -17,11 +17,14 @@ the differences are our optimisations. The spread between repeated jobs falls fr
 | 4 nodes, 150 steps | s/step | Against our baseline |
 |---|---:|---:|
 | Our baseline (case-default `hierarchical`, launcher binding only) | 3.650 | — |
+| Organisers' common baseline (site module, case defaults): `hierarchical` / `scotch` | 3.415 / 3.576 | — |
 | **Basic** | **2.898** | **−20.6%** |
 | **Bonus** | **2.360** | **−35.3%** |
 
-For reference, the organisers' vanilla runs on the same machine took 3.30 s per step with `scotch`. They use the site build,
-the default MPI transport and no binding, so we show them as context, not as the comparison (section 5).
+The organisers' common baseline is the one their "5. Common Baselines" gives for ASPIRE-2A: one untuned full-chain job per
+method, from the 4.3 Application Notes. Their five 4-node `scotch` jobs ranged from 3.191 to 3.576 s per step (mean 3.30).
+They use the site build, the default MPI transport and no binding, so we show them as context, not as the comparison
+(section 5).
 
 What we found and did:
 

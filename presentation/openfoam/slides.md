@@ -1,6 +1,6 @@
 # OpenFOAMパートのスライド構成（第5版）
 
-チームのデッキ（Boxの`Tokyo_Rapids_with_RIKEN_Submission/presentation/Tokyo Rapids with RIKEN Presentation.pptx`）の新しい流れ（#52、10/13のメモ）に合わせて、第2版（本編9枚）を組み直したものです。第4版（10/19）では、旧課題の資料が勧めていた姿勢を話の筋道に取り込み、デッキにも反映しました（下の「旧課題の資料から取り入れた姿勢」）。第5版（10/26）では、Bonusを14の変更の最終版（#69）にそろえました（下の「10/26の更新」）。
+チームのデッキ（Boxの`Tokyo_Rapids_with_RIKEN_Submission/presentation/Tokyo Rapids with RIKEN Presentation.pptx`）の新しい流れ（#52、10/13のメモ）に合わせて、第2版（本編9枚）を組み直したものです。第4版（10/19）では、旧課題の資料が勧めていた姿勢を話の筋道に取り込み、デッキにも反映しました（下の「旧課題の資料から取り入れた姿勢」）。第5版（10/26）では、Bonusを14の変更の最終版（#69）にそろえました（下の「10/26の更新」）。10/27には、主催者が公式リポジトリに足した「5. Common Baselines」に合わせて、2枚目に主催者の共通ベースラインを載せました（下の「10/27の更新」）。
 
 - スライドに載せる文は英語、話す内容（メモ）は日本語です。デッキのノートには、発表者が読む英語の原稿と日本語のメモの両方を入れてあります。
 - 図と表はBoxの`presentation/openfoam/figures/`（`.png`は貼り付け用、`.svg`は編集用）にあります。分割の絵は`decomposition/`、流れの動画は`flow/`です。図は、リポジトリで`uv run presentation/openfoam/figures.py <出力先>`を実行すると作り直せます。
@@ -103,6 +103,16 @@
 - Q&A目次（23枚目）：10/26版の目次は、rooflineが足される前の番号（23〜43）のままでした（クリックの飛び先は正しい）。番号を作り直しました。
 - 図のデータ：最終計測の対照（fa4f5b0、1/2/4ノード各3本）を`data/changes_ab.csv`に`0006-0016`として足しました（値は成果物の保管庫の`result.txt`）。
 
+### 10/27の更新
+
+主催者が10/20に、公式リポジトリへ`5. Common Baselines.md`を足しました（リポジトリの`tasks/`も最新にしました）。課題とプラットフォームごとに全チーム共通のベースラインを1つ決め、発表のスライドで自分の結果の横に、数字と出典がわかる形で示すよう求めています。新しいrunは要らず、Bonusは引き続き自分のBasicに対して評価されます。ASPIRE-2Aの4ノードは、サイトの`OpenFOAM/2512`モジュール、ケース既定、Allrun一式を1ジョブずつ流した**hierarchical 3.415 s**と**scotch 3.576 s**です（4.3 Application Notesの「Reference results」）。
+
+- 2枚目の結果の帯の一番下に「Organisers' common baseline: hierarchical 3.415, scotch 3.576 s/step」を1行（11pt、灰色）足しました。帯の大きさは変えず、数字と矢印の段を少し上げました。この「baseline」は私たちのbaselineではないので、緑にせず灰色のままにしています（`deck/decklib.py`の色分けで「common baseline」を除外）。
+- 2枚目のノートのメモに、出典、言うときの1文、共通ベースラインに対するBasicとBonusの差（hierarchical比 −15%と−31%、scotch比 −19%と−34%）を足しました。英語の原稿は変えていません。
+- 主催者のscotchの「5本の平均3.296」（5枚目、補足28枚目、Q15など）は、そのまま使います。共通ベースラインのscotch 3.576は、その5本のうち、Allrun一式を1ジョブで流したものです。
+- 提出物の`README.md`（Results）と`REPORT.md`（1. Summary）にも、同じ共通ベースラインを書きました。
+- デッキの入力は、Boxにあるチームの最新版（10/27 0:13保存）にしました。`~/apac26`の10/26版とは、AIパートの書式（文字の変更はなし）とスライドマスターだけが違い、OpenFOAMのスライド（入力の1〜45枚目）は同じです。前の改訂版と比べて、OpenFOAMパートで変わったのは2枚目とそのノートだけです。
+
 ---
 
 ## 方針
@@ -124,7 +134,7 @@
 3. **測り方は1枚にまとめる（6枚目）。** 以降のスライドでは、道具の名前を括弧で添えるだけにします。
 4. **BasicとBonusは同じ順で話す。** 何を変えたか → 結果 → プロファイルで確かめた理由。
 5. **測ったことと仮説を分ける。** 並列効率が1を超える理由（セルの配列がL3に収まる）は、ノード数ごとのカウンタで確かめました（#66）。DRAMの転送バイト数と、ピーク帯域に対する割合は測れないので、未測定として話します。
-6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.90（−21%）、Bonus 2.36（−35%、1.55×）。BonusはBasicから−18.6%（1/2ノードは−23.4%、−21.7%）。並列効率（1→4ノード）はbaseline 1.00、Basic 1.15、Bonus 1.08。参考：主催者のhierarchicalは3.415、scotchは5本の平均3.296（3.19〜3.58）。主催者のscotchに対して、Basicは−12%、Bonusは−28%。ただし主催者のrunはビルド、MPI、配置が違うので、本編の比較は自分たちのbaselineに対して行います。
+6. **数値をデッキ全体でそろえる。** 4ノード：baseline 3.65、Basic 2.90（−21%）、Bonus 2.36（−35%、1.55×）。BonusはBasicから−18.6%（1/2ノードは−23.4%、−21.7%）。並列効率（1→4ノード）はbaseline 1.00、Basic 1.15、Bonus 1.08。参考：主催者のhierarchicalは3.415、scotchは5本の平均3.296（3.19〜3.58）。主催者のscotchに対して、Basicは−12%、Bonusは−28%。主催者の共通ベースライン（`tasks/5. Common Baselines.md`）は、Allrun一式を1ジョブずつ流したhierarchical 3.415とscotch 3.576で、2枚目に載せます。ただし主催者のrunはビルド、MPI、配置が違うので、本編の比較は自分たちのbaselineに対して行います。
 7. **速さは各ジョブの点で見せる。** 平均だけの棒グラフにせず、ノード数ごとの時間、変化、本数が見える図にします（`deck/deck_plots.py`）。差を見せるため縦軸が0から始まらない図があるので、変化は図の中に%で書きます。
 8. **小さな注記を置かない。** 出典とissue番号はノートに書き、図の条件は図の見出しの下の1行に書きます。図と表には番号（Figure 1、Table 1、補足はFigure S1、Table S1）を付けます。
 
@@ -173,7 +183,7 @@
 | # | 見出し（デッキ） | スライドの主張（1行） | 主な図 | 目安 | 旧課題 |
 |---|---|---|---|---|---|
 | 1 | Title | | | 0:08 | |
-| 2 | OpenFOAM TASK OVERVIEW | Make the same math faster: same mesh, same solver, same work | 流れの動画、メッシュ、4ノードの結果（3.65 → 2.90 → 2.36） | 0:30 | |
+| 2 | OpenFOAM TASK OVERVIEW | Make the same math faster: same mesh, same solver, same work | 流れの動画、メッシュ、4ノードの結果（3.65 → 2.90 → 2.36）と主催者の共通ベースライン | 0:30 | |
 | 3 | ASPIRE-2A | 8 NUMA domains per node; 16 cores already fill the bandwidth | 仕様の表、ノードの図（図形） | 0:20 | |
 | 4 | BASELINE SETTINGS | We start from the case defaults, on our own build of v2512 | 設定の表、hierarchicalの分割の絵 | 0:20 | |
 | 5 | BASELINE RESULTS | 3.65 s/step on 4 nodes: linear scaling, but slow and unsteady | Figure 5（各ジョブの点と、主催者のhierarchicalの値）、数字3つ | 0:25 | |
@@ -209,14 +219,15 @@
 - Step: fixed solver iterations → the same work every step
 - Metric: average time per step (steps 2 to N) on 4 nodes; scaling on 1 / 2 / 4 nodes (40 / 80 / 150 steps)
 - Our result on 4 nodes: 3.65 (Baseline) → 2.90 (Basic, −21%) → 2.36 s/step (Bonus, −35%); 1.55× faster with the same build, scripts and measurement
+- Organisers' common baseline: hierarchical 3.415, scotch 3.576 s/step
 
-図：流れの動画（Boxの`flow/flow-iterations.mp4`）と、メッシュの図（旧pptxの2枚目のもの）。結果は左下の帯に、答えを先に出す形で置きました。
+図：流れの動画（Boxの`flow/flow-iterations.mp4`）と、メッシュの図（旧pptxの2枚目のもの）。結果は左下の帯に、答えを先に出す形で置きました。帯の一番下には、主催者の共通ベースラインを1行、小さく置きました（公式の「5. Common Baselines」が、自分の結果の横に示すよう求めているため。10/27）。
 
 メモ（30秒）：
 - 車の周りの空気の流れを計算するケースを、同じ計算のまま速くする課題です。メッシュは固定で、車の近くほど細かく、車輪は回りません。
 - 反復の回数が固定です（`fvSolution.fixedIter`：pはGAMGで12サイクル、Uは3成分それぞれGauss-Seidelで15回、kとωは8回）。どのstepも同じ仕事なので、1 stepの平均時間で比べられます。
 - 動画は、場を書き出すための別runです。計測runは場を書き出さないので、同じ公式ケースに出力だけを足して流しました（Q22）。
-- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.36秒になりました」。比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaselineです。主催者の値は、ビルド、MPI、配置が違うので、5枚目で参考として見せます。
+- 最後に答えを先に言います：「4ノードで3.65秒だった1 stepが、Basicで2.90秒、Bonusで2.36秒になりました」。比べる基準は、同じビルド・同じスクリプト・同じ測り方で取った自分たちのbaselineです。主催者の値は、ビルド、MPI、配置が違うので、この枚の一番下の共通ベースラインと5枚目で参考として見せます。聞かれたら、共通ベースラインに対してBasicは−15%（hierarchical比）と−19%（scotch比）、Bonusは−31%と−34%です。私たちのbaseline（3.65）がhierarchicalの3.415より遅い理由はQ27です。
 - Bonusは10/26の最終版（14の変更、#69）で、4ノード2.359976 s/step（3本）、baselineの3.650から−35.3%、1.546倍です。
 
 ### 3. ASPIRE-2A（0:20）
@@ -1102,18 +1113,18 @@ Table S7（The ten later patches (0006, 0008–0016); F3: rounding can change, s
 
 ## 発表の準備
 
-- pptxへの反映（10/26に済み）：第3版で挙げていた修正（「EPIC」→「EPYC」、8 NUMA domains、4枚目の図ほか）、第4版の変更（旧課題の姿勢、おまけの#68、Q&A目次、旧スライドの整理）、10/20の変更（配置の見直し、MPIの上位3つを本編7枚目へ、補足の進め方）、10/21の変更（色、注記とissue番号の削除、図と表の番号、各ジョブの点の図、進め方を本編9枚目へ、補足33枚目の追加、原稿の短縮と日本語訳）、10/26の変更（最終Bonus、補足36枚目の追加）は、改訂版pptx（`Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`、79枚）に入っています。入力はチームの10/26版（78枚）で、チームのroofline（14枚目）とAIパートはそのままです。作り直すときは`deck/build.sh`を使います。pptxを手で直したら、作り直す前にその変更を`deck/build_deck.py`に入れます。
-- 改訂版pptxをBoxのデッキへ移すこと：Boxのデッキを置き換えるか、改訂版の1〜46枚目を「スライドの再利用」で移します。AIパート（47枚目以降）は改訂版でも10/26版のデッキと同じです。
+- pptxへの反映（10/26に済み）：第3版で挙げていた修正（「EPIC」→「EPYC」、8 NUMA domains、4枚目の図ほか）、第4版の変更（旧課題の姿勢、おまけの#68、Q&A目次、旧スライドの整理）、10/20の変更（配置の見直し、MPIの上位3つを本編7枚目へ、補足の進め方）、10/21の変更（色、注記とissue番号の削除、図と表の番号、各ジョブの点の図、進め方を本編9枚目へ、補足33枚目の追加、原稿の短縮と日本語訳）、10/26の変更（最終Bonus、補足36枚目の追加）、10/27の変更（2枚目の共通ベースライン）は、改訂版pptx（`Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`、79枚）に入っています。入力はBoxにあるチームの最新版（10/27 0:13保存、78枚）で、チームのroofline（14枚目）とAIパートはそのままです。作り直すときは`deck/build.sh`を使います。pptxを手で直したら、作り直す前にその変更を`deck/build_deck.py`に入れます。
+- 改訂版pptxをBoxのデッキへ移すこと：Boxのデッキを置き換えるか、改訂版の1〜46枚目を「スライドの再利用」で移します。AIパート（47枚目以降）は、改訂版でもBoxのデッキ（10/27 0:13保存）と同じです。
 - 本編21枚を、タイマーで通しで練習します。各スライドに「時間が足りないときの1文」を決めておきます。14枚目（roofline）を誰が話すかも決めます。
 - 話す人と交代の位置を決めます（Qwenとの切り替えも）。HPCの後にAIを話すなら、補足と再現性のスライド（22〜46枚目）はスライドショーで「47」Enterで飛ばせます。
-- 数値は提出物の`README.md`と同じものを使います（2.898 / 2.360 / −18.56%、3.296）。baselineは3.65です。桁は上の「数値の桁」に従います。
+- 数値は提出物の`README.md`と同じものを使います（2.898 / 2.360 / −18.56%、主催者の3.296、共通ベースラインの3.415 / 3.576）。baselineは3.65です。桁は上の「数値の桁」に従います。
 - 補足スライドは本編の後ろに置き、23枚目のQ&A目次から1クリックで出せます。
 - （任意）ISC26の課題にある「ログから描くCdの収束グラフ」は、まだデッキにありません。足すなら、150 stepのrunの`coefficient.dat`から描いて補足42枚目（DRAG COEFFICIENT CHECKS）の隣に置きます。
 - 図の文字が小さければ、`.svg`を開いて拡大するか、pptxの側で書き直します。デッキの各ジョブの点の図（`p*.png`）は`deck/deck_plots.py`がスライドの大きさで描くので、文字の大きさはそこで変えます。
 
 ## 根拠
 
-- 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。
+- 図の元データ：リポジトリの`presentation/openfoam/data/`。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）。共通ベースラインは`tasks/5. Common Baselines.md`（10/20）。
 - 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#67（10/15の精査と取り組みの一覧）、#68（固定反復で使われない残差）、#69（Bonusの後の10個、最終計測、提出スクリプトでの再実行）。
 - 各runの公式の結果（`result.txt`）と`coefficient.dat`：成果物の保管庫（Actionsのrun IDごとのフォルダ）。#69の最終計測の18本と、#68の最終Bonusの上の3本の値は、ここで確かめました。
 - rooflineの天井：チームの測定（PBS 26004695）。来歴はデッキの14枚目のノート。
