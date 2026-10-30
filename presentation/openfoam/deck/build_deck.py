@@ -2,12 +2,12 @@
 # requires-python = ">=3.11"
 # dependencies = ["python-pptx>=1.0", "lxml", "pillow", "xlsxwriter"]
 # ///
-"""Rebuild the OpenFOAM (HPC) part of the team deck from the 10/26 team deck.
+"""Rebuild the OpenFOAM (HPC) part of the team deck from the 10/29 team deck.
 
 usage: uv run build_deck.py INPUT.pptx OUTPUT.pptx FIGDIR ASSETDIR
 
-INPUT is the team deck as of 2026-10-26: our 10/21 build of the OpenFOAM part (main 1-21 with the team's HPC roofline at 14,
-divider 22, Q&A index 23, supporting 24-44, the shared reproducibility slide 45), then the AI track from slide 46 on.
+INPUT is the team deck as of 2026-10-29: our 10/27 build of the OpenFOAM part (main 1-21 with the team's HPC roofline at 14,
+divider 22, Q&A index 23, supporting 24-45, the shared reproducibility slide 46), then the AI track from slide 47 on.
 FIGDIR holds the deck's renders of ../figures.py (deck_figures.py) and its per-job plots (deck_plots.py). ASSETDIR holds
 pictures that are neither in INPUT nor drawn here: the decomposition renders from the Box folder
 presentation/openfoam/decomposition/. build.sh runs all three steps.
@@ -34,14 +34,15 @@ SRC, OUT, FIG, ASSETS = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]),
 prs = Presentation(SRC)
 S = list(prs.slides)  # S[i] is input slide i + 1
 X0, XW = 0.70, 11.93  # left edge and width of the content area
-GREY_TINT = "F1F1F1"
+# Every box that carries text is LIGHT; a box inside one is WHITE with a rule, and one inside that LIGHT again. Only emphasis
+# differs: TINT (the slide's key fact, TAKEAWAY), the Bonus tint (a Bonus result or part), and solid tier or NAVY labels.
 DECOMP_COLUMNS = {"hier": (0.0, 0.667), "scotch": (0.333, 0.334)}
 PANEL_TOP, PLANE_BOTTOM, ALL_BOTTOM = 0.113, 0.346, 0.085
 CAR_CROP = (0.06, 0.12, 0.17, 0.0)  # a 1920 x 1080 car render from decomposition/panels/, cropped to the car
 COUNT = {"Figure": 0, "Table": 0}
 SERIES = [""]  # "" in the main part, "S" in the supporting slides
-# the titles of the input's OpenFOAM part, slides 1-45, in order; S[i] is rebuilt as the slide that had title INPUT_TITLES[i]
-INPUT_TITLES = ["", "OpenFOAM TASK OVERVIEW", "ASPIRE-2A", "BASELINE SETTINGS", "BASELINE RESULTS", "HOW WE MEASURE AND PROFILE", "MPI PROFILE ON 4 NODES", "BASELINE ANALYSIS", "OPTIMIZATION STRATEGY", "BASIC OPTIMIZATION (1/2)", "BASIC OPTIMIZATION (2/2)", "BASIC RESULTS", "MEMORY BANDWIDTH SETS THE SPEED", "HPC ROOFLINE: MEMORY AND COMMUNICATION", "BONUS OPTIMIZATION", "BONUS RESULTS", "BONUS ANALYSIS", "SCALING ANALYSIS", "WHAT DID NOT HELP, AND WHY", "CONCLUSION", "EXTRA: A GAIN WE DID NOT COUNT", "SUPPORTING INFORMATION", "Q&A INDEX", "BOTTLENECKS WE MEASURED", "MEASURING HONESTLY", "EXPERIMENT AUTOMATION", "BUILD, STORAGE AND MPI", "THE ORGANISERS' REFERENCE", "WHERE A STEP GOES AFTER BASIC", "THE PATH ON 4 NODES", "IS THE NETWORK THE BOTTLENECK?", "OFI AGAINST UCX", "THE THREE SPLITS: FACES OR EVEN WORK?", "CORES OR MEMORY?", "THE SOURCE CHANGES", "SOURCE CHANGES IN DETAIL (1/2)", "SOURCE CHANGES IN DETAIL (2/2)", "EFFECT OF EACH BONUS CHANGE", "PROFILES BEFORE AND AFTER", "WHY THE EFFICIENCY EXCEEDS 1", "DRAG COEFFICIENT CHECKS", "REPRODUCING OUR RESULTS", "NOT ADOPTED: THE FULL LIST", "COMPILER AND FLAGS", "Reproducibility: Code, Build, Runtime and Results"]
+# the titles of the input's OpenFOAM part, slides 1-46, in order; S[i] is rebuilt as the slide that had title INPUT_TITLES[i]
+INPUT_TITLES = ["", "OpenFOAM TASK OVERVIEW", "ASPIRE-2A", "BASELINE SETTINGS", "BASELINE RESULTS", "HOW WE MEASURE AND PROFILE", "MPI PROFILE ON 4 NODES", "BASELINE ANALYSIS", "OPTIMIZATION STRATEGY", "BASIC OPTIMIZATION (1/2)", "BASIC OPTIMIZATION (2/2)", "BASIC RESULTS", "MEMORY BANDWIDTH SETS THE SPEED", "HPC ROOFLINE: MEMORY AND COMMUNICATION", "BONUS OPTIMIZATION", "BONUS RESULTS", "BONUS ANALYSIS", "SCALING ANALYSIS", "WHAT DID NOT HELP, AND WHY", "CONCLUSION", "EXTRA: A GAIN WE DID NOT COUNT", "SUPPORTING INFORMATION", "Q&A INDEX", "BOTTLENECKS WE MEASURED", "MEASURING HONESTLY", "EXPERIMENT AUTOMATION", "BUILD, STORAGE AND MPI", "THE ORGANISERS' REFERENCE", "WHERE A STEP GOES AFTER BASIC", "THE PATH ON 4 NODES", "IS THE NETWORK THE BOTTLENECK?", "OFI AGAINST UCX", "THE THREE SPLITS: FACES OR EVEN WORK?", "CORES OR MEMORY?", "THE SOURCE CHANGES (1/2)", "THE SOURCE CHANGES (2/2)", "SOURCE CHANGES IN DETAIL (1/2)", "SOURCE CHANGES IN DETAIL (2/2)", "EFFECT OF EACH BONUS CHANGE", "PROFILES BEFORE AND AFTER", "WHY THE EFFICIENCY EXCEEDS 1", "DRAG COEFFICIENT CHECKS", "REPRODUCING OUR RESULTS", "NOT ADOPTED: THE FULL LIST", "COMPILER AND FLAGS", "Reproducibility: Code, Build, Runtime and Results"]
 AI = len(INPUT_TITLES)  # S[AI] is the AI track's title slide
 
 
@@ -49,7 +50,7 @@ def check_input():
     titles = [s.shapes.title.text_frame.text if s.shapes.title is not None else "" for s in S]
     ai_title = " ".join(sh.text_frame.text for sh in S[AI].shapes if sh.has_text_frame) if len(S) > AI else ""
     if titles[:AI] != INPUT_TITLES or "AI Track" not in ai_title:
-        raise SystemExit("build_deck.py expects the 2026-10-26 team deck (OpenFOAM 1-45 with the HPC roofline at 14, AI title slide at 46); see README.md")
+        raise SystemExit("build_deck.py expects the 2026-10-29 team deck (OpenFOAM 1-46 with the HPC roofline at 14, AI title slide at 47); see README.md")
 
 
 check_input()
@@ -172,19 +173,19 @@ def slide_overview():
 
 def node_diagram(s, x, y, w, h):
     """One ASPIRE-2A node as the job sees it: 2 sockets x 4 NUMA domains, each 16 cores with 2 memory channels."""
-    box(s, x, y, w, h, fill="F7F8FA", line=LINE, radius=0.04)
+    box(s, x, y, w, h, fill=LIGHT, line=LINE, radius=0.04)
     add_text(s, x + 0.15, y + 0.06, w - 0.3, 0.3, [f"{number('Figure')}. One node: 2 sockets × 4 NUMA × 16 cores"], size=12, color=NAVY, bold=True)
     socket_w, socket_h = (w - 0.45) / 2, h - 0.52
     numa_w, numa_h = (socket_w - 0.3) / 2, (socket_h - 0.46) / 2
     for k in range(2):
         sx, sy = x + 0.15 + k * (socket_w + 0.15), y + 0.42
-        box(s, sx, sy, socket_w, socket_h, fill=WHITE, line="B8C2D3", radius=0.04)
+        box(s, sx, sy, socket_w, socket_h, fill=WHITE, line=LINE, radius=0.04)
         add_text(s, sx + 0.1, sy + 0.04, socket_w - 0.2, 0.28, [f"socket {k}"], size=11, bold=True)
         for r in range(2):
             for c in range(2):
                 domain = 4 * k + 2 * r + c
                 nx, ny = sx + 0.1 + c * (numa_w + 0.1), sy + 0.36 + r * (numa_h + 0.06)
-                box(s, nx, ny, numa_w, numa_h, fill=TINT, radius=0.06)
+                box(s, nx, ny, numa_w, numa_h, fill=LIGHT, line=LINE, radius=0.06)
                 add_text(s, nx, ny, numa_w, numa_h, [{"runs": [f"NUMA {domain}"], "size": 11.5, "bold": True, "color": NAVY}, {"runs": ["16 cores, 2 channels"], "size": 10}], align="c", anchor="m")
 
 
@@ -201,9 +202,9 @@ def slide_aspire():
     card(s, X0, 5.55, XW, 1.45)
     add_text(s, X0 + 0.25, 5.8, 5.6, 0.4, ["Why ASPIRE-2A?"], size=17, color=NAVY, bold=True)
     add_text(s, X0 + 0.25, 6.22, 5.75, 0.7, ["OpenFOAM works with very many files: a build is ≈ 36,000 files, and each decomposed case adds thousands more."], size=13)
-    for i, (head, value, fill, color, mark) in enumerate([("Gadi project quota", "0.2 M files · 1 TB", GREY_TINT, BAD, "✕"), ("ASPIRE-2A quota", "200 M files · 100 TB", WHITE, NAVY, "✓")]):
+    for i, (head, value, color, mark) in enumerate([("Gadi project quota", "0.2 M files · 1 TB", BAD, "✕"), ("ASPIRE-2A quota", "200 M files · 100 TB", NAVY, "✓")]):
         x = 6.75 + i * 2.95
-        box(s, x, 5.75, 2.75, 1.06, fill=fill, line=LINE, radius=0.08)
+        box(s, x, 5.75, 2.75, 1.06, fill=WHITE, line=LINE, radius=0.08)
         add_text(s, x + 0.18, 5.78, 2.45, 1.0, [{"runs": [(mark + " ", {"color": color}), (head, {})], "size": 12, "color": MUTED, "bold": True}, {"runs": [value], "size": 16, "color": color, "bold": True, "space_before": 3}], anchor="m")
     set_notes(s, NOTES["aspire"])
     return s
@@ -251,7 +252,7 @@ def slide_measure():
     rows = [["Tool", "When it runs", "Question it answers"], ["Official metric", "Every benchmark run, no profiler", "How long does a step take?"], ["IMB-MPI1", "After the solver, every benchmark run", "How fast is the network between these nodes?"], ["CrayPAT", "Profile runs: 4 nodes, 40 steps", "Which MPI calls take the time, per rank?"], ["OpenFOAM profiling", "Profile runs", "Which solver stage takes the time, per rank?"], ["AMD uProf", "Profile runs", "Which functions use the CPU? Hardware counters"], ["/proc in the job", "Profile runs", "Is each rank on its own core? Where is its memory?"]]
     colors = [None] + [[NAVY, INK, INK]] * 6
     table(s, X0, 1.98, [2.45, 4.3, 5.18], rows, row_h=0.46, size=14, bolds=[None] + [[True, False, False]] * 6, colors=colors)
-    cards = [("✓", "Decision rule", "Candidate and control alternate in the same period, at least 3 jobs each on 4 nodes. A change is kept only if every job with it beats every job without it."), ("≈", "Know the noise before trusting a gain", "One setup, repeated: 8% spread in our baseline, 0.18% after Basic. Profilers shift a step by −1% to +6%, so profiled times are never results.")]
+    cards = [("≈", "Know the noise before trusting a gain", "One setup, repeated: 8% spread in our baseline, 0.18% after Basic. Single jobs can be 90% slower, so one job never decides."), ("✓", "Benchmarks decide, profiles explain", "Profilers shift a step by −1% to +6%, so a profiled time never enters a result or a decision.")]
     for i, (mark, head, body) in enumerate(cards):
         x = X0 + i * 6.08
         card(s, x, 5.35, 5.85, 1.65)
@@ -259,6 +260,27 @@ def slide_measure():
         add_text(s, x + 0.78, 5.49, 4.9, 0.44, [head], size=16, color=NAVY, bold=True, anchor="m")
         add_text(s, x + 0.78, 5.95, 4.85, 1.0, [body], size=14)
     set_notes(s, NOTES["measure"])
+    return s
+
+
+def slide_decide():
+    """What a change must pass to be kept, with the second test shown on two small changes: one kept, one not."""
+    s = new_slide()
+    set_title(s, "HOW WE DECIDE WHAT TO KEEP")
+    message(s, "Four tests decide what we keep, not the size of the gain")
+    tests = [("Alternate with a control", "Candidate and control run in turns, in the same period, at least 3 jobs each on 4 nodes: slow periods come and go"), ("Win every job", "Every job with the change beats every job without it. By chance: 1 in 20 at 3 v 3, 1 in 70 at 4 v 4, 1 in 252 at 5 v 5"), ("Same computation", "Basic: unmodified source. Bonus: same iterations and tests, and Cd within ±0.5% at 1, 2 and 4 nodes"), ("Know why", "A profile shows the bottleneck it removes, and the next profile agrees; a gain we cannot explain may be luck")]
+    w = 6.35
+    for i, (head, body) in enumerate(tests):
+        y = 1.62 + i * 1.2
+        card(s, X0, y, w, 1.08)
+        circle_num(s, X0 + 0.2, y + 0.14, 0.38, str(i + 1), size=14)
+        add_text(s, X0 + 0.72, y + 0.1, w - 0.92, 0.42, [head], size=16, color=NAVY, bold=True, anchor="m")
+        add_text(s, X0 + 0.72, y + 0.5, w - 0.92, 0.56, [body], size=12.5)
+    xr, wr = 7.35, 5.28
+    heading(s, xr, 1.58, wr, "Figure", "Test 2 on two small changes", sub="4 nodes, each job; candidate and control in the same period")
+    picture(s, fig("p07_rule"), xr - 0.02, 2.3, w=wr + 0.02)
+    add_text(s, X0, 6.5, XW, 0.42, ["We kept only what passed all four on 4 nodes; what failed is on slide 18"], size=15, color=NAVY, bold=True)
+    set_notes(s, NOTES["decide"])
     return s
 
 
@@ -305,26 +327,24 @@ def slide_baseline_analysis():
         add_text(s, x + 0.25, 3.78, w - 0.45, 1.05, [detail], size=13, color=MUTED)
         if i < 2:
             block_arrow(s, x + w + 0.11, 3.05, 0.42, 0.42)
-    boxes = [("Why one slow rank matters", "Every solver iteration exchanges halo values and takes a global sum: about 14,000 messages and 1,600 global sums per rank per step. When one rank is late, the other 511 wait.", TINT), ("Where the computation goes (AMD uProf)", "Sparse-matrix sweeps lead: Gauss–Seidel smoothing, residuals and A·x are about a quarter of the computation. Each sweep streams the whole matrix with little arithmetic per byte.", LIGHT)]
-    for i, (head, body, fill) in enumerate(boxes):
+    boxes = [("Why one slow rank matters", "Every solver iteration exchanges halo values and takes a global sum: about 14,000 messages and 1,600 global sums per rank per step. When one rank is late, the other 511 wait."), ("Where the computation goes (AMD uProf)", "Sparse-matrix sweeps lead: Gauss–Seidel smoothing, residuals and A·x are about a quarter of the computation. Each sweep streams the whole matrix with little arithmetic per byte.")]
+    for i, (head, body) in enumerate(boxes):
         x = X0 + i * 6.08
-        card(s, x, 5.1, 5.85, 1.88, fill=fill)
+        card(s, x, 5.1, 5.85, 1.88)
         add_text(s, x + 0.25, 5.2, 5.4, 0.4, [head], size=15, color=NAVY, bold=True)
         add_text(s, x + 0.25, 5.62, 5.4, 1.3, [body], size=14.5)
     set_notes(s, NOTES["baseline_analysis"])
     return s
 
 
-def slide_strategy():
-    """The plan of the work: the loop we ran, and the rounds it took on 4 nodes."""
-    s = reuse(8)
-    set_title(s, "OPTIMIZATION STRATEGY")
-    message(s, "Fix what is broken first, then follow the measured bottleneck")
+def s_strategy():
+    """The plan of the work: the loop we ran, and the rounds it took on 4 nodes (main slide 9 until 10/29)."""
+    s = supp(8, "OPTIMIZATION STRATEGY", "Fix what is broken first, then follow the measured bottleneck", "s_strategy")
     steps = [("Baseline", "Case defaults on our own build, 3 or more jobs per node count: know the spread"), ("Profile", "Separate profile runs: /proc, OpenFOAM profiling, CrayPAT, uProf, IMB"), ("Bottleneck", "What is broken? Why do the ranks wait? What limits one rank?"), ("Change one thing", "One commit per condition: job script and split (Basic), source (Bonus)"), ("Check", "Alternate with a control; keep it only if every job is faster. Bonus: Cd within F3")]
     w, gap = 2.146, 0.3
     for i, (head, body) in enumerate(steps):
         x = X0 + i * (w + gap)
-        box(s, x, 1.6, w, 1.56, fill=TINT, line="B8C2D3", radius=0.08)
+        box(s, x, 1.6, w, 1.56, fill=LIGHT, line=LINE, radius=0.08)
         circle_num(s, x + w / 2 - 0.17, 1.66, 0.34, str(i + 1), size=12)
         add_text(s, x + 0.08, 2.01, w - 0.16, 0.34, [head], size=14.5, color=NAVY, bold=True, align="c")
         add_text(s, x + 0.1, 2.35, w - 0.2, 0.8, [body], size=11.5, align="c")
@@ -342,7 +362,6 @@ def slide_strategy():
         x = X0 + i * 6.08
         shape_text(box(s, x, 6.62, 0.98, 0.34, fill=color, radius=0.5), name, size=11)
         add_text(s, x + 1.1, 6.57, 4.75, 0.44, [text], size=12.5, anchor="m")
-    set_notes(s, NOTES["strategy"])
     return s
 
 
@@ -375,7 +394,7 @@ def slide_basic_decomp():
     xr, wr = 7.15, 5.48
     heading(s, xr, 1.58, wr, "Figure", "scotch against hierarchical", sub="same placement, 3 jobs each, alternated")
     picture(s, fig("p11_scotch"), xr, 2.28, w=wr)
-    card(s, xr, 5.4, wr, 1.58, fill=TINT)
+    card(s, xr, 5.4, wr, 1.58)
     add_text(s, xr + 0.22, 5.5, wr - 0.4, 0.36, ["Then: map the split onto the node"], size=14.5, color=NAVY, bold=True)
     add_text(s, xr + 0.22, 5.88, wr - 0.4, 1.05, [[("scotchCoeffs follow 2 sockets × 4 NUMA domains × 16 cores: 23% fewer faces between nodes. ", {}), ("2.918 → 2.898 s/step (−0.7%)", {"b": True, "color": BASIC}), ("; all 5 jobs beat all 5 controls", {})]], size=13)
     set_notes(s, NOTES["basic_decomp"])
@@ -423,22 +442,38 @@ def slide_bandwidth():
 
 
 def replace_run_text(s, shape_name, old, new):
-    """Replace text inside one run of a shape that the team made, keeping the run's formatting."""
+    """Replace text inside one run of a shape that the team made, keeping the run's formatting; done if new is there."""
     for paragraph in next(sh for sh in s.shapes if sh.name == shape_name).text_frame.paragraphs:
         for run in paragraph.runs:
+            if new in run.text:
+                return
             if old in run.text:
                 run.text = run.text.replace(old, new)
                 return
-    raise SystemExit(f"{shape_name}: '{old}' not found; see README.md")
+    raise SystemExit(f"{shape_name}: neither '{old}' nor '{new}' found; see README.md")
 
 
-def prepend_notes(s, text):
-    """Put our script above the notes the team wrote, leaving their paragraphs as they are."""
+NOTES_END = "（ここまでがデッキのビルド（build_deck.py）のメモ。この下は、スライドを作ったチームのノート）"
+
+
+def team_notes(s, text):
+    """Put our notes above the notes the team wrote on its own slide, leaving their paragraphs as they are.
+
+    A rebuild replaces our part, which ends with NOTES_END and an empty paragraph. The 10/27 build wrote its part without
+    the marker: it began with "[0:20]" and ended with the paragraph "- スライドの最下行に…" and an empty one.
+    """
     tf = s.notes_slide.notes_text_frame
-    if tf.text.startswith("[0:"):
-        return
+    texts = [p.text for p in tf.paragraphs]
+    if NOTES_END in texts:
+        ours = texts.index(NOTES_END) + 2
+    elif texts[0] == "[0:20]":
+        ours = next(i for i, t in enumerate(texts) if t.startswith("- スライドの最下行に")) + 2
+    else:
+        ours = 0
+    for p in tf.paragraphs[:ours]:
+        p._p.getparent().remove(p._p)
     anchor = tf.paragraphs[0]._p
-    for line in text.strip("\n").split("\n") + [""]:
+    for line in text.strip("\n").split("\n") + [NOTES_END, ""]:
         p = etree.Element(qn("a:p"))
         if line:
             etree.SubElement(etree.SubElement(p, qn("a:r")), qn("a:t")).text = line
@@ -446,10 +481,11 @@ def prepend_notes(s, text):
 
 
 def slide_roofline():
-    """The team's HPC roofline (2026-10-26), as it is but for the measured time of the final Bonus in its label 5."""
+    """The team's HPC roofline (2026-10-26), a supporting slide since 10/30: as it is but for the measured time of the final
+    Bonus in its label 5."""
     s = S[13]
     replace_run_text(s, "HPC_change_5", "2.599 s/step", "2.360 s/step")
-    prepend_notes(s, NOTES["roofline"])
+    team_notes(s, NOTES["roofline"])
     return s
 
 
@@ -475,12 +511,12 @@ def slide_bonus_opt():
     add_text(s, xd, 2.02, 5.28, 0.3, ["Before: one pass per component"], size=13, bold=True)
     for k, component in enumerate(("Ux", "Uy", "Uz")):
         y = 2.42 + k * 0.56
-        shape_text(box(s, xd, y, 2.15, 0.44, fill=TINT, line="9FB0CC", radius=0.12), "matrix arrays", size=12.5, color=NAVY, bold=False)
+        shape_text(box(s, xd, y, 2.15, 0.44, fill=LIGHT, line=LINE, radius=0.12), "matrix arrays", size=12.5, color=NAVY, bold=False)
         arrow_line(s, xd + 2.2, y + 0.22, xd + 2.85, y + 0.22, color=FAINT)
         shape_text(box(s, xd + 2.9, y, 2.2, 0.44, fill=BONUS_TINT, line=BONUS_LINE, radius=0.12), f"sweep {component}", size=12.5, color=INK, bold=False)
     add_text(s, xd, 4.06, 5.1, 0.32, ["the matrix is read 3 times"], size=13.5, color=BAD, bold=True, align="c")
     add_text(s, xd, 4.6, 5.28, 0.3, ["After: one pass for all three"], size=13, bold=True)
-    shape_text(box(s, xd, 5.0, 2.15, 1.1, fill=TINT, line="9FB0CC", radius=0.08), "matrix arrays", size=12.5, color=NAVY, bold=False)
+    shape_text(box(s, xd, 5.0, 2.15, 1.1, fill=LIGHT, line=LINE, radius=0.08), "matrix arrays", size=12.5, color=NAVY, bold=False)
     arrow_line(s, xd + 2.2, 5.55, xd + 2.85, 5.55, color=FAINT)
     shape_text(box(s, xd + 2.9, 5.0, 2.2, 1.1, fill=BONUS_TINT, line=BONUS_LINE, radius=0.08), ["sweep Ux", "sweep Uy", "sweep Uz"], size=12.5, color=INK, bold=False)
     add_text(s, xd, 6.18, 5.1, 0.32, ["the matrix is read once"], size=13.5, color=BONUS, bold=True, align="c")
@@ -568,7 +604,7 @@ def slide_conclusion():
     heading(s, X0, 3.02, XW, "Table", "What we changed, the bottleneck it removed, and the gain on 4 nodes")
     rows = [["What we changed", "The bottleneck it removes, and the evidence", "vs own control"], ["Pin CPU and memory (Basic)", "Lost binding: 0 of 512 ranks pinned, 9% of memory local", "−11%"], ["scotch, then node mapping (Basic)", "Uneven work near the car: slowest / median 1.16 → 1.06", "−10.5%, −0.7%"], ["multiLevel split (Bonus)", "Faces between nodes −38%, sockets −34%, NUMA −26%", "−1.5%"], ["Four source changes (Bonus)", "Memory bandwidth: half the channels → 2.2× slower", "−9.5%"], ["Ten more source changes (Bonus)", "Passes, copies and global sums left in the Bonus profile", "−9.3%"]]
     table(s, X0, 3.38, [3.85, 5.83, 2.25], rows, row_h=0.38, size=13.5, colors=[None, [BASIC, INK, BASIC], [BASIC, INK, BASIC], [BONUS, INK, BONUS], [BONUS, INK, BONUS], [BONUS, INK, BONUS]], bolds=[None] + [[True, False, True]] * 5, aligns=["l", "l", "c"])
-    card(s, X0, 5.82, 6.55, 1.16, fill=TINT)
+    card(s, X0, 5.82, 6.55, 1.16)
     add_text(s, X0 + 0.22, 5.86, 6.15, 0.36, ["What remains after the Bonus"], size=14.5, color=NAVY, bold=True)
     bullets(s, X0 + 0.22, 6.22, 6.2, 0.76, ["Memory traffic: fuse U, k and ω assembly for fewer passes", "Imbalance: slow ranks read most from DRAM, so reorder cells"], size=12.5, space_after=2)
     xr = X0 + 6.75
@@ -630,11 +666,11 @@ def s_noise():
 def s_automation():
     s = supp(25, "EXPERIMENT AUTOMATION", "One commit = one condition; every run is started by GitHub Actions", "s_automation")
     heading(s, X0, 1.58, XW, "Figure", "One condition, from a push to the archived run")
-    steps = [("git push or manual run", GREY_TINT), ("select build: reuse if inputs unchanged", TINT), ("build OpenFOAM (1-node job)", TINT), ("prepare case: decomposePar, cached", TINT), ("run job: Allrun chain + simpleFoam", TINT), ("official parser + Cd file", TINT), ("archive raw records + metrics DB", TINT)]
+    steps = ["git push or manual run", "select build: reuse if inputs unchanged", "build OpenFOAM (1-node job)", "prepare case: decomposePar, cached", "run job: Allrun chain + simpleFoam", "official parser + Cd file", "archive raw records + metrics DB"]
     w, gap = 1.533, 0.2
-    for i, (text, fill) in enumerate(steps):
+    for i, text in enumerate(steps):
         x = X0 + i * (w + gap)
-        box(s, x, 2.02, w, 2.0, fill=fill, line="B8C2D3", radius=0.08)
+        box(s, x, 2.02, w, 2.0, fill=LIGHT, line=LINE, radius=0.08)
         circle_num(s, x + w / 2 - 0.2, 2.19, 0.4, str(i + 1), size=13)
         add_text(s, x + 0.06, 2.69, w - 0.12, 1.2, [text], size=13, align="c", anchor="m")
         if i < len(steps) - 1:
@@ -646,17 +682,17 @@ def s_automation():
 def s_build():
     s = supp(26, "BUILD, STORAGE AND MPI", "Builds and records on Lustre; every node solves from its own local disk", "s_build")
     heading(s, X0, 1.58, XW, "Figure", "Where builds, cases and runs live")
-    columns = [(X0, 3.35, GREY_TINT, ["GitHub Actions runner", "team server"]), (4.4, 4.05, TINT, ["ASPIRE-2A login node", "/scratch: Lustre, shared"]), (8.8, 3.83, LIGHT, ["Compute nodes", "$TMPDIR: node-local"])]
+    columns = [(X0, 3.35, ["GitHub Actions runner", "team server"]), (4.4, 4.05, ["ASPIRE-2A login node", "/scratch: Lustre, shared"]), (8.8, 3.83, ["Compute nodes", "$TMPDIR: node-local"])]
     rows_y = [2.72, 3.37, 4.02, 4.67]
     items = {0: {0: f"start build, case and run jobs (ssh{NBSP}+{NBSP}qsub)", 3: "after the job: pack the run, archive it, send metrics to the database"}, 1: {0: "mesh archive (3.2 GB)", 1: "build archive per build (OpenFOAM tree, flags, hashes)", 2: "decomposed case per build and decomposition", 3: f"run directory per run (logs,{NBSP}results,{NBSP}records)"}, 2: {0: "unpack the OpenFOAM build", 1: "copy the decomposed case, restore0Dir", 2: "Allrun chain + simpleFoam: all case I/O stays local", 3: "write logs and coefficient.dat back"}}
-    for ci, (x, w, fill, head) in enumerate(columns):
-        box(s, x, 1.98, w, 3.42, fill=fill, line="B8C2D3", radius=0.04)
+    for ci, (x, w, head) in enumerate(columns):
+        box(s, x, 1.98, w, 3.42, fill=LIGHT, line=LINE, radius=0.04)
         add_text(s, x, 2.04, w, 0.62, [{"runs": [head[0]], "bold": True, "size": 13.5, "color": NAVY, "align": "c"}, {"runs": [head[1]], "size": 12, "color": MUTED, "align": "c"}])
         for ri, text in items[ci].items():
             shape_text(box(s, x + 0.15, rows_y[ri], w - 0.3, 0.56, fill=WHITE, line=LINE, radius=0.1), text, size=12, color=INK, bold=False, margin=(0.06, 0.02, 0.06, 0.02))
 
     def mid(ci, ri, side):
-        x, w = columns[ci][0], columns[ci][1]
+        x, w, _ = columns[ci]
         return (x + 0.15 if side == "l" else x + w - 0.15), rows_y[ri] + 0.28
 
     for (c1, r1, s1), (c2, r2, s2) in [((0, 0, "r"), (1, 0, "l")), ((1, 1, "r"), (2, 0, "l")), ((1, 2, "r"), (2, 1, "l")), ((2, 3, "l"), (1, 3, "r")), ((1, 3, "l"), (0, 3, "r"))]:
@@ -742,7 +778,7 @@ def s_changes():
 
 
 def s_changes2():
-    s = supp(None, "THE SOURCE CHANGES (2/2)", "Ten more: none changes the iterations, the convergence tests or the discretisation", "s_changes2")
+    s = supp(35, "THE SOURCE CHANGES (2/2)", "Ten more: none changes the iterations, the convergence tests or the discretisation", "s_changes2")
     heading(s, X0, 1.55, XW, "Table", "The ten later patches (0006, 0008–0016); F3: rounding can change, so Cd is checked")
     f3 = ("F3: ", {"b": True, "color": NAVY})
     rows = [["Change (patch)", "What it removes", "Why the result is the same"], ["Laplacian coefficients with the diagonal (0006)", "A temporary product field, its copy and a re-read of upper", "The same operations per face in the same order"], ["Pressure reference decided once (0008)", "Patch loops and a global sum per step that did nothing here", "The same cells get the same change whenever one is needed"], ["Viscous stress in one pass (0009)", "Three whole-field passes for nuEff · dev2(T(grad U))", "The same operations on the same operands in the same order"], ["Wall shear stress on the walls only (0010)", "A full-volume field of which only the wall values were read", "The same expression on the walls, as the forces object uses"], ["Gauss–Seidel without the source copy (0011)", "A copy of the source into a work array in every sweep", [[f3, ("the same terms, but the source is added last", {})]]], ["One global sum per CG iteration (0012)", "Two of three global sums per iteration on the coarsest level", [[f3, ("the same iterates in exact arithmetic", {})]]], ["Turbulence model in single cell loops (0013)", "67 of the 80 passes over the cells per k-ω SST update", "The same operations in the same association, no new FMAs"], ["No zero fill of overwritten coefficients (0014)", "Zero fills of face coefficients, a copy of the U matrix", "No arithmetic changes"], ["GAMG correction and restriction in place (0015)", "Two passes over the finest level per V-cycle", "The same operations and summation order"], ["Gauss–Seidel residual from the sweep (0016)", "A matrix pass and a halo exchange per component and iteration", [[f3, ("still formed and tested every iteration", {})]]]]
@@ -769,16 +805,16 @@ def detail_slide(s, title, msg, cards):
 
 def s_detail1():
     cards = [("0001", "No copies in the solvers", ["smoothSolver::scalarSolve", "GAMGSolver::solve"], ["Before: residual = matrix_.residual(...) builds a new field, then copies it", "After: matrix_.residual(residual, ...) writes into the existing buffer", "GAMG: source − A·psi in one pass instead of a copy and a subtraction"], "2.873 → 2.776 s/step (−3.39%, 4 v 4 jobs)"), ("0002", "U components in one pass", ["fvMatrix::solveSegregated", "solveGaussSeidelComponents"], ["Before: one complete solve per component, each reading the matrix", "After: each face coefficient serves Ux, Uy and Uz in one sweep", "Shared: lower and upper coefficients and the addressing; per component: diagonal, source, norms", "Falls back to the original path when the solver or field type does not match"], "2.781 → 2.718 s/step (−2.29%, 3 v 3 jobs)")]
-    return detail_slide(S[35], "SOURCE CHANGES IN DETAIL (1/2)", "No copies, and the U matrix read once instead of three times", cards)
+    return detail_slide(S[36], "SOURCE CHANGES IN DETAIL (1/2)", "No copies, and the U matrix read once instead of three times", cards)
 
 
 def s_detail2():
     cards = [("0003", "No unused boundary updates", ["fvc::surfaceIntegrateInternal", "gaussConvectionScheme::fvmDiv"], ["Return the internal cell values directly; skip building and evaluating output boundaries that nobody reads", "Input boundary contributions are kept", "Build lower, upper and diagonal in one face loop", "Used at six call sites, including pEqn.H and kOmegaSST"], "2.708 → 2.672 s/step (−1.31%, 3 v 3 jobs)"), ("0004", "Fused face loops", ["gaussGrad / addLinearFaceSums", "surfaceIntegrateInternal(a, b)"], ["Interpolate while adding the gradient's face sums", "Multiply the two fields inside the integration loop", "No temporary surface fields and no re-reads; boundaries, volume division and order kept", "Non-linear interpolation keeps the original path"], "2.675 → 2.599 s/step (−2.82%, 3 v 3 jobs)")]
-    return detail_slide(S[36], "SOURCE CHANGES IN DETAIL (2/2)", "No unused boundary values, and no temporary face fields", cards)
+    return detail_slide(S[37], "SOURCE CHANGES IN DETAIL (2/2)", "No unused boundary values, and no temporary face fields", cards)
 
 
 def s_each():
-    s = supp(37, "EFFECT OF EACH BONUS CHANGE", "Each change against the configuration just before it; separate experiments, not added up", "s_each")
+    s = supp(38, "EFFECT OF EACH BONUS CHANGE", "Each change against the configuration just before it; separate experiments, not added up", "s_each")
     heading(s, X0, 1.58, 6.4, "Figure", "Each change against the one before, 4 nodes")
     picture(s, fig("ps_each"), X0 - 0.05, 1.98, w=6.4)
     heading(s, 7.25, 1.58, 5.38, "Table", "Change per step, 1 / 2 / 4 nodes")
@@ -789,7 +825,7 @@ def s_each():
 
 
 def s_profiles():
-    s = supp(38, "PROFILES BEFORE AND AFTER", "The first four changes shorten the computation by 9% and leave MPI as it was", "s_profiles")
+    s = supp(39, "PROFILES BEFORE AND AFTER", "The first four changes shorten the computation by 9% and leave MPI as it was", "s_profiles")
     heading(s, X0, 1.58, 7.4, "Figure", "Seconds per rank in 40 steps (mean of 512 ranks)")
     categories = ["Bonus, first four changes\n118.5 s, MPI 19.9%", "multiLevel + no copies only\n127.6 s, MPI 18.3%", "Basic (scotch)\n137.6 s, MPI 19.4%"]
     series = [("computation", (94.94, 104.25, 110.83)), ("MPI_Allreduce", (11.35, 11.01, 12.89)), ("MPI_Waitall", (8.45, 8.78, 10.25)), ("other MPI", (3.73, 3.60, 3.61))]
@@ -799,7 +835,7 @@ def s_profiles():
 
 
 def s_efficiency():
-    s = supp(39, "WHY THE EFFICIENCY EXCEEDS 1", "On 4 nodes the cell arrays fit in L3: 30% fewer DRAM refills per cell", "s_efficiency")
+    s = supp(40, "WHY THE EFFICIENCY EXCEEDS 1", "On 4 nodes the cell arrays fit in L3: 30% fewer DRAM refills per cell", "s_efficiency")
     heading(s, X0, 1.58, XW, "Table", "Per cell and step, Basic before the node mapping, AMD uProf")
     rows = [["Per cell and step (Basic, uProf)", "1 node", "2 nodes", "4 nodes", "4 nodes / 1 node"], ["Cycles", "24,235", "22,860", "20,418", "0.843"], ["L1 demand refills from DRAM", "24.6", "20.7", "17.1", "0.697"], ["L1 demand refills from L3 (same CCX)", "5.4", "6.3", "9.4", "1.75"]]
     table(s, X0, 1.98, [4.7, 1.6, 1.6, 1.6, 2.43], rows, row_h=0.62, size=15.5, bolds=[None] + [[True, False, False, False, True]] * 3, colors=[None, [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY], [INK, INK, INK, INK, NAVY]], aligns=["l", "r", "r", "r", "r"])
@@ -808,7 +844,7 @@ def s_efficiency():
 
 
 def s_cd():
-    s = supp(40, "DRAG COEFFICIENT CHECKS", "Cd depends on the split; the Bonus is within 0.0005% of its own baseline", "s_cd")
+    s = supp(41, "DRAG COEFFICIENT CHECKS", "Cd depends on the split; the Bonus is within 0.0005% of its own baseline", "s_cd")
     heading(s, X0, 1.58, XW, "Table", "Cd at the last step, 1 / 2 / 4 nodes")
     rows = [["Steps", "OHC-1 values", ["Baseline", "(hierarchical)"], ["scotch", "defaults"], ["Basic", "(mapped scotch)"], ["Bonus", "(multiLevel)"]], ["40", "0.433 – 0.436", "0.43305", "0.43599", "0.43958", "0.43828"], ["80", "0.334 – 0.345", "0.33733", "0.32714", "0.33410", "0.32286"], ["150", "0.284 – 0.292", "0.27356", "0.28405", "0.29302", "0.29139"]]
     table(s, X0, 1.98, [1.0, 2.0, 2.45, 1.95, 2.35, 2.18], rows, row_h=0.7, size=16, row_heights=[0.8, 0.62, 0.62, 0.62], colors=[None] + [[INK, MUTED, BASE, INK, BASIC, BONUS]] * 3, bolds=[None] + [[True, False, False, False, True, True]] * 3, aligns=["c"] * 6)
@@ -817,7 +853,7 @@ def s_cd():
 
 
 def s_repro():
-    s = supp(41, "REPRODUCING OUR RESULTS", "The submitted scripts, run from public sources: same Cd, times within 0.4%", "s_repro")
+    s = supp(42, "REPRODUCING OUR RESULTS", "The submitted scripts, run from public sources: same Cd, times within 0.4%", "s_repro")
     heading(s, X0, 1.58, XW, "Table", "Re-runs with the submitted scripts against our recorded means")
     rows = [["Configuration", "Nodes", "s/step", "Recorded mean", "Change", "coefficient.dat"], ["Basic (2026-10-16)", "1", "13.413150", "13.364504", "+0.36%", "identical"], ["Basic (2026-10-16)", "2", "6.390324", "6.371748", "+0.29%", "identical"], ["Basic (2026-10-16)", "4", "2.904620", "2.897638", "+0.24%", "identical"], ["Bonus (2026-10-26)", "1", "10.201813", "10.233606", "−0.31%", "identical"], ["Bonus (2026-10-26)", "2", "4.980185", "4.992196", "−0.24%", "identical"], ["Bonus (2026-10-26)", "4", "2.365118", "2.359976", "+0.22%", "identical"]]
     table(s, X0, 1.98, [2.85, 1.0, 2.0, 2.2, 1.6, 2.28], rows, row_h=0.58, size=15, colors=[None] + [[BASIC, INK, INK, INK, INK, INK]] * 3 + [[BONUS, INK, INK, INK, INK, INK]] * 3, bolds=[None] + [[True, False, False, False, False, True]] * 6, aligns=["l", "c", "r", "r", "r", "c"])
@@ -826,7 +862,7 @@ def s_repro():
 
 
 def s_rejected():
-    s = supp(42, "NOT ADOPTED: THE FULL LIST", "What we tried, what happened, and what we learned", "s_rejected")
+    s = supp(43, "NOT ADOPTED: THE FULL LIST", "What we tried, what happened, and what we learned", "s_rejected")
     heading(s, X0, 1.55, XW, "Table", "Every idea we did not adopt: Basic, then Bonus, then other ideas")
     rows = [["Idea (tier)", "Result, 4 nodes", "Why it did not help"], ["-march=znver3, AOCC 5.0, -O2, LTO (Basic)", "within ±0.1%", "The loops wait on memory, not on instructions"], ["GCC profile-guided optimisation (Basic)", "+0.13% (+0.08% on 1 node)", "The same; Cd bit-identical"], ["Default OFI with the organisers' workarounds (Basic)", "+0.77% (3 v 3), +0.50% (1 v 1)", "Not faster than UCX; same Cd, no SIGBUS"], ["UCX over RC instead of UD between nodes", "−0.01% Basic, −0.16% early Bonus", "IMB bandwidth +55%; steps do not wait on transfers"], ["OpenFOAM comm switches (topoControl, nbx, pbufs)", "no gain; commsType scheduled crashed", "MPI time is waiting for the slowest rank"], ["Rank reordering (MPICH_RANK_REORDER_METHOD=3)", "+0.1%, 92% fewer faces between nodes", "Fewer bytes between nodes do not shorten the wait"], ["glibc malloc thresholds (Basic)", "−0.4% (3 jobs)", "Too small to separate with 3 jobs; not re-tested"], ["SMT, 2 ranks per core (Basic)", "≈ 5.7× slower", "Stalls of minutes; cause not isolated"], ["GAMG coarsest level on fewer ranks (Bonus)", "−0.25% to +4.95%", "81% of the global sums, but ≈ 0.6% of the time"], ["Weighted cells (×2, ×12), METIS two constraints (Bonus)", "+1.5% to +6.1%", "Uneven cells, or 18% more processor faces"], ["Gauss–Seidel overlapped with its halo exchange (Bonus)", "+8.32% (3 v 3), Cd −1.20%", "Fails F3: Cd moves far beyond rounding"], ["bound() averaging only the bounded cells (Bonus)", "not run", "An extra global sum per call costs more than it saves"], ["Overlapping halo exchange with computation", "under 1% available", "Led to skipping unused exchanges instead (0003)"], ["File I/O in the timed steps", "≈ 0.01% of a step", "Not a factor"]]
     table(s, X0, 1.9, [4.7, 3.25, 3.98], rows, row_h=0.33, size=10.5, row_heights=[0.36] + [0.33] * 14, bolds=[None] + [[True, False, False]] * 14, margins=(0.08, 0.02, 0.08, 0.02))
@@ -834,7 +870,7 @@ def s_rejected():
 
 
 def s_compiler():
-    s = reuse(43)
+    s = reuse(44)
     set_title(s, "COMPILER AND FLAGS")
     message(s, "Every compiler and flag variant lies inside the control's range", size=18)
     heading(s, X0, 1.58, XW, "Figure", "Each compiler and flag variant against the control, 4 nodes, each job", sub="scotch, 3 jobs each in the same period (2026-10-03); shaded: the range of the control jobs. GCC PGO, run separately: +0.13%")
@@ -847,31 +883,32 @@ def fill_index(s, entries):
     """Q&A index: one clickable line per supporting slide; call after the slide order is final."""
     set_title(s, "Q&A INDEX")
     message(s, "Supporting slides for questions: click a line to jump there", size=18)
-    groups = [(0, "Method and setup", entries[0:5]), (0, "Basic, and what limits it", entries[5:11]), (1, "Bonus", entries[11:17]), (1, "Results, and what we did not use", entries[17:])]
+    groups = [(0, "Method and setup", entries[0:5]), (0, "Basic, and what limits it", entries[5:12]), (1, "Bonus", entries[12:18]), (1, "Results, and what we did not use", entries[18:])]
     next_y = [1.6, 1.6]
     for column, group_name, items in groups:
         x, y0 = (X0, 6.78)[column], next_y[column]
         add_text(s, x, y0, 5.85, 0.38, [group_name], size=16, color=NAVY, bold=True)
         for k, (title, target) in enumerate(items):
-            line = add_text(s, x + 0.1, y0 + 0.44 + k * 0.38, 5.75, 0.35, [[(f"{prs.slides.index(target) + 1}", {"b": True, "color": NAVY}), ("   " + title, {})]], size=14, anchor="m")
+            line = add_text(s, x + 0.1, y0 + 0.44 + k * 0.36, 5.75, 0.34, [[(f"{prs.slides.index(target) + 1}", {"b": True, "color": NAVY}), ("   " + title, {})]], size=14, anchor="m")
             line.click_action.target_slide = target
-        next_y[column] = y0 + 0.44 + len(items) * 0.38 + 0.3
+        next_y[column] = y0 + 0.44 + len(items) * 0.36 + 0.3
     set_notes(s, NOTES["index"])
 
 
 def slide_reproducibility():
     """The shared reproducibility slide (the team's), with our patch list brought up to the final Bonus."""
-    s = S[44]
+    s = S[45]
     replace_run_text(s, "Compact_OFBuildBody", "Apply 0001 / 0002 / 0003 / 0004 in order", "Apply 0001–0004, 0006, 0008–0016 in order")
     return s
 
 
 # ====================================================================== assemble
-main = [slide_title(), slide_overview(), slide_aspire(), slide_baseline_settings(), slide_baseline_results(), slide_measure(), slide_mpi_profile(), slide_baseline_analysis(), slide_strategy(), slide_basic_pinning(), slide_basic_decomp(), slide_basic_results(), slide_bandwidth(), slide_roofline(), slide_bonus_opt(), slide_bonus_results(), slide_bonus_analysis(), slide_scaling(), slide_not_helped(), slide_conclusion(), slide_extra()]
+main = [slide_title(), slide_overview(), slide_aspire(), slide_baseline_settings(), slide_baseline_results(), slide_measure(), slide_decide(), slide_mpi_profile(), slide_baseline_analysis(), slide_basic_pinning(), slide_basic_decomp(), slide_basic_results(), slide_bandwidth(), slide_bonus_opt(), slide_bonus_results(), slide_bonus_analysis(), slide_scaling(), slide_not_helped(), slide_conclusion(), slide_extra()]
 divider = S[21]
 COUNT.update(Figure=0, Table=0)
 SERIES[0] = "S"
-supporting = [("Bottlenecks we measured", s_bottlenecks()), ("Measuring honestly", s_noise()), ("Experiment automation", s_automation()), ("Build, storage and MPI", s_build()), ("The organisers' reference", s_reference()), ("Where a step goes after Basic", s_step()), ("The path on 4 nodes", s_path()), ("Is the network the bottleneck?", s_network()), ("OFI against UCX", s_ofi()), ("The three splits: faces or even work?", s_splits()), ("Cores or memory?", s_cores()), ("The source changes (1/2): the first four", s_changes()), ("The source changes (2/2): ten more", s_changes2()), ("Source changes in detail (1/2)", s_detail1()), ("Source changes in detail (2/2)", s_detail2()), ("Effect of each Bonus change", s_each()), ("Profiles before and after", s_profiles()), ("Why the efficiency exceeds 1", s_efficiency()), ("Drag coefficient checks", s_cd()), ("Reproducing our results", s_repro()), ("Not adopted: the full list", s_rejected()), ("Compiler and flags", s_compiler())]
+# in the order of the Q&A index's groups (fill_index): method, Basic, Bonus, results
+supporting = [("Optimization strategy", s_strategy()), ("Bottlenecks we measured", s_bottlenecks()), ("Measuring honestly", s_noise()), ("Experiment automation", s_automation()), ("Build, storage and MPI", s_build()), ("Where a step goes after Basic", s_step()), ("The path on 4 nodes", s_path()), ("Is the network the bottleneck?", s_network()), ("OFI against UCX", s_ofi()), ("The three splits: faces or even work?", s_splits()), ("Cores or memory?", s_cores()), ("HPC roofline (made by the team)", slide_roofline()), ("The source changes (1/2): the first four", s_changes()), ("The source changes (2/2): ten more", s_changes2()), ("Source changes in detail (1/2)", s_detail1()), ("Source changes in detail (2/2)", s_detail2()), ("Effect of each Bonus change", s_each()), ("Profiles before and after", s_profiles()), ("The organisers' reference", s_reference()), ("Why the efficiency exceeds 1", s_efficiency()), ("Drag coefficient checks", s_cd()), ("Reproducing our results", s_repro()), ("Not adopted: the full list", s_rejected()), ("Compiler and flags", s_compiler())]
 index_slide = reuse(22)
 order = main + [divider, index_slide] + [sl for _, sl in supporting] + [slide_reproducibility()] + S[AI:]
 

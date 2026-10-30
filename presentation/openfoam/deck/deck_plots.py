@@ -109,6 +109,31 @@ def baseline_scaling():
     save(figure, "p05_baseline_scaling")
 
 
+def rule():
+    """Slide 7: the second test on two small changes, 4 nodes, each job: kept only when every job beats every control job."""
+    compilers = runs("compiler_options.csv", "option")
+    examples = [("Kept: mapped onto the node", "scotch defaults", CHANGES[("mapping", 4, "control")], "mapped", CHANGES[("mapping", 4, "candidate")], BASIC), ("Not kept: AOCC instead of GCC", "GCC", compilers["control (GCC -O3, scotch)"], "AOCC", compilers["AOCC 5.0 / AOCL 5.1"], NAVY)]
+    figure, axes = plt.subplots(2, 1, figsize=(5.3, 3.95), layout="constrained")
+    for axis, (title, control_name, control, candidate_name, candidate, color) in zip(axes, examples):
+        jobs(axis, 0, control, FAINT, width=0.36, horizontal=True)
+        jobs(axis, 1, candidate, color, width=0.36, horizontal=True)
+        kept = max(candidate) < min(control)
+        if kept:
+            axis.axvspan(max(candidate), min(control), color=GRID, zorder=0)
+        axis.set_title(f"{title}, {percent(candidate, control, 2)}", loc="left", fontsize=12, fontweight="bold", color=INK)
+        axis.text(0.99, 0.5, "no overlap" if kept else "overlap", transform=axis.transAxes, ha="right", va="center", fontsize=12, fontweight="bold", color=NAVY if kept else BAD)
+        axis.set_yticks([0, 1], [f"{control_name}\n{jobs_label(len(control))}", f"{candidate_name}\n{jobs_label(len(candidate))}"])
+        colour_ticks(axis.get_yticklabels(), [INK, color])
+        axis.set_ylim(1.55, -0.55)
+        low, high = min(control + candidate), max(control + candidate)
+        axis.set_xlim(low - (high - low) * 0.1, high + (high - low) * 0.45)
+        axis.xaxis.set_major_locator(MaxNLocator(4))
+        axis.grid(axis="x", color=GRID, linewidth=0.8)
+        axis.set_axisbelow(True)
+    axes[-1].set_xlabel("s/step on 4 nodes, each job")
+    save(figure, "p07_rule")
+
+
 PLACEMENTS = [("Both: Basic\n(numactl + keeper)", "numactl --membind + taskset keeper (adopted for Basic)", BASIC), ("CPU only\n(taskset keeper)", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Neither: the launcher's\nbinding, lost", "PALS --cpu-bind and --mem-bind only", FAINT), ("Memory only\n(numactl)", "numactl --membind only", BAD)]
 
 
@@ -170,7 +195,7 @@ def basic_4node():
 
 
 def bonus():
-    """Slide 16: Basic, the Bonus split with the source unchanged (the pre-change baseline), the first four changes and the Bonus.
+    """Slide 15: Basic, the Bonus split with the source unchanged (the pre-change baseline), the first four changes and the Bonus.
 
     The first four changes are the control jobs of the final measurement, alternated with the Bonus jobs.
     """
@@ -197,7 +222,7 @@ def bonus():
 
 
 def scaling():
-    """Slide 18: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on log axes where ideal scaling is a straight line."""
+    """Slide 17: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on log axes where ideal scaling is a straight line."""
     series = [("baseline", BASELINE, BASE, 0.87), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC, 1.0), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS, 1.15)]
     figure, axis = plt.subplots(figsize=(6.45, 4.95), layout="constrained")
     handles = []
@@ -314,6 +339,7 @@ def path():
 
 
 baseline_scaling()
+rule()
 pinning()
 scotch()
 basic_4node()
