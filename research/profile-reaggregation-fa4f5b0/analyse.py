@@ -1,6 +1,9 @@
 """Analyse CrayPAT/eu-stack stack samples of simpleFoam (profile53).
 
-usage: uv run -q --no-project python -I profile53_analyse.py <stack-samples-dir> <out.md>
+usage: uv run -q --no-project python -I analyse.py <stack-samples-dir> <out.md> [<out.folded>]
+
+With <out.folded>, it also writes the in-loop stacks in the folded form that flame graphs are drawn from (one line per
+distinct stack with its sample count); presentation/openfoam/data/callstack_folded_fa4f5b0.txt is that file.
 
 Sample file format (one file per sampled rank):
     === round=<n> t=<epoch seconds>
@@ -792,3 +795,20 @@ table(["samples", "%", "stack"], rows)
 with open(OUT, "w", encoding="utf-8") as fh:
     fh.write("\n".join(out) + "\n")
 print(f"wrote {OUT}: {N} in-loop samples, classes {dict(cls_counts)}")
+
+# --------------------------------------------------------------------------- folded stacks for a flame graph
+# "phase;frame;...;frame samples": the phase under the names of presentation/openfoam/data/callstack_phases_fa4f5b0.csv,
+# then the abbreviated frames from the one under main to the leaf. A stack inside MPI ends at the MPI call that OpenFOAM
+# made (the MPI frame closest to main), so the library's internals are folded into that call.
+if len(sys.argv) > 3:
+    PHASE_NAMES = {"pEqn solve": "p solve", "turbulence->correct": "k-ω SST correction", "UEqn solve": "U solve", "UEqn assembly": "U assembly",
+                   "pEqn assembly": "p assembly", "Time::loop (function objects)": "function objects", "U/phi correction": "U and flux correction",
+                   "continuityErrs": "continuity errors"}
+    folded = collections.Counter()
+    for s in inloop:
+        cut = mpi_top_idx(s)
+        frames = s.frames[cut or 0: s.main_idx]
+        folded[";".join([PHASE_NAMES[phase_of(s)]] + [f[3] for f in reversed(frames)])] += 1
+    with open(sys.argv[3], "w", encoding="utf-8") as fh:
+        fh.writelines(f"{stack} {n}\n" for stack, n in sorted(folded.items()))
+    print(f"wrote {sys.argv[3]}: {len(folded)} distinct stacks")

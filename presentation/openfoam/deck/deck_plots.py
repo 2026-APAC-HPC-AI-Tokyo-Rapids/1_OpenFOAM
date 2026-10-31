@@ -25,6 +25,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
 from matplotlib.ticker import MaxNLocator
 
 import palette
@@ -33,7 +34,7 @@ spec = importlib.util.spec_from_file_location("team_figures", sys.argv[1])
 F = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(F)
 OUT = Path(sys.argv[2])
-BASE, BASIC, BONUS, BONUS_LIGHT, NAVY, INK, MUTED, FAINT, GRID = ("#" + getattr(palette, name) for name in ("BASE", "BASIC", "BONUS", "BONUS_LIGHT", "NAVY", "INK", "MUTED", "FAINT", "GRID"))
+BASE, BASIC, BONUS, BONUS_LIGHT, NAVY, INK, MUTED, FAINT, GRID, COMPUTATION, MPI = ("#" + getattr(palette, name) for name in ("BASE", "BASIC", "BONUS", "BONUS_LIGHT", "NAVY", "INK", "MUTED", "FAINT", "GRID", "COMPUTATION", "MPI"))
 plt.rcParams.update({"font.size": 13, "font.weight": "bold", "axes.titlesize": 14, "axes.titleweight": "bold", "axes.labelsize": 13, "axes.labelweight": "bold", "xtick.labelsize": 12.5, "ytick.labelsize": 12.5, "legend.fontsize": 12.5, "axes.spines.top": False, "axes.spines.right": False, "axes.edgecolor": MUTED, "axes.labelcolor": INK, "xtick.color": INK, "ytick.color": INK, "text.color": INK})
 NODES = (1, 2, 4)
 STEPS = {1: 40, 2: 80, 4: 150}
@@ -323,7 +324,7 @@ def cd_iterations():
     cd = defaultdict(list)
     for row in F.read("cd_iterations_4node.csv"):
         cd[row["configuration"]].append((int(row["iteration"]), float(row["cd"])))
-    figure, (whole, end) = plt.subplots(1, 2, figsize=(11.9, 4.2), layout="constrained", width_ratios=(1.15, 1))
+    figure, (whole, end) = plt.subplots(1, 2, figsize=(11.9, 4.0), layout="constrained", width_ratios=(1.15, 1))
     for name, color, style, width in CD_RUNS:
         iterations, values = zip(*cd[name])
         label = name.replace("organisers", "organisers'")
@@ -345,6 +346,71 @@ def cd_iterations():
     save(figure, "ps_cd_iterations")
 
 
+def flame(levels=14):
+    """Supporting slide: the 2,396 CrayPAT stack samples in the time loop of the Bonus with the first four changes (#53, 48
+    of 512 ranks on 4 nodes) as a flame graph, from data/callstack_folded_fa4f5b0.txt.
+
+    The bottom row is the time loop, the next the phase of the step as in the phase bars before it, and each box above is a
+    function called by the box under it, as wide as its share of the samples, the widest on the left. A tower in MPI ends at
+    the MPI call that OpenFOAM made, which holds the library's own functions. Rows above the 14th hold 2 samples, too narrow
+    to see, and are not drawn. A box shows its name and share where they fit, else its name, else the function without its
+    class, else the start of that.
+    """
+    inclusive = defaultdict(int)
+    with open(F.DATA / "callstack_folded_fa4f5b0.txt", encoding="utf-8") as f:
+        for line in f:
+            stack, samples = line.rstrip("\n").rsplit(" ", 1)
+            frames = tuple(stack.split(";"))
+            for k in range(len(frames) + 1):
+                inclusive[frames[:k]] += int(samples)
+    total = inclusive[()]
+    children = defaultdict(list)
+    for path in inclusive:
+        if path:
+            children[path[:-1]].append(path)
+    figure = plt.figure(figsize=(11.93, 4.1))
+    axis = figure.add_axes((0, 0, 1, 1))
+    axis.set_xlim(0, total)
+    axis.set_ylim(0, levels + 1)
+    axis.axis("off")
+    renderer = figure.canvas.get_renderer()
+
+    def put(x, n, level, text):
+        """Write text in the box if it fits; returns its width in pixels and whether it stayed."""
+        shown = axis.text(x + n / 2, level + 0.5, text, ha="center", va="center", fontsize=9)
+        width = shown.get_window_extent(renderer).width
+        room = axis.transData.transform((n, 0))[0] - axis.transData.transform((0, 0))[0] - 8
+        if width > room:
+            shown.remove()
+        return width, room, width <= room
+
+    def label(x, n, level, name, share):
+        if share and put(x, n, level, f"{name}  {share}")[2]:
+            return
+        short = name.rsplit("::", 1)[-1]  # the function without its class or namespace
+        for text in dict.fromkeys((name, short)):
+            width, room, fits = put(x, n, level, text)
+            if fits:
+                return
+        k = int(len(short) * room / width)
+        while k > 3 and not put(x, n, level, short[:k] + "…")[2]:
+            k -= 1
+
+    def draw(path, x, level):
+        n = inclusive[path]
+        name = path[-1] if path else f"time loop of simpleFoam, {total:,} samples on 48 ranks"
+        axis.add_patch(Rectangle((x, level), n, 1, facecolor=MPI if name.startswith(("MPI_", "PMPI_")) else COMPUTATION, edgecolor="white", linewidth=0.8))
+        if n / total > 0.004:
+            label(x, n, level, name, f"{100 * n / total:.1f}%" if path else "")
+        if level < levels:
+            for child in sorted(children[path], key=lambda p: (-inclusive[p], p[-1])):
+                draw(child, x, level + 1)
+                x += inclusive[child]
+
+    draw((), 0, 0)
+    save(figure, "ps_flame")
+
+
 rule()
 pinning()
 scotch()
@@ -355,3 +421,4 @@ scaling()
 reference()
 each_change()
 cd_iterations()
+flame()

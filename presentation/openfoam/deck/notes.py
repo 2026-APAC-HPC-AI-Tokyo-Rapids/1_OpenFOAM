@@ -14,7 +14,7 @@ JP: 名乗るだけで、すぐ次の枚（要約）へ進む。結果の数字�
 """
 
 NOTES["index"] = """
-JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。11/01の第7版で、補足を17枚に絞りました（外したものは slides.md の「補足」の節）。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目、数えなかった高速化（#68）は本編15枚目の上半分にあるので、ここには載せていません。
+JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は18枚です（11/01の第7版で17枚に絞り、同じ日にflame graphの1枚を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目、数えなかった高速化（#68）は本編15枚目の上半分にあるので、ここには載せていません。
 """
 
 NOTES["s_aspire"] = """
@@ -84,7 +84,30 @@ EN (Q, how did you find the ten later changes?): We re-aggregated the CrayPAT ca
 JP:
 - 出典：research/profile-reaggregation-fa4f5b0/summary.md（#53、fa4f5b0、4ノード、512 rankのうち48 rank、時間ループの中の標本2,396本）。段階はmainの直下の呼び出し先で分けた（pの解き31.8%、kOmegaSSTのcorrect 26.9%、Uの解き20.5%、Uの組み立て11.8%、pの組み立て6.6%）。MPIは各段階の標本のうちMPIの中にあったもの（pの解きでは53%）。3%未満の段階（function objects、U・fluxの補正、連続の式の誤差）は other にまとめた。データは data/callstack_phases_fa4f5b0.csv。
 - stack sampleはMPIの割合を約1.8倍に多く見せる（#53）ので、MPIの割合の大きさにはCrayPATのタイマーの値（Basicで19%）を使う。
-- 最終Bonus（14の変更）のcall stackは取っていない。全部のstackのflame graphにするには、成果物の保管庫の生のsample（Actions 37529785072の profile-raw.tar.zst）が要る。
+- 最終Bonus（14の変更）のcall stackは取っていない。関数の段まで描いたflame graphは次の枚（同じ標本）。
+"""
+
+NOTES["s_flame"] = """
+EN (Q, which functions took the time?): These are the same samples, by function. Each tower is a chain of calls and its width is its share of the samples. The widest are GAMG for the pressure, the k-omega SST correction and the Gauss–Seidel sweeps for U. At the coarsest GAMG level almost every sample was in MPI, mostly global sums, which led us to one global sum per CG iteration. The k-omega SST correction was mostly field algebra over the cells, which led us to single cell loops.
+
+JP:
+- 出典：生のsample（Actions 37529785072 の profile-raw.tar.zst、成果物の保管庫、7,117,215 bytes、SHA-256はartifact-manifest.jsonと一致）を11/01に取り直し、research/profile-reaggregation-fa4f5b0/analyse.py で data/callstack_folded_fa4f5b0.txt（390通りのstack）を書き出した。summary.md は出典のパスの1行を除いて同じものが出る。段階ごとの本数とMPIの本数は、前の枚の data/callstack_phases_fa4f5b0.csv と全段階で一致。
+- 描き方：下から時間ループ、段階、関数の順。MPIの中のstackは、OpenFOAMが呼んだMPIの関数（MPI_Allreduceなど）で止め、ライブラリの中の関数はその箱に含めた。15段目より上（2本だけ）は描いていない。幅が0.4%以下の箱には名前を書いていない。
+- 数字：GAMG（p）752本 31.4%、kOmegaSSTのcorrect 644本 26.9%、UのGauss–Seidel（smoothSolver::solveGaussSeidelComponents）455本 19.0%。GAMGの最も粗い段（solveCoarsestLevel）158本 6.6%のうち155本がMPIの中（MPI_Allreduceが118本）。GAMGのscale（補正の倍率）は228本 9.5%で、うちMPIが127本。MPI全体は748本（31.2%）。
+- stack sampleはMPIの割合を約1.8倍に多く見せる（#53）ので、MPIの大きさを言うときはCrayPATのタイマーの値を使う。最終Bonus（14の変更）のcall stackは取っていない。
+"""
+
+NOTES["records"] = """
+[Q&A]
+EN: (Leave this slide up while we take questions.) These are our results in both tasks. In the HPC task, a step of OpenFOAM on 4 nodes took 3.650 seconds with the case defaults, 2.898 with Basic and 2.360 with the Bonus. In the AI task, Qwen3 on 2 nodes of H200 scored 1,832 good tokens per second with the organisers' settings, 6,321 with Basic and 9,833 with the Bonus. Thank you.
+
+訳（参考）: （質疑の間、この枚を映しておきます）2つの課題の結果です。HPCの課題では、4ノードでのOpenFOAMの1 stepは、ケースの既定で3.650秒、Basicで2.898秒、Bonusで2.360秒でした。AIの課題では、H200の2ノードでのQwen3のスコアは、主催者の設定で毎秒1,832 good token、Basicで6,321、Bonusで9,833でした。ありがとうございました。
+
+JP:
+- 謝辞の後の、発表の最後の1枚（ユーザーの案、11/01）。質疑の間に映しておく。
+- HPCの数字は本編2枚目と同じ（4ノード、各3〜5本の平均）。共通ベースラインは主催者のhierarchical 3.415 sとscotch 3.576 s。
+- AIの数字はAIパートのRESULTSとSUMMARYの枚の値（Firmus H200、2ノード×8 GPU、Qwen3-235B-A22B-Instruct-2507-FP8）。AIパートの記録では単発のrun。5.4倍はAIパートの書き方（9,833 / 1,832 = 5.37）。3.45倍と1.56倍は同じ値どうしの比。
+- AIパートの表示される枚からこの3つの数字が消えると、build_deck.py がビルドを止めるので、AI_FLOW とこのノートを直す。
 """
 
 NOTES["s_changes"] = """

@@ -9,10 +9,10 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 - 入力の既定は `~/apac26/Tokyo Rapids with RIKEN Presentation.pptx`、出力の既定は `~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx` です。入力の元はBoxの `Tokyo_Rapids_with_RIKEN_Submission/presentation/` にあります。デッキはリポジトリに入れません。Boxのpptxはチームが別に編集しているので、上書きしません。
 - 入力は、OpenFOAMパートが10/29のビルドのまま（1〜46枚目：表紙、本編2〜21でチームのrooflineが14、補足の扉22、Q&A目次23、補足24〜45、共通の再現性スライド46）で、47枚目からAIパートが続くデッキです。11/01には、Boxのデッキ（10/31、184枚。AIパートだけがチームの手で更新されていた）をWindows側でコピーして入力にしました。
 - `build.sh` は、まず `deck_figures.py` で `../figures.py` の図をデッキ用に描き、`deck_plots.py` で各ジョブの点を描く図とCdの収束の図をスライドの大きさで描きます。次に `build_deck.py` でpptxを作ります。図は一時フォルダに描き、終われば消します。
-- 出力のOpenFOAMパートは、表紙1、本編2〜15（`slides.md` の本編1〜14）、補足の扉16、Q&A目次17、補足18〜34（17枚）、共通の再現性スライド35です。AIパートは36枚目からです。
-- 各スライドは入力のスライドの上で作り直すので、slide idと、チームが2桁の番号のために広げたスライド番号の欄が残ります。余った11枚（チームのrooflineを含む）は消します。PowerPointのセクション（入力では全スライドが1つのセクション）も新しい並びに合わせます。
+- 出力のOpenFOAMパートは、表紙1、本編2〜15（`slides.md` の本編1〜14）、補足の扉16、Q&A目次17、補足18〜35（18枚）、共通の再現性スライド36です。AIパートは37枚目からで、その謝辞（ACKNOWLEDGEMENTS）の後に、HPCとAIの記録をまとめた1枚（OUR RESULTS: HPC AND AI）を足します（11/01の入力では60枚目）。スライドショーで映るのは本編とAIパートの表示される枚と記録の枚で、補足の扉から再現性スライドまでは非表示です。
+- 各スライドは入力のスライドの上で作り直すので、slide idと、チームが2桁の番号のために広げたスライド番号の欄が残ります。flame graphの枚と記録の枚も入力の余った枚の上に作り、残りの9枚（チームのrooflineを含む）は消します。PowerPointのセクション（入力では全スライドが1つのセクション）も新しい並びに合わせます。
 - 本編のノートは `slides.md` の各スライドの節（原稿、訳、メモ）から作ります（`build_deck.py` の `plan_notes()`）。原稿を直すときは `slides.md` だけを直せばよく、ビルドし直すとノートに入ります。表紙、Q&A目次、補足のノートは `notes.py` にあります。
-- AIパートは1バイトも変えずに残します。共通の再現性スライドは、OpenFOAMのpatchの並びだけを最終版にします（すでに最終版なら何もしません）。
+- AIパートは1バイトも変えずに残し、記録の枚はその枚と枚の間に挟みます。記録の枚のAIの数字（`build_deck.py` の `AI_FLOW`）はAIパートのRESULTSとSUMMARYの枚の値で、AIパートの表示される枚からその値が消えるとビルドが止まります。そのときは `AI_FLOW` と `notes.py` の記録の枚のノートを直します。共通の再現性スライドは、OpenFOAMのpatchの並びだけを最終版にします（すでに最終版なら何もしません）。
 
 ## ファイル
 
@@ -23,15 +23,16 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 | `decklib.py` | テンプレートに合わせた文字、表、グラフの部品。数字と単位を改行で分けない `tidy()` と、baseline・Basic・Bonusの語に色を付ける `tier_runs()` |
 | `palette.py` | スライドと図の色 |
 | `deck_figures.py` | `../figures.py` をデッキ用に実行する（補足の92本のばらつきの図に使う） |
-| `deck_plots.py` | 速さを比べる図（各ジョブの点と平均の棒、平均とSDの数字）と、Cdの収束の図を、スライドに置く大きさで描く |
+| `deck_plots.py` | 速さを比べる図（各ジョブの点と平均の棒、平均とSDの数字）、Cdの収束の図、call stackのflame graphを、スライドに置く大きさで描く |
 | `render.ps1` | PowerPointでスライドをPNGに書き出す（Windows、確認用） |
 | `qa_grid.py` | 書き出したPNGを並べた一覧画像を作る（確認用） |
 | `qa_gaps.py` | 書き出したPNGで、各スライドの内容の下に残った余白を測る（確認用） |
 
-図の元データは `../data/` です。11/01に足した2つは次のとおりです。
+図の元データは `../data/` です。11/01に足した3つは次のとおりです。
 
 - `cd_iterations_4node.csv`：4ノードの各反復のCd。Basic、Bonus、ソースを変える前のrunは、Boxの提出物の `openfoam/results/4node/`、`openfoam/bonus/results/4node/`、`openfoam/bonus/f3-baseline/4node/` の `coefficient.dat` から、主催者のhierarchicalとscotchは `tasks/4.3-aspire2a-logs/*-4node/coefficient.dat` から取りました。
 - `callstack_phases_fa4f5b0.csv`：最初の4つの変更の版（fa4f5b0、#53）のCrayPATのstack sample 2,396本の、段階ごとの数とそのうちMPIの中にあった数。`../../../research/profile-reaggregation-fa4f5b0/summary.md` の「Phase totals」と「MPI by step phase」の表から写しました。
+- `callstack_folded_fa4f5b0.txt`：同じ2,396本を、flame graphの形（「段階;関数;…;関数 本数」の1行が1通りのstack、390行）に折りたたんだもの。MPIの中のstackは、OpenFOAMが呼んだMPIの関数で止めています。成果物の保管庫の生のsample（Actions 37529785072 の `profile-raw.tar.zst` の `profile/raw/craypat/stack-samples/rank-*.txt`）から、`uv run -q --no-project python -I analyse.py <stack-samples> <summary.md> <この.txt>` で書き出しました（`analyse.py` は `research/profile-reaggregation-fa4f5b0/`）。段階ごとの本数とMPIの本数は `callstack_phases_fa4f5b0.csv` と一致します。
 
 ## 作りの決まり（第7版）
 
@@ -39,8 +40,8 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 
 - テンプレートのレイアウト「白背景_タイトルとテキスト_横のコピー」に載せ、タイトルはマスターの32 pt、本文はメイリオです。タイトルはチームのAIパートに合わせて大文字にします。
 - 文字は完全な黒（`palette.INK` = 000000）で、太字が既定です（`add_text()`、`table()`、`bullets()`、図の中の文字も）。強調はテーマ色の紺（`NAVY`）で示し、太さでは示しません。
-- タイトルの下の主張の行、TAKEAWAYの札、余白を埋めるカードは置きません。表や文の塊の上には、短い見出し（紺）を置きます。
-- 図には、図の下に「Figure N. 一文の注釈」を付けます（`caption()`、`figure()`）。番号はスライドの順に数え、本編はFigure 1から、補足はFigure S1からです。表には番号を付けません。
+- タイトルの下の主張の行、TAKEAWAYの札、余白を埋めるカードは置きません。文の塊の上には、短い見出し（紺）を置きます。
+- 図には、図の下に「Figure N. 一文の注釈」を付けます（`caption()`、`figure()`）。表には、表の上に「Table N. 一文の注釈」を付けます（`table_caption()`、11/01の6回目から）。番号はスライドの順に数え、本編はFigure 1、Table 1から、補足はFigure S1、Table S1からです。注釈は1行に収まる長さにします。
 - 箇条は1つの完結した文で書きます。本文は18 pt以上、表は16 pt以上です（補足の大きな表は11 ptまで下げています）。余白が多い枚は、図を大きくするか、文字を大きくするか、行間（`line`）を広げて、下端の線（7.0 in）の近くまで使います。
 - 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、290 M calls）。表で列の見出しに単位があるときも、本編ではセルに単位を書きます。
 - 表は横の罫線だけです。見出しの行は白地に紺で、下に紺の線を引きます（`decklib.table()` の既定）。
@@ -52,15 +53,16 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx]
 
 ## 確かめ方
 
-1. `build.sh` が `saved ... with N slides` と全スライドの題名を出して終わること。11/01の入力（184枚）では173枚です。
+1. `build.sh` が `saved ... with N slides` と全スライドの題名を出して終わること。11/01の入力（184枚）では175枚です。
 2. `render.ps1` で書き出して、全スライドを等倍で見る。見るのは、文字のはみ出し、見出しの折り返し、要素の重なり、表の数字が別の行に分かれていないか、です。PowerPointは255文字を超えるパスを開けないので、`render.ps1` は短いパスにコピーしてから開きます。
 
     ```bash
     powershell.exe -File "$(wslpath -w presentation/openfoam/deck/render.ps1)" -Pptx "$(wslpath -w "$HOME/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx")" -OutDir 'C:\Users\<you>\AppData\Local\Temp\deck_png' -Slides "1,2,3"
     ```
 
-3. 入力のAIパート（47枚目〜）と出力のAIパート（36枚目〜）で、各スライドのXMLとノートのXMLがバイト単位で同じこと（python-pptxで `slide.part.blob` と `notes_slide.part.blob` を比べる）。
+3. 入力のAIパート（47枚目〜）と出力のAIパート（37枚目〜、記録の枚を除く）で、各スライドのXMLとノートのXMLがバイト単位で同じこと（python-pptxで `slide.part.blob` と `notes_slide.part.blob` を比べる）。11/01の入力では、入力の47〜69枚目が出力の37〜59枚目、70〜184枚目が61〜175枚目です。
 4. Q&A目次（17枚目）の各行が、その番号のスライドへ飛ぶこと。
+5. スライドショーで非表示（`<p:sld show="0">`）なのが、補足の扉から再現性スライドまで（16〜36枚目）と、入力で非表示だったAIパートの枚だけで、本編と記録の枚は表示されること。
 
 ## 注意
 

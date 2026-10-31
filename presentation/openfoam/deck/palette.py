@@ -20,3 +20,5 @@ TINT = "E6ECF6"  # highlighted card fill
 LINE = "D3DAE6"  # table rules and card borders
 GRID = "E4E9F1"  # chart gridlines and bar tracks
 WHITE = "FFFFFF"
+COMPUTATION = "A9BCDD"  # computation in the call-stack figures (the phase bars and the flame graph)
+MPI = "C7A3C2"  # MPI in the call-stack figures

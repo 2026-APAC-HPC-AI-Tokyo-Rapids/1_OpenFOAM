@@ -92,6 +92,13 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 11枚目（Bonusの結果）には、7枚目（Basicの結果）と同じ形で、BasicとBonusの各ジョブ（本数、平均、SD、何%短くなったか）の図を足し、カウンタの図と並べます。
 - 12枚目のscalingは、対数軸をやめ、原点0からの線形の軸にします。ノード数ごとに枠を分け、各枠の縦軸を前の枠の半分にするので、理想どおりにスケールすれば同じ高さに並びます。
 
+6回目（ユーザーの依頼、同じ日の夜）：
+
+- 表にも通し番号と一文の注釈を付けます。注釈は、図では図の下、表では表の上です（本編はTable 1から、補足はTable S1から）。表の上にあった短い見出しは、この注釈に置き換えました。
+- AIパートの謝辞（ACKNOWLEDGEMENTS）の後に、発表の最後の1枚として、HPCとAIの記録をまとめた枚（OUR RESULTS: HPC AND AI）を置きます。1枚目と同じ流れの図を2段にし、AIの数字はAIパートのRESULTSとSUMMARYの枚の値をそのまま使います。
+- call stackのflame graphを作り、補足の段階ごとの棒の次の枚に置きます。成果物の保管庫から生のsampleを取り直して描きました（下の「補足」）。
+- 第7版のビルドでは、入力で本編だった5枚を補足（18〜22枚目）に使ったため、その5枚がスライドショーで非表示になっておらず、HPCの本編の後に映る状態でした。補足は全部非表示にしました。
+
 ## 外せないもの
 
 | | 外せないもの | 理由 | 本編 |
@@ -112,7 +119,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | n | 今の律速 | 何が残っているかを言えること | 13 |
 | o | 数えなかった高速化（おまけ） | 線引きを自分で言えることを見せる | 14 |
 
-補足に必ず置くもの：ASPIRE-2Aを選んだ理由（Q1）、Cdの収束のグラフ（ISC26のTask 4）、効かなかったことの全部の一覧、call stackの図（作れれば）。
+補足に必ず置くもの：ASPIRE-2Aを選んだ理由（Q1）、Cdの収束のグラフ（ISC26のTask 4）、効かなかったことの全部の一覧、call stackの図（段階ごとの棒とflame graph）。
 
 ## 並べ方
 
@@ -134,7 +141,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 同じものは、スライドでも原稿でも同じ語で呼びます。英語の技術発表では、言い換えるより同じ語をくり返す方が分かりやすいからです。分割はdecomposition（splitは使わない）、rankの仕事量はcomputationです。
 - 時制：取り組んだことと測った結果は過去形（We pinned、A step dropped）、図表の説明と今も成り立つ事実は現在形（The figure shows、Linux keeps each page where it was first written、memory bandwidth limits the solver）にします。スライドの箇条も同じです。
 - 見出しの下の主張の行、TAKEAWAYやLESSONの札、出典やrun IDの小さな注記、余白を埋めるカードやアイコンは置きません。出典と細かい条件はノートに書きます。
-- 図には、通し番号とどういう図かを一文で書いた注釈を、図の下に付けます（「Figure 3. Each job of a change that was kept and of one that was not, against its control on 4 nodes.」）。本編はFigure 1から、補足はFigure S1からです。表には番号を付けません。
+- 図には、通し番号とどういう図かを一文で書いた注釈を、図の下に付けます（「Figure 3. Each job of a change that was kept and of one that was not, against its control on 4 nodes.」）。本編はFigure 1から、補足はFigure S1からです。表にも、通し番号と一文の注釈を、表の上に付けます（「Table 2. The top three MPI calls of the baseline by count and by time, from CrayPAT over 40 steps.」）。本編はTable 1から、補足はTable S1からです。
 - 標語や対句（「Benchmarks decide, profiles explain」など）、「What we changed」「How we worked」のような見出し、中黒（·）でのつなぎは使いません。
 - 色は今のデッキの色合い（`deck/palette.py`）のままにします。黒い文字は完全な黒（#000000）です。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
 - スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。baseline、Basic、Bonusの語は段の色です。
@@ -273,6 +280,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - Our baseline was unmodified v2512 built with GCC 11.2 and run on Cray MPICH over UCX.
 - It took 3.650 s per step on 4 nodes with an SD of 4.1% over 3 jobs.
 
+表の注釈（表の上）：Table 1. Each possible bottleneck of our baseline, how we measured it and what we found.
+
 | Possible bottleneck | How we measured it | What we found |
 |---|---|---|
 | MPI | CrayPAT and OpenFOAM profiling | 46% of each rank's time |
@@ -296,7 +305,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ### 4. MPI calls on 4 nodes（0:40）
 
-スライドの文（表の上に1行）：CrayPAT profile of the baseline with 512 ranks over 40 steps.
+表の注釈（表の上）：Table 2. The top three MPI calls of the baseline by count and by time, from CrayPAT over 40 steps.（11/01の6回目に、表の上の1行「CrayPAT profile of the baseline with 512 ranks over 40 steps.」をこの注釈にした）
 
 | Most calls | Calls | Most time | Time | Share of MPI |
 |---|---:|---|---:|---:|
@@ -397,6 +406,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 ### 8. Profiling Basic（0:40）
 
 スライドの文（3枚目と同じ見方の表）：
+
+表の注釈（表の上）：Table 3. Each possible bottleneck after Basic, how we measured it and what we found.
 
 | Possible bottleneck | How we measured it | What we found after Basic |
 |---|---|---|
@@ -539,6 +550,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 スライドの文（表と、表の下に2文）：
 
+表の注釈（表の上）：Table 4. Four ideas that usually help, with the time per step each gave against its control on 4 nodes.
+
 | Idea that usually helps | Time per step against its control |
 |---|---|
 | Compiler flags, AOCC, LTO and PGO | Within 0.13% |
@@ -605,8 +618,9 @@ AIパートのチームメイトから、デッキについて指摘がありま
 ## まだ決めていないこと
 
 - 1枚目の、BasicとBonusの下の1文を残すか（この案は残す。原稿で同じことを言うので、なくても伝わります）。
-- call stackの図を、段階ごとの棒（11/01に作った補足）から、全部のstackのflame graphにするか。それには、成果物の保管庫から生のsampleを取ってくる必要があります。
-- デッキ全体の最後（AIパートの後）に、HPCとAIを1行ずつまとめた結論の枚を置くか。質疑はその後に続くので、結論を置くならそこが最も効きます。AIパートのチームメイトと決めます。
+- 謝辞の後の記録の枚（デッキの60枚目、11/01の6回目）を、AIパートのチームメイトに見てもらうこと。AIの数字はAIパートのRESULTSとSUMMARYの枚から取りました。
+
+11/01の6回目で決めたもの：call stackの図は、段階ごとの棒を残したまま、次の枚にflame graphを足しました。デッキ全体の最後には、AIパートの謝辞の後に、HPCとAIの記録をまとめた1枚を置きました（ユーザーの案）。
 
 ## 第6版の本編との対応
 
@@ -631,23 +645,24 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | 19 CONCLUSION | 1（要約）、13（今の律速）、14の下半分と最後の1文（最終結果） |
 | 20 EXTRA: A GAIN WE DID NOT COUNT | 14の上半分 |
 
-## 補足（質疑用、17枚）
+## 補足（質疑用、18枚）
 
-補足も本編と同じ決まり（短い見出し、主張の行なし、図にはFigure S1からの番号と一文の注釈）で作り直しました（11/01）。第6版の24枚から、質疑で出しそうなものだけを残しました。デッキでは補足の扉が16枚目、Q&A目次が17枚目、補足が18〜34枚目です。
+補足も本編と同じ決まり（短い見出し、主張の行なし、図にはFigure S1から、表にはTable S1からの番号と一文の注釈）で作り直しました（11/01）。第6版の24枚から、質疑で出しそうなものだけを残し、同じ日にflame graphの1枚を足しました。デッキでは補足の扉が16枚目、Q&A目次が17枚目、補足が18〜35枚目で、どれもスライドショーでは非表示です。
 
 | まとまり | デッキの補足（枚目） |
 |---|---|
 | Setup and measurement | ASPIRE-2A and why we chose it（18、Q1）、Build, MPI and run settings（19、第6版の本編4とBUILD, STORAGE AND MPI、OFI AGAINST UCXをまとめた）、Run-to-run variation over 92 jobs（20）、The organisers' reference（21）、Reproducing our results（22） |
 | Basic | Is the network the bottleneck?（23）、Hierarchical against scotch（24、1/2/4ノード）、The placement experiment in full（25） |
-| Bonus | Where a Bonus step goes（26、call stack、新規）、The source changes (1/2)（27）、(2/2)（28）、Effect of each Bonus change（29）、Hardware counters（30） |
-| Results | Drag coefficient over the iterations（31、新規）、Drag coefficient checks（32）、Why the efficiency exceeds 1（33）、Not adopted: the full list（34） |
+| Bonus | Where a Bonus step goes（26、段階ごとのcall stack、新規）、Call stacks of a Bonus step（27、flame graph、新規）、The source changes (1/2)（28）、(2/2)（29）、Effect of each Bonus change（30）、Hardware counters（31） |
+| Results | Drag coefficient over the iterations（32、新規）、Drag coefficient checks（33）、Why the efficiency exceeds 1（34）、Not adopted: the full list（35） |
 
-外したもの：Optimization strategy、Bottlenecks we measured、Experiment automation、Where a step goes after Basic（8枚目は表にした）、The path on 4 nodes、The three splits、HPC roofline、Source changes in detail（2枚）、Profiles before and after、Compiler and flags（数値は不採用の一覧の1、2行目）。中身は第6版のslides.md（git `a1f18a3`）と想定問答に残っています。Qwenと共通の再現性スライドは、そのまま35枚目に残しました。
+外したもの：Optimization strategy、Bottlenecks we measured、Experiment automation、Where a step goes after Basic（8枚目は表にした）、The path on 4 nodes、The three splits、HPC roofline、Source changes in detail（2枚）、Profiles before and after、Compiler and flags（数値は不採用の一覧の1、2行目）。中身は第6版のslides.md（git `a1f18a3`）と想定問答に残っています。Qwenと共通の再現性スライドは、そのまま36枚目に残しました。
 
 11/01に新しく作った補足：
 
 - Drag coefficient over the iterations：4ノード150反復のCdを、全体と100〜150反復の拡大の2つで描きました（`deck/deck_plots.py`の`cd_iterations()`、データは`data/cd_iterations_4node.csv`）。Basic（Boxの`openfoam/results/4node/coefficient.dat`）、Bonus（`openfoam/bonus/results/4node/`）、ソースを変える前のrun（`openfoam/bonus/f3-baseline/4node/`）、主催者のhierarchicalとscotch（リポジトリの`tasks/4.3-aspire2a-logs/*-4node/coefficient.dat`）。Bonusと変更前のrunは線が重なり、分割が違うrunどうしは150反復で最大7%違う（Q12、Q13）ことが1枚で見えます。ISC26の課題（Task 4）の「ログから描くCdの収束グラフ」に当たります。
-- Where a Bonus step goes：最初の4つの版（fa4f5b0、4ノード、512 rankのうち48 rank）のCrayPATのstack sample 2,396本を、段階ごとに計算とMPIに分けた積み上げ棒（データは`data/callstack_phases_fa4f5b0.csv`、`research/profile-reaggregation-fa4f5b0/summary.md`の表から）。段階の割合は、pの解き31.8%、kOmegaSSTのcorrect 26.9%、Uの解き20.5%、Uの組み立て11.8%、pの組み立て6.6%です。後の10個を見つけた根拠の図です。stack sampleはMPIの割合を約1.8倍に多く見せます（#53）。関数の段まで描くflame graphは、生のsample（Actions 37529785072の`profile-raw.tar.zst`、成果物の保管庫）が要るので作っていません。
+- Where a Bonus step goes：最初の4つの版（fa4f5b0、4ノード、512 rankのうち48 rank）のCrayPATのstack sample 2,396本を、段階ごとに計算とMPIに分けた積み上げ棒（データは`data/callstack_phases_fa4f5b0.csv`、`research/profile-reaggregation-fa4f5b0/summary.md`の表から）。段階の割合は、pの解き31.8%、kOmegaSSTのcorrect 26.9%、Uの解き20.5%、Uの組み立て11.8%、pの組み立て6.6%です。後の10個を見つけた根拠の図です。stack sampleはMPIの割合を約1.8倍に多く見せます（#53）。関数の段までは次の枚のflame graphで見せます。
+- Call stacks of a Bonus step：同じ2,396本を関数の段まで描いたflame graphです（`deck/deck_plots.py`の`flame()`）。生のsample（Actions 37529785072の`profile-raw.tar.zst`、成果物の保管庫、7,117,215 bytes、SHA-256は同じフォルダの`artifact-manifest.json`と一致）を11/01に取り直し、`research/profile-reaggregation-fa4f5b0/analyse.py`で、段階、関数の順に折りたたんだstack（`data/callstack_folded_fa4f5b0.txt`、390通り）を書き出しました。MPIの中のstackは、OpenFOAMが呼んだMPIの関数で止めています。段階ごとの本数とMPIの本数は、前の枚のCSVと全段階で一致し、`summary.md`も出典のパスの1行を除いて同じものが出ます。幅の大きい塔は、GAMG（p）31.4%、kOmegaSSTのcorrect（スライドではk-ω SST correction）26.9%、UのGauss–Seidel 19.0%で、GAMGの最も粗い段（6.6%）はほぼ全部がMPIの中です。
 
 ---
 
@@ -793,10 +808,10 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ## 発表の準備
 
-- 11/01に、この文書の第7版でデッキを作り直しました（`deck/build.sh`、入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）。デッキでは、表紙1、本編2〜15、補足の扉16、Q&A目次17、補足18〜34、共通の再現性スライド35、AIパートが36枚目からです。AIパートは入力とバイト単位で同じです。
+- 11/01に、この文書の第7版でデッキを作り直しました（`deck/build.sh`、入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）。デッキでは、表紙1、本編2〜15、補足の扉16、Q&A目次17、補足18〜35、共通の再現性スライド36、AIパートが37枚目からです。AIパートは入力とバイト単位で同じで、その謝辞（59枚目）の後に、HPCとAIの記録をまとめた1枚（60枚目、OUR RESULTS: HPC AND AI）を足しています（11/01の6回目）。スライドショーで映るのは、1〜15枚目と37〜60枚目です。
 - 本編のノートは、この文書の各スライドの節（原稿、訳、メモ）から作ります。原稿を直したら、この文書を直してビルドし直せば、ノートに入ります。
-- 図は今のものを流用しました：流れの動画とメッシュの絵（1枚目）、`p07_rule`（2枚目）、`p10_pinning`（5枚目）、分割の絵（6枚目）、`p12_basic`（7枚目）、メモリチャネルの図（9枚目）、Uの例（10枚目）、BasicとBonusの各ジョブとカウンタ（11枚目）、`p17_scaling`（12枚目）。表は3、4、8、13枚目です。11/01の5回目から、図には通し番号と一文の注釈を付け、時間は縦軸、各群の近くに平均とSDを書いています（注釈の文は`deck/build_deck.py`にあります）。
-- 補足に新しく作った図は2枚です（Cdの収束、段階ごとのcall stack）。
+- 図は今のものを流用しました：流れの動画とメッシュの絵（1枚目）、`p07_rule`（2枚目）、`p10_pinning`（5枚目）、分割の絵（6枚目）、`p12_basic`（7枚目）、メモリチャネルの図（9枚目）、Uの例（10枚目）、BasicとBonusの各ジョブとカウンタ（11枚目）、`p17_scaling`（12枚目）。表は3、4、8、13枚目です（Table 1〜4）。11/01の5回目から、図には通し番号と一文の注釈を付け、時間は縦軸、各群の近くに平均とSDを書いています。6回目から、表にも通し番号と一文の注釈を表の上に付けています（注釈の文は`deck/build_deck.py`にあります）。
+- 補足に新しく作った図は3枚です（Cdの収束、段階ごとのcall stack、call stackのflame graph）。
 - 本編14枚を、タイマーで通して練習します（目安10分）。数字は読むのに時間がかかるので、語数から見積もった時間より長くなりがちです。各枚で「何を言わないか」も決めておきます。
 - 数値は提出物の`README.md`と同じものを、有効数字4桁で使います（2.898／2.360、共通ベースラインの3.415／3.576、baselineは3.650）。%は小数1桁です（−18.6%）。
 
@@ -806,7 +821,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - ISC26 SCCのOpenFOAM課題（Virtual Part、https://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/3700260877 、10/31に読み直した）：Task 2は1/2/4ノードのscalability、Task 3は4ノードでのMPIの上位3つ（回数と合計CPU時間）、Task 4はParaViewでの可視化とログからのCdの収束グラフ、Task 5（bonus）は分割方法を変えた効果です。どれも「チームの発表で示す」とあります。
 - 図の元データ：リポジトリの`presentation/openfoam/data/`。主な数値の平均とSDは、11/01にこのフォルダのCSVから計算し直しました。主催者の参照値は`tasks/4.3 OpenFOAM Application Notes - ASPIRE-2A.md`とそのログ（`tasks/4.3-aspire2a-logs/`）です。
 - 反復ごとのCd：Boxの`openfoam/results/<n>node/coefficient.dat`（Basic）、`openfoam/bonus/results/`（Bonus）、`openfoam/bonus/f3-baseline/`（ソースを変える前のrun）。
-- call stack：`research/profile-reaggregation-fa4f5b0/`（#53のCrayPATのstack sampleの集計）。
+- call stack：`research/profile-reaggregation-fa4f5b0/`（#53のCrayPATのstack sampleの集計）。flame graphの元は`data/callstack_folded_fa4f5b0.txt`で、同じフォルダの`analyse.py`が、成果物の保管庫の生のsample（Actions 37529785072の`profile-raw.tar.zst`）から書き出します。
+- 記録の枚のAIの数字：AIパートのRESULTSとSUMMARYの枚（Firmus H200、2ノード×8 GPU、Qwen3-235B-A22B-Instruct-2507-FP8。AIパートの記録では単発のrun）。
 - ParaViewの絵と動画：`flow/README.md`（流れ）、`decomposition/README.md`（分割）。
 - 固定が`MPI_Init`の中で外れることの診断：`TASK_2a.md`（PBS 24911705〜24944881。直前と直後の固定を記録した）。直し方は`submission/openfoam/REPORT.md` §6.1。
 - 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#67（10/15の精査と取り組みの一覧）、#68（固定反復で使われない残差）、#69（Bonusの後の10個、最終計測、提出スクリプトでの再実行）。11/01の時点で、10/26の最終計測より新しい結果はありません（mainにもブランチにも、issueにもなし）。
