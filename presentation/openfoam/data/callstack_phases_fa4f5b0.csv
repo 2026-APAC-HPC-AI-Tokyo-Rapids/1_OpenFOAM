@@ -1,0 +1,9 @@
+phase,samples,mpi_samples
+p solve,762,404
+k-ω SST correction,644,147
+U solve,491,92
+U assembly,282,34
+p assembly,157,45
+function objects,39,22
+U and flux correction,14,0
+continuity errors,7,4

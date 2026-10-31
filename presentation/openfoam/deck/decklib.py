@@ -44,7 +44,7 @@ _PAIRS = re.compile(r"\b(max|slowest|r|R²) (/|=) (?=[\w+−])")
 TIER_COLOURS = {"baseline": BASE, "basic": BASIC, "bonus": BONUS}
 # "pre-change baseline" and "its own baseline" (the Bonus build without its patches), "the new baseline", and the organisers'
 # "common baseline" are not our baseline configuration
-_TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )(?<!common )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
+_TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )(?<!common )(?<!Common )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
 
 
 def tidy(text):
@@ -103,11 +103,12 @@ def _bullet_position(pPr):
     return position
 
 
-def set_bullet(p, char="●", color=NAVY, size_pct=60, indent=0.24, font=FONT):
+def set_bullet(p, char="●", color=NAVY, size_pct=60, indent=0.24, font=FONT, number=False):
+    """A bullet, or with number=True an automatic number (1. 2. 3.) in the bullet's place."""
     pPr = p._p.get_or_add_pPr()
     pPr.set("marL", str(int(Inches(indent))))
     pPr.set("indent", str(-int(Inches(indent))))
-    for tag in ("a:buClr", "a:buSzPct", "a:buFont", "a:buChar", "a:buNone", "a:buClrTx", "a:buSzTx", "a:buFontTx"):
+    for tag in ("a:buClr", "a:buSzPct", "a:buFont", "a:buChar", "a:buAutoNum", "a:buNone", "a:buClrTx", "a:buSzTx", "a:buFontTx"):
         for el in pPr.findall(qn(tag)):
             pPr.remove(el)
     clr = etree.Element(qn("a:buClr"))
@@ -116,8 +117,12 @@ def set_bullet(p, char="●", color=NAVY, size_pct=60, indent=0.24, font=FONT):
     size.set("val", str(int(size_pct * 1000)))
     typeface = etree.Element(qn("a:buFont"))
     typeface.set("typeface", font)
-    bullet = etree.Element(qn("a:buChar"))
-    bullet.set("char", char)
+    if number:
+        bullet = etree.Element(qn("a:buAutoNum"))
+        bullet.set("type", "arabicPeriod")
+    else:
+        bullet = etree.Element(qn("a:buChar"))
+        bullet.set("char", char)
     position = _bullet_position(pPr)
     for k, el in enumerate((clr, size, typeface, bullet)):
         pPr.insert(position + k, el)
@@ -293,8 +298,11 @@ def cell_border(cell, side="b", color=LINE, width=0.75, none=False):
     tcPr.insert(position, ln)
 
 
-def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fill=NAVY, header_color=WHITE, zebra=True, aligns=None, fills=None, colors=None, bolds=None, margins=(0.09, 0.06, 0.09, 0.06), valign="m", name=None, color=INK, row_heights=None):
-    """rows[i][j] is a cell: a str, or a list of paragraphs (see fill_paragraph). fills, colors and bolds are per-cell overrides."""
+def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fill=WHITE, header_color=NAVY, header_rule=NAVY, zebra=False, aligns=None, fills=None, colors=None, bolds=None, margins=(0.09, 0.06, 0.09, 0.06), valign="m", name=None, color=INK, row_heights=None):
+    """rows[i][j] is a cell: a str, or a list of paragraphs (see fill_paragraph). fills, colors and bolds are per-cell overrides.
+
+    By default a table has horizontal rules only: a bold navy header over a navy rule, and thin rules between the rows.
+    """
     nr, nc = len(rows), len(col_w)
     frame = slide.shapes.add_table(nr, nc, Inches(x), Inches(y), Inches(sum(col_w)), Inches(row_h * nr))
     if name:
@@ -335,7 +343,7 @@ def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fil
                 fill_paragraph(p, para, size=size, color=cell_color, bold=cell_bold, align=aligns[j] if aligns else "l")
             for side in ("l", "r", "t"):
                 cell_border(cell, side, none=True)
-            cell_border(cell, "b", color=header_fill if head else LINE)
+            cell_border(cell, "b", color=header_rule if head else LINE, width=1.25 if head else 0.75)
     return frame
 
 
@@ -356,10 +364,11 @@ def _axis_text(axis, size, color):
     axis.tick_labels.font.name = FONT
 
 
-def bar_chart(slide, x, y, w, h, categories, series, colors=None, point_colors=None, horizontal=True, stacked=False, number_format="0.00", vmin=None, vmax=None, major=None, font_size=13, label_size=14, gap=55, overlap=None, legend=False, value_axis=True, gridlines=True, label_pos="outEnd", labelled=None, label_color=INK, cat_size=None, name=None):
+def bar_chart(slide, x, y, w, h, categories, series, colors=None, point_colors=None, horizontal=True, stacked=False, number_format="0.00", label_format=None, vmin=None, vmax=None, major=None, font_size=13, label_size=14, gap=55, overlap=None, legend=False, value_axis=True, gridlines=True, label_pos="outEnd", labelled=None, label_color=INK, cat_size=None, name=None):
     """A clustered or stacked bar/column chart with data labels; series is [(name, values), ...].
 
-    labelled lists the series indexes that get data labels (all by default).
+    labelled lists the series indexes that get data labels (all by default). label_format, the labels' number format, may
+    hold a condition such as [<1]"" that hides small values; number_format goes into the chart's XML as it is, so it may not.
     """
     data = CategoryChartData(number_format=number_format)
     data.categories = categories
@@ -403,7 +412,7 @@ def bar_chart(slide, x, y, w, h, categories, series, colors=None, point_colors=N
         if labelled is None or si in labelled:
             labels = ser.data_labels
             labels.show_value = True
-            labels.number_format = number_format
+            labels.number_format = label_format or number_format
             labels.number_format_is_linked = False
             labels.position = LABEL_POSITION[label_pos]
             labels.font.size = Pt(label_size)
