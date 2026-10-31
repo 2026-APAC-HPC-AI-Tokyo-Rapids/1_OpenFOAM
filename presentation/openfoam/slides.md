@@ -79,6 +79,19 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 時間は、聞く側の余裕も見て、1分に約130語（1秒に約2.2語）で見積もり直し、要らない文を削りました。
 - 14枚目は、上半分をおまけ、下半分をまとめ（1枚目と同じ時間の流れ）にします。
 
+5回目（第7版のデッキを見て、見た目について）：
+
+- スライドの黒い文字は完全な黒（#000000）にします。
+- スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。
+- 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、290 M calls）。
+- 時間は縦軸にします（各ジョブの点の図は、どれも時間が縦）。
+- 図には通し番号と、どういう図かを一文で書いた注釈を付けます（本編はFigure 1から、補足はFigure S1から）。4回目までの「Figure Nの番号を外す」はやめました。
+- プロットには、必ず点の近くにSD（とジョブの本数）を載せます。
+- 余白が多い枚は、図を大きくするか、文字を大きくするか、行間を広げて、ものが平均的に置かれた状態にします。
+- 1枚目は、ユーザーが手で作った案（6版の結論のような、baseline → Basic → Bonusの流れ）を受けて、14枚目の下半分と同じ流れの図にし、その下に流れの動画とメッシュの絵を置きます。ユーザーの手作りの3枚目は、デッキの「(HPC revised, user draft 11-01).pptx」に残してあります。
+- 11枚目（Bonusの結果）には、7枚目（Basicの結果）と同じ形で、BasicとBonusの各ジョブ（本数、平均、SD、何%短くなったか）の図を足し、カウンタの図と並べます。
+- 12枚目のscalingは、対数軸をやめ、原点0からの線形の軸にします。ノード数ごとに枠を分け、各枠の縦軸を前の枠の半分にするので、理想どおりにスケールすれば同じ高さに並びます。
+
 ## 外せないもの
 
 | | 外せないもの | 理由 | 本編 |
@@ -113,18 +126,21 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ## 見た目と言葉の決まり
 
-- 1枚に1つのこと。図か表は1つまで、本文は4行まで（1枚目だけは例外）。
+- 1枚に1つのこと。図か表は1つまで（1枚目と11枚目は図が2つ）、本文は4行までです。
 - 見出しは、何の枚かを表す短い語句にします（MPI calls on 4 nodesなど）。見出しにコロンや矢印を入れません。
 - 箇条は、1つの完結した文で書き切ります。カンマと括弧はできるだけ使いません（英語として自然な範囲で）。表のセルも短い文か語句にします。
 - 原稿でも、コロン、セミコロン、ダッシュ（—）は使いません。
 - 原稿は、スライドを読み上げません。ただし、スライドに載っている文、図、表は、どれも原稿で説明します（「In the figure」「as the table shows」のように指してから、意味を言う）。
 - 同じものは、スライドでも原稿でも同じ語で呼びます。英語の技術発表では、言い換えるより同じ語をくり返す方が分かりやすいからです。分割はdecomposition（splitは使わない）、rankの仕事量はcomputationです。
 - 時制：取り組んだことと測った結果は過去形（We pinned、A step dropped）、図表の説明と今も成り立つ事実は現在形（The figure shows、Linux keeps each page where it was first written、memory bandwidth limits the solver）にします。スライドの箇条も同じです。
-- 見出しの下の主張の行、TAKEAWAYやLESSONの札、Figure N・Table Nの番号、出典やrun IDの小さな注記、余白を埋めるカードやアイコンは置きません。出典と細かい条件はノートに書きます。
+- 見出しの下の主張の行、TAKEAWAYやLESSONの札、出典やrun IDの小さな注記、余白を埋めるカードやアイコンは置きません。出典と細かい条件はノートに書きます。
+- 図には、通し番号とどういう図かを一文で書いた注釈を、図の下に付けます（「Figure 3. Each job of a change that was kept and of one that was not, against its control on 4 nodes.」）。本編はFigure 1から、補足はFigure S1からです。表には番号を付けません。
 - 標語や対句（「Benchmarks decide, profiles explain」など）、「What we changed」「How we worked」のような見出し、中黒（·）でのつなぎは使いません。
-- 色は今のデッキの色合い（`deck/palette.py`）のままにします。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
-- 図は今のもの（`deck/deck_plots.py`の各ジョブの点の図など）を流用します。Figure Nの番号と副題を外し、時間の図には平均と標準偏差（SD）を書き添えます。図の中の見出しも、コロンを使わない文にします（「Mapping onto the node was kept」など）。
-- 文字の大きさは、本文18 pt以上、表16 pt以上です。
+- 色は今のデッキの色合い（`deck/palette.py`）のままにします。黒い文字は完全な黒（#000000）です。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
+- スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。baseline、Basic、Bonusの語は段の色です。
+- 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、2.898 s/step、290 M calls）。
+- 図は今のもの（`deck/deck_plots.py`の各ジョブの点の図など）を流用し、時間は縦軸にします。プロットには、点の近くに必ず平均（単位付き）と標準偏差（SD）、ジョブの本数を書きます。図の中の見出しも、コロンを使わない文にします。
+- 文字の大きさは、本文18 pt以上、表16 pt以上です。余白が多い枚は、図を大きくするか、文字を大きくするか、行間を広げて、ものが平均的に置かれた状態にします。
 - 原稿は英語です。聞く側の余裕も見て、1分に約130語（1秒に約2.2語）として時間を見積もり、話す間を入れて約10分です。ノートには、英語の原稿、訳、メモの順に書きます。
 
 ## 数値の決まり（有効数字）
@@ -179,8 +195,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 | # | 見出し | 載せること | 図・表 | 目安 |
 |---|---|---|---|---|
-| 1 | OpenFOAM on ASPIRE-2A | 共通ベースライン、私たちのbaseline、Basic、Bonusの時間を大きく | 流れの動画（話さない） | 0:30 |
-| 2 | Criteria for keeping a change | 4つのテスト。改善がばらつきよりはっきり大きいこと | 採用と不採用の例の各ジョブ（今の図、見出しは「採用」「不採用」だけ） | 0:45 |
+| 1 | OpenFOAM on ASPIRE-2A | 私たちのbaseline → Basic → Bonusの時間の流れと、共通ベースライン | Figure 1 流れの動画、Figure 2 メッシュ（どちらも話さない） | 0:30 |
+| 2 | Criteria for keeping a change | 4つのテスト。改善がばらつきよりはっきり大きいこと | Figure 3 採用と不採用の例の各ジョブ（時間が縦軸、見出しは「Kept」「Not kept」だけ） | 0:45 |
 | 3 | Profiling the baseline | 自分たちのビルドと3.650 s/step（SD 4.1%）。律速の候補ごとの測り方と結果。一番大きいのはMPI | 表 | 0:45 |
 | 4 | MPI calls on 4 nodes | 回数の上位3つと時間の上位3つ。MPIの時間は待ちで、遅いrankがいる（2.9秒と2.0秒） | 表 | 0:40 |
 | 5 | CPU and memory pinning | `/proc`で見た置き場所、固定が外れた原因、直し方 | 4つの固定のしかたの各ジョブ（今の図） | 0:50 |
@@ -189,33 +205,25 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | 8 | Profiling Basic | 3枚目と同じ見方の表。MPIは46% → 19%、計算が81%、コアは待っている、メモリのカウンタは読めない | 表 | 0:40 |
 | 9 | Measuring the memory limit | 配置を変えて、時間とSTREAMの帯域を比べた。1 stepの約97%が帯域に比例 | メモリチャネルの図（今の図） | 0:50 |
 | 10 | Bonus optimizations | 大きく2つ。multiLevelの分割と、運ぶデータを減らすソースの変更 | Uの3成分を1回で読む例（今の図） | 0:45 |
-| 11 | Bonus results | 2.898 → 2.360 s/step。命令−4%に対しDRAMからの読み込み−17%の理由。Cd | カウンタの棒グラフ（今の図） | 1:00 |
-| 12 | Scaling from 1 to 4 nodes | strong scaling。どのノード数でも速い。並列効率が1を超える理由 | 3つの段の各ジョブ（今の図）と並列効率 | 0:40 |
+| 11 | Bonus results | 2.898 → 2.360 s/step。命令−4%に対しDRAMからの読み込み−17%の理由。Cd | Figure 9 BasicとBonusの各ジョブ、Figure 10 カウンタ（各ジョブの組とSD） | 1:00 |
+| 12 | Scaling from 1 to 4 nodes | strong scaling。どのノード数でも速い。並列効率が1を超える理由 | Figure 11 3つの段の各ジョブ（ノード数ごとの枠、原点0、縦軸は枠ごとに半分）と並列効率 | 0:45 |
 | 13 | What did not help | 効きそうだった4つの手と、共通の理由。今の律速 | 表 | 0:30 |
 | 14 | An uncounted gain and our result | 上半分：固定反復でだけ効く−8.2%を数えなかったこと。下半分：1枚目と同じ時間の流れ | 時間の流れ（図形と数字） | 0:40 |
 
-原稿は合わせて約1,210語です。聞く側の余裕も見て1分に約130語で見積もると、原稿だけで約9分20秒、上の目安の合計（話す間を少し含む）は約9分55秒です。数字は読むのに時間がかかるので、通しの練習で確かめます。
+原稿は合わせて約1,230語です。聞く側の余裕も見て1分に約130語で見積もると、原稿だけで約9分30秒、上の目安の合計（話す間を少し含む）は約10分です。数字は読むのに時間がかかるので、通しの練習で確かめます。
 
 ### 1. OpenFOAM on ASPIRE-2A（0:30）
 
 1枚目は、タイトルと要約を兼ねます。
 
-スライド（右に3列で縦に並べる。見出しの横に「Time per step on 4 nodes」）：
+スライドの上半分：4ノードの1 stepの時間の流れ（14枚目の下半分と同じ図。11/01の5回目に、ユーザーの手作りの案を受けて表から変えた）。
 
-| | s/step | |
-|---|---:|---|
-| Common baseline with hierarchical | 3.415 | |
-| Common baseline with scotch | 3.576 | |
-| Our baseline | 3.650 | |
-| Basic | 2.898 | −20.6% |
-| Bonus | 2.360 | −18.6% from Basic |
+- Our baseline 3.650 s/step（case defaults。その下に小さく「common baselines 3.415 s and 3.576 s」）→ −20.6% → Basic 2.898 s/step（binding and balance between ranks）→ −18.6% → Bonus 2.360 s/step（less data moved per step）。数字は段の色、矢印は細い線です。
 
-BasicとBonusの行の下に、小さく1文ずつ：
+スライドの下半分：
 
-- Basic restores the CPU and memory binding and balances the computation between ranks.
-- The Bonus moves less data because memory bandwidth limits the solver.
-
-図（左）：流れの動画（`flow/flow-streamlines.mp4`か`flow/flow-iterations.mp4`、ParaView）。繰り返し、音なしで流し、原稿では触れません。
+- Figure 1（左）：流れの動画（`flow/flow-iterations.mp4`、ParaView）。繰り返し、音なしで流します。注釈は「Flow around the car over the 150 iterations, drawn with ParaView.」
+- Figure 2（右）：メッシュの細かさの絵（入力のデッキの第6版の1枚目にあった絵）。注釈は「Refinement level of the 65.3 million cells, finest near the car.」
 
 原稿（約30秒）：We optimised OpenFOAM on ASPIRE-2A. On four nodes our starting point took 3.650 seconds per step. Basic brought it down to 2.898 seconds and the Bonus to 2.360 seconds. In Basic we fixed the lost CPU and memory binding and the imbalance between ranks. In the Bonus we reduced the data each step moves, because memory bandwidth limits the solver.
 
@@ -223,7 +231,8 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 メモ：
 - 話し終えたら、すぐ2枚目へ進みます。同じ計算であることは1枚目では言いません（Bonusの証拠は11枚目に1文だけ置きます。R3でBonusの点はこの証拠に懸かっているので、そこは省きません）。
-- 共通ベースラインの2行は、決まりで載せる参照の値で、行の名前で何か分かるので、原稿では触れません（「載っているものは説明する」の唯一の例外。時間を削るため、11/01の4回目に原稿から外した）。出典は`tasks/5. Common Baselines.md`です（ASPIRE-2A、4ノード、サイトの`OpenFOAM/2512`モジュール、ケース既定、Allrun一式を1ジョブずつ）。聞かれたら：共通ベースラインに対して、Basicは−15.1%（hierarchical比）と−19.0%（scotch比）、Bonusは−30.9%と−34.0%です。私たちのbaseline（3.650）がhierarchicalの3.415より遅い理由はQ27です。
+- 動画とメッシュの絵は、見せるだけで原稿では触れません。
+- 共通ベースラインの小さな行は、決まりで載せる参照の値で、書いてあることで何か分かるので、原稿では触れません（「載っているものは説明する」の例外。時間を削るため、11/01の4回目に原稿から外した）。出典は`tasks/5. Common Baselines.md`です（ASPIRE-2A、4ノード、サイトの`OpenFOAM/2512`モジュール、ケース既定、Allrun一式を1ジョブずつ）。聞かれたら：共通ベースラインに対して、Basicは−15.1%（hierarchical比）と−19.0%（scotch比）、Bonusは−30.9%と−34.0%です。私たちのbaseline（3.650）がhierarchicalの3.415より遅い理由はQ27です。
 - baselineに対して、Bonusは−35.3%（1.55×）です。この%は14枚目の最後の1文で言います。
 
 ### 2. Criteria for keeping a change（0:50）
@@ -235,7 +244,7 @@ BasicとBonusの行の下に、小さく1文ずつ：
 3. Source changes had to keep Cd within 0.5% of the unmodified code.
 4. A profile had to explain why the change helped.
 
-図（右）：第6版のFigure 6（`deck/deck_plots.py`の`p07_rule`）を流用します。番号と副題を外し、パネルの見出しは「Kept」「Not kept」だけにして、個々の変更の名前は出しません。平均とSDを書き添えます。
+図（右、Figure 3）：第6版のFigure 6（`deck/deck_plots.py`の`p07_rule`）を、時間を縦軸にして描き直します。パネルの見出しは「Kept」「Not kept」だけにして、個々の変更の名前は出しません。各群の上に平均（単位付き）とSDを書きます。
 
 - Kept：2.918 → 2.898 s/step、5本ずつ、範囲は重ならない（中身はノードへの対応付け）
 - Not kept：2.910と2.911 s/step、3本ずつ、範囲が重なる（中身はAOCC）
@@ -291,9 +300,9 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 | Most calls | Calls | Most time | Time | Share of MPI |
 |---|---:|---|---:|---:|
-| MPI_Isend | 290 M | MPI_Waitall | 22,069 s | 55% |
-| MPI_Irecv | 290 M | MPI_Allreduce | 14,140 s | 35% |
-| MPI_Test | 289 M | MPI_Bcast | 1,289 s | 3% |
+| MPI_Isend | 290 M calls | MPI_Waitall | 22,069 s | 55% |
+| MPI_Irecv | 290 M calls | MPI_Allreduce | 14,140 s | 35% |
+| MPI_Test | 289 M calls | MPI_Bcast | 1,289 s | 3% |
 
 - Most calls were the halo exchange with neighbouring subdomains.
 - Waitall and Allreduce took 90% of the MPI time waiting for other ranks.
@@ -321,9 +330,9 @@ BasicとBonusの行の下に、小さく1文ずつ：
 - During the solve no rank stayed on its own core and only 9% of its memory was local.
 - The launcher had bound each rank but MPI_Init removed the binding.
 - Our job script binds the memory with numactl before each rank starts and re-pins the rank with taskset.
-- With the case-default decomposition a step dropped from 3.670 to 3.257 s in the same period.
+- With the case-default decomposition a step dropped from 3.670 s to 3.257 s in the same period.
 
-図：第6版のFigure 8（`deck/deck_plots.py`の`p10_pinning`、4ノード、scotchの分割、各ジョブ）を流用し、行の名前を「CPU and memory」「CPU only」「Neither」「Memory only」にして、平均とSDを書き添えます。CPU and memory 2.917（SD 0.13%、3本）、CPU only 3.474（2.0%、3本）、Neither 3.395（0.78%、2本）、Memory only 4.380（1本）s/step。
+図（Figure 4）：第6版のFigure 8（`deck/deck_plots.py`の`p10_pinning`、4ノード、scotchの分割、各ジョブ）を、時間を縦軸にして描き直し、群の名前を「CPU and memory」「CPU only」「Neither」「Memory only」にして、各群の上に平均とSDを書きます。CPU and memory 2.917（SD 0.13%、3本）、CPU only 3.474（2.0%、3本）、Neither 3.395（0.78%、2本）、Memory only 4.380（1本）s/step。
 
 原稿（約50秒）：/proc of every rank, read during the solve, showed that no rank stayed on its own core and only 9 percent of a rank's memory was local. The launcher had bound each rank, but MPI_Init removed the binding. So each rank now starts under numactl, which binds its memory before MPI starts. We also start a watcher process, which pins each rank back to its core with taskset. Both are needed, because Linux keeps each page where it was first written. The figure shows that either one alone did not help. With both, on the case-default decomposition, a step dropped from 3.670 to 3.257 seconds, 11.2 percent less.
 
@@ -345,7 +354,7 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 - With hierarchical the ranks whose slabs held much of the car's surface got more computation.
 - scotch keeps the cell counts equal with 32% fewer faces between subdomains.
-- The slowest rank fell from 1.16 to 1.06 times the median and a step from 3.257 to 2.915 s.
+- The slowest rank fell from 1.16 to 1.06 times the median and a step from 3.257 s to 2.915 s.
 - Telling scotch about the sockets and NUMA domains saved another 0.7%.
 
 図：hierarchical（左）とscotch（右）の分割（車体表面をサブ領域ごとに塗った絵、ParaView）。第6版のFigure 9と同じ絵を流用します。
@@ -367,7 +376,7 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 スライドの文：
 
-- Basic took 2.898 s per step on 4 nodes against 3.650 for our baseline.
+- Basic took 2.898 s per step on 4 nodes against 3.650 s for our baseline.
 - The SD between identical jobs fell from 4.1% to 0.07%.
 
 図：第6版のFigure 11（`deck/deck_plots.py`の`p12_basic`、4ノード、baselineの3本とBasicの5本）を流用し、平均とSDを書き添えます。
@@ -473,16 +482,19 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 スライドの文：
 
-- The Bonus took 2.360 s per step on 4 nodes against 2.898 for Basic.
+- The Bonus took 2.360 s per step on 4 nodes against 2.898 s for Basic.
 - The first four changes cut instructions by 4% but L1 refills from DRAM by 17%.
 - With half the memory channels the same four changes gained 11.4% instead of 7.9%.
 - Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes.
 
-図：第6版のFigure 15（最初の4つのカウンタの横棒グラフ、`fig17_counters`の平均）を流用します。time per step −12.3%、cycles −10.8%、instructions −4.1%、L1 data accesses −5.9%、L2 accesses including prefetch −9.6%、L1 refills from DRAM −17.2%。
+図は2つ並べ、箇条は下に2列で置きます（11/01の5回目）。
 
-原稿（約55秒）：With all the changes applied, the Bonus took 2.360 seconds per step, 18.6 percent less than Basic. The chart shows why. For the first four changes on one node, the instructions fell by only 4 percent, but a step got 12 percent faster, and the cache lines fetched from DRAM fell by 17 percent. What we removed was mostly extra passes over large arrays, such as copying a field. A pass does little arithmetic but streams a whole array from memory. So removing it saves few instructions but many memory reads, and the time follows the reads. With half the memory channels, the same four changes gained 11.4 percent instead of 7.9. And Cd stayed within 0.0005 percent of the unmodified code.
+- Figure 9（左）：BasicとBonusの各ジョブ（4ノード、5本と3本、平均とSD、−18.6%）。7枚目のFigure 6と同じ形です（`deck/deck_plots.py`の`bonus_4node()`）。
+- Figure 10（右）：最初の4つの変更のカウンタ（1ノード）。棒は平均どうしの変化、点は変更なし2本と変更あり2本の4つの組、SDはその4つの組の変化のSDです（`counters()`）。time per step −12.3%（SD 0.10%）、cycles −10.8%（0.14%）、instructions −4.1%（0.02%）、L1 data accesses −5.8%（0.13%）、L2 accesses including prefetch −9.6%（0.24%）、L1 refills from DRAM −17.2%（1.9%）。DRAMからのrefillだけ組の間のばらつきが大きい（変更なしの2本が482.9 Mと502.8 M）ことも、この図で見えます。
 
-訳：すべての変更を入れると、Bonusは1 step 2.360秒になり、Basicより18.6%短くなりました。なぜ速くなったかを、グラフで示します。1ノードで測った最初の4つの変更では、命令は4%しか減っていないのに、1 stepは12%速くなり、コアがDRAMから取ってきたキャッシュラインは17%減りました。取り除いたのは、主に大きな配列をなめる余分な処理で、例えば場のコピーです。こうした処理は演算が少ないのに、配列全体をメモリから流し込みます。だから取り除くと、命令は少ししか減らず、メモリからの読み込みが大きく減ります。そして時間は読み込みに沿って減ります。メモリチャネルを半分にすると、同じ4つの変更の改善は7.9%から11.4%に増えました。そして、Cdは変更前のコードから0.0005%以内でした。
+原稿（約55秒）：With all the changes applied, the Bonus took 2.360 seconds per step, 18.6 percent less than Basic. The chart on the right shows why. For the first four changes on one node, the instructions fell by only 4 percent, but a step got 12 percent faster, and the cache lines fetched from DRAM fell by 17 percent. What we removed was mostly extra passes over large arrays, such as copying a field. A pass does little arithmetic but streams a whole array from memory. So removing it saves few instructions but many memory reads, and the time follows the reads. With half the memory channels, the same four changes gained 11.4 percent instead of 7.9. And Cd stayed within 0.0005 percent of the unmodified code.
+
+訳：すべての変更を入れると、Bonusは1 step 2.360秒になり、Basicより18.6%短くなりました。なぜ速くなったかを、右のグラフで示します。1ノードで測った最初の4つの変更では、命令は4%しか減っていないのに、1 stepは12%速くなり、コアがDRAMから取ってきたキャッシュラインは17%減りました。取り除いたのは、主に大きな配列をなめる余分な処理で、例えば場のコピーです。こうした処理は演算が少ないのに、配列全体をメモリから流し込みます。だから取り除くと、命令は少ししか減らず、メモリからの読み込みが大きく減ります。そして時間は読み込みに沿って減ります。メモリチャネルを半分にすると、同じ4つの変更の改善は7.9%から11.4%に増えました。そして、Cdは変更前のコードから0.0005%以内でした。
 
 メモ：
 - 考察をやさしく言うと：コアの仕事は「計算する（命令）」と「データを運んでくる（メモリから読む）」の2つです。このソルバは1バイト読むごとに約0.1回しか計算しないので（8枚目）、コアはほとんどの時間データを待っています（9枚目）。最初の4つの変更が取り除いたのは、大きな配列を最初から最後までなめるだけの処理です（Uの行列の読み直し、場のコピー、面の上の一時的な場）。こうした処理は1要素あたり数命令しかないので、全体の命令は4%しか減りません。でも配列はキャッシュに収まらないので、なめるたびにDRAMから全部読み直していました。だからDRAMからの読み込みは17%も減ります。時間は命令ではなく読み込みの側に沿って減りました（1 step −12.3%、cycles −10.8%）。チャネルを半分にして運ぶのが大変な状況にすると、運ぶ量を減らした効果が大きくなる（7.9% → 11.4%）のも、同じ理由です。
@@ -497,11 +509,13 @@ BasicとBonusの行の下に、小さく1文ずつ：
 - Cdの証拠の2段（REPORT §8.3、`bonus/README.md`）：(a) 0001〜0004の版は、変更前のrun（pre-change baseline：同じmultiLevelの分割とrank数で、ソースの変更を外したもの）と1/2/4ノードで`coefficient.dat`がバイト一致し、`simpleFoam.log`の全stepの残差（16桁）、反復回数、連続の式の誤差、kとωのboundingが全行一致しました（371、771、1,475行）。(b) 14すべてのCdは、変更前のrunに対して+1.2 × 10⁻¹²（相対）、−0.00002%、−0.00041%（1/2/4ノード）で、F3の±0.5%の1000分の1以下です（Q7、Q33）。
 - 提出スクリプトでの再実行（10/26）も、記録の平均から−0.31〜+0.22%で、`coefficient.dat`はバイト一致しました（Q18）。
 
-### 12. Scaling from 1 to 4 nodes（0:40）
+### 12. Scaling from 1 to 4 nodes（0:45）
 
-スライドの文（図の下に1文）：Basic and the Bonus were faster than our baseline at every node count.
+スライドの文（図の右に1文）：Basic and the Bonus were faster than our baseline at every node count.
 
-図：第6版のFigure 16（`deck/deck_plots.py`の`p17_scaling`、baseline、Basic、Bonusの各ジョブ、対数軸、1ノードからの理想の線）を流用します。各点の横に平均（4桁）を書きます。図の右に、並列効率（1.00、1.15、1.08）を3行で大きく書きます。
+図（Figure 11）：baseline、Basic、Bonusの各ジョブを、1、2、4ノードの3つの枠に分けて描きます（`deck/deck_plots.py`の`scaling()`）。どの枠も縦軸は原点0からの線形で、縦軸の長さは前の枠の半分（18、9、4.5 s）です。だから理想どおりにスケールすれば、点は3つの枠で同じ高さに並びます。点線は1ノードの平均から求めた理想の時間です。各点の上に平均（4桁、単位付き）とSDを書きます。図の右に、並列効率（1.00、1.15、1.08）を3行で大きく書きます。
+
+- 対数軸をやめた理由（11/01の5回目）：対数軸は理想のスケーリングが直線になるのはよいのですが、時間の比が読み取りにくく、原点も描けません。線形の軸を1枚にすると4ノードの差が潰れるので、枠を分けて縦軸を半分ずつにしました。
 
 | s/step（SD） | 1 node | 2 nodes | 4 nodes | Efficiency, 1 → 4 nodes |
 |---|---:|---:|---:|---:|
@@ -511,9 +525,9 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 （表は図に書く値の一覧です。）
 
-原稿（約40秒）：This is strong scaling of the same case. Basic and the Bonus were faster than our baseline at every node count. From one to four nodes the parallel efficiency was 1.00 for our baseline, 1.15 for Basic and 1.08 for the Bonus. It exceeds 1 because on four nodes each rank's arrays shrink to about 1 megabyte and fit in the L3 cache. The Bonus is lower because it saved the most on one node, where the data does not fit.
+原稿（約45秒）：This is strong scaling of the same case. Each panel's axis is half as tall as the one before, so a job that scales ideally stays at the same height. Basic and the Bonus were faster than our baseline at every node count. From one to four nodes the parallel efficiency was 1.00 for our baseline, 1.15 for Basic and 1.08 for the Bonus. It exceeds 1 because on four nodes each rank's arrays shrink to about 1 megabyte and fit in the L3 cache. The Bonus is lower because it saved the most on one node, where the data does not fit.
 
-訳：これは、同じケースのstrong scalingです。BasicとBonusは、どのノード数でもbaselineより速くなりました。1ノードから4ノードへの並列効率は、baselineが1.00、Basicが1.15、Bonusが1.08です。1を超えるのは、4ノードでは各rankの配列が約1 MBに縮み、L3キャッシュに収まるからです。Bonusが低いのは、データがキャッシュに収まらない1ノードで最もよく効いたからです。
+訳：これは、同じケースのstrong scalingです。各枠の縦軸は前の枠の半分なので、理想どおりにスケールすれば同じ高さに並びます。BasicとBonusは、どのノード数でもbaselineより速くなりました。1ノードから4ノードへの並列効率は、baselineが1.00、Basicが1.15、Bonusが1.08です。1を超えるのは、4ノードでは各rankの配列が約1 MBに縮み、L3キャッシュに収まるからです。Bonusが低いのは、データがキャッシュに収まらない1ノードで最もよく効いたからです。
 
 メモ：
 - strong scalingです。同じメッシュ（65,334,765セル）を1/2/4ノード（128/256/512 rank）で解きます。ケースは1/2/4ノードで40/80/150 stepですが、指標は1 stepの時間なので比べられます。並列効率は、1ノードの時間 ÷（4 × 4ノードの時間）です。
@@ -619,7 +633,7 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 ## 補足（質疑用、17枚）
 
-補足も本編と同じ決まり（短い見出し、主張の行なし、Figure Nの番号なし）で作り直しました（11/01）。第6版の24枚から、質疑で出しそうなものだけを残しました。デッキでは補足の扉が16枚目、Q&A目次が17枚目、補足が18〜34枚目です。
+補足も本編と同じ決まり（短い見出し、主張の行なし、図にはFigure S1からの番号と一文の注釈）で作り直しました（11/01）。第6版の24枚から、質疑で出しそうなものだけを残しました。デッキでは補足の扉が16枚目、Q&A目次が17枚目、補足が18〜34枚目です。
 
 | まとまり | デッキの補足（枚目） |
 |---|---|
@@ -781,7 +795,7 @@ BasicとBonusの行の下に、小さく1文ずつ：
 
 - 11/01に、この文書の第7版でデッキを作り直しました（`deck/build.sh`、入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）。デッキでは、表紙1、本編2〜15、補足の扉16、Q&A目次17、補足18〜34、共通の再現性スライド35、AIパートが36枚目からです。AIパートは入力とバイト単位で同じです。
 - 本編のノートは、この文書の各スライドの節（原稿、訳、メモ）から作ります。原稿を直したら、この文書を直してビルドし直せば、ノートに入ります。
-- 図は今のものを流用しました：流れの動画（1枚目）、`p07_rule`（2枚目）、`p10_pinning`（5枚目）、分割の絵（6枚目）、`p12_basic`（7枚目）、メモリチャネルの図（9枚目）、Uの例（10枚目）、カウンタの棒グラフ（11枚目）、`p17_scaling`（12枚目）。表は3、4、8、13枚目です。どれもFigure Nの番号と副題を外し、時間の図には平均とSDを書き添えました。
+- 図は今のものを流用しました：流れの動画とメッシュの絵（1枚目）、`p07_rule`（2枚目）、`p10_pinning`（5枚目）、分割の絵（6枚目）、`p12_basic`（7枚目）、メモリチャネルの図（9枚目）、Uの例（10枚目）、BasicとBonusの各ジョブとカウンタ（11枚目）、`p17_scaling`（12枚目）。表は3、4、8、13枚目です。11/01の5回目から、図には通し番号と一文の注釈を付け、時間は縦軸、各群の近くに平均とSDを書いています（注釈の文は`deck/build_deck.py`にあります）。
 - 補足に新しく作った図は2枚です（Cdの収束、段階ごとのcall stack）。
 - 本編14枚を、タイマーで通して練習します（目安10分）。数字は読むのに時間がかかるので、語数から見積もった時間より長くなりがちです。各枚で「何を言わないか」も決めておきます。
 - 数値は提出物の`README.md`と同じものを、有効数字4桁で使います（2.898／2.360、共通ベースラインの3.415／3.576、baselineは3.650）。%は小数1桁です（−18.6%）。

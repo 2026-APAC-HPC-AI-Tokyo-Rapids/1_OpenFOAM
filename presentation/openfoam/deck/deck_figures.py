@@ -9,7 +9,7 @@ usage: deck_figures.py <path/to/figures.py> <output_dir>
 - Captions (figure text below the axes, y < 0) are dropped; the slides restate them at a readable size.
 - The tier colours come from palette.py, and the labels that figures.py draws in red become navy (red is for what is slow
   or wrong on the slides), so the figures match the slide text.
-- Labels follow the slides: s/step, no space before %, and a minus sign instead of a hyphen.
+- Labels follow the slides: s/step, no space before %, a minus sign instead of a hyphen, and bold text.
 figures.py itself is unchanged, so the figures of the report keep their style.
 """
 
@@ -53,5 +53,6 @@ colours = {"BASELINE": palette.BASE, "BASIC": palette.BASIC, "BONUS": palette.BO
 for name, colour in colours.items():
     setattr(module, name, "#" + colour)
 module.PLACEMENT_CONFIGS.update({"Basic": module.BASIC, "Bonus": module.BONUS})  # built from the old colours at import
+matplotlib.rcParams.update({"font.weight": "bold", "axes.labelweight": "bold", "axes.titleweight": "bold"})
 sys.argv = [str(src), str(out)]
 module.main()

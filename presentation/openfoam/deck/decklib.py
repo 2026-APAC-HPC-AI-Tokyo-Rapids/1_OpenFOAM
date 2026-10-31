@@ -162,7 +162,7 @@ def fill_paragraph(p, para, size=16, color=INK, bold=False, align="l", line=None
         set_bullet(p, **(b if isinstance(b, dict) else {}))
 
 
-def add_text(slide, x, y, w, h, paras, size=16, color=INK, bold=False, align="l", anchor="t", margin=(0, 0, 0, 0), line=None, space_after=0, space_before=0, bullet=None, name=None):
+def add_text(slide, x, y, w, h, paras, size=16, color=INK, bold=True, align="l", anchor="t", margin=(0, 0, 0, 0), line=None, space_after=0, space_before=0, bullet=None, name=None):
     shape = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
     if name:
         shape.name = name
@@ -179,8 +179,8 @@ def add_text(slide, x, y, w, h, paras, size=16, color=INK, bold=False, align="l"
     return shape
 
 
-def bullets(slide, x, y, w, h, items, size=13, color=INK, space_after=6, anchor="t"):
-    return add_text(slide, x, y, w, h, [{"runs": item if isinstance(item, list) else [item], "bullet": True, "space_after": space_after} for item in items], size=size, color=color, anchor=anchor)
+def bullets(slide, x, y, w, h, items, size=13, color=INK, space_after=6, anchor="t", line=None):
+    return add_text(slide, x, y, w, h, [{"runs": item if isinstance(item, list) else [item], "bullet": True, "space_after": space_after} for item in items], size=size, color=color, anchor=anchor, line=line)
 
 
 # ---------------------------------------------------------------- shapes
@@ -298,10 +298,11 @@ def cell_border(cell, side="b", color=LINE, width=0.75, none=False):
     tcPr.insert(position, ln)
 
 
-def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fill=WHITE, header_color=NAVY, header_rule=NAVY, zebra=False, aligns=None, fills=None, colors=None, bolds=None, margins=(0.09, 0.06, 0.09, 0.06), valign="m", name=None, color=INK, row_heights=None):
+def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fill=WHITE, header_color=NAVY, header_rule=NAVY, zebra=False, aligns=None, fills=None, colors=None, bolds=None, bold=True, margins=(0.09, 0.06, 0.09, 0.06), valign="m", name=None, color=INK, row_heights=None):
     """rows[i][j] is a cell: a str, or a list of paragraphs (see fill_paragraph). fills, colors and bolds are per-cell overrides.
 
-    By default a table has horizontal rules only: a bold navy header over a navy rule, and thin rules between the rows.
+    By default a table has horizontal rules only: a bold navy header over a navy rule, and thin rules between the rows. Every
+    cell is bold unless bold=False or bolds says otherwise.
     """
     nr, nc = len(rows), len(col_w)
     frame = slide.shapes.add_table(nr, nc, Inches(x), Inches(y), Inches(sum(col_w)), Inches(row_h * nr))
@@ -336,7 +337,7 @@ def table(slide, x, y, col_w, rows, row_h=0.42, size=14, header=True, header_fil
             tf = cell.text_frame
             tf.word_wrap = True
             cell_color = header_color if head else (colors[i][j] if colors and colors[i] and colors[i][j] else color)
-            cell_bold = True if head else bool(bolds and bolds[i] and bolds[i][j])
+            cell_bold = True if head else (bolds[i][j] if bolds and bolds[i] and bolds[i][j] is not None else bold)
             value = row[j] if j < len(row) else ""
             for k, para in enumerate(value if isinstance(value, list) else [value]):
                 p = tf.paragraphs[0] if k == 0 else tf.add_paragraph()
@@ -385,6 +386,7 @@ def bar_chart(slide, x, y, w, h, categories, series, colors=None, point_colors=N
     chart.has_title = False
     chart.font.name = FONT
     chart.font.size = Pt(font_size)
+    chart.font.bold = True
     chart.font.color.rgb = rgb(INK)
     _chart_frame_off(chart)
     plot = chart.plots[0]
@@ -427,7 +429,7 @@ def bar_chart(slide, x, y, w, h, categories, series, colors=None, point_colors=N
     value.format.line.fill.background()
     value.major_tick_mark = XL_TICK_MARK.NONE
     value.minor_tick_mark = XL_TICK_MARK.NONE
-    _axis_text(value, font_size - 1, MUTED)
+    _axis_text(value, font_size - 1, INK)
     if vmin is not None:
         value.minimum_scale = vmin
     if vmax is not None:
