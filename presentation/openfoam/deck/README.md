@@ -2,6 +2,8 @@
 
 10/29版のチームのデッキ（130枚）を入力にして、OpenFOAMパートを作り直したpptxを出力します。作り直すのは本編20枚、補足の扉、Q&A目次、補足24枚です。スライドの主張、原稿、根拠の正本は [`../slides.md`](../slides.md) で、このフォルダはそれをpptxにする道具です。
 
+10/31から、`slides.md`は第7版（本編14枚、約10分、単純で堅い見た目）に作り直している途中です。このフォルダのコードとこの文書は、まだ第6版（commit `a1f18a3`の`slides.md`、本編20枚）の構成のままです。第7版が決まったら、コードとこの文書を作り直します。
+
 ```bash
 presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [ASSETDIR]
 ```
@@ -46,7 +48,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [ASSETDIR]
 - Bonusは、最初の4つの変更（0001〜0004、fa4f5b0、ビット一致）と、後の10個（0006、0008〜0016、うち3つはF3で判定）を分けて書きます。カウンタ、CrayPAT、配置の実験は最初の4つでしか測っていないので、そのことを見出しか行の名前に書きます。
 - 分割の絵、流れの動画、メッシュの図は、入力のデッキに入っているものを使います。分割の絵は3列×3段の合成画像から列と段を切り出しています。14枚目と補足32枚目の絵だけは `ASSETDIR` から取ります。
 - まとめの札（13枚目）は「TAKEAWAY」、結論の右下は「How we worked」です。「LESSON」という語は使いません。
-- 数値は [`../../../submission/openfoam/REPORT.md`](../../../submission/openfoam/REPORT.md) と `../data/*.csv` から取ります。数値を変えるときは、`slides.md`、`notes.py`、`build_deck.py` の3か所をそろえます。桁の決まりは `slides.md` の「数値の桁」にあります。
+- 数値は [`../../../submission/openfoam/REPORT.md`](../../../submission/openfoam/REPORT.md) と `../data/*.csv` から取ります。数値を変えるときは、`slides.md`、`notes.py`、`build_deck.py` の3か所をそろえます。桁の決まりは、第6版の `slides.md` では「数値の桁」、第7版では「見た目と言葉の決まり」にあります。
 
 ## 確かめ方
 
