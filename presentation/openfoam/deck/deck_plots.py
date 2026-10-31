@@ -93,8 +93,10 @@ def jobs(axis, x, values, color, width=0.3, hollow=False):
     return mean
 
 
-def label_above(axis, x, values, color=INK, size=12, text=None):
-    axis.annotate(text or stats(values), (x, max(values)), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
+def label_above(axis, x, values, color=INK, size=12, text=None, top=None):
+    """The mean and SD of the jobs at x (or text), above the highest job, or above top when a mark drawn there is higher."""
+    y = max(values) if top is None else max(max(values), top)
+    axis.annotate(text or stats(values), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
 
 
 def jobs_label(n):
@@ -237,15 +239,17 @@ def counters():
 def scaling():
     """Main slide 12: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, one panel per node count on a linear axis from
     0. Each panel's axis is half as tall as the one before, so a job that scales ideally sits at the same height in every
-    panel; the dashed marks are ideal scaling from each 1-node mean. The parallel efficiencies stand beside the plot."""
+    panel; the dashed marks are ideal scaling from each 1-node mean, and the labels sit above them so that no mark crosses
+    the text. The legend sits in the empty lower half. The parallel efficiencies stand beside the plot."""
     series = [("baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
     figure, axes = plt.subplots(1, 3, figsize=(7.6, 5.0), layout="constrained")
     for axis, n in zip(axes, NODES):
         for x, (name, data, color) in enumerate(series):
-            if n > 1:
-                axis.hlines(statistics.fmean(data[1]) / n, x - 0.36, x + 0.36, color=color, linestyle="--", linewidth=1.3, zorder=1)
+            ideal = statistics.fmean(data[1]) / n if n > 1 else None
+            if ideal:
+                axis.hlines(ideal, x - 0.36, x + 0.36, color=color, linestyle="--", linewidth=1.3, zorder=1)
             jobs(axis, x, data[n], color, width=0.26)
-            label_above(axis, x, data[n], color=color, size=10)
+            label_above(axis, x, data[n], color=color, size=10, top=ideal)
         axis.set_xticks(range(3), [name for name, _, _ in series], fontsize=11)
         colour_ticks(axis.get_xticklabels(), [color for _, _, color in series])
         axis.set_xlim(-0.6, 2.6)
@@ -253,7 +257,7 @@ def scaling():
         axis.yaxis.set_major_locator(MaxNLocator(5))
         axis.set_title(f"{n} node{'s' if n > 1 else ''}")
         finish(axis, "s/step, each job" if n == 1 else "")
-    axes[2].legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from\n1 node")], frameon=False, loc="upper right", fontsize=10.5)
+    axes[2].legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from\n1 node")], frameon=False, loc="lower right", fontsize=10.5)
     save(figure, "p17_scaling")
 
 
