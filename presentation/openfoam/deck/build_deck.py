@@ -147,7 +147,8 @@ def flow(s, y, common=False):
         add_text(s, x, y + 0.45, w, 0.95, [[(value, {"size": 46}), (" s/step", {"size": 18, "color": INK})]], color=color, align="c", anchor="m")
         paras = [{"runs": [what], "align": "c"}]
         if common and k == 0:
-            paras.append({"runs": ["common baselines 3.415 s and 3.576 s"], "align": "c", "size": 14, "space_before": 4})
+            # two lines of their own: in one paragraph the box wraps it with the last time alone on the second line
+            paras += [{"runs": ["common baselines"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
         add_text(s, x, y + 1.45, w, 0.9, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
