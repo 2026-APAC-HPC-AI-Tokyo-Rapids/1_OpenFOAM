@@ -166,5 +166,5 @@ NOTES["s_rejected"] = """
 EN (Q4, is equal cell count enough?): It mattered most. Weighting cells by their face and point work made cell counts uneven and slower (+2.2%, +6.1%); a METIS two-constraint decomposition balanced faces better but added 18% processor faces (+1.46%).
 EN (Q20, what would you do next?): Move fewer bytes still: fuse the assembly of U, k and omega across terms, which removes a few more passes over the face arrays. And renumber the cells of each subdomain for locality, since the slower ranks are the ones that read more from DRAM. We expect a few per cent from these.
 
-JP: 全一覧（REPORT §10、bonus/README.md）。重み付き分割は3回試してすべて遅くなった（#37、#45）。壁の面で取り切っても1.063 → 1.056の見込み（#57）。Gauss-Seidelと境界交換の重ね合わせ（0018）とbound()の平均（0017）は#69。以前Q20で挙げていたGAMGの残差と制限の融合は0015で、ラプラシアンの係数と対角の融合は0006で済んだ。コンパイラとフラグの各ジョブの図（第6版の補足）は外した。数値は表の1、2行目（#36 D、#59）。
+JP: 全一覧の出典は bonus/README.md と、提出から外した技術レポートの §10（git の c562b50 の submission/openfoam/REPORT.md）。重み付き分割は3回試してすべて遅くなった（#37、#45）。壁の面で取り切っても1.063 → 1.056の見込み（#57）。Gauss-Seidelと境界交換の重ね合わせ（0018）とbound()の平均（0017）は#69。以前Q20で挙げていたGAMGの残差と制限の融合は0015で、ラプラシアンの係数と対角の融合は0006で済んだ。コンパイラとフラグの各ジョブの図（第6版の補足）は外した。数値は表の1、2行目（#36 D、#59）。
 """

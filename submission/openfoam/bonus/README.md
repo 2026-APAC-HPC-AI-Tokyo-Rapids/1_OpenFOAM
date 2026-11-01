@@ -1,7 +1,7 @@
 # Bonus: NUMA-aware multiLevel decomposition and fourteen source patches
 
-The Bonus runs use the same machine, modules, compiler flags, MPI launch and CPU/NUMA placement as Basic (`../README.md`,
-`../REPORT.md`). Two things differ, and nothing else.
+The Bonus runs use the same machine, modules, compiler flags, MPI launch and CPU/NUMA placement as Basic (`../README.md`).
+Two things differ, and nothing else.
 
 1. **Decomposition** (Bonus F2, "other decomposition methods"): `multiLevel` with `scotch` at every level. The levels follow
    the machine: nodes, 2 sockets per node, 4 NUMA domains per socket, 16 cores per NUMA domain.
@@ -27,7 +27,8 @@ The patches remove memory traffic: temporary fields, copies, extra passes over t
 result is thrown away. None of them changes the iteration counts, the convergence tests, the number of time steps or the
 discretisation. Eleven keep every arithmetic expression and its order, so they cannot change a result; three (`0011`, `0012`,
 `0016`) change the order of some floating-point operations and are judged by F3 with the drag coefficient (next section).
-The numbers `0005` and `0007` are not in the Bonus (`0005`: `../REPORT.md`, Appendix A).
+The numbers `0005` and `0007` are not in the Bonus. `0005` computed the residual norms that the fixed iterations never read
+only after the last iteration; we do not count it (our slide "An uncounted gain and our result").
 
 | Patch | What it changes | Why the result is the same |
 |---|---|---|

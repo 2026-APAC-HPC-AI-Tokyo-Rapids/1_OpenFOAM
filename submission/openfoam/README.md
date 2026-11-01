@@ -1,38 +1,39 @@
 # OpenFOAM HPC task — Tokyo Rapids with RIKEN
 
 We made the official `occDrivAerStaticMesh` 65M case (`simpleFoam`, OpenFOAM v2512) faster on NSCC ASPIRE-2A without
-changing what it computes. This file says what is in the folder, how to run it again, and what you should get.
-[`REPORT.md`](REPORT.md) explains how we got there and why it works.
+changing what it computes. This file says what is in the folder, how to run it again, and what you should get. Our
+interview slides (the OpenFOAM part of the deck in `../presentation/`, with its supporting slides) explain how we got there
+and why it works.
 
 ## Results
 
 The metric is `Average wall-clock time per time step` at the end of `simpleFoam.log` (steps 2 to N). Lower is better.
 
-The baseline is the same build, scripts and measurement with the case's own settings (the `hierarchical` split and the
-launcher's binding only), so the change against it is what our optimisations did. Means of the repeated jobs (number of jobs):
+Our Baseline is the same build, scripts and measurement with the case's own settings (the `hierarchical` decomposition and
+the launcher's binding only), so the change against it is what our optimisations did. Means of the repeated jobs (number of
+jobs):
 
-| Nodes (ranks, steps) | Baseline | **Basic** | Bonus | Basic against baseline | Bonus against Basic |
+| Nodes (ranks, steps) | Baseline | **Basic** | Bonus | Basic against Baseline | Bonus against Basic |
 |---|---:|---:|---:|---:|---:|
 | 1 (128, 40) | 14.567 (6) | 13.364504 (3) | 10.233606 (3) | −8.3% | −23.43% |
 | 2 (256, 80) | 7.427 (3) | 6.371748 (3) | 4.992196 (3) | −14.2% | −21.65% |
 | **4 (512, 150)** | **3.650 (3)** | **2.897638 (5)** | **2.359976 (3)** | **−20.6%** | **−18.56%** |
 
-For reference only: the organisers' common baseline for ASPIRE-2A ("5. Common Baselines": site module, case defaults, full
-chain, one job per method) is 3.415 s/step on 4 nodes with `hierarchical` and 3.576 with `scotch`; their five 4-node `scotch`
-jobs ranged from 3.191 to 3.576 (mean 3.296). They also use the default MPI transport and no binding, so they differ from our
+For reference only: the official results for ASPIRE-2A, the organisers' common baseline in "5. Common Baselines" (site
+module, case defaults, full chain, one job per method), are 3.415 s/step on 4 nodes with `hierarchical` and 3.576 with
+`scotch`; their five 4-node `scotch` jobs ranged from 3.191 to 3.576 (mean 3.296). They also use the default MPI transport and no binding, so they differ from our
 runs in more than our optimisations.
 
 - **Basic**: unmodified OpenFOAM v2512 rebuilt on ASPIRE-2A; `scotch` decomposition mapped onto the sockets and NUMA domains
   of each node; every MPI rank pinned to its core, with its memory on that core's NUMA domain.
 - **Bonus**: the same build and runtime, plus a node-aware `multiLevel` decomposition and fourteen source patches that move
   fewer bytes. Eleven keep every operation and its order; three change the order of some floating-point operations. Cd stays
-  within 0.0005% of the unpatched baseline at 1, 2 and 4 nodes (F3 allows ±0.5%).
+  within 0.0005% of the unpatched code at 1, 2 and 4 nodes (F3 allows ±0.5%).
 
 ## What is in this folder
 
 ```
 README.md            this file: results, how to run, what to expect
-REPORT.md            technical report: the analysis, every optimisation and the evidence
 build/build.pbs      builds OpenFOAM v2512 from the official sources (the Bonus build adds bonus/patches)
 run/                 the Allrun chain as two PBS jobs, for 1 / 2 / 4 nodes, Basic and Bonus
 dicts/               caseDefinition, controlDict and decomposeParDict of the 4-node Basic run
@@ -40,7 +41,6 @@ results/<n>node/     logs and coefficient.dat of the fastest Basic run per node 
 scaling/scaling.txt  every run with its PBS job ID, the means, speedup and efficiency
 analysis/            MPI profiles (CrayPAT) and hardware-counter results
 bonus/               the Bonus patches, dictionaries, results and the F3 evidence
-figures/             the figures of REPORT.md
 ```
 
 ## How to run it
@@ -96,9 +96,9 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
   `coefficient.dat` was byte-identical to `bonus/results/<n>node/coefficient.dat` at every node count, at 10.2018, 4.9802 and
   2.3651 s/step (−0.31%, −0.24% and +0.22% against our means).
 - The PBS output of the second job prints `bound=128/128` for every node when every rank sits on its own core. If it does not,
-  the placement has failed and a step will be 16 – 19% slower (`REPORT.md`, section 6.1).
+  the placement has failed and a step will be 16 – 19% slower (our slide "CPU and memory pinning").
 - At these step counts the flow has not converged, and Cd depends on the decomposition. Another decomposition gives a Cd a few
-  per cent different (`REPORT.md`, section 11).
+  per cent different (our supporting slides "Drag coefficient over the iterations" and "Drag coefficient checks").
 
 ## How it is built (`build/build.pbs`)
 

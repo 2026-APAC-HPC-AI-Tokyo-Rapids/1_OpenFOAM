@@ -844,8 +844,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - call stack：`research/profile-reaggregation-fa4f5b0/`（#53のCrayPATのstack sampleの集計）。flame graphの元は`data/callstack_folded_fa4f5b0.txt`で、同じフォルダの`analyse.py`が、成果物の保管庫の生のsample（Actions 37529785072の`profile-raw.tar.zst`）から書き出します。
 - 記録の枚のAIの数字：AIパートのRESULTSとSUMMARYの枚（Firmus H200、2ノード×8 GPU、Qwen3-235B-A22B-Instruct-2507-FP8。AIパートの記録では単発のrun）。
 - ParaViewの絵と動画：`flow/README.md`（流れ）、`decomposition/README.md`（分割）。
-- 固定が`MPI_Init`の中で外れることの診断：`TASK_2a.md`（PBS 24911705〜24944881。直前と直後の固定を記録した）。直し方は`submission/openfoam/REPORT.md` §6.1。
+- 固定が`MPI_Init`の中で外れることの診断：`TASK_2a.md`（PBS 24911705〜24944881。直前と直後の固定を記録した）。直し方はREPORT §6.1と`submission/openfoam/run/keep-rank-affinity.sh`。
 - 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（Baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#67（10/15の精査と取り組みの一覧）、#68（固定反復で使われない残差）、#69（Bonusの後の10個、最終計測、提出スクリプトでの再実行）。11/01の時点で、10/26の最終計測より新しい結果はありません（mainにもブランチにも、issueにもなし）。
 - 各runの公式の結果（`result.txt`）と`coefficient.dat`：成果物の保管庫（Actionsのrun IDごとのフォルダ）。
 - 採否の決め方のデータ：`data/changes_ab.csv`（変更ごとの対照と候補の各ジョブ）、`data/decomposition_basic.csv`（scotchとhierarchical）、`data/compiler_options.csv`（2枚目の図のAOCC）、`data/start_unpinned.csv`と`data/pinning.csv`（固定）。
-- 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`。
+- 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`（台本と説明はリポジトリの`submission/openfoam/`と同じ）。技術レポート（`REPORT.md`）と図（`figures/`）は、11/01に提出物から外しました。スライドの補足に分析と証拠がそろっていて、図はBoxの`presentation/`にあるからです（ユーザーの判断）。メモの「REPORT §n」は、gitの`c562b50`の`submission/openfoam/REPORT.md`の節です。

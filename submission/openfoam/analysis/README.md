@@ -11,7 +11,7 @@
 - The final Bonus (fourteen patches, `../bonus/README.md`) has no report here; the reports end with the Bonus of
   2026-10-07, patches 0001 – 0004.
 - `pat-report-*.txt` are the `pat_report` text outputs.
-- `pat-report-baseline-calls.txt` is the baseline profile read again with `pat_report -T -O profile`, which lists every MPI
+- `pat-report-baseline-calls.txt` is the Baseline profile read again with `pat_report -T -O profile`, which lists every MPI
   function. The default reports leave out functions that take little time, such as `MPI_Irecv` and `MPI_Test`.
 
 | Report | Configuration | Commit (profiling run) | Actions run | s/step under CrayPAT |
@@ -73,7 +73,7 @@ The profile of `pat-report-bonus-before.txt` needs a build with patch 0001 only:
 
 The reports here were made through our CI. Its profile runs also recorded rank placement and hardware information, and the
 run of the Bonus with patches 0001 – 0004 sampled the call stacks of 48 ranks with `eu-stack`. None of these change the solver
-run that CrayPAT measures. The scripts here have no baseline mode: the baseline profile ran the case's own settings from commit
+run that CrayPAT measures. The scripts here have no Baseline mode: the Baseline profile ran the case's own settings from commit
 `7a77cc9`.
 `pat-report-baseline-calls.txt` was made on a login node from the stored data of that run:
 
@@ -102,8 +102,8 @@ command above:
 
 ## Baseline: the most used MPI calls
 
-Means over the 512 ranks, 40 steps, from `pat-report-baseline-calls.txt` (Table 1). `../REPORT.md`, section 5, gives the
-totals over the 512 ranks.
+Means over the 512 ranks, 40 steps, from `pat-report-baseline-calls.txt` (Table 1). Our slide "MPI calls on 4 nodes" gives
+the totals over the 512 ranks.
 
 | | By number of calls | Calls per rank | By time | Seconds per rank |
 |---|---|---:|---|---:|
@@ -140,7 +140,7 @@ the mesh read and solver set-up.
   - The MPI time per rank ranges from about 15 – 20 s up to 32 – 37 s. Ranks that finish their local work early wait for the
     slowest one at the next exchange or reduction.
   - Tuning the MPI library cannot remove that part of the wait. Only better balance, or less work on the slowest ranks, can.
-  - The OpenFOAM communication switches we tried gave no gain (`../REPORT.md`, section 10).
+  - The OpenFOAM communication switches we tried gave no gain (our supporting slide "Not adopted: the full list").
 - **Patches 0002 – 0004 shorten the computation and leave MPI as it was.** From "before 0002 – 0004" to the Bonus with
   0001 – 0004, the computation drops by 8.9% (104.25 s to 94.93 s). The MPI time stays at about 23.5 s. That is what the
   patches aim at: they remove passes over large arrays, copies and discarded boundary exchanges. They do not change the
