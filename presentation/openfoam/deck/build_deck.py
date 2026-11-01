@@ -83,6 +83,7 @@ check_input()
 PLAN_NOTES = plan_notes()
 DECOMP_IMAGE = next(sh for sh in S[3].shapes if sh.name == "図 7").image  # hierarchical, scotch, multiLevel x car, centre plane, cross-section
 DECOMP = DECOMP_IMAGE.blob
+MESH = next(sh for sh in S[1].shapes if sh.name == "図 5").image.blob  # refinement level of the mesh, on the input's slide 2 with the video
 
 
 def reuse(i, keep=()):
@@ -170,7 +171,8 @@ AI_FLOW = ("good tok/s", [("Organisers' Baseline", "1,832", "the organisers' set
 def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
     """From the Baseline through Basic to the Bonus, with what each stage dealt with: time per step on 4 nodes on slide 1 and
     in the bottom half of slide 14 (the user liked it as a conclusion, 11/01), and both tasks on the results slide. common
-    adds the organisers' Common Baselines under our Baseline; big and small are the sizes of the numbers and their unit."""
+    adds the official runs (the organisers' Common Baselines, called Official on the slides since 11/01) under our Baseline;
+    big and small are the sizes of the numbers and their unit."""
     unit, stages, changes = stages
     w = 3.3
     gap = (XW - 3 * w) / 2
@@ -181,7 +183,7 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
         paras = [{"runs": [what], "align": "c"}]
         if common and k == 0:
             # two lines of their own: in one paragraph the box wraps it with the last time alone on the second line
-            paras += [{"runs": ["Common Baselines"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
+            paras += [{"runs": ["Official"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
         add_text(s, x, y + 1.45, w, 0.9, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
@@ -191,20 +193,16 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
 
 # ====================================================================== main part (slides.md 1-14, deck 2-15)
 def m_summary():
-    """The results as the flow of slide 14, the flow video and the mesh (the user's draft of 11/01: the flow of the 6th
-    edition's conclusion, with the video and the mesh picture under it)."""
-    s = reuse(1, keep=("flow-iterations", "図 5"))
+    """The results as the flow of slide 14 with the mesh under it (the user's draft of 11/01: the flow of the 6th edition's
+    conclusion). The flow video went to slide 7, which had room for it (the user, 11/01), so this slide is built on another
+    input slide and the mesh picture is added again."""
+    s = reuse(7)
     set_title(s, "OpenFOAM ON ASPIRE-2A")
     flow(s, 1.35, common=True)
-    vh = 2.4
-    vw = vh * 5.33 / 3.0  # the video's own 16:9 frame
-    place(s, "flow-iterations", X0, 4.0, vw, vh)
-    caption(s, X0, 4.0 + vh + 0.08, vw, "Flow around the car over the 150 iterations, drawn with ParaView.")
-    mx = X0 + vw + 0.35
-    mw = X0 + XW - mx
-    mh = mw * 1.23 / 5.33  # the mesh picture's own frame
-    place(s, "図 5", mx, 4.0 + (vh - mh) / 2, mw, mh)
-    caption(s, mx, 4.0 + vh + 0.08, mw, "Refinement level of the 65.3 million cells, finest near the car.")
+    mw = 11.0
+    mx = X0 + (XW - mw) / 2
+    pic = picture(s, MESH, mx, 3.95, w=mw)
+    caption(s, mx, 3.95 + pic.height / EMU + 0.08, mw, "Refinement level of the 65.3 million cells, finest near the car.", h=0.4)
     set_notes(s, PLAN_NOTES[0])
     return s
 
@@ -267,9 +265,14 @@ def m_decomposition():
 
 
 def m_basic_results():
-    s = reuse(7)
+    """Basic against our Baseline, with the flow video under the text (the user moved it here from slide 1, 11/01). The slide
+    is built on the input slide that holds the video, so the video keeps its autoplay, which lives in that slide's timing."""
+    s = reuse(1, keep=("flow-iterations",))
     set_title(s, "BASIC RESULTS")
-    bullets(s, X0, 2.0, 5.65, 3.8, ["Basic took 2.898 s per step on 4 nodes against 3.650 s for our Baseline.", "The SD between identical jobs fell from 4.1% to 0.07%."], size=23, space_after=30, line=1.1)
+    bullets(s, X0, 1.45, 5.65, 2.45, ["Basic took 2.898 s per step on 4 nodes against 3.650 s for our Baseline.", "The SD between identical jobs fell from 4.1% to 0.07%."], size=23, space_after=20, line=1.1)
+    vh = 2.3
+    place(s, "flow-iterations", X0, 3.95, vh * 5.33 / 3.0, vh)  # the video's own 16:9 frame
+    caption(s, X0, 3.95 + vh + 0.08, 5.65, "Flow around the car over the 150 iterations, drawn with ParaView.")
     figure(s, "p12_basic", 6.73, 1.3, 5.9, "Each job of our Baseline and of Basic on 4 nodes, with the mean and SD of each.")
     set_notes(s, PLAN_NOTES[6])
     return s
@@ -347,16 +350,18 @@ def m_bonus_results():
 
 
 def m_scaling():
+    """The scaling plot across the slide, with the official runs beside our three tiers at each node count (the user, 11/01);
+    under it the sentence on the left and the parallel efficiencies on the right."""
     s = reuse(12)
     set_title(s, "SCALING FROM 1 TO 4 NODES")
-    figure(s, "p17_scaling", X0 - 0.1, 1.3, 7.6, "Each job on 1, 2 and 4 nodes on one axis from 0 s, the dashes being ideal scaling from 1 node.")
-    xr = 8.65
-    add_text(s, xr, 1.45, 12.63 - xr, 1.4, ["Basic and the Bonus were faster than our Baseline at every node count."], size=21, line=1.1)
-    heading(s, xr, 3.25, 12.63 - xr, "Parallel efficiency, 1 to 4 nodes", size=18)
+    bottom = figure(s, "p17_scaling", X0 - 0.1, 1.25, XW + 0.1, "Each job on 1, 2 and 4 nodes on one axis from 0 s, the dashes being ideal scaling from 1 node.", h=0.4)
+    add_text(s, X0, bottom + 0.08, 6.3, 1.2, ["Basic and the Bonus were faster than our Baseline at every node count."], size=20, line=1.05, anchor="m")
+    xr = 7.3
+    heading(s, xr, bottom + 0.05, 12.63 - xr, "Parallel efficiency, 1 to 4 nodes", size=16)
+    w = (12.63 - xr) / 3
     for k, (name, value, color) in enumerate((("Our Baseline", "1.00", BASE), ("Basic", "1.15", BASIC), ("Bonus", "1.08", BONUS))):
-        y = 3.8 + k * 1.0
-        add_text(s, xr, y, 2.4, 0.8, [name], size=21, color=color, anchor="m")
-        add_text(s, xr + 2.3, y, 1.68, 0.8, [value], size=36, color=color, anchor="m", align="r")
+        add_text(s, xr + k * w, bottom + 0.42, w, 0.35, [name], size=16, color=color, align="c")
+        add_text(s, xr + k * w, bottom + 0.74, w, 0.56, [value], size=30, color=color, align="c", anchor="m")
     set_notes(s, PLAN_NOTES[11])
     return s
 

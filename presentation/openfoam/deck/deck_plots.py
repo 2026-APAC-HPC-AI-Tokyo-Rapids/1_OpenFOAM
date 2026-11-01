@@ -52,6 +52,9 @@ def runs(name, *keys, where=None):
 BASELINE = F.baseline_runs()
 FINAL = runs("final_runs.csv", "configuration", "nodes")
 ORGANISERS = runs("organiser_reference_aspire2a.csv", "method", "nodes", where=lambda row: row["setting"] == "defaults")
+# the official runs: the organisers' reference results (full chain, site module, case defaults), one job per method and node
+# count; on 4 nodes they are the Common Baselines, 3.415 s (hierarchical) and 3.576 s (scotch)
+OFFICIAL = runs("organiser_reference_aspire2a.csv", "method", "nodes", where=lambda row: row["setting"] == "defaults" and row["run"] == "full chain")
 CHANGES = F.changes_by_role()
 
 
@@ -238,33 +241,42 @@ def counters():
 
 
 def scaling():
-    """Main slide 12: Baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on one linear axis from 0 (the user, 11/01:
-    panels with axes of their own hid the scaling). Each tier's 1, 2 and 4 nodes stand side by side, so its time can be seen
-    to halve from one to the next, and its dashed marks are ideal scaling from its 1-node mean. The labels sit above the jobs
-    or the mark, whichever is higher, so that no mark crosses the text; side by side within a tier they are far apart in
-    height, so they never meet. The parallel efficiencies stand beside the plot."""
-    series = [("Baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
-    step, pitch = 1.1, 3.45  # from one node count to the next within a tier, and from one tier to the next
-    figure, axis = plt.subplots(figsize=(7.6, 5.0), layout="constrained")
-    for g, (_, data, color) in enumerate(series):
-        for k, n in enumerate(NODES):
-            x = pitch * g + step * k
+    """Main slide 12: every job on 1, 2 and 4 nodes on one linear axis from 0, grouped by node count (the user, 11/01): the
+    official runs, then our Baseline, Basic and Bonus. The official runs are one hierarchical (hollow) and one scotch (grey)
+    job, drawn as on the supporting slide of the organisers' runs. The dashed marks are ideal scaling from each tier's
+    1-node mean. Our tiers are labelled above their jobs or mark, whichever is higher, and the official runs under theirs,
+    so that no mark crosses a label; the plot spans the slide so that labels side by side have room. The parallel
+    efficiencies stand under the plot."""
+    tiers = [("Baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
+    official = [("hierarchical", -0.13, True), ("scotch", 0.13, False)]  # method, offset from the column, hollow
+    pitch = 4.7  # from one node count to the next: four columns 1 apart and a gap
+    figure, axis = plt.subplots(figsize=(12.03, 3.85), layout="constrained")
+    for g, n in enumerate(NODES):
+        x0 = pitch * g
+        for method, offset, hollow in official:
+            if hollow:
+                axis.scatter([x0 + offset], OFFICIAL[(method, n)], s=50, facecolor="white", edgecolor=MUTED, linewidth=1.6, zorder=3)
+            else:
+                axis.scatter([x0 + offset], OFFICIAL[(method, n)], s=50, color=FAINT, edgecolor="black", linewidth=0.5, zorder=3)
+        lines = sorted(((OFFICIAL[(method, n)][0], method) for method, _, _ in official), reverse=True)  # as the jobs stand
+        axis.annotate("\n".join(f"{method} {four(value)} s" for value, method in lines), (x0, lines[-1][0]), textcoords="offset points", xytext=(0, -9), ha="center", va="top", fontsize=10, color=INK, linespacing=1.05)
+        for k, (_, data, color) in enumerate(tiers, 1):
+            x = x0 + k
             ideal = statistics.fmean(data[1]) / n if n > 1 else None
             if ideal:
                 axis.hlines(ideal, x - 0.42, x + 0.42, color=color, linestyle="--", linewidth=1.3, zorder=1)
             jobs(axis, x, data[n], color, width=0.48)
             label_above(axis, x, data[n], color=color, size=10, top=ideal)
-    axis.set_xticks([pitch * g + step * k for g in range(len(series)) for k in range(len(NODES))], [f"{n} node{'s' if n > 1 else ''}" for _ in series for n in NODES], minor=True)
-    axis.set_xticks([pitch * g + step for g in range(len(series))], [name for name, _, _ in series])
-    axis.xaxis.remove_overlapping_locs = False  # the tier's name sits under its 2-node label
-    axis.tick_params(axis="x", which="minor", labelsize=10)
+    axis.set_xticks([pitch * g + k for g in range(len(NODES)) for k in range(4)], [name for _ in NODES for name in ("Official", "Baseline", "Basic", "Bonus")], minor=True)
+    axis.set_xticks([pitch * g + 1.5 for g in range(len(NODES))], [f"{n} node{'s' if n > 1 else ''}" for n in NODES])
+    axis.tick_params(axis="x", which="minor", labelsize=10.5)
     axis.tick_params(axis="x", which="major", labelsize=13, length=0, pad=19)
-    colour_ticks(axis.get_xticklabels(), [color for _, _, color in series])
-    axis.set_xlim(-0.65, pitch * (len(series) - 1) + step * (len(NODES) - 1) + 0.65)
-    axis.set_ylim(0, 18)
+    colour_ticks(axis.get_xticklabels(minor=True), [color for _ in NODES for color in (INK, BASE, BASIC, BONUS)])
+    axis.set_xlim(-1.15, pitch * (len(NODES) - 1) + 3.6)
+    axis.set_ylim(0, 18.5)
     axis.set_yticks([0, 4, 8, 12, 16])
     finish(axis, "s/step, each job")
-    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node")], frameon=False, loc="upper right", fontsize=11.5)
+    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor="white", markeredgecolor=MUTED, markeredgewidth=1.6, label="official hierarchical, 1 job"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.5, label="official scotch, 1 job")], frameon=False, loc="upper right", fontsize=11)
     save(figure, "p17_scaling")
 
 
