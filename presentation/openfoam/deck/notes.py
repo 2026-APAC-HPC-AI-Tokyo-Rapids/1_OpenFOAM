@@ -40,7 +40,7 @@ JP:
 """
 
 NOTES["s_noise"] = """
-EN (Q3, why did you first reject scotch?): One job on 27 September took 5.03 s/step, an outlier from a slow period. When we alternated three jobs of each in the same period, scotch was 10.5% faster. Since then we never decide from a single job.
+EN (if asked why one job is never enough, an example): One job on 27 September took 5.03 s/step, an outlier from a slow period. When we alternated three jobs of each in the same period, scotch was 10.5% faster. Since then we never decide from a single job.
 EN (Q28, are 40-step profiles representative?): With fixed iterations every step does the same work, so 40 steps show the same pattern as 150. Profilers change a step by −1% to +6%, so we never use profiled times as results.
 
 JP: #47。92本、29構成（同じcommit・build・ノード数・分割で3本以上）、2026-09-21〜10-05。多くは構成の中央値から±0.4%以内。9月には84%、91%遅い単発のrunがあった。run内のstep間の標準偏差とrun間のばらつきは別物で、150 stepを150個の独立な標本として扱わない。遅い回の原因をホストだけに断定しない（同じホストで後に正常なrunがある）。
@@ -133,7 +133,7 @@ JP: 各変更を直前の構成と比べた値で、別々の実験なので足�
 """
 
 NOTES["s_counters"] = """
-EN (Q25, most demand refills come from L2, isn't the data in cache?): Demand refills do not count hardware prefetches. The arrays we stream are brought from DRAM into L2 by the prefetcher, so their loads show up as L2 hits. With the first four patches, L2 accesses including prefetches fall 10 percent and DRAM refills 17 percent.
+EN (if asked why most demand refills come from L2, isn't the data in cache?): Demand refills do not count hardware prefetches. The arrays we stream are brought from DRAM into L2 by the prefetcher, so their loads show up as L2 hits. With the first four patches, L2 accesses including prefetches fall 10 percent and DRAM refills 17 percent.
 
 JP:
 - カウンタ（#55）：1ノード、128 rank、40 step、multiLevel、uProfのdata_accessをNUMA領域ごとに1 rank、最初の4つの版と変更なしの版を各2本。計算部分だけ（MPI、UCX、Pstreamを除く）の7 rankの平均。同じ側の2本は、どのカウンタも約4%以内で一致した。
@@ -142,15 +142,15 @@ JP:
 """
 
 NOTES["s_cd_iterations"] = """
-EN (Q12, why does your Cd differ from the reference?): Cd after a fixed number of iterations depends on the decomposition. The organisers' own hierarchical and scotch runs end 3.5 percent apart after 150 iterations, and ours lie in that kind of range. The Bonus and the same decomposition without its source changes end 0.0004 percent apart.
+EN (if asked why Cd differs between decompositions): Cd after a fixed number of iterations depends on the decomposition. The organisers' own hierarchical and scotch runs end 3.5 percent apart after 150 iterations, and ours lie in that kind of range. The Bonus and the same decomposition without its source changes end 0.0004 percent apart.
 
 JP:
 - ISC26の課題（Task 4）の「ログから描くCdの収束グラフ」に当たる。4ノード、150反復。Basic（Boxの openfoam/results/4node/coefficient.dat）、Bonus（openfoam/bonus/results/4node/）、ソースを変える前のrun（openfoam/bonus/f3-baseline/4node/）、主催者のhierarchicalとscotch（tasks/4.3-aspire2a-logs/*-4node/coefficient.dat）。データは data/cd_iterations_4node.csv。
-- 150反復の値：Basic 0.29302、Bonus 0.29139、変更前 0.29139、主催者のhierarchical 0.27392、scotch 0.28398。BonusとBasicの差は分割の違い（multiLevelと対応付けたscotch）で、ソースの変更ではない（Q12、Q13）。
+- 150反復の値：Basic 0.29302、Bonus 0.29139、変更前 0.29139、主催者のhierarchical 0.27392、scotch 0.28398。BonusとBasicの差は分割の違い（multiLevelと対応付けたscotch）で、ソースの変更ではない（Q13）。
 """
 
 NOTES["s_cd"] = """
-EN (Q12, why is the 80-step Cd below the reference?): Cd after 80 steps depends on the decomposition. The organisers' own scotch run also gives 0.327 at 80 steps, and their notes say hierarchical and scotch differ by 0.7%, 3.0% and 3.5% at 40, 80 and 150 steps. The Bonus differs from its unmodified baseline by at most 0.0005%, so the gap does not come from our source changes.
+EN (if asked why the 80-step Cd is below the OHC-1 values): Cd after 80 steps depends on the decomposition. The organisers' own scotch run also gives 0.327 at 80 steps, and their notes say hierarchical and scotch differ by 0.7%, 3.0% and 3.5% at 40, 80 and 150 steps. The Bonus differs from its unmodified baseline by at most 0.0005%, so the gap does not come from our source changes.
 EN (Q13, why does your Cd differ from the organisers'?): With the same decomposition, ours is 0.284049 against their 0.283983. With the site module and our scripts we got their value exactly, so the difference comes from our build (AMD's math library), not from the method.
 
 JP: 主催者の値は tasks/4.3 の表と「What Cd tells you」（2ノード80 stepでhierarchical 0.336869、scotch 0.327130）。目安の0.34はOHC-1の別の機械での値（0.334〜0.345）。Bonusの欄は最終Bonus（1bc34b9）で、pre-change baseline（同じmultiLevelでパッチなし）とは5桁まで同じ。F3の値：1ノード 0.43827636195094927 対 0.43827636195043501（相対+1.2×10⁻¹²）、2ノード 0.32285928314184348 対 0.32285935413723610（−0.00002%）、4ノード 0.29138659643758436 対 0.29138777754153217（−0.00041%）。
