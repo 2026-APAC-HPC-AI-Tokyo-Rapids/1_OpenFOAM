@@ -1,5 +1,5 @@
 """Speaker notes of the cover, the Q&A index and the supporting slides: an English answer for the questions the slide is for,
-then a Japanese memo for the team (sources, caveats). The notes of the 14 main slides come from ../slides.md (build_deck.py
+then a Japanese memo for the team (sources, caveats). The notes of the 20 main slides come from ../slides.md (build_deck.py
 plan_notes), where the script, its translation and the memo are written."""
 
 NOTES = {}
@@ -14,7 +14,7 @@ JP: 名乗るだけで、すぐ次の枚（要約）へ進む。結果の数字�
 """
 
 NOTES["index"] = """
-JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は18枚です（11/01の第7版で17枚に絞り、同じ日にflame graphの1枚を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目、数えなかった高速化（#68）は本編15枚目の上半分にあるので、ここには載せていません。
+JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は19枚です（第8版で、試して残さなかったことの一覧を本編11枚目と20枚目へ移し、固定の4通りの比較と、試した分割の一覧を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目、数えなかった高速化（#68）は本編21枚目の上半分にあるので、ここには載せていません。
 """
 
 NOTES["s_aspire"] = """
@@ -65,10 +65,20 @@ EN (Q31, did you profile the network?): Yes, at three levels: IMB after every be
 JP: rankごとのMPI_Isendの回数は、分割から数えた隣のrankの数と相関+1.000（1つの隣に1 stepあたり約1,324通）。メッセージの数は分割で決まり、待ちは計算の不均衡で決まる（#48）。16の最も遅いrankのうち13はノード外の隣を持たない。
 """
 
+NOTES["s_pinning_halves"] = """
+EN (if asked whether pinning only the CPU or only the memory is enough): No. In these runs on scotch, re-pinning only the CPU came 12 to 16 seconds after each rank started, when its memory had already been placed, and binding only the memory let the rank run away from it, 50 percent slower. Only both together gave the fast and stable result.
+
+JP:
+- data/pinning.csv。4ノード、scotch（ケース既定のhierarchicalではない）。全ジョブが2026-10-03（Actionsの実行時刻で13:40〜16:44 UTC）。第7版のメモの「10/07」は誤りだった（11/02に調べ直した）。
+- CPU and memory 2.917 s（SD 0.13%、3本）、CPU only 3.474 s（2.0%、3本）、Neither 3.395 s（0.78%、2本）、Memory only 4.380 s（1本）。同じファイルにLD_PRELOADの固定 2.919 s（2本）、PALSのmem-bind＋見張り 3.469 s（2本）もある。
+- NeitherがBaseline（3.650 s）より速いのは分割がscotchだから（Baselineはhierarchical）。ユーザーの質問（11/02）への答え。隠れた最適化はない。
+- 第7版まではこの図が本編の固定の枚にあった。第8版で、本編はBaselineと同じhierarchicalでの比較（本編7枚目）にした。
+"""
+
 NOTES["s_scotch"] = """
 EN (Q30, why does the Basic gain grow with the node count?): Mostly through the decomposition. scotch gains 1.3, 2.5 and 10.5 percent on 1, 2 and 4 nodes, and mapping it onto the node gains only on 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
-JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編7枚目の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
+JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編8枚目の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
 """
 
 NOTES["s_cores"] = """
@@ -97,17 +107,13 @@ JP:
 - stack sampleはMPIの割合を約1.8倍に多く見せる（#53）ので、MPIの大きさを言うときはCrayPATのタイマーの値を使う。最終Bonus（14の変更）のcall stackは取っていない。
 """
 
-NOTES["records"] = """
-[Q&A]
-EN: (Leave this slide up while we take questions.) These are our results in both tasks. In the HPC task, a step of OpenFOAM on 4 nodes took 3.650 seconds with the case defaults, 2.898 with Basic and 2.360 with the Bonus. In the AI task, Qwen3 on 2 nodes of H200 scored 1,832 good tokens per second with the organisers' settings, 6,321 with Basic and 9,833 with the Bonus. Thank you.
-
-訳（参考）: （質疑の間、この枚を映しておきます）2つの課題の結果です。HPCの課題では、4ノードでのOpenFOAMの1 stepは、ケースの既定で3.650秒、Basicで2.898秒、Bonusで2.360秒でした。AIの課題では、H200の2ノードでのQwen3のスコアは、主催者の設定で毎秒1,832 good token、Basicで6,321、Bonusで9,833でした。ありがとうございました。
+NOTES["s_decompositions"] = """
+EN (Q4, is equal cell count enough?): It mattered most. Weighting cells by their face and point work made the cell counts uneven and slower, by 2.2 to 6.5 percent, and a METIS decomposition with two constraints balanced the faces better but added 18 percent more faces between subdomains, 1.5 percent slower.
+EN (if asked whether we tried other methods): Yes, the table lists every decomposition we timed. kahip, METIS and ptscotch on their own did not run, because the build had only stub libraries for them, and simple and structured we did not try.
 
 JP:
-- 謝辞の後の、発表の最後の1枚（ユーザーの案、11/01）。質疑の間に映しておく。
-- HPCの数字は本編2枚目と同じ（4ノード、各3〜5本の平均）。共通ベースラインは主催者のhierarchical 3.415 sとscotch 3.576 s。
-- AIの数字はAIパートのRESULTSとSUMMARYの枚の値（Firmus H200、2ノード×8 GPU、Qwen3-235B-A22B-Instruct-2507-FP8）。AIパートの記録では単発のrun。5.4倍はAIパートの書き方（9,833 / 1,832 = 5.37）。3.45倍と1.56倍は同じ値どうしの比。
-- AIパートの表示される枚からこの3つの数字が消えると、build_deck.py がビルドを止めるので、AI_FLOW とこのノートを直す。
+- 出典（11/02に調べ直した）：hierarchical (4 8 16)のzyxは#35（1本を別の日の5本と比べた）、並べ替えは#36 B（3対3、10/02）、scotchは#36（3対3）、対応付けは#63（5対5、10/16に採用）、品質重視のScotchの戦略は#63（892861f、1本）。multiLevel (4 128)は#32（2対2、9/22、LD_PRELOADの固定）、(4 2 4 16)は#42（plain scotchに対して4対4、numactlの固定）、(4 2 8 8)は#35（1対1、40 step）。車輪と床下のセルに重み3は#33（tag 3922bdc、+64%と+10.8%、2対3、Cd −2.595%でF3を満たさない）、境界のセルに重み2（weightField 2:1）は#37 F1（3対6）、点の割合での重み×2と×12は#37（0001ありのmultiLevelに対して1対4、×12は32ビットのScotchであふれた）、METISの2つの制約（段ごとにmethod manual）は#45（e2730dbに対して2対3、10/05）。kahip、metis、ptscotchは9/29に、ビルドのライブラリがスタブだけで動かなかった（#35）。
+- 壁の面で重みを取り切っても、計算の最大/中央値は1.063 → 1.056の見込みだった（#57）。
 """
 
 NOTES["s_changes"] = """
@@ -123,7 +129,8 @@ JP: #69。実装はCodex（GPT-6.1 Sol）、各パッチと説明は提出物の
 - 0010（wallShearStressを壁だけで計算）は、本番ケースでは値を書き出さずログにも出ないので、ローカルの逐次の試験（151,600セル、40 step。0010を外した版と、coefficient.dat、最終時刻のU・p・k・ω・nut・cp・wallShearStressがビット一致）を証拠にした。
 - 0012はDIC前処理のPCGだけをChronopoulos/Gear型にする（Ghysels & Vanroose 2014）。どの許容誤差でも収束判定と反復の意味は同じ（minIter/maxIter、特異性の判定、報告する残差も）。35反復で大域和が105回から36回に。単独では−0.30%と小さいが、3本とも一貫して速く、Cdの差も極小なので束に残した。
 - 0014の運動量予測子は、圧力勾配をsourceに足してから解き、元に戻す（対角はビット単位で戻るので、A()・H()・H1()は元の行列を見る）。
-- 実装しなかったもの：P1（勾配の使い回し）はfvSolutionのcacheと同じ効果をソースで有効にする形になり、F2の線引きで裏口と読まれ得るので、チームの判断で見送った。0017（bound()の平均を対象セルだけで）は大域和が1回増えるので実施せず。0018は不採用（補足の不採用の一覧）。0005（#68）はBonusに数えない（本編15枚目の上半分）。
+- 実装しなかったもの：P1（勾配の使い回し）はfvSolutionのcacheと同じ効果をソースで有効にする形になり、F2の線引きで裏口と読まれ得るので、チームの判断で見送った。0017（bound()の平均を対象セルだけで）は大域和が1回増えるので実施せず。0018は不採用（本編20枚目の表）。0005（#68）はBonusに数えない（本編21枚目の上半分）。
+- 意図別の一覧は本編15、16枚目、図にした例（0002と0001）は本編17枚目。
 """
 
 NOTES["s_each"] = """
@@ -138,7 +145,7 @@ EN (if asked why most demand refills come from L2, isn't the data in cache?): De
 JP:
 - カウンタ（#55）：1ノード、128 rank、40 step、multiLevel、uProfのdata_accessをNUMA領域ごとに1 rank、最初の4つの版と変更なしの版を各2本。計算部分だけ（MPI、UCX、Pstreamを除く）の7 rankの平均。同じ側の2本は、どのカウンタも約4%以内で一致した。
 - 右の表：チャネルの比較は#61（4ノード、64 rank/ノード、各2本）。ノード数の比較は#69の最終計測（1/2/4ノードで交互に3本ずつ）。
-- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではない（uncoreのカウンタは読めない）。後の10個はカウンタで測っていない。考察は本編12枚目のメモと slides.md の11枚目。
+- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではない（uncoreのカウンタは読めない）。後の10個はカウンタで測っていない。考察は slides.md の17枚目（Bonus results）のメモ。第7版では本編のBonus resultsにこのカウンタの図があったが、細かいので第8版で補足だけにした（ユーザー、11/02）。
 """
 
 NOTES["s_cd_iterations"] = """
@@ -159,12 +166,5 @@ JP: 主催者の値は tasks/4.3 の表と「What Cd tells you」（2ノード80
 NOTES["s_efficiency"] = """
 EN (Q6, super-linear scaling): We measured counters at 1, 2 and 4 nodes: per cell and step, the L1 refills from DRAM fall by 30% from 1 to 4 nodes, almost all in the sparse-matrix kernels, whose scattered cell arrays shrink to 1 MB per rank and fit in L3.
 
-JP: #66、Basic（対応付けの前）、uProf data_access、NUMA領域ごとに1 rank、rank数・step数・rankあたりのセル数で正規化。1セルあたりの時間は4ノードで0.873倍（このconfigの効率1.145）。
-"""
-
-NOTES["s_rejected"] = """
-EN (Q4, is equal cell count enough?): It mattered most. Weighting cells by their face and point work made cell counts uneven and slower (+2.2%, +6.1%); a METIS two-constraint decomposition balanced faces better but added 18% processor faces (+1.46%).
-EN (Q20, what would you do next?): Move fewer bytes still: fuse the assembly of U, k and omega across terms, which removes a few more passes over the face arrays. And renumber the cells of each subdomain for locality, since the slower ranks are the ones that read more from DRAM. We expect a few per cent from these.
-
-JP: 全一覧の出典は bonus/README.md と、提出から外した技術レポートの §10（git の c562b50 の submission/openfoam/REPORT.md）。重み付き分割は3回試してすべて遅くなった（#37、#45）。壁の面で取り切っても1.063 → 1.056の見込み（#57）。Gauss-Seidelと境界交換の重ね合わせ（0018）とbound()の平均（0017）は#69。以前Q20で挙げていたGAMGの残差と制限の融合は0015で、ラプラシアンの係数と対角の融合は0006で済んだ。コンパイラとフラグの各ジョブの図（第6版の補足）は外した。数値は表の1、2行目（#36 D、#59）。
+JP: #66、Basic（対応付けの前）、uProf data_access、NUMA領域ごとに1 rank、rank数・step数・rankあたりのセル数で正規化。1セルあたりの時間は4ノードで0.873倍（1ノードに対して4.58倍速い。並列効率で言えば1.145）。本編19枚目は第8版から、効率ではなく「1ノードの何倍速いか」で示す（ユーザー、11/02）。
 """

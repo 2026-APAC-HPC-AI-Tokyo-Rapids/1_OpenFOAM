@@ -8,9 +8,10 @@ usage: deck_plots.py <path/to/figures.py> <output_dir>
 
 Every point is one job's official time per step and a bar is the mean of the jobs, so a plot shows the change, the scaling
 and how many jobs stand behind each number. Time runs up the vertical axis, every mean is written next to its jobs with its
-unit and the standard deviation of the jobs, and all text is bold, as on the slides (the user, 11/01). The data and their
-readers come from figures.py, the colours from palette.py. A plot is drawn at its size on the slide, so 12 pt here is 12 pt
-there.
+unit and the standard deviation of the jobs, and all text is bold, as on the slides (the user, 11/01). Every time axis starts
+at 0; where the jobs need a narrow range to show their spread, the part below it is squeezed and marked with a wavy break
+(zoomed(), the user, 11/02). The data and their readers come from figures.py, the colours from palette.py. A plot is drawn at
+its size on the slide, so 12 pt here is 12 pt there.
 """
 
 import importlib.util
@@ -21,6 +22,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -118,6 +120,36 @@ def finish(axis, ylabel="s/step on 4 nodes, each job"):
     axis.set_axisbelow(True)
 
 
+def zoomed(axis, low, high, ticks, band=0.07):
+    """Start the time axis at 0 but give almost all its height to low..high, so that the jobs and their spread can be read:
+    the range from 0 to low is squeezed into a thin band (band of the height) and marked with a wavy break across the axis."""
+    squeeze = band / (1 - band) * (high - low) / low
+
+    def forward(y):
+        y = np.asarray(y, dtype=float)
+        return np.where(y < low, y * squeeze, low * squeeze + (y - low))
+
+    def inverse(z):
+        z = np.asarray(z, dtype=float)
+        return np.where(z < low * squeeze, z / squeeze, z - low * squeeze + low)
+
+    axis.set_yscale("function", functions=(forward, inverse))
+    axis.set_ylim(0, high)
+    digits = max(len(f"{t:g}".partition(".")[2]) for t in ticks)
+    axis.set_yticks([0, *ticks], ["0"] + [f"{t:.{digits}f}" for t in ticks])
+    centre = float(forward(low / 2) / forward(high))
+    x = np.linspace(-0.035, 0.035, 80)
+    wave = 0.007 * np.sin(x / 0.035 * 2 * np.pi)
+    axis.fill_between(x, centre - 0.009 + wave, centre + 0.009 + wave, color="white", transform=axis.transAxes, clip_on=False, zorder=5)
+    for offset in (-0.009, 0.009):
+        axis.plot(x, centre + offset + wave, color=MUTED, linewidth=1.3, transform=axis.transAxes, clip_on=False, zorder=6)
+
+
+def nice_ticks(low, high, count=5):
+    """Round tick values inside low..high, for zoomed()."""
+    return [t for t in MaxNLocator(count).tick_values(low, high) if low <= t <= high]
+
+
 def rule():
     """Main slide 2: the second test on a change that was kept and on one that was not, 4 nodes, each job. The panels do
     not name the changes (the node mapping and AOCC); the slide is about the test."""
@@ -135,28 +167,66 @@ def rule():
         colour_ticks(axis.get_xticklabels(), [INK, color])
         axis.set_xlim(-0.7, 1.7)
         low, high = min(control + candidate), max(control + candidate)
-        axis.set_ylim(low - (high - low) * 0.3, high + (high - low) * 1.0)
-        axis.yaxis.set_major_locator(MaxNLocator(5))
+        bottom, top = low - (high - low) * 0.3, high + (high - low) * 1.0
+        zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
         finish(axis, "s/step on 4 nodes, each job" if axis is axes[0] else "")
     save(figure, "p07_rule")
 
 
-PLACEMENTS = [("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("Memory\nonly", "numactl --membind only", FAINT)]
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12):
+    """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
+    colour, hollow), with its mean and SD, or '1 job', above it. Each (i, j) in arrows joins the means of groups i and j
+    with an arrow and writes the change between them to its left."""
+    figure, axis = plt.subplots(figsize=size, layout="constrained")
+    for x, (_, values, color, hollow) in enumerate(groups):
+        jobs(axis, x, values, color, width=0.34, hollow=hollow)
+        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size)
+    for i, j in arrows:
+        before, after = groups[i][1], groups[j][1]
+        start, end = (i + 0.4, statistics.fmean(before)), (j - 0.4, statistics.fmean(after))  # clear of the labels of j
+        axis.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "-|>", "color": NAVY, "linewidth": 2, "mutation_scale": 18, "shrinkA": 0, "shrinkB": 0})
+        axis.text(start[0] - 0.06, (start[1] + end[1]) / 2, percent(after, before), ha="right", va="center", fontsize=15, color=NAVY, zorder=4)
+    axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups])
+    colour_ticks(axis.get_xticklabels(), [INK if color in (MUTED, FAINT) else color for _, _, color, _ in groups])
+    axis.set_xlim(-0.6, len(groups) - 0.4)
+    zoomed(axis, low, high, ticks)
+    finish(axis, ylabel)
+    save(figure, name)
+
+
+def official(method):
+    """The official 4-node run of one method as a group for tiers(): hierarchical hollow, scotch grey, as in scaling()."""
+    return (f"Official\n{method}\n1 job", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
 
 
 def pinning():
-    """Main slide 5: which half of the placement fix matters (4 nodes, scotch decomposition)."""
+    """Main slide 6: pinning on the case-default decomposition (#36, 2 October): the Baseline's setting without pinning and
+    with it, alternated, next to our Baseline's own jobs (#62, 12 October), which ran the same setting later (the user asked
+    to see the Baseline on this slide, 11/02)."""
+    unpinned = runs("start_unpinned.csv", "nodes")[4]
+    pinned = runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")]
+    groups = [("Our Baseline\n12 October", BASELINE[4], BASE, False), ("Not pinned\n2 October", unpinned, FAINT, False), ("Pinned\n2 October", pinned, BASIC, False)]
+    tiers("p10_pinning", groups, (5.9, 4.95), 2.9, 4.05, [3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(1, 2)])
+
+
+# The four ways of placing the ranks on scotch (10/07): tick label, configuration in pinning.csv, colour
+PLACEMENTS = [("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("Memory\nonly", "numactl --membind only", FAINT)]
+
+
+def pinning_halves():
+    """Supporting slide: which half of the placement fix matters, on the scotch decomposition (3 October), so Neither is not
+    our Baseline, which used the case-default hierarchical decomposition."""
     data = runs("pinning.csv", "configuration")
-    figure, axis = plt.subplots(figsize=(5.7, 4.95), layout="constrained")
+    figure, axis = plt.subplots(figsize=(6.6, 4.95), layout="constrained")
     for x, (_, key, color) in enumerate(PLACEMENTS):
         jobs(axis, x, data[key], color, width=0.3)
         label_above(axis, x, data[key], color=BASIC if color == BASIC else INK)
-    axis.set_xticks(range(len(PLACEMENTS)), [label for label, _, _ in PLACEMENTS])
+    axis.set_xticks(range(len(PLACEMENTS)), [f"{label}\n{jobs_label(len(data[key]))}" for label, key, _ in PLACEMENTS])
     colour_ticks(axis.get_xticklabels(), [BASIC, INK, INK, INK])
     axis.set_xlim(-0.6, len(PLACEMENTS) - 0.4)
-    axis.set_ylim(2.6, 4.95)
-    finish(axis)
-    save(figure, "p10_pinning")
+    zoomed(axis, 2.6, 4.95, [3.0, 3.5, 4.0, 4.5])
+    finish(axis, "s/step on 4 nodes with scotch, each job")
+    save(figure, "ps_pinning")
 
 
 def scotch():
@@ -174,83 +244,36 @@ def scotch():
         axis.set_title(f"{n} node{'s' if n > 1 else ''}, {percent(split, hierarchical)}")
         both = hierarchical + split
         span = max(both) - min(both)
-        axis.set_ylim(min(both) - span * 0.15, max(both) + span * 0.75)
-        axis.yaxis.set_major_locator(MaxNLocator(4))
+        bottom, top = min(both) - span * 0.15, max(both) + span * 0.75
+        zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
         finish(axis, "s/step, each job" if n == 1 else "")
     save(figure, "p11_scotch")
 
 
-def before_after(name, groups, size, ylim, yticks):
-    """Two configurations on 4 nodes, each job, with the mean, SD and job count of each and the change between them."""
-    figure, axis = plt.subplots(figsize=size, layout="constrained")
-    for x, (_, values, color) in enumerate(groups):
-        jobs(axis, x, values, color, width=0.34)
-        label_above(axis, x, values, color=color, size=13)
-    (_, before, _), (_, after, _) = groups
-    axis.text(0.5, (statistics.fmean(before) + statistics.fmean(after)) / 2, percent(after, before), ha="center", va="center", fontsize=17, color=NAVY)
-    axis.set_xticks([0, 1], [f"{label}\n{jobs_label(len(values))}" for label, values, _ in groups])
-    colour_ticks(axis.get_xticklabels(), [color for _, _, color in groups])
-    axis.set_xlim(-0.6, 1.6)
-    axis.set_ylim(*ylim)
-    axis.set_yticks(yticks)
-    finish(axis)
-    save(figure, name)
-
-
 def basic_4node():
-    """Main slide 7: our Baseline and Basic on 4 nodes, each job."""
-    before_after("p12_basic", [("Baseline", BASELINE[4], BASE), ("Basic", FINAL[("Basic", 4)], BASIC)], (5.9, 5.05), (2.75, 4.2), [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0])
+    """Main slides 8 and 9: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
+    groups = [official("hierarchical"), official("scotch"), ("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False)]
+    tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.1, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)])
 
 
 def bonus_4node():
-    """Main slide 11: Basic and the Bonus on 4 nodes, each job (the Bonus jobs of the final measurement, 10/26)."""
-    before_after("p15_bonus", [("Basic", FINAL[("Basic", 4)], BASIC), ("Bonus", FINAL[("Bonus", 4)], BONUS)], (4.3, 3.65), (2.25, 3.1), [2.3, 2.5, 2.7, 2.9])
-
-
-# The counters of the first four changes on 1 node (#55), in the order of the slide; label, metric in counters_1node.csv
-COUNTERS = [("Time\nper step", None), ("Cycles", "cycles"), ("Instruc-\ntions", "instructions"), ("L1 data\naccesses", "L1 data accesses"), ("L2\naccesses\nincl. pre-\nfetch", "L2 accesses incl. prefetch"), ("L1\nrefills\nfrom\nDRAM", "L1 refills from DRAM")]
-
-
-def counters():
-    """Main slide 11: each counter with the first four changes against the same build without them, 1 node; the bar is the
-    change of the means, the dots the four pairs of jobs, and the SD is that of the four pairs."""
-    values = defaultdict(lambda: defaultdict(list))
-    seconds = defaultdict(dict)
-    for row in F.read("counters_1node.csv"):
-        values[row["metric"]][row["condition"]].append(float(row["per_rank_mean"]))
-        seconds[row["condition"]][row["actions_run"]] = float(row["s_per_step_under_uprof"])
-    figure, axis = plt.subplots(figsize=(7.3, 3.65), layout="constrained")
-    for x, (label, metric) in enumerate(COUNTERS):
-        if metric is None:
-            before, after = list(seconds["unpatched"].values()), list(seconds["patched"].values())
-        else:
-            before, after = values[metric]["unpatched"], values[metric]["patched"]
-        pairs = [(b / a - 1) * 100 for a in before for b in after]
-        mean = F.change(after, before)
-        color = BONUS if metric == "L1 refills from DRAM" else (FAINT if metric == "instructions" else BONUS_LIGHT)
-        axis.bar(x, mean, width=0.62, color=color, zorder=2)
-        axis.scatter([x] * len(pairs), pairs, s=16, color="black", zorder=3)
-        sd = statistics.stdev(pairs)
-        axis.annotate(f"{mean:+.1f}%\nSD {sd:.2f}%".replace("-", "−") if sd < 1 else f"{mean:+.1f}%\nSD {sd:.1f}%".replace("-", "−"), (x, min(pairs + [mean])), textcoords="offset points", xytext=(0, -5), ha="center", va="top", fontsize=11, color=BONUS if metric == "L1 refills from DRAM" else INK, linespacing=1.05)
-    axis.axhline(0, color=INK, linewidth=1)
-    axis.set_xticks(range(len(COUNTERS)), [label for label, _ in COUNTERS], fontsize=10.5)
-    axis.set_ylim(-27, 1.5)
-    axis.set_yticks([0, -5, -10, -15, -20, -25], ["0%", "−5%", "−10%", "−15%", "−20%", "−25%"])
-    finish(axis, "Change against none")
-    save(figure, "p15_counters")
+    """Main slide 17: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement,
+    10/26; the user asked for the official runs and the Baseline here, 11/02)."""
+    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False), ("Bonus\n3 jobs", FINAL[("Bonus", 4)], BONUS, False)]
+    tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.1, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11)
 
 
 def scaling():
-    """Main slide 12: every job on 1, 2 and 4 nodes on one linear axis from 0, grouped by node count (the user, 11/01): the
+    """Main slide 18: every job on 1, 2 and 4 nodes on one linear axis from 0, grouped by node count (the user, 11/01): the
     official runs, then our Baseline, Basic and Bonus. The official runs are one hierarchical (hollow) and one scotch (grey)
     job, drawn as on the supporting slide of the organisers' runs. The dashed marks are ideal scaling from each tier's
     1-node mean. Our tiers are labelled above their jobs or mark, whichever is higher, and the official runs under theirs,
-    so that no mark crosses a label; the plot spans the slide so that labels side by side have room. The parallel
-    efficiencies stand under the plot."""
+    so that no mark crosses a label; the plot spans the slide so that labels side by side have room. The speedups from
+    1 node stand under the plot."""
     tiers = [("Baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
     official = [("hierarchical", -0.13, True), ("scotch", 0.13, False)]  # method, offset from the column, hollow
     pitch = 4.7  # from one node count to the next: four columns 1 apart and a gap
-    figure, axis = plt.subplots(figsize=(12.03, 3.85), layout="constrained")
+    figure, axis = plt.subplots(figsize=(12.03, 3.25), layout="constrained")
     for g, n in enumerate(NODES):
         x0 = pitch * g
         for method, offset, hollow in official:
@@ -298,8 +321,8 @@ def reference():
         axis.set_xlim(-0.6, 3.6)
         axis.set_title(f"{n} node{'s' if n > 1 else ''}")
         span = max(everything) - min(everything)
-        axis.set_ylim(min(everything) - span * 0.25, max(everything) + span * 0.35)
-        axis.yaxis.set_major_locator(MaxNLocator(4))
+        bottom, top = min(everything) - span * 0.25, max(everything) + span * 0.35
+        zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
         finish(axis, "s/step, each job" if n == 1 else "")
     save(figure, "ps_reference")
 
@@ -431,10 +454,10 @@ def flame(levels=14):
 
 rule()
 pinning()
+pinning_halves()
 scotch()
 basic_4node()
 bonus_4node()
-counters()
 scaling()
 reference()
 each_change()
