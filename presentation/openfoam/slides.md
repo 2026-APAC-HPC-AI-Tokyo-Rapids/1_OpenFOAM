@@ -111,6 +111,11 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 流れの動画は、1枚目から7枚目（Basic results）へ移します。1枚目は数字、動画、メッシュで詰まっていて、7枚目は箇条の下が空いていたからです。1枚目にはメッシュの絵だけを大きく置きます。動画は原稿では触れません（1枚目にあったときと同じ）。
 - 12枚目のscalingは、横軸をノード数でそろえ、1、2、4ノードごとに、公式の結果（hierarchicalとscotchを1本ずつ）、Baseline、Basic、Bonusを並べます。同じノード数で、段どうしと公式の結果を比べやすいからです。12列の数字の注記が重ならないように、図をスライドの横幅いっぱいに広げ、1文と並列効率は図の下に移しました。
 
+9回目（提出物の準備と合わせて）：
+
+- Qwenと共通の再現性スライド（Reproducibility: Code, Build, Runtime and Results）は、デッキから外します（ユーザー）。10/21に消えていたときは誤りでしたが、今回はユーザーが外すと決めました。OneDriveで編集しているチームのデッキにも、もうありません。
+- OpenFOAMの提出物には、技術レポートと図を置きません（下の「根拠」の提出物の行）。
+
 ## 外せないもの
 
 | | 外せないもの | 理由 | 本編 |
@@ -638,7 +643,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 ## まだ決めていないこと
 
 - 1枚目の、BasicとBonusの下の1文を残すか（この案は残す。原稿で同じことを言うので、なくても伝わります）。
-- 謝辞の後の記録の枚（デッキの60枚目、11/01の6回目）を、AIパートのチームメイトに見てもらうこと。AIの数字はAIパートのRESULTSとSUMMARYの枚から取りました。
+- 謝辞の後の記録の枚（デッキの59枚目、11/01の6回目）を、AIパートのチームメイトに見てもらうこと。OneDriveのチームのデッキでは、この枚がチームの作った「OUR RESULTS」（AIが上、HPCが下、非表示）に置き換わっています（11/01 14:52の版）。AIの数字はAIパートのRESULTSとSUMMARYの枚から取りました。
 
 11/01の6回目で決めたもの：call stackの図は、段階ごとの棒を残したまま、次の枚にflame graphを足しました。デッキ全体の最後には、AIパートの謝辞の後に、HPCとAIの記録をまとめた1枚を置きました（ユーザーの案）。
 
@@ -676,7 +681,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | Bonus | Where a Bonus step goes（26、段階ごとのcall stack、新規）、Call stacks of a Bonus step（27、flame graph、新規）、The source changes (1/2)（28）、(2/2)（29）、Effect of each Bonus change（30）、Hardware counters（31） |
 | Results | Drag coefficient over the iterations（32、新規）、Drag coefficient checks（33）、Why the efficiency exceeds 1（34）、Not adopted: the full list（35） |
 
-外したもの：Optimization strategy、Bottlenecks we measured、Experiment automation、Where a step goes after Basic（8枚目は表にした）、The path on 4 nodes、The three splits、HPC roofline、Source changes in detail（2枚）、Profiles before and after、Compiler and flags（数値は不採用の一覧の1、2行目）。中身は第6版のslides.md（git `a1f18a3`）と想定問答に残っています。Qwenと共通の再現性スライドは、そのまま36枚目に残しました。
+外したもの：Optimization strategy、Bottlenecks we measured、Experiment automation、Where a step goes after Basic（8枚目は表にした）、The path on 4 nodes、The three splits、HPC roofline、Source changes in detail（2枚）、Profiles before and after、Compiler and flags（数値は不採用の一覧の1、2行目）。中身は第6版のslides.md（git `a1f18a3`）と想定問答に残っています。Qwenと共通の再現性スライドは、11/01の9回目に外しました。
 
 11/01に新しく作った補足：
 
@@ -828,7 +833,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ## 発表の準備
 
-- 11/01に、この文書の第7版でデッキを作り直しました（`deck/build.sh`、入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）。デッキでは、表紙1、本編2〜15、補足の扉16、Q&A目次17、補足18〜35、共通の再現性スライド36、AIパートが37枚目からです。AIパートは入力とバイト単位で同じで、その謝辞（59枚目）の後に、HPCとAIの記録をまとめた1枚（60枚目、OUR RESULTS: HPC AND AI）を足しています（11/01の6回目）。スライドショーで映るのは、1〜15枚目と37〜60枚目です。
+- 11/01に、この文書の第7版でデッキを作り直しました（`deck/build.sh`、入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation (HPC revised).pptx`）。デッキでは、表紙1、本編2〜15、補足の扉16、Q&A目次17、補足18〜35、AIパートが36枚目からです（共通の再現性スライドは9回目に外しました）。AIパートは入力とバイト単位で同じで、その謝辞（58枚目）の後に、HPCとAIの記録をまとめた1枚（59枚目、OUR RESULTS: HPC AND AI）を足しています（11/01の6回目）。スライドショーで映るのは、1〜15枚目と36〜59枚目です。チームはデッキをOneDriveで編集し、チームメイトがrobocopyで定期的にBoxへ上げています。HPCの枚を直したら、この出力からOneDriveのデッキへユーザーが貼ります。
 - 本編のノートは、この文書の各スライドの節（原稿、訳、メモ）から作ります。原稿を直したら、この文書を直してビルドし直せば、ノートに入ります。
 - 図は今のものを流用しました：メッシュの絵（1枚目）、`p07_rule`（2枚目）、`p10_pinning`（5枚目）、分割の絵（6枚目）、流れの動画と`p12_basic`（7枚目）、メモリチャネルの図（9枚目）、multiLevelの分割の絵とUの例（10枚目）、BasicとBonusの各ジョブとカウンタ（11枚目）、`p17_scaling`（12枚目）。図はFigure 1〜12、表は3、4、8、13枚目です（Table 1〜4）。11/01の5回目から、図には通し番号と一文の注釈を付け、時間は縦軸、各群の近くに平均とSDを書いています。6回目から、表にも通し番号と一文の注釈を表の上に付けています（注釈の文は`deck/build_deck.py`にあります）。7回目に、10枚目の分割の絵を足し、12枚目のscalingを1つの軸にまとめました。8回目に、流れの動画を1枚目から7枚目へ移し、12枚目のscalingをノード数ごとの並びにして公式の結果を加え、主催者の結果を「Official」と呼ぶことにしました。
 - 補足に新しく作った図は3枚です（Cdの収束、段階ごとのcall stack、call stackのflame graph）。

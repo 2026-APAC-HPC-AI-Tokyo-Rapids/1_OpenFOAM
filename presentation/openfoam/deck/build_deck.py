@@ -11,10 +11,10 @@ INPUT is the team deck whose OpenFOAM part is still the 10/29 build: the cover 1
 FIGDIR holds the deck's renders of ../figures.py (deck_figures.py) and its per-job plots (deck_plots.py); build.sh runs all
 three steps.
 
-The output keeps the cover, then the 14 main slides of slides.md, the divider, the Q&A index, 18 supporting slides and the
-shared reproducibility slide. They are rebuilt in place on input slides, so each keeps a slide id and the team's slide-number
-box; the supporting slides are hidden from the slide show, and the 9 input slides left over (the roofline among them) are
-removed. The notes of the main slides are read from slides.md (script, translation, memo), the others come from notes.py.
+The output keeps the cover, then the 14 main slides of slides.md, the divider, the Q&A index and 18 supporting slides. They
+are rebuilt in place on input slides, so each keeps a slide id and the team's slide-number box; the supporting slides are
+hidden from the slide show, and the 10 input slides left over are removed: the team's roofline among them, and the shared
+reproducibility slide, which the user did not want (11/01). The notes of the main slides are read from slides.md (script, translation, memo), the others come from notes.py.
 Every slide from the AI title slide on stays byte for byte, and PowerPoint's sections follow the new slide list. One slide
 is added to the AI track: the results of both tasks, right after its acknowledgements, as the last slide of the talk.
 
@@ -147,18 +147,6 @@ def decomp_views(s, which, x, y, w, gap=0.06):
 def channel_row(s, x, y, used, size=0.22, gap=0.06):
     for k in range(16):
         box(s, x + k * (size + gap), y, size, size, fill=NAVY if k < used else "D5D9E0", radius=0.15)
-
-
-def replace_run_text(s, shape_name, old, new):
-    """Replace text inside one run of a shape that the team made, keeping the run's formatting; done if new is there."""
-    for paragraph in next(sh for sh in s.shapes if sh.name == shape_name).text_frame.paragraphs:
-        for run in paragraph.runs:
-            if new in run.text:
-                return
-            if old in run.text:
-                run.text = run.text.replace(old, new)
-                return
-    raise SystemExit(f"{shape_name}: neither '{old}' nor '{new}' found; see README.md")
 
 
 # The flows of slide 1, slide 14 and the results slide after the AI track: the unit, each stage with what it dealt with, and
@@ -589,13 +577,6 @@ def fill_index(s, groups):
     set_notes(s, NOTES["index"])
 
 
-def slide_reproducibility():
-    """The shared reproducibility slide (the team's), with our patch list brought up to the final Bonus."""
-    s = S[45]
-    replace_run_text(s, "Compact_OFBuildBody", "Apply 0001 / 0002 / 0003 / 0004 in order", "Apply 0001–0004, 0006, 0008–0016 in order")
-    return s
-
-
 def shown_in_talk(slide):
     return slide._element.get("show") != "0"
 
@@ -650,7 +631,7 @@ divider = S[21]
 index_slide = reuse(22)
 groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("The source changes (1/2): the first four", s_changes()), ("The source changes (2/2): ten more", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the efficiency exceeds 1", s_efficiency()), ("Not adopted: the full list", s_rejected())])]
 results_slide, after = records(S[AI:])
-order = [cover] + main + [divider, index_slide] + [sl for _, items in groups for _, sl in items] + [slide_reproducibility()] + S[AI:AI + after] + [results_slide] + S[AI + after:]
+order = [cover] + main + [divider, index_slide] + [sl for _, items in groups for _, sl in items] + S[AI:AI + after] + [results_slide] + S[AI + after:]
 
 sldIdLst = prs.slides._sldIdLst
 by_part = {prs.part.related_part(sldId.rId): sldId for sldId in sldIdLst}
