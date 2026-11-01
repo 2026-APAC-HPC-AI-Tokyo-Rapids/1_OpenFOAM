@@ -1,6 +1,6 @@
 """Helpers on top of python-pptx that add text, cards, tables and charts in the team deck's own style.
 
-Fonts follow the template (Meiryo everywhere); colours come from palette.py. The words baseline, Basic and Bonus take their
+Fonts follow the template (Meiryo everywhere); colours come from palette.py. The words Baseline, Basic and Bonus take their
 tier colour wherever they appear in normal text and in titles, so the colours need no legend. Positions and sizes are in
 inches.
 """
@@ -43,7 +43,7 @@ _COMPOUND = re.compile(r"\b(bit|case|pre|fixed|run|node|re|off|non|two|same)-(?=
 _PAIRS = re.compile(r"\b(max|slowest|r|R²) (/|=) (?=[\w+−])")
 TIER_COLOURS = {"baseline": BASE, "basic": BASIC, "bonus": BONUS}
 # "pre-change baseline" and "its own baseline" (the Bonus build without its patches), "the new baseline", and the organisers'
-# "common baseline" are not our baseline configuration
+# "common baseline" are not our Baseline configuration
 _TIER = re.compile(r"(?<!change )(?<!its own )(?<!new )(?<!common )(?<!Common )\b(baseline|Baseline|BASELINE|Basic|BASIC|Bonus|BONUS)\b")
 
 
@@ -67,7 +67,7 @@ def tidy(text):
 
 
 def tier_runs(text, color):
-    """Split text so that baseline, Basic and Bonus take their tier colour; text in white, red or a tier colour stays as it is.
+    """Split text so that Baseline, Basic and Bonus take their tier colour; text in white, red or a tier colour stays as it is.
 
     color None stands for an inherited colour (titles). Returns [(piece, colour or None), ...].
     """

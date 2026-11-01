@@ -43,8 +43,11 @@ prs = Presentation(SRC)
 S = list(prs.slides)  # S[i] is input slide i + 1
 EMU = 914400
 X0, XW = 0.70, 11.93  # left edge and width of the content area; the title ends at 0.80 in and the slide number at 7.14 in
-DECOMP_COLUMNS = {"hier": (0.0, 0.667), "scotch": (0.333, 0.334)}
+DECOMP_COLUMNS = {"hier": (0.0, 0.667), "scotch": (0.333, 0.334), "multi": (0.667, 0.0)}
 PANEL_TOP, ALL_BOTTOM = 0.113, 0.085
+# the car surface, the centre plane and the cross-section of the decomposition picture, each from under the small label that
+# ParaView wrote in its corner: (top, bottom) crops of the 3840 x 2220 picture
+DECOMP_VIEWS = [(0.1153, 0.5734), (0.4387, 0.3451), (0.6905, ALL_BOTTOM)]
 P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main"
 COUNT = {"prefix": "", "Figure": 0, "Table": 0}  # Figure 1 and Table 1 on in the main part, Figure S1 and Table S1 on in the supporting slides
 # the titles of the input's OpenFOAM part, slides 1-46, in order
@@ -78,7 +81,8 @@ def plan_notes():
 
 check_input()
 PLAN_NOTES = plan_notes()
-DECOMP = next(sh for sh in S[3].shapes if sh.name == "図 7").image.blob  # hierarchical, scotch, multiLevel x car, centre plane, cross-section
+DECOMP_IMAGE = next(sh for sh in S[3].shapes if sh.name == "図 7").image  # hierarchical, scotch, multiLevel x car, centre plane, cross-section
+DECOMP = DECOMP_IMAGE.blob
 
 
 def reuse(i, keep=()):
@@ -121,9 +125,22 @@ def figure(s, name, x, y, w, text, gap=0.08, h=0.55):
     return bottom + gap + h
 
 
-def decomp_panel(s, which, x, y, w=None, h=None, bottom=ALL_BOTTOM):
+def decomp_panel(s, which, x, y, w=None, h=None, rows=(PANEL_TOP, ALL_BOTTOM)):
+    """One column of the decomposition picture: its three views stacked, or the one view that rows crops out."""
     left, right = DECOMP_COLUMNS[which]
-    return picture(s, DECOMP, x, y, w, h, crop=(left, PANEL_TOP, right, bottom))
+    return picture(s, DECOMP, x, y, w, h, crop=(left, rows[0], right, rows[1]))
+
+
+def decomp_views(s, which, x, y, w, gap=0.06):
+    """The three views of one decomposition side by side, as one strip of width w at a common height; returns its bottom."""
+    left, right = DECOMP_COLUMNS[which]
+    width, height = DECOMP_IMAGE.size
+    aspects = [width * (1 - left - right) / (height * (1 - top - bottom)) for top, bottom in DECOMP_VIEWS]
+    h = (w - gap * (len(aspects) - 1)) / sum(aspects)
+    for rows, aspect in zip(DECOMP_VIEWS, aspects):
+        decomp_panel(s, which, x, y, h=h, rows=rows)
+        x += h * aspect + gap
+    return y + h
 
 
 def channel_row(s, x, y, used, size=0.22, gap=0.06):
@@ -146,14 +163,14 @@ def replace_run_text(s, shape_name, old, new):
 # The flows of slide 1, slide 14 and the results slide after the AI track: the unit, each stage with what it dealt with, and
 # the change from one stage to the next. The AI numbers are the AI part's own (its RESULTS and SUMMARY slides, Firmus H200,
 # 2 nodes of 8 GPUs); records() stops the build if the AI part no longer shows them.
-HPC_FLOW = ("s/step", [("Our baseline", "3.650", "case defaults"), ("Basic", "2.898", "binding and balance between ranks"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
-AI_FLOW = ("good tok/s", [("Organisers' baseline", "1,832", "the organisers' settings"), ("Basic", "6,321", "option tuning only"), ("Bonus", "9,833", "our code changes")], ["3.45×", "1.56×"])
+HPC_FLOW = ("s/step", [("Our Baseline", "3.650", "case defaults"), ("Basic", "2.898", "binding and balance between ranks"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
+AI_FLOW = ("good tok/s", [("Organisers' Baseline", "1,832", "the organisers' settings"), ("Basic", "6,321", "option tuning only"), ("Bonus", "9,833", "our code changes")], ["3.45×", "1.56×"])
 
 
 def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
-    """From the baseline through Basic to the Bonus, with what each stage dealt with: time per step on 4 nodes on slide 1 and
+    """From the Baseline through Basic to the Bonus, with what each stage dealt with: time per step on 4 nodes on slide 1 and
     in the bottom half of slide 14 (the user liked it as a conclusion, 11/01), and both tasks on the results slide. common
-    adds the organisers' common baselines under our baseline; big and small are the sizes of the numbers and their unit."""
+    adds the organisers' Common Baselines under our Baseline; big and small are the sizes of the numbers and their unit."""
     unit, stages, changes = stages
     w = 3.3
     gap = (XW - 3 * w) / 2
@@ -164,7 +181,7 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
         paras = [{"runs": [what], "align": "c"}]
         if common and k == 0:
             # two lines of their own: in one paragraph the box wraps it with the last time alone on the second line
-            paras += [{"runs": ["common baselines"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
+            paras += [{"runs": ["Common Baselines"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
         add_text(s, x, y + 1.45, w, 0.9, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
@@ -205,9 +222,9 @@ def m_criteria():
 def m_profile_baseline():
     s = reuse(3)
     set_title(s, "PROFILING THE BASELINE")
-    add_text(s, X0, 1.35, XW, 1.0, [{"runs": ["Our baseline was unmodified v2512 built with GCC 11.2 and run on Cray MPICH over UCX."], "space_after": 6}, "It took 3.650 s per step on 4 nodes with an SD of 4.1% over 3 jobs."], size=20)
+    add_text(s, X0, 1.35, XW, 1.0, [{"runs": ["Our Baseline was unmodified v2512 built with GCC 11.2 and run on Cray MPICH over UCX."], "space_after": 6}, "It took 3.650 s per step on 4 nodes with an SD of 4.1% over 3 jobs."], size=20)
     rows = [["Possible bottleneck", "How we measured it", "What we found"], ["MPI", "CrayPAT and OpenFOAM profiling", "46% of each rank's time"], ["Computation", "CrayPAT and AMD uProf", "The other 54% of the time"], ["Network transfer", "IMB after every run", "Global sums took about 0.02 s per step"], ["File I/O and OS noise", "Timers and interrupt counts", "0.01% and 0.8% of the time"]]
-    top = table_caption(s, X0, 2.62, XW, "Each possible bottleneck of our baseline, how we measured it and what we found.")
+    top = table_caption(s, X0, 2.62, XW, "Each possible bottleneck of our Baseline, how we measured it and what we found.")
     table(s, X0, top + 0.05, [3.0, 4.2, 4.73], rows, row_heights=[0.55, 0.8, 0.8, 0.8, 0.8], size=18, colors=[None, [INK, INK, NAVY], None, None, None])
     set_notes(s, PLAN_NOTES[2])
     return s
@@ -218,7 +235,7 @@ def m_mpi():
     the APAC task rules strongly recommend MPI profiling."""
     s = reuse(4)
     set_title(s, "MPI CALLS ON 4 NODES")
-    top = table_caption(s, X0, 1.35, XW, "The top three MPI calls of the baseline by count and by time, from CrayPAT over 40 steps.")
+    top = table_caption(s, X0, 1.35, XW, "The top three MPI calls of the Baseline by count and by time, from CrayPAT over 40 steps.")
     rows = [["Most calls", "Calls", "Most time", "Time", "Share of MPI"], ["MPI_Isend", "290 M calls", "MPI_Waitall", "22,069 s", "55%"], ["MPI_Irecv", "290 M calls", "MPI_Allreduce", "14,140 s", "35%"], ["MPI_Test", "289 M calls", "MPI_Bcast", "1,289 s", "3%"]]
     table(s, X0, top + 0.12, [2.45, 2.15, 2.85, 2.1, 2.38], rows, row_heights=[0.6, 0.74, 0.74, 0.74], size=18, aligns=["l", "r", "l", "r", "r"], colors=[None, [INK, INK, NAVY, NAVY, NAVY], [INK, INK, NAVY, NAVY, NAVY], None])
     bullets(s, X0, 5.05, XW, 1.9, ["Most calls were the halo exchange with neighbouring subdomains.", "Waitall and Allreduce took 90% of the MPI time waiting for other ranks.", "With equal cells the slowest rank computed for 2.9 s per step and the median rank for 2.0 s."], size=20, space_after=10)
@@ -252,8 +269,8 @@ def m_decomposition():
 def m_basic_results():
     s = reuse(7)
     set_title(s, "BASIC RESULTS")
-    bullets(s, X0, 2.0, 5.65, 3.8, ["Basic took 2.898 s per step on 4 nodes against 3.650 s for our baseline.", "The SD between identical jobs fell from 4.1% to 0.07%."], size=23, space_after=30, line=1.1)
-    figure(s, "p12_basic", 6.73, 1.3, 5.9, "Each job of our baseline and of Basic on 4 nodes, with the mean and SD of each.")
+    bullets(s, X0, 2.0, 5.65, 3.8, ["Basic took 2.898 s per step on 4 nodes against 3.650 s for our Baseline.", "The SD between identical jobs fell from 4.1% to 0.07%."], size=23, space_after=30, line=1.1)
+    figure(s, "p12_basic", 6.73, 1.3, 5.9, "Each job of our Baseline and of Basic on 4 nodes, with the mean and SD of each.")
     set_notes(s, PLAN_NOTES[6])
     return s
 
@@ -304,9 +321,13 @@ def u_diagram(s, x, y):
 
 
 def m_bonus_opt():
+    """The two kinds of change: the multiLevel decomposition, drawn as on slide 6 but with its three views side by side under
+    the text (the user, 11/01), and the source changes with the example of U."""
     s = reuse(10)
     set_title(s, "BONUS OPTIMIZATIONS")
-    bullets(s, X0, 1.5, 6.05, 5.3, ["A multiLevel decomposition by nodes, sockets, NUMA domains and cores saved 1.5%.", "14 source changes reduced the data each step moves.", "None of them changes the iterations, the convergence tests or the discretisation."], size=21, space_after=30, line=1.1)
+    bullets(s, X0, 1.5, 6.25, 3.5, ["A multiLevel decomposition by nodes, sockets, NUMA domains and cores saved 1.5%.", "14 source changes reduced the data each step moves.", "None of them changes the iterations, the convergence tests or the discretisation."], size=21, space_after=16, line=1.1)
+    bottom = decomp_views(s, "multi", X0, 5.3, 6.35)
+    caption(s, X0, bottom + 0.08, 6.35, "The 512 subdomains of multiLevel on the car, the centre plane and a cross-section.")
     bottom = u_diagram(s, 7.35, 1.35)
     caption(s, 7.35, bottom + 0.15, 5.28, "The three components of U share one matrix, so one pass over it can update all three.", h=0.6)
     set_notes(s, PLAN_NOTES[9])
@@ -328,11 +349,11 @@ def m_bonus_results():
 def m_scaling():
     s = reuse(12)
     set_title(s, "SCALING FROM 1 TO 4 NODES")
-    figure(s, "p17_scaling", X0 - 0.1, 1.3, 7.6, "Each job on 1, 2 and 4 nodes, on axes that halve with each doubling so that ideal scaling, dashed, stays level.")
+    figure(s, "p17_scaling", X0 - 0.1, 1.3, 7.6, "Each job on 1, 2 and 4 nodes on one axis from 0 s, the dashes being ideal scaling from 1 node.")
     xr = 8.65
-    add_text(s, xr, 1.45, 12.63 - xr, 1.4, ["Basic and the Bonus were faster than our baseline at every node count."], size=21, line=1.1)
+    add_text(s, xr, 1.45, 12.63 - xr, 1.4, ["Basic and the Bonus were faster than our Baseline at every node count."], size=21, line=1.1)
     heading(s, xr, 3.25, 12.63 - xr, "Parallel efficiency, 1 to 4 nodes", size=18)
-    for k, (name, value, color) in enumerate((("Our baseline", "1.00", BASE), ("Basic", "1.15", BASIC), ("Bonus", "1.08", BONUS))):
+    for k, (name, value, color) in enumerate((("Our Baseline", "1.00", BASE), ("Basic", "1.15", BASIC), ("Bonus", "1.08", BONUS))):
         y = 3.8 + k * 1.0
         add_text(s, xr, y, 2.4, 0.8, [name], size=21, color=color, anchor="m")
         add_text(s, xr + 2.3, y, 1.68, 0.8, [value], size=36, color=color, anchor="m", align="r")
@@ -358,7 +379,7 @@ def m_final():
     bullets(s, X0, 1.35, XW, 2.4, ["Many solvers still computed a residual and a global sum at every iteration for a test that fixed iterations never use.", "Doing it once after the last iteration took the Bonus to 2.166 s per step with a byte-identical coefficient.dat.", "We did not count it because only the benchmark's fixed iterations allow it."], size=18, space_after=10)
     arrow_line(s, X0, 3.78, X0 + XW, 3.78, color=LINE, width=1.25, head=False)
     flow(s, 3.98)
-    add_text(s, X0, 6.32, XW, 0.5, ["The Bonus takes 35.3% less time per step than our baseline with the same computation."], size=19, color=NAVY, align="c")
+    add_text(s, X0, 6.32, XW, 0.5, ["The Bonus takes 35.3% less time per step than our Baseline with the same computation."], size=19, color=NAVY, align="c")
     set_notes(s, PLAN_NOTES[13])
     return s
 
@@ -593,7 +614,7 @@ def records(ai):
     arrow_line(s, X0, 4.1, X0 + XW, 4.1, color=LINE, width=1.25, head=False)
     heading(s, X0, 4.18, XW, "AI: Qwen3-235B-A22B on 2 nodes of 8 H200 GPUs", size=18)
     flow(s, 4.6, AI_FLOW, big=40, small=16)
-    add_text(s, X0, 6.42, XW, 0.45, ["The Bonus takes 35.3% less time per step in HPC and scores 5.4 times the baseline in AI."], size=17, color=NAVY, align="c")
+    add_text(s, X0, 6.42, XW, 0.45, ["The Bonus takes 35.3% less time per step in HPC and scores 5.4 times the Baseline in AI."], size=17, color=NAVY, align="c")
     set_notes(s, NOTES["records"])
     return s, after
 

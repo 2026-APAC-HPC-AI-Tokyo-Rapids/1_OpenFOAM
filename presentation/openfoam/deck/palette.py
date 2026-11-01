@@ -6,7 +6,7 @@ since all slide text is bold. Fills stay light.
 """
 
 NAVY = "14378F"  # accent: emphasis, headings, bullets, table headers
-BASE = "1F7A4A"  # baseline (green)
+BASE = "1F7A4A"  # Baseline (green)
 BASIC = "A07800"  # Basic (deep yellow)
 BONUS = "B3261E"  # Bonus (red)
 BONUS_LIGHT = "EBA9A3"  # Bonus bars that are not the point of the chart

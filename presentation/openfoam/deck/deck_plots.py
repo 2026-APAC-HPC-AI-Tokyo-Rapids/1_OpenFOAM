@@ -195,8 +195,8 @@ def before_after(name, groups, size, ylim, yticks):
 
 
 def basic_4node():
-    """Main slide 7: our baseline and Basic on 4 nodes, each job."""
-    before_after("p12_basic", [("baseline", BASELINE[4], BASE), ("Basic", FINAL[("Basic", 4)], BASIC)], (5.9, 5.05), (2.75, 4.2), [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0])
+    """Main slide 7: our Baseline and Basic on 4 nodes, each job."""
+    before_after("p12_basic", [("Baseline", BASELINE[4], BASE), ("Basic", FINAL[("Basic", 4)], BASIC)], (5.9, 5.05), (2.75, 4.2), [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0])
 
 
 def bonus_4node():
@@ -238,27 +238,33 @@ def counters():
 
 
 def scaling():
-    """Main slide 12: baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, one panel per node count on a linear axis from
-    0. Each panel's axis is half as tall as the one before, so a job that scales ideally sits at the same height in every
-    panel; the dashed marks are ideal scaling from each 1-node mean, and the labels sit above them so that no mark crosses
-    the text. The legend sits in the empty lower half. The parallel efficiencies stand beside the plot."""
-    series = [("baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
-    figure, axes = plt.subplots(1, 3, figsize=(7.6, 5.0), layout="constrained")
-    for axis, n in zip(axes, NODES):
-        for x, (name, data, color) in enumerate(series):
+    """Main slide 12: Baseline, Basic and Bonus on 1, 2 and 4 nodes, each job, on one linear axis from 0 (the user, 11/01:
+    panels with axes of their own hid the scaling). Each tier's 1, 2 and 4 nodes stand side by side, so its time can be seen
+    to halve from one to the next, and its dashed marks are ideal scaling from its 1-node mean. The labels sit above the jobs
+    or the mark, whichever is higher, so that no mark crosses the text; side by side within a tier they are far apart in
+    height, so they never meet. The parallel efficiencies stand beside the plot."""
+    series = [("Baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
+    step, pitch = 1.1, 3.45  # from one node count to the next within a tier, and from one tier to the next
+    figure, axis = plt.subplots(figsize=(7.6, 5.0), layout="constrained")
+    for g, (_, data, color) in enumerate(series):
+        for k, n in enumerate(NODES):
+            x = pitch * g + step * k
             ideal = statistics.fmean(data[1]) / n if n > 1 else None
             if ideal:
-                axis.hlines(ideal, x - 0.36, x + 0.36, color=color, linestyle="--", linewidth=1.3, zorder=1)
-            jobs(axis, x, data[n], color, width=0.26)
+                axis.hlines(ideal, x - 0.42, x + 0.42, color=color, linestyle="--", linewidth=1.3, zorder=1)
+            jobs(axis, x, data[n], color, width=0.48)
             label_above(axis, x, data[n], color=color, size=10, top=ideal)
-        axis.set_xticks(range(3), [name for name, _, _ in series], fontsize=11)
-        colour_ticks(axis.get_xticklabels(), [color for _, _, color in series])
-        axis.set_xlim(-0.6, 2.6)
-        axis.set_ylim(0, 18 / n)
-        axis.yaxis.set_major_locator(MaxNLocator(5))
-        axis.set_title(f"{n} node{'s' if n > 1 else ''}")
-        finish(axis, "s/step, each job" if n == 1 else "")
-    axes[2].legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from\n1 node")], frameon=False, loc="lower right", fontsize=10.5)
+    axis.set_xticks([pitch * g + step * k for g in range(len(series)) for k in range(len(NODES))], [f"{n} node{'s' if n > 1 else ''}" for _ in series for n in NODES], minor=True)
+    axis.set_xticks([pitch * g + step for g in range(len(series))], [name for name, _, _ in series])
+    axis.xaxis.remove_overlapping_locs = False  # the tier's name sits under its 2-node label
+    axis.tick_params(axis="x", which="minor", labelsize=10)
+    axis.tick_params(axis="x", which="major", labelsize=13, length=0, pad=19)
+    colour_ticks(axis.get_xticklabels(), [color for _, _, color in series])
+    axis.set_xlim(-0.65, pitch * (len(series) - 1) + step * (len(NODES) - 1) + 0.65)
+    axis.set_ylim(0, 18)
+    axis.set_yticks([0, 4, 8, 12, 16])
+    finish(axis, "s/step, each job")
+    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node")], frameon=False, loc="upper right", fontsize=11.5)
     save(figure, "p17_scaling")
 
 
