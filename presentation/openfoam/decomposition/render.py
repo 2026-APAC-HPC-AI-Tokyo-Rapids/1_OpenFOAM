@@ -1,11 +1,13 @@
-"""Renders the three 512-subdomain decompositions (Issue #39) with ParaView.
+"""Renders the 512-subdomain decompositions (Issue #39) with ParaView.
 
-    pvbatch render.py RUN_DIR OUT_DIR
+    pvbatch render.py RUN_DIR OUT_DIR [METHOD ...]
 
-RUN_DIR is the unpacked decomposition-visualization.tar.zst: postProcessing/decomposition/<surface>/<surface>.case with the
-cellDist of time 1 (hierarchical), 2 (scotch) and 3 (multiLevel), and logFiles/decomposePar-<method>.log. OUT_DIR gets one
-picture per decomposition, view and colouring (panels/<method>-<view>-<colouring>.png) and stats.json with the numbers of
-the decomposePar logs, which compose.py writes under the pictures.
+RUN_DIR is the unpacked output of a decomposition job: postProcessing/decomposition/<surface>/<surface>.case with the
+cellDist of time 1, 2, ... and logFiles/decomposePar-<method>.log. The METHODs name the decompositions in time order: by
+default hierarchical, scotch and multiLevel, as decomposition.pbs ran them on ASPIRE-2A (10/09); scotchDomains and
+multiLevel for decomposition-genkai.pjm (11/02). OUT_DIR gets one picture per decomposition, view and colouring
+(panels/<method>-<view>-<colouring>.png) and stats.json with the numbers of the decomposePar logs, which compose.py writes
+under the pictures.
 
 Two colourings: "subdomains" gives each of the 512 subdomains its own colour (the colour key is the fractional part of
 subdomain x golden ratio, so that subdomains with near numbers, which are often neighbours, get distant colours); "numa" gives
@@ -23,7 +25,9 @@ from paraview import simple as pv
 
 RUN_DIR, OUT_DIR = Path(sys.argv[1]), Path(sys.argv[2])
 SURFACES = RUN_DIR / "postProcessing" / "decomposition"
-METHODS = [(1.0, "hierarchical", "Case default: hierarchical (16 8 4)"), (2.0, "scotch", "Basic: scotch"), (3.0, "multiLevel", "Bonus (final): multiLevel (4 2 4 16)")]
+# Plain scotch was Basic's decomposition until the node tree of #63 (10/16).
+TITLES = {"hierarchical": "Case default: hierarchical (16 8 4)", "scotch": "Plain scotch", "scotchDomains": "Basic: scotch on the node tree (2 4 16)", "multiLevel": "Bonus (final): multiLevel (4 2 4 16)"}
+METHODS = [(float(time), method, TITLES[method]) for time, method in enumerate(sys.argv[3:] or ["hierarchical", "scotch", "multiLevel"], 1)]
 GROUND_Z = -0.3176
 WHITE = [0.95, 0.95, 0.95]
 GREY = [0.55, 0.57, 0.61]
@@ -159,7 +163,7 @@ def log_numbers(method):
     text = (RUN_DIR / "logFiles" / f"decomposePar-{method}.log").read_text()
     cells = re.search(r"Max number of cells = (\d+) \(([0-9.eE+-]+)% above average ([0-9.eE+-]+)\)", text)
     # Each subdomain lists its own processor faces, indented; the total is the line that starts the line.
-    return {"processor_faces": int(re.search(r"^Number of processor faces = (\d+)", text, re.M).group(1)), "max_cells": int(cells.group(1)), "max_cells_above_average_percent": float(cells.group(2)), "average_cells": float(cells.group(3))}
+    return {"processor_faces": int(re.search(r"^Number of processor faces = (\d+)", text, re.MULTILINE).group(1)), "max_cells": int(cells.group(1)), "max_cells_above_average_percent": float(cells.group(2)), "average_cells": float(cells.group(3))}
 
 
 tables = colourings()

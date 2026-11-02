@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# 30 minutes: decomposePar takes 6 to 8 minutes for scotch's 512 subdomains (tasks/4.3, 4.2), and a request of 1 hour or
+# more waited until the next day on 11/02 while 30 minutes started at once, as for the flow run (../flow/README.md).
+#PJM -L elapse=00:30:00
+#
+# Decomposition visualization on Genkai (Issue #39, 11/02), as decomposition.pbs did on ASPIRE-2A, which could not be
+# reached that day. Splits the official 65M mesh into the 512 subdomains of the 4-node runs as Basic does since #63
+# (scotch on the node tree of scotchCoeffs) and as the final Bonus does (multiLevel (4 2 4 16)), with the coefficients that
+# submission/openfoam/run/prepare.pbs appends to the case's own decomposeParDict. The two decomposePar -cellDist run side by
+# side on one node, each in its own copy of the case that shares the mesh files by hard links; their cellDist fields go to
+# time 1 and 2 of the case, and one simpleFoam -postProcess pass samples them on the car and the planes of
+# decompositionSurfaces. The build is the unmodified v2512 that the Genkai runs reuse (Intel oneAPI 2025.1,
+# linux64IcxDPInt32Opt, Scotch 6.1.0), unpacked in WORK/build beforehand, so its Scotch is not built by the GCC of ASPIRE-2A:
+# the decomposePar logs are compared with those of the measured runs afterwards (README.md).
+#
+#   cd WORK && pjsub -L rscgrp=a-batch -L node=1 -x MESH_ARCHIVE=<polyMesh_65M.tar.gz>,WORK=<WORK> -o WORK/logs/%j.pjm.log -j decomposition-genkai.pjm
+#
+# WORK holds build/ (the unpacked build), case/ (benchmark/occDrivAerStaticMesh), decomposeParDict (the case's own, without
+# the scotchCoeffs that the repository's copy has had since #63), decompositionSurfaces and prepare.pbs.
+set -euo pipefail
+: "${MESH_ARCHIVE:?mesh archive is required}"
+: "${WORK:?work directory is required}"
+
+module purge
+module load intel/2025.1.3 impi
+# OpenFOAM's scripts use unset variables and return non-zero codes while they set up.
+set +eu
+source "${WORK}/build/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+set -eu
+# The build's C++ libraries need the libstdc++ of GCC 13 (GLIBCXX_3.4.32), which the OS of the nodes lacks; the account that
+# runs the Genkai CI has a GCC of its own, and the first try (PJM 7236100) failed without it. Intel oneAPI 2025.1.3 ships
+# that libstdc++ with Advisor: its libstdc++.so.6 there is a small loader, so the library itself is linked under that name.
+mkdir -p "${WORK}/runtime"
+ln -sfn /home/app/inteloneapi/2025.1.3/advisor/2025.1/lib64/libstdc++.so.6.0.32 "${WORK}/runtime/libstdc++.so.6"
+export LD_LIBRARY_PATH="${WORK}/runtime:${LD_LIBRARY_PATH}"
+
+case_dir="${WORK}/occDrivAerStaticMesh"
+mkdir -p "${case_dir}"
+cp -a "${WORK}/case/." "${case_dir}/"
+mkdir -p "${case_dir}/logFiles"
+cd "${case_dir}"
+tar -xzf "${MESH_ARCHIVE}" -C constant
+cp system/controlDict.noWrite system/controlDict
+cp system/fvSolution.fixedIter system/fvSolution
+cp "${WORK}/decompositionSurfaces" system/decompositionSurfaces
+sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1512;/" system/include/caseDefinition
+cp -a 0.orig 0
+strategy=$(sed -n "s/^strategy='\(.*\)'$/\1/p" "${WORK}/prepare.pbs")
+test -n "${strategy}"
+
+decompose() {
+  local method=$1 copy="${WORK}/decompose-$1"
+  mkdir -p "${copy}"
+  cp -a "${case_dir}/0" "${case_dir}/system" "${copy}/"
+  cp -al "${case_dir}/constant" "${copy}/constant"
+  cp "${WORK}/decomposeParDict" "${copy}/system/decomposeParDict"
+  case "${method}" in
+    scotchDomains)
+      sed -i -E "s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1scotch;/" "${copy}/system/include/caseDefinition"
+      printf '\nscotchCoeffs\n{\n    domains (2 4 16);\n    domainWeights (0.125 0.0625 0.015625);\n    strategy "%s";\n}\n' "${strategy}" >> "${copy}/system/decomposeParDict" ;;
+    multiLevel)
+      sed -i -E "s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1multiLevel;/" "${copy}/system/include/caseDefinition"
+      printf '\nmultiLevelCoeffs\n{\n    method scotch;\n    domains (4 2 4 16);\n}\n' >> "${copy}/system/decomposeParDict" ;;
+  esac
+  cp "${copy}/system/decomposeParDict" "${case_dir}/logFiles/decomposeParDict-${method}"
+  decomposePar -case "${copy}" -constant -cellDist -force -fileHandler uncollated > "${case_dir}/logFiles/decomposePar-${method}.log" 2>&1
+}
+
+decompose scotchDomains &
+scotch_pid=$!
+decompose multiLevel &
+multi_pid=$!
+wait "${scotch_pid}"
+wait "${multi_pid}"
+
+time_dir=0
+for method in scotchDomains multiLevel; do
+  time_dir=$(( time_dir + 1 ))
+  mkdir "${time_dir}"
+  cell_dist=$(find "${WORK}/decompose-${method}/0" "${WORK}/decompose-${method}/constant" -maxdepth 1 -name cellDist)
+  mv "${cell_dist}" "${time_dir}/cellDist"
+  cp 0/U 0/p 0/k 0/omega 0/nut 0/nuTilda "${time_dir}/"
+  rm -rf "${WORK}/decompose-${method}"
+done
+
+simpleFoam -postProcess -dict system/decompositionSurfaces -time '1:2' -fileHandler uncollated > logFiles/postProcess.log 2>&1
+grep -c 'Time = ' logFiles/postProcess.log
+touch "${WORK}/run-success"

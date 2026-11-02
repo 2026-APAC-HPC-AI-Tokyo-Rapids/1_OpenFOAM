@@ -286,13 +286,13 @@ def m_mpi():
     the sums are its mean per rank times 512, over the whole run of 40 steps."""
     s = reuse(4)
     set_title(s, "MPI CALLS ON 4 NODES")
-    xr, w = X0 + 6.1, 5.83
+    xr, w = X0 + 5.97, 5.96  # the user's hand edit of 11/02: the right table moved left and widened for MPI_Allreduce
     top = table_caption(s, X0, 1.3, 5.7, "The three MPI calls made most often, summed over the 512 ranks.")
     rows = [["Call", "Calls, all ranks", "Time, all ranks"], ["MPI_Isend", "290 M calls", "839 s"], ["MPI_Irecv", "290 M calls", "167 s"], ["MPI_Test", "289 M calls", "24 s"]]
     table(s, X0, top + 0.08, [2.0, 1.9, 1.8], rows, row_heights=[0.75, 0.6, 0.6, 0.6], size=18, aligns=["l", "r", "r"])
     table_caption(s, xr, 1.3, w, "The three MPI calls that took the most time, summed over the 512 ranks and per rank.")
     rows = [["Call", "Time, all ranks", "Time per rank", "Share of MPI"], ["MPI_Waitall", "22,069 s", "43.1 s", "55%"], ["MPI_Allreduce", "14,140 s", "27.6 s", "35%"], ["MPI_Bcast", "1,289 s", "2.5 s", "3%"]]
-    table(s, xr, top + 0.08, [2.0, 1.45, 1.3, 1.08], rows, row_heights=[0.75, 0.6, 0.6, 0.6], size=18, aligns=["l", "r", "r", "r"], colors=[None, [NAVY] * 4, [NAVY] * 4, None])
+    table(s, xr, top + 0.08, [2.175, 1.353, 1.33, 1.105], rows, row_heights=[0.75, 0.6, 0.6, 0.6], size=18, aligns=["l", "r", "r", "r"], colors=[None, [NAVY] * 4, [NAVY] * 4, None])
     bullets(s, X0, top + 2.95, XW, 6.95 - top - 2.95, ["Isend, Irecv and Test exchange halo values with neighbouring subdomains and took little time.", "Waitall and Allreduce wait for other ranks and took 90% of the MPI time.", "With equal cells the fastest rank computed for 1.34 s per step, the median rank for 1.96 s and the slowest for 2.88 s."], size=19, space_after=12)
     set_notes(s, PLAN_NOTES[3])
     return s
@@ -349,7 +349,7 @@ def m_decomposition():
     rows = [["", "hierarchical", "scotch"], ["Faces between subdomains", "4.31 M", "2.93 M"], ["Largest subdomain above the average", "0.00%", "1.07%"], ["s/step", "3.650", "3.395"], ["Jobs", "3", "2"]]
     table(s, X0, top + 0.05, [2.6, 1.85, 1.3], rows, row_heights=[0.45, 0.72, 0.72, 0.45, 0.45], size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], None, [INK, INK, NAVY], None])
     pw, xr = 2.875, 6.73
-    for i, (which, label) in enumerate((("hier", "hierarchical"), ("scotch", "scotch"))):
+    for i, (which, label) in enumerate((("hier", "hierarchical (16 8 4)"), ("scotch", "scotch"))):  # (16 8 4): the user's hand edit, 11/02
         x = xr + i * (pw + 0.15)
         add_text(s, x, 1.3, pw, 0.4, [label], size=18, color=NAVY, align="c")
         panel = decomp_panel(s, which, x, 1.72, w=pw)
@@ -524,9 +524,10 @@ def m_bonus_decomposition():
     rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"]]
     table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_heights=[0.45, 0.47, 0.47, 0.72, 0.47], size=17, aligns=["l", "r", "r"], colors=[None, None, None, None, [INK, INK, NAVY]])
     pw, xr = 2.62, 12.63 - 2 * 2.62 - 0.15
-    for i, (which, label) in enumerate((("scotch", "plain scotch"), ("multi", "multiLevel"))):
+    # the domains in the heading and its wider box are the user's hand edit (11/02), with multiLevel spelt as OpenFOAM does
+    for i, (which, label) in enumerate((("scotch", "plain scotch"), ("multi", "multiLevel (4 2 4 16)"))):
         x = xr + i * (pw + 0.15)
-        add_text(s, x, 1.3, pw, 0.4, [label], size=18, color=NAVY, align="c")
+        add_text(s, x - 0.15, 1.3, pw + 0.18, 0.42, [label], size=18, color=NAVY, align="c")
         panel = decomp_panel(s, which, x, 1.72, w=pw)
     caption(s, xr, 1.72 + panel.height / EMU + 0.08, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
     set_notes(s, PLAN_NOTES[13])

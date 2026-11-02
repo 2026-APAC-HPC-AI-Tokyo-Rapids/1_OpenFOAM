@@ -6,11 +6,13 @@
 
     uv run presentation/openfoam/decomposition/compose.py OUT_DIR
 
-OUT_DIR is the output directory of render.py (panels/ and stats.json). For each colouring (subdomains, numa) it writes one
-sheet with the case default hierarchical, Basic's scotch and the final Bonus' multiLevel (decomposition-<colouring>.png),
-one with hierarchical and scotch only (decomposition-<colouring>-baseline-vs-basic.png) and one with scotch and multiLevel
-only (decomposition-<colouring>-basic-vs-bonus.png). Each column has the car surface, the centre plane and the
-cross-section, with the numbers of its decomposePar log under its name and a key to the colours.
+OUT_DIR is the output directory of render.py (panels/ and stats.json). For each colouring (subdomains, numa) it writes, from
+the ASPIRE-2A run of 10/09, one sheet with the case default hierarchical, plain scotch (Basic until 10/16) and the final
+Bonus' multiLevel (decomposition-<colouring>.png), one with hierarchical and scotch only
+(decomposition-<colouring>-baseline-vs-basic.png) and one with scotch and multiLevel only
+(decomposition-<colouring>-basic-vs-bonus.png); from the Genkai run of 11/02, one with Basic's scotch on the node tree and
+multiLevel (decomposition-<colouring>-scotch-domains-vs-multilevel.png). Each column has the car surface, the centre plane
+and the cross-section, with the numbers of its decomposePar log under its name and a key to the colours.
 """
 import json
 import sys
@@ -22,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 OUT_DIR = Path(sys.argv[1])
 PANELS = OUT_DIR / "panels"
 STATS = json.loads((OUT_DIR / "stats.json").read_text())
-TITLES = {"hierarchical": "Case default: hierarchical (16 8 4)", "scotch": "Basic: scotch", "multiLevel": "Bonus (final): multiLevel (4 2 4 16)"}
+TITLES = {"hierarchical": "Case default: hierarchical (16 8 4)", "scotch": "Plain scotch", "scotchDomains": "Basic: scotch on the node tree (2 4 16)", "multiLevel": "Bonus (final): multiLevel (4 2 4 16)"}
 VIEWS = ["car", "side", "cross"]
 NODE_COLOURS = [(0.12, 0.47, 0.71), (1.0, 0.50, 0.05), (0.17, 0.63, 0.17), (0.58, 0.40, 0.74)]
 BACKGROUND = (18, 20, 25)
@@ -80,6 +82,9 @@ def compose(methods, colouring, name, column_width):
 
 
 for colouring in ("subdomains", "numa"):
-    compose(["hierarchical", "scotch", "multiLevel"], colouring, f"decomposition-{colouring}.png", 1280)
-    compose(["hierarchical", "scotch"], colouring, f"decomposition-{colouring}-baseline-vs-basic.png", 1920)
-    compose(["scotch", "multiLevel"], colouring, f"decomposition-{colouring}-basic-vs-bonus.png", 1920)
+    if "hierarchical" in STATS:
+        compose(["hierarchical", "scotch", "multiLevel"], colouring, f"decomposition-{colouring}.png", 1280)
+        compose(["hierarchical", "scotch"], colouring, f"decomposition-{colouring}-baseline-vs-basic.png", 1920)
+        compose(["scotch", "multiLevel"], colouring, f"decomposition-{colouring}-basic-vs-bonus.png", 1920)
+    if "scotchDomains" in STATS:
+        compose(["scotchDomains", "multiLevel"], colouring, f"decomposition-{colouring}-scotch-domains-vs-multilevel.png", 1920)

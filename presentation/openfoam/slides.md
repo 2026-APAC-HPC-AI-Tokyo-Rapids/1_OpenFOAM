@@ -63,8 +63,9 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 第8版の3回目（11/02夜、ユーザーが2回目の版を見て）：
   - 1枚目：公式の記録を「hierarchical 3.415 s/step」「scotch 3.576 s/step」と、分割の名前を付けて書く。
   - s/stepをsと略さない。表の見出しにs/stepがあれば値は数字だけ（10枚目など、本編と補足の全部の表）。図の平均も「s/step」と書く。
+  - ユーザーが出力を手で直して保存した3か所を取り込んだ（17:51、取り込むことはユーザーに確かめた）：4枚目の右の表を左へ寄せて広げた（MPI_Allreduceが1行に入る）、5枚目の絵の見出し「hierarchical (16 8 4)」、14枚目の絵の見出し「multiLevel (4 2 4 16)」（ユーザーの手ではmultilevelと小文字だったが、OpenFOAMの名前どおりLを大文字にすることもユーザーに確かめた）。
   - 13枚目：CPUの箱とメモリのチャネルを、NUMA領域ごとにまとめて隙間を空けた。1つの箱が8コア（L3の組）であることをメモに書いた（ユーザーの質問「4コアをフル、8コアを半分で合ってる？」）。
-  - domainsを入れたscotchの分割の絵：ASPIRE-2Aに入れないので、玄界で同じ設定の分割を作る（`decomposition/decomposition-genkai.pjm`、ユーザー：玄界で動かしてscpすればよい）。
+  - domainsを入れたscotchの分割の絵：ASPIRE-2Aに入れないので、玄界で同じ設定の分割を作った（`decomposition/decomposition-genkai.pjm`、PJM 7236147、ユーザー：玄界で動かしてscpすればよい）。BasicもmultiLevelも、512のサブ領域ごとのセル数と隣り合う組ごとの共有面が、ASPIRE-2Aの計測runと全部一致した。抜き出した面は`~/apac26/decomposition-genkai-20261102/`。玄界にParaViewがないので、絵はParaView 5.13.3を入れてから描く（`decomposition/README.md`）。
 
 ## 外せないもの
 
@@ -335,7 +336,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 表の時間は、固定なしの2つのrunです。hierarchicalは私たちのBaseline（#62、3本、3.6003、3.5313、3.8170、SD 4.1%）、scotchは7枚目の固定の実験のNeither（#36 A3、2本、3.3763、3.4137、SD 0.78%。PALSの`--cpu-bind`と`--mem-bind`だけで、MPI_Initで外れる）。この2つは同じ時期に交互に流したものではありません（日付は書かない決まりですが、10/12と10/03）。両方の全ジョブで、scotchがhierarchicalより速いのは確かです（範囲は重ならない）。scotchを採った根拠は、固定した後に交互に流した比較（3対3、−10.5%、7枚目の3つ目の文、補足31枚目）です。聞かれたらそう答えます。
 - 表の面とサブ領域の大きさ：`decomposePar.log`から（Boxの`presentation/openfoam/decomposition/README.md`）。hierarchicalは431万面、最大のサブ領域は平均の+0.002%（表では0.00%）。scotchは293万面（−32%）、最大+1.07%。
 - 「車の表面を多く含む板のrankは計算が多い」の根拠：固定したrunで、rankごとの計算時間の最大/中央値がhierarchicalで1.16、scotchで1.06でした（CrayPATの（プロセス − MPI）、#38、37181991433、37176272426、37182420190）。hierarchicalの偏りは、壁の面（車の表面）の数と相関しました（#38）。第8版の最初の版ではこの比を表に載せていましたが、固定したrunの値なので、固定なしの時間と並べないように外しました。
-- 絵：Boxの`decomposition-numa.png`（#39、10/09、`decomposePar -cellDist`、セル数と共有面の数は計測runの`decomposePar.log`と全部一致）。色はノードを色相（青、橙、緑、紫）、ノードの中の8つのNUMA領域を濃淡で分けています（rank rはノードr // 128、NUMA領域(r // 16) % 8）。scotchの列はdomains (2 4 16)を入れる前のplain scotchで、この表のscotchと同じ分け方です（ユーザーの質問「numaごとのdecompositionの画像はdomain(2,4,16)のあと？」への答え：前です。照合したのは10/05ごろのBasicの4ノードrun 37202026690で、domainsはまだ入っていなかった）。domainsを入れたscotchの絵はありません。作るにはASPIRE-2Aで`decomposePar -cellDist`とParaViewを流す必要があり、今はASPIRE-2Aに入れません（ユーザー、11/02）。
+- 絵：Boxの`decomposition-numa.png`（#39、10/09、`decomposePar -cellDist`、セル数と共有面の数は計測runの`decomposePar.log`と全部一致）。色はノードを色相（青、橙、緑、紫）、ノードの中の8つのNUMA領域を濃淡で分けています（rank rはノードr // 128、NUMA領域(r // 16) % 8）。scotchの列はdomains (2 4 16)を入れる前のplain scotchで、この表のscotchと同じ分け方です（ユーザーの質問「numaごとのdecompositionの画像はdomain(2,4,16)のあと？」への答え：前です。照合したのは10/05ごろのBasicの4ノードrun 37202026690で、domainsはまだ入っていなかった）。domainsを入れたscotchの絵はまだありません。分割は11/02に玄界で作り、計測runと全部一致したので、ParaViewを入れれば描けます（`decomposition/README.md`）。
 - 分け方：hierarchical (16 8 4)は、x方向に16、y方向に8、z方向に4つ、セル数が等しくなるように平らに切ります。scotchはグラフ分割で、セル数をそろえながら、切る面（サブ領域の間の面）をできるだけ少なくします。`hierarchicalCoeffs`には`delta 0.001`と`order xyz`もありますが、スライドでは`n`だけにしました（既定の値）。
 - 固定ありの交互の比較では、scotch対hierarchicalは1/2/4ノードで−1.3／−2.5／−10.5%です（`data/decomposition_basic.csv`、補足31枚目）。ノード数が多いほど効く理由は確かめていません（Q30）。
 - ISC26の課題（Task 5）の「分割方法を変えて、性能への効果を示す」に当たります。試した分割の全部は補足の33枚目です。
@@ -439,7 +440,7 @@ scotchCoeffs
 - 面の数（REPORT §6.3、`decomposePar.log`から、plain scotchに対して）：ノード間−22.7%、ソケット間−21.3%、NUMA領域間−10.4%、コアの間（サブ領域の間の全部の面）+3.3%。1つのサブ領域の隣の数の最大は66 → 40です。
 - 図：#63の5対5（交互）。対照（plain scotch）2.918 s（SD 0.22%）、候補2.898 s（SD 0.07%）で、全runが対照より速く、2枚目の決まりを通りました（2枚目の図のKeptと同じデータ）。1・2ノードではほぼ変わりません（+0.29%、+0.07%、#38）。
 - Basicの範囲であること：分割の方法はscotchのままで、その係数（`scotchCoeffs`）を変えるだけです（F1、Q10）。
-- 絵：domainsを入れたscotchの分割の絵はありません（5枚目の絵は入れる前のplain scotch）。作るにはASPIRE-2Aで`decomposePar -cellDist`とParaViewを流す必要があり、今はASPIRE-2Aに入れません（ユーザー、11/02）。
+- 絵：domainsを入れたscotchの分割の絵は、まだありません（5枚目の絵は入れる前のplain scotch）。分割は11/02に玄界で作り、計測runと全部一致しました（`decomposition/README.md`の「玄界での作り直し」）。ParaViewを入れれば、multiLevelと同じ画角と色で描けます。
 - multiLevel（Bonus）との違いは14枚目です。Basicで採用したのは、scotch、固定、ノードの木の3つです。
 
 ### 9. Basic results（0:30）
@@ -761,7 +762,7 @@ scotchCoeffs                   multiLevelCoeffs
 - 結論の1枚：1枚目が要約を兼ね、20枚目の最後の1文で最終結果に戻ります。
 - 数えなかった高速化（#68、固定反復でだけ効く残差と大域和の省略。最終Bonusの上で2.166 s/step）：運営の答え（11/02）で、どの段でも数えないと決まりました。別の枚で見せてもよいが採点しない、とのことで、ユーザーの判断で枚ごと消しました。聞かれたときの答えはQ34。
 - カウンタの図（第7版の11枚目にあった、最初の4つの変更の命令とDRAMからのrefill）：細かいので補足の39枚目だけにしました（ユーザー、11/02）。18枚目のメモで、聞かれたときの答えを書いています。
-- domainsを入れたscotch（Basic）の、NUMAごとに塗った絵：Boxにありません（plain scotch、hierarchical、multiLevelだけ）。作るにはASPIRE-2Aで`decomposePar -cellDist`とParaViewを流す必要があり、今はASPIRE-2Aに入れません（11/02）。
+- domainsを入れたscotch（Basic）の、NUMAごとに塗った絵：Boxにはまだありません（plain scotch、hierarchical、multiLevelだけ）。分割は11/02に玄界で作り、計測runと全部一致しました。描くにはParaView 5.13.3が要ります（玄界にはない）。
 
 ## 時間が足りないとき（削る順）
 
