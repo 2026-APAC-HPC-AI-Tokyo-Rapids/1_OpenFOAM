@@ -9,8 +9,6 @@ NOTES["cover"] = """
 EN: We are Tokyo Rapids with RIKEN. We start with the HPC task, OpenFOAM.
 
 訳（参考）: Tokyo Rapids with RIKENです。HPCの課題、OpenFOAMから始めます。
-
-JP: 名乗るだけで、すぐ次の枚（要約）へ進む。結果の数字は次の枚で言う。
 """
 
 NOTES["index"] = """

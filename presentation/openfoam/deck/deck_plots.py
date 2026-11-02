@@ -174,10 +174,11 @@ def rule():
     save(figure, "p07_rule")
 
 
-def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False):
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD, or '1 job', above it. Each (i, j) in arrows joins the means of groups i and j
-    with an arrow and writes the change between them to its left."""
+    with an arrow and writes the change between them to its left, at the height along the arrow from its end (0) to its
+    start (1), lower where a job of group i stands at the middle."""
     figure, axis = plt.subplots(figsize=size, layout="constrained")
     for x, (_, values, color, hollow) in enumerate(groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
@@ -186,7 +187,7 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
         before, after = groups[i][1], groups[j][1]
         start, end = (i + 0.4, statistics.fmean(before)), (j - 0.5, statistics.fmean(after))  # clear of the labels of j
         axis.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "-|>", "color": NAVY, "linewidth": 2, "mutation_scale": 18, "shrinkA": 0, "shrinkB": 0})
-        axis.text(start[0] - 0.06, (start[1] + end[1]) / 2, percent(after, before), ha="right", va="center", fontsize=15, color=NAVY, zorder=4)
+        axis.text(start[0] - 0.06, end[1] + along * (start[1] - end[1]), percent(after, before), ha="right", va="center", fontsize=15, color=NAVY, zorder=4)
     axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups])
     colour_ticks(axis.get_xticklabels(), [INK if color in (MUTED, FAINT) else color for _, _, color, _ in groups])
     axis.set_xlim(-0.6, len(groups) - 0.4)
@@ -202,6 +203,17 @@ def official(method):
 
 # The four ways of placing the ranks on scotch (#36 A3): tick label, configuration in pinning.csv, colour
 PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Memory\nonly", "numactl --membind only", FAINT), ("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC)]
+
+
+def decomposition():
+    """Main slide 5: the case default hierarchical, our Baseline (#62), against plain scotch, Neither of the pinning
+    experiment (#36 A3), both without pinning and not run in turns, with the faces between subdomains of each from its
+    decomposePar log under its name (the user, 11/02: a comparison of results goes in a plot, small if need be, which
+    shows the jobs, the time and the SD)."""
+    scotch = runs("pinning.csv", "configuration")[PLACEMENTS[0][1]]
+    groups = [("hierarchical\n4.31 M faces\n3 jobs", BASELINE[4], BASE, False), ("scotch\n2.93 M faces\n2 jobs", scotch, BASIC, False)]
+    # the change is written low on its arrow, clear of the Baseline job at 3.53 s/step that stands at the middle
+    tiers("p05_decomposition", groups, (5.75, 3.0), 3.2, 4.1, [3.4, 3.6, 3.8, 4.0], arrows=[(0, 1)], ylabel="s/step, each job", along=0.1)
 
 
 def pinning():
@@ -453,6 +465,7 @@ def flame(levels=14):
 
 
 rule()
+decomposition()
 pinning()
 pinning_case_default()
 mapping()

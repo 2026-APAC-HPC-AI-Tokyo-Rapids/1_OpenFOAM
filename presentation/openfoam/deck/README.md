@@ -7,7 +7,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [PICTURES]
 ```
 
 - 入力の既定は `~/apac26/Tokyo Rapids with RIKEN Presentation.pptx`、出力の既定は `~/apac26/Tokyo Rapids with RIKEN Presentation HPC (8th edition).pptx` です。入力の元はBoxの `Tokyo_Rapids_with_RIKEN_Submission/presentation/` にあります。デッキはリポジトリに入れません。Boxのpptxと、ユーザーがコメントを付けた `~/apac26/Tokyo Rapids with RIKEN Presentation HPC.pptx` は、チームが別に編集しているので、上書きしません。
-- `PICTURES` は、Boxの `presentation/openfoam/decomposition/` の写しです（WSLからはBoxを読めないので、Windows側でコピーする）。既定は `~/apac26/decomposition` で、そこの `decomposition-numa.png`（分割をノードとNUMA領域ごとに塗った絵、3840×2220）を使います。
+- `PICTURES` は、Boxの `presentation/openfoam/decomposition/` の写しです（WSLからはBoxを読めないので、Windows側でコピーする）。既定は `~/apac26/decomposition` で、そこの `decomposition-numa.png`（分割をノードとNUMA領域ごとに塗った絵、3840×2220）と `decomposition-numa-scotch-domains-vs-multilevel.png`（玄界で描いたBasicとmultiLevel、3840×3330）を使います。
 - 入力は、OpenFOAMパートが10/29のビルドのまま（1〜46枚目：表紙、本編2〜21でチームのrooflineが14、補足の扉22、Q&A目次23、補足24〜45、共通の再現性スライド46）で、47枚目からAIパートが続くデッキです。11/01からは、Boxのデッキ（10/31、184枚）をWindows側でコピーして入力にしています。
 - `build.sh` は、まず分割の絵を一時フォルダに写し、`deck_figures.py` で `../figures.py` の図をデッキ用に描き、`deck_plots.py` で各ジョブの点を描く図とCdの収束の図をスライドの大きさで描きます。次に `build_deck.py` でpptxを作ります。一時フォルダは終われば消します。
 - 出力はHPCだけのデッキです（11/02、チームがHPCとAIのデッキを分けたため）：表紙1、本編2〜21（`slides.md` の本編1〜20）、補足の扉22、Q&A目次23、補足24〜42（19枚）。スライドショーで映るのは1〜21枚目で、補足の扉から補足の最後までは非表示です。入力のAIパート、チームのroofline、Qwenと共通の再現性スライド（11/01にユーザーの判断で外した）は出力しません。
@@ -52,7 +52,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [PICTURES]
 - 時間の図は、時間を縦軸にし、各ジョブの点、平均の棒、各群の上に平均（有効数字4桁、単位付き）と標準偏差（%）を描きます（`deck_plots.py` の `stats()`）。1本しかないときは「1 job」と書きます。時間の軸は原点0から描き、ジョブの差が見える範囲の下は細い帯に縮めて、軸に波線を入れます（`zoomed()`、11/02）。段どうしの変化は矢印と%で描きます（`tiers()`）。scalingは原点0からの1つの線形の軸に、1、2、4ノードごとに公式の結果、Baseline、Basic、Bonusを並べ、理想の時間を点線で描きます。
 - 数値は `s/step` と書き、%の前に空白を入れません（「21%」）。`tidy()` は「21 %」を「21%」に直します。
 - 見出しが1行に収まらないと本文に重なるので、大文字で32文字ほどまでにします。
-- 流れの動画とメッシュの絵は、入力のデッキに入っているものを使います。どちらも入力の2枚目にあり、動画の自動再生はその枚のタイミングの設定にあるので、動画を置く本編9枚目（デッキの10枚目）を入力の2枚目の上に作り、本編1枚目には入力の2枚目からメッシュの画像を写します。分割の絵は、Boxの `decomposition-numa.png`（3列×3段）から列を切り出します（本編5枚目でhierarchicalとscotch、14枚目でplain scotchとmultiLevel）。列の上の見出しの段は切り落とします（`PANEL_TOP`）。絵のscotchはdomains (2 4 16)を入れる前のplain scotchです。Basic（domainsあり）の絵は11/02に玄界で作りましたが、デッキにはまだ使っていません（`../decomposition/README.md`）。
+- 流れの動画とメッシュの絵は、入力のデッキに入っているものを使います。どちらも入力の2枚目にあり、動画の自動再生はその枚のタイミングの設定にあるので、動画を置く本編9枚目（デッキの10枚目）を入力の2枚目の上に作り、本編1枚目には入力の2枚目からメッシュの画像を写します。分割の絵は、Boxの絵から列を切り出します。本編5枚目は `decomposition-numa.png`（3列×3段）のhierarchicalとscotch（domains (2 4 16)を入れる前のplain scotch）、14枚目は `decomposition-numa-scotch-domains-vs-multilevel.png`（11/02に玄界で描いた2列×3段）のBasic（domainsあり）とmultiLevelです。2つの絵は同じ段組みを1.5倍にしたものなので、列の上の見出しの段と下の凡例の段を同じ割合で切り落とします（`PANEL_TOP`、`ALL_BOTTOM`）。凡例は、Boxの絵と同じ色（`../decomposition/render.py`）を、絵の下にPowerPointの図形で描きます（`numa_key()`）。
 
 ## 確かめ方
 
