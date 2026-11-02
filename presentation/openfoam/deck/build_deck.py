@@ -24,6 +24,7 @@ over the whole slide. Time axes start at 0, with a wavy break where the jobs nee
 """
 
 import csv
+import json
 import re
 import sys
 from pathlib import Path
@@ -264,7 +265,7 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
         add_text(s, x, y + 1.45, w, 1.1, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
-            arrow_line(s, x1, y + 0.92, x2, y + 0.92, color=FAINT, width=1.75)
+            arrow_line(s, x1, y + 0.92, x2, y + 0.92, color=INK, width=3)  # black and 3 pt, as the user drew them (11/02)
             add_text(s, x1 - 0.25, y + 0.42, x2 - x1 + 0.5, 0.42, [changes[k - 1]], size=17, color=color, align="c")
 
 
@@ -353,10 +354,11 @@ def m_pinning():
     cx, cy = at.core(1, 5)
     cx, cy = cx + at.cell / 2, cy + at.cell / 2
     bottom = at.y + at.h
-    for d, m, color, label in ((1, 0, MEMORY, "local memory"), (6, 1, FAINT, "remote memory")):
+    # arrows are black (the user, 11/03), but for the way to remote memory, which may stay grey
+    for d, m, arrow, color, label in ((1, 0, INK, MEMORY, "local memory"), (6, 1, FAINT, INK, "remote memory")):
         mx, my = at.module(d, m)
-        arrow_line(s, cx, cy, mx + at.module_w / 2, my - 0.02, color=color, width=2.25)
-        add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=INK if color == FAINT else color, align="c")
+        arrow_line(s, cx, cy, mx + at.module_w / 2, my - 0.02, color=arrow, width=2.25)
+        add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=color, align="c")
     caption(s, X0, bottom + 0.62, at.w + 0.1, "One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels, one rank in navy and its local memory in green.", h=0.7)
     steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 7% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
     set_notes(s, PLAN_NOTES[5])
@@ -527,7 +529,7 @@ def m_memory_limit():
     blocks over a row of memory channels, so that the halved resource can be seen (the user, 11/02: simpler than the chips
     of the 8th edition's first build); then the ranks and channels per node, the time and the bandwidth, and arrows between
     the rows. The colours are the user's hand edit (11/02): the cores in navy and the channels in green, what was halved in
-    red, the step that took 2.2 times as long in navy and the arrow to the same time in black."""
+    red and the step that took 2.2 times as long in navy; both arrows are black (the user, 11/03)."""
     s = reuse(9)
     set_title(s, "MEASURING THE MEMORY LIMIT")
     pitch, top, bar_w, xc, xr, xa = 1.5, 1.45, 4.95, 5.8, 7.65, 10.45
@@ -541,7 +543,7 @@ def m_memory_limit():
         add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=NAVY if k == 2 else INK, anchor="m")
     for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
         y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
-        arrow_line(s, xa, y1, xa, y2 - 0.05, color=NAVY if k else INK, width=2.25)
+        arrow_line(s, xa, y1, xa, y2 - 0.05, color=INK, width=2.25)
         add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": HALVED}, {"runs": [effect], "color": NAVY if k else INK}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
     caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
@@ -632,12 +634,12 @@ def u_diagram(s, x, y, w=5.6):
     for k, component in enumerate(("Ux", "Uy", "Uz")):
         yy = y + 0.42 + k * 0.52
         shape_text(box(s, x, yy, bw, 0.42, fill=LIGHT, line=LINE, radius=0.12), "matrix of U", size=15, color=NAVY)
-        arrow_line(s, x + bw + 0.06, yy + 0.21, x + bw + 0.54, yy + 0.21, color=FAINT)
+        arrow_line(s, x + bw + 0.06, yy + 0.21, x + bw + 0.54, yy + 0.21, color=INK)
         shape_text(box(s, x + bw + 0.6, yy, bw, 0.42, fill=BONUS_TINT, line=BONUS_LINE, radius=0.12), f"sweep {component}", size=15, color=INK)
     add_text(s, x, y + 1.98, w, 0.36, ["the matrix is read 3 times"], size=16, align="c")
     add_text(s, x, y + 2.5, w, 0.36, ["After, one pass for all three"], size=16)
     shape_text(box(s, x, y + 2.92, bw, 1.0, fill=LIGHT, line=LINE, radius=0.08), "matrix of U", size=15, color=NAVY)
-    arrow_line(s, x + bw + 0.06, y + 3.42, x + bw + 0.54, y + 3.42, color=FAINT)
+    arrow_line(s, x + bw + 0.06, y + 3.42, x + bw + 0.54, y + 3.42, color=INK)
     shape_text(box(s, x + bw + 0.6, y + 2.92, bw, 1.0, fill=BONUS_TINT, line=BONUS_LINE, radius=0.08), ["sweep Ux", "sweep Uy", "sweep Uz"], size=15, color=INK)
     add_text(s, x, y + 3.98, w, 0.36, ["the matrix is read once"], size=16, color=NAVY, align="c")
     return y + 4.34
@@ -651,14 +653,14 @@ def residual_diagram(s, x, y, w=5.6):
         bx = x + k * (bw + 0.5)
         shape_text(box(s, bx, y + 0.5, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=NAVY if k == 0 else INK)
         if k:
-            arrow_line(s, bx - 0.44, y + 0.95, bx - 0.06, y + 0.95, color=FAINT)
+            arrow_line(s, bx - 0.44, y + 0.95, bx - 0.06, y + 0.95, color=INK)
             add_text(s, bx - 0.75, y + 1.45, 1.0, 0.3, [("b − Aψ", "copy")[k - 1]], size=13, align="c")
     add_text(s, x, y + 1.98, w, 0.36, ["the residual is written twice"], size=16, align="c")
     add_text(s, x, y + 2.5, w, 0.36, ["After, in place"], size=16)
     for k, (text, fill, line) in enumerate((("matrix, ψ and b", LIGHT, LINE), ("residual r", BONUS_TINT, BONUS_LINE))):
         bx = x + k * 2 * (bw + 0.5)
         shape_text(box(s, bx, y + 2.97, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=NAVY if k == 0 else INK)
-    arrow_line(s, x + bw + 0.06, y + 3.42, x + 2 * (bw + 0.5) - 0.06, y + 3.42, color=FAINT)
+    arrow_line(s, x + bw + 0.06, y + 3.42, x + 2 * (bw + 0.5) - 0.06, y + 3.42, color=INK)
     add_text(s, x + bw, y + 3.47, bw + 1.0, 0.3, ["b − Aψ"], size=13, align="c")
     add_text(s, x, y + 3.98, w, 0.36, ["the residual is written once"], size=16, color=NAVY, align="c")
     return y + 4.34
@@ -666,9 +668,11 @@ def residual_diagram(s, x, y, w=5.6):
 
 def m_examples():
     """Two source changes drawn side by side (the user, 11/02: like the example of U, left and right): 0002 removes passes
-    over a matrix and 0001 a copy, two of the four intents, each measured on its own."""
+    over a matrix and 0001 a copy, two of the four intents, each measured on its own. A thin black line divides the two at
+    the middle of the slide, as the user drew it (11/02)."""
     s = main_slide(40)
     set_title(s, "TWO SOURCE CHANGES IN PICTURES")
+    arrow_line(s, 6.667, 1.01, 6.667, 7.34, color=INK, width=0.5, head=False)
     for x, title, gain, draw, text in ((X0, "0002 U components in one pass", "−2.3% per step on 4 nodes, −6.4% on 1 node", u_diagram, "The three components of U share one matrix, so one pass over it can update all three."), (7.03, "0001 No copies in the solvers", "−3.4% per step on 4 nodes, −2.2% on 1 node", residual_diagram, "The residual is written straight into its field instead of into a new field that is then copied.")):
         heading(s, x, 1.3, 5.6, title, size=18)
         add_text(s, x, 1.7, 5.6, 0.36, [gain], size=16)
@@ -692,22 +696,33 @@ def m_bonus_results():
     return s
 
 
-# Times faster than on 1 node: the mean s/step on 1 node over that on 2 and 4 nodes, from the jobs of the scaling plot (the
-# official runs are one job each)
-SPEEDUPS = ["Official, hierarchical", "Official, scotch", "Our Baseline", "Basic", "Bonus"]
-SPEEDUP = {2: [2.06, 1.95, 1.96, 2.10, 2.05], 4: [4.30, 3.93, 3.99, 4.61, 4.34]}
+TIER_COLOURS = {"Baseline": BASE, "Basic": BASIC, "Bonus": BONUS}
 
 
 def m_scaling():
-    """The scaling plot across the slide, with the official runs beside our three tiers at each node count (the user, 11/01);
-    under it how many times faster than 1 node each is on 2 and 4 nodes, instead of the efficiency (the user, 11/02)."""
+    """The scaling plot alone, as tall as the slide allows (the user, 11/03: the table of speedups under it made the slide
+    busy), with the official runs beside our three tiers at each node count (the user, 11/01). Over it, as slide shapes the
+    user can move by hand, how many times faster than on 1 node each of our tiers is at 2 and 4 nodes, over its label
+    (instead of the efficiency, the user, 11/02), and why that passes 4 on 4 nodes, in the empty part over the 4-node jobs.
+    deck_plots.py gives the speedups and those places in p17_scaling.json; the official runs' speedups (4.30 and 3.93 on 4
+    nodes) are in the notes only."""
     s = reuse(12)
     set_title(s, "SCALING FROM 1 TO 4 NODES")
-    bottom = figure(s, "p17_scaling", X0 - 0.1, 1.25, XW + 0.1, "Each job on 1, 2 and 4 nodes on one axis from 0, the dashes being ideal scaling from 1 node.", h=0.4)
-    top = table_caption(s, X0, bottom + 0.1, 8.4, "Times faster than on 1 node, against 2 and 4 times for ideal scaling.")
-    rows = [[""] + SPEEDUPS, ["2 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[2]], ["4 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[4]]]
-    table(s, X0, top + 0.03, [1.2, 1.6, 1.4, 1.45, 1.25, 1.25], rows, row_heights=[0.62, 0.42, 0.42], size=16, aligns=["l"] + ["r"] * 5, colors=[None, None, [INK, INK, INK, INK, NAVY, NAVY]])
-    add_text(s, 9.45, bottom + 0.15, 12.63 - 9.45, 1.4, ["Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache."], size=18, line=1.05, anchor="m")
+    x, y, w = X0 - 0.1, 1.25, XW + 0.1
+    figure(s, "p17_scaling", x, y, w, "Each job on 1, 2 and 4 nodes on one axis from 0, with the dashes for ideal scaling and the numbers for times faster than on 1 node.", h=0.62)
+    plot = json.loads((FIG / "p17_scaling.json").read_text(encoding="utf-8"))
+    h = w * plot["size"][1] / plot["size"][0]
+
+    def on_slide(fx, fy):
+        """A point of the plot, given in figure fractions from its bottom left, on the slide."""
+        return x + fx * w, y + (1 - fy) * h
+
+    number_h = 0.42
+    for key, mark in plot["marks"].items():
+        cx, top = on_slide(mark["x"], mark["top"])
+        add_text(s, cx - 0.55, top - number_h, 1.1, number_h, [f"{mark['speedup']:.2f}×"], size=17, color=TIER_COLOURS[key.split()[0]], align="c", anchor="b")
+    (left, floor), (right, ceiling) = on_slide(*plot["free"][:2]), on_slide(*plot["free"][2:])
+    add_text(s, left, ceiling + 0.1, right - left, floor - number_h - 0.15 - ceiling - 0.1, ["Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache."], size=18, line=1.05, anchor="b")
     set_notes(s, PLAN_NOTES[18])
     return s
 

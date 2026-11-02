@@ -16,6 +16,7 @@ its size on the slide, so 12 pt here is 12 pt there.
 """
 
 import importlib.util
+import json
 import math
 import statistics
 import sys
@@ -103,9 +104,10 @@ def jobs(axis, x, values, color, width=0.3, hollow=False):
 
 
 def label_above(axis, x, values, color=INK, size=12, text=None, top=None, stacked=False):
-    """The mean and SD of the jobs at x (or text), above the highest job, or above top when a mark drawn there is higher."""
+    """The mean and SD of the jobs at x (or text), above the highest job, or above top when a mark drawn there is higher;
+    returns the label."""
     y = max(values) if top is None else max(max(values), top)
-    axis.annotate(text or stats(values, stacked), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
+    return axis.annotate(text or stats(values, stacked), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
 
 
 def colour_ticks(labels, colors):
@@ -175,8 +177,8 @@ def rule():
 def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD (none for a single job) above it. Each (i, j) in arrows joins the means of groups i and j
-    with an arrow and writes the change between them to its left, at the height along the arrow from its end (0) to its
-    start (1), lower where a job of group i stands at the middle."""
+    with a black arrow (the user, 11/03: arrows are black) and writes the change between them in navy to its left, at the
+    height along the arrow from its end (0) to its start (1), lower where a job of group i stands at the middle."""
     figure, axis = plt.subplots(figsize=size, layout="constrained")
     for x, (_, values, color, hollow) in enumerate(groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
@@ -184,7 +186,7 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
     for i, j in arrows:
         before, after = groups[i][1], groups[j][1]
         start, end = (i + 0.4, statistics.fmean(before)), (j - 0.5, statistics.fmean(after))  # clear of the labels of j
-        axis.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "-|>", "color": NAVY, "linewidth": 2, "mutation_scale": 18, "shrinkA": 0, "shrinkB": 0})
+        axis.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "-|>", "color": INK, "linewidth": 2, "mutation_scale": 18, "shrinkA": 0, "shrinkB": 0})
         axis.text(start[0] - 0.06, end[1] + along * (start[1] - end[1]), percent(after, before), ha="right", va="center", fontsize=15, color=NAVY, zorder=4)
     axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups])
     colour_ticks(axis.get_xticklabels(), [INK if color in (MUTED, FAINT) else color for _, _, color, _ in groups])
@@ -278,12 +280,19 @@ def scaling():
     official runs, then our Baseline, Basic and Bonus. The official runs are one hierarchical (hollow) and one scotch (grey)
     job, drawn as on the supporting slide of the organisers' runs. The dashed marks are ideal scaling from each tier's
     1-node mean. Our tiers are labelled above their jobs or mark, whichever is higher, and the official runs under theirs,
-    so that no mark crosses a label; the plot spans the slide so that labels side by side have room. The speedups from
-    1 node stand under the plot."""
+    so that no mark crosses a label; the plot spans the slide so that labels side by side have room.
+
+    The plot takes the slide's height, since the speedups are no longer a table under it (the user, 11/03: the slide was
+    busy): build_deck.py writes them over the plot as slide shapes that can be moved by hand. p17_scaling.json gives it
+    each tier's speedup from 1 node at 2 and 4 nodes (the 1-node mean over that mean, as the table had it) and where the
+    top of that label is, and the empty part over the 4-node labels and under the legend, all in figure fractions from the
+    bottom left."""
     tiers = [("Baseline", BASELINE, BASE), ("Basic", {n: FINAL[("Basic", n)] for n in NODES}, BASIC), ("Bonus", {n: FINAL[("Bonus", n)] for n in NODES}, BONUS)]
     official = [("hierarchical", -0.13, True), ("scotch", 0.13, False)]  # method, offset from the column, hollow
     pitch = 4.7  # from one node count to the next: four columns 1 apart and a gap
-    figure, axis = plt.subplots(figsize=(12.03, 3.25), layout="constrained")
+    size = (12.03, 5.0)
+    figure, axis = plt.subplots(figsize=size, layout="constrained")
+    labels = {}
     for g, n in enumerate(NODES):
         x0 = pitch * g
         for method, offset, hollow in official:
@@ -293,13 +302,15 @@ def scaling():
                 axis.scatter([x0 + offset], OFFICIAL[(method, n)], s=50, color=FAINT, edgecolor="black", linewidth=0.5, zorder=3)
         lines = sorted(((OFFICIAL[(method, n)][0], method) for method, _, _ in official), reverse=True)  # as the jobs stand
         axis.annotate("\n".join(f"{method} {four(value)} s/step" for value, method in lines), (x0, lines[-1][0]), textcoords="offset points", xytext=(0, -9), ha="center", va="top", fontsize=10, color=INK, linespacing=1.05)
-        for k, (_, data, color) in enumerate(tiers, 1):
+        for k, (name, data, color) in enumerate(tiers, 1):
             x = x0 + k
             ideal = statistics.fmean(data[1]) / n if n > 1 else None
             if ideal:
                 axis.hlines(ideal, x - 0.42, x + 0.42, color=color, linestyle="--", linewidth=1.3, zorder=1)
             jobs(axis, x, data[n], color, width=0.48)
-            label_above(axis, x, data[n], color=color, size=10, top=ideal, stacked=True)
+            label = label_above(axis, x, data[n], color=color, size=10, top=ideal, stacked=True)
+            if n > 1:
+                labels[f"{name} {n}"] = (label, statistics.fmean(data[1]) / statistics.fmean(data[n]))
     axis.set_xticks([pitch * g + k for g in range(len(NODES)) for k in range(4)], [name for _ in NODES for name in ("Official", "Baseline", "Basic", "Bonus")], minor=True)
     axis.set_xticks([pitch * g + 1.5 for g in range(len(NODES))], [f"{n} node{'s' if n > 1 else ''}" for n in NODES])
     axis.tick_params(axis="x", which="minor", labelsize=10.5)
@@ -309,7 +320,18 @@ def scaling():
     axis.set_ylim(0, 18.5)
     axis.set_yticks([0, 4, 8, 12, 16])
     finish(axis, "s/step, each job")
-    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor="white", markeredgecolor=MUTED, markeredgewidth=1.6, label="official hierarchical"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.5, label="official scotch")], frameon=False, loc="upper right", fontsize=11)
+    legend = axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor="white", markeredgecolor=MUTED, markeredgewidth=1.6, label="official hierarchical"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.5, label="official scotch")], frameon=False, loc="upper right", fontsize=11)
+    figure.canvas.draw()  # lays the figure out, so that the labels stand where they are saved
+    to_figure = figure.transFigure.inverted()
+    marks = {}
+    for key, (label, speedup) in labels.items():
+        box = label.get_window_extent().transformed(to_figure)
+        marks[key] = {"speedup": round(speedup, 2), "x": round((box.x0 + box.x1) / 2, 5), "top": round(box.y1, 5)}
+    legend_box = legend.get_window_extent().transformed(to_figure)
+    left = to_figure.transform(axis.transData.transform((pitch * 2 - 0.8, 0)))[0]  # just left of the 4-node official runs
+    free = [left, max(mark["top"] for key, mark in marks.items() if key.endswith(" 4")), legend_box.x1, legend_box.y0]
+    layout = {"size": size, "marks": marks, "free": [round(v, 5) for v in free]}
+    (OUT / "p17_scaling.json").write_text(json.dumps(layout, indent=1) + "\n", encoding="utf-8")
     save(figure, "p17_scaling")
 
 
