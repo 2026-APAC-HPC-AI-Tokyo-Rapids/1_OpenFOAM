@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+#PJM -L elapse=00:30:00
+#
+# Other renumberMesh methods on Genkai (11/03), for the question why we kept the default: does another order of the cells
+# make a step of the official case faster than Cuthill-McKee, which every measured run used (Allrun's renumberMesh as
+# written, as Basic requires)? ASPIRE-2A could not be reached that day, so this is an indication on another machine (Xeon
+# Platinum 8490H with 2 MB of L2 per core, against 0.5 MB on ASPIRE-2A), not a result of the task. The build is the
+# unmodified v2512 of the Genkai runs (35722802934: Intel oneAPI 2025.1, Intel MPI, Scotch 6.1.0) and the case the official
+# one in the 448 subdomains of the Genkai 4-node runs (scotch, 112 ranks per node). One STEP per job:
+#
+#   prepare  1 node: unpack the mesh, decomposePar, and copy the decomposed case once per method (cases/<method>).
+#   run      4 nodes: in each copy not yet renumbered, Allrun's steps with its method (restore0Dir, renumberMesh,
+#            potentialFoam, applyBoundaryLayer); then rounds of simpleFoam over 40 iterations, every method once per round
+#            in an order rotated by the round, until ROUNDS rounds are done or the next round would not end in time. Run the
+#            step again for more rounds: each run's log and coefficient.dat go to results/ and are not repeated.
+#
+#   cd WORK && pjsub -L rscgrp=a-batch -L node=1 -x STEP=prepare,WORK=<WORK> -o <WORK>/logs/%j.pjm.log -j renumber-genkai.pjm
+#   cd WORK && pjsub -L rscgrp=a-batch -L node=4 --mpi proc=448 -x STEP=run,WORK=<WORK>,ROUNDS=4 -o <WORK>/logs/%j.pjm.log -j renumber-genkai.pjm
+#
+# WORK holds build/ (the unpacked build), case/ (benchmark/occDrivAerStaticMesh) and the renumberMeshDict-* of this
+# directory. The default method runs renumberMesh exactly as Allrun does; the others read their renumberMeshDict with -dict,
+# as the Bonus would.
+set -euo pipefail
+: "${STEP:?step is required}"
+: "${WORK:?work directory is required}"
+METHODS=(CuthillMcKee RCM none spring random)
+MESH_ARCHIVE=/home/pj26000080/share/openfoam-workload/polyMesh_65M.tar.gz
+
+module purge
+module load intel/2025.1.3 impi
+# As platforms/genkai/run-openfoam.pjm: a user-installed GCC with cpp but no cc1 stays off the PATH, so that the coded
+# function object compiles with the tools of the OS.
+user_local_bin="${HOME}/.local/bin:"
+export PATH="${PATH//${user_local_bin}/}"
+# OpenFOAM's scripts use unset variables and return non-zero codes while they set up.
+set +eu
+source "${WORK}/build/OpenFOAM/etc/bashrc" WM_COMPILER=Icx WM_MPLIB=INTELMPI WM_LABEL_SIZE=32 WM_PRECISION_OPTION=DP WM_COMPILE_OPTION=Opt
+source "${WM_PROJECT_DIR}/bin/tools/RunFunctions"
+set -eu
+# The build needs the libstdc++ of GCC 13 (GLIBCXX_3.4.32), which the OS lacks: as decomposition-genkai.pjm, the one that
+# Intel oneAPI ships with Advisor is linked under its usual name.
+mkdir -p "${WORK}/runtime" "${WORK}/results"
+ln -sfn /home/app/inteloneapi/2025.1.3/advisor/2025.1/lib64/libstdc++.so.6.0.32 "${WORK}/runtime/libstdc++.so.6"
+export LD_LIBRARY_PATH="${WORK}/runtime:${LD_LIBRARY_PATH}"
+
+if [[ "${STEP}" == prepare ]]; then
+  base="${WORK}/cases/decomposed"
+  mkdir -p "${base}/logs"
+  cp -a "${WORK}/case/." "${base}/"
+  cd "${base}"
+  tar -xzf "${MESH_ARCHIVE}" -C constant
+  cp system/controlDict.noWrite system/controlDict
+  cp system/fvSolution.fixedIter system/fvSolution
+  cp -a 0.orig 0
+  sed -i -E "s/^(nCores[[:space:]]+)[0-9]+;/\\1448;/; s/^(decompositionMethod[[:space:]]+)[^;]+;/\\1scotch;/" system/include/caseDefinition
+  # plain scotch, as the Genkai runs: the repository's scotchCoeffs maps 512 subdomains onto the ASPIRE-2A node (#63),
+  # and 448 is no multiple of its 128 (the first try, PJM 7238142, stopped there)
+  sed -i '/^\/\/ Map the subdomains onto the ASPIRE-2A node tree/,/^}/d' system/decomposeParDict
+  test "$(grep -c scotchCoeffs system/decomposeParDict)" -eq 0
+  # 40 iterations from 0 every time: a run writes its last step, which startFrom latestTime would continue from
+  sed -i -E "s/^(endTime[[:space:]]+)[0-9]+;/\\140;/; s/^(startFrom[[:space:]]+)[^;]+;/\\1startTime;/" system/controlDict
+  decomposePar -constant -fileHandler uncollated > logs/decomposePar.log 2>&1
+  cp logs/decomposePar.log "${WORK}/results/decomposePar.log"
+  for method in "${METHODS[@]}"; do
+    copy="${WORK}/cases/${method}"
+    mkdir -p "${copy}/constant" "${copy}/logs"
+    cp -a "${base}/0.orig" "${base}/system" "${copy}/"
+    find "${base}/constant" -mindepth 1 -maxdepth 1 ! -name polyMesh -exec cp -a {} "${copy}/constant/" \;
+    [[ "${method}" == CuthillMcKee ]] || cp "${WORK}/renumberMeshDict-${method}" "${copy}/system/"
+    cp -a "${base}"/processor* "${copy}/" &
+  done
+  wait
+  touch "${WORK}/prepared"
+  exit 0
+fi
+
+[[ "${STEP}" == run ]]
+: "${ROUNDS:?number of rounds is required}"
+export I_MPI_FABRICS=shm:ofi
+export I_MPI_PIN_PROCESSOR_LIST="0-13,15-28,30-43,45-58,60-73,75-88,90-103,105-118"
+launch=(mpirun -np 448 -ppn 112 -genv PATH "${PATH}" -genv LD_LIBRARY_PATH "${LD_LIBRARY_PATH}")
+test -e "${WORK}/prepared"
+
+for method in "${METHODS[@]}"; do
+  [[ -e "${WORK}/results/${method}.renumbered" ]] && continue
+  cd "${WORK}/cases/${method}"
+  restore0Dir -processor
+  if [[ "${method}" == CuthillMcKee ]]; then
+    "${launch[@]}" renumberMesh -constant -overwrite -parallel -fileHandler uncollated > logs/renumberMesh.log 2>&1
+  else
+    "${launch[@]}" renumberMesh -constant -overwrite -parallel -fileHandler uncollated -dict "system/renumberMeshDict-${method}" > logs/renumberMesh.log 2>&1
+  fi
+  "${launch[@]}" potentialFoam -initialiseUBCs -parallel -fileHandler uncollated > logs/potentialFoam.log 2>&1
+  "${launch[@]}" applyBoundaryLayer -ybl 0.0450244 -parallel -fileHandler uncollated > logs/applyBoundaryLayer.log 2>&1
+  for log in renumberMesh potentialFoam applyBoundaryLayer; do cp "logs/${log}.log" "${WORK}/results/${method}-${log}.log"; done
+  touch "${WORK}/results/${method}.renumbered"
+done
+
+# A round of five runs takes about 12 minutes, so a round starts only while 12 of the 30 minutes remain and all its runs
+# share the nodes of one job.
+for (( round = 1; round <= ROUNDS; round++ )); do
+  [[ -e "${WORK}/results/round${round}.done" ]] && continue
+  (( SECONDS < 17 * 60 )) || { echo "stopped before round ${round}: too little time left"; exit 0; }
+  for (( k = 0; k < ${#METHODS[@]}; k++ )); do
+    method=${METHODS[(k + round - 1) % ${#METHODS[@]}]}
+    run="${WORK}/results/round${round}-${method}"
+    [[ -e "${run}-simpleFoam.log" ]] && continue
+    cd "${WORK}/cases/${method}"
+    rm -rf postProcessing processor*/40
+    "${launch[@]}" simpleFoam -parallel -fileHandler uncollated > logs/simpleFoam.log 2>&1
+    cp -a postProcessing "${run}-postProcessing"
+    printf '%s %s\n' "${PJM_JOBID}" "$(hostname)" > "${run}-job.txt"
+    cp logs/simpleFoam.log "${run}-simpleFoam.log"
+  done
+  touch "${WORK}/results/round${round}.done"
+done

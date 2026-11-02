@@ -1,0 +1,15 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      renumberMeshDict;
+}
+
+// Cuthill-McKee in reverse order, the usual variant for direct solvers (renumberMesh -dict)
+method      CuthillMcKee;
+
+CuthillMcKeeCoeffs
+{
+    reverse     true;
+}

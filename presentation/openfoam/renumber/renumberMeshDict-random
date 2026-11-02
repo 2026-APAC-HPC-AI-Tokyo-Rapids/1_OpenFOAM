@@ -1,0 +1,10 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      renumberMeshDict;
+}
+
+// A random order (fixed seed), the worst locality, to see how much the order matters at all (renumberMesh -dict)
+method      random;

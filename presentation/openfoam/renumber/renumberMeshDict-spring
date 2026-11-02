@@ -1,0 +1,18 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      renumberMeshDict;
+}
+
+// Cells as masses on springs along a line, ordered by position (renumberMesh -dict), with the coefficients of the example
+// in springRenumber.H
+method      spring;
+
+springCoeffs
+{
+    maxCo           0.1;
+    freezeFraction  0.9;
+    maxIter         1000;
+}

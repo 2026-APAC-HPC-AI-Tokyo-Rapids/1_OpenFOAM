@@ -12,7 +12,7 @@ EN: We are Tokyo Rapids with RIKEN. We start with the HPC task, OpenFOAM.
 """
 
 NOTES["index"] = """
-JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は19枚です（第8版で、試して残さなかったことの一覧を本編12枚目と21枚目へ移し、ケース既定の分割での固定の比較と、試した分割の一覧を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目にあるので、ここには載せていません。数えなかった高速化（#68）は、運営の答え（11/02、どの段でも数えない）を受けてデッキから外しました（聞かれたときの答えは slides.md の想定問答）。
+JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は20枚です（第8版で、試して残さなかったことの一覧を本編11枚目と21枚目へ移し、固定と分割の掛け合わせ（11/03）、試した分割の一覧、玄界でのほかの並べ方（11/03）を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目にあるので、ここには載せていません。本編の各枚のノートには、その枚に関係する想定質問と補足の枚が書いてあります（11/03）。数えなかった高速化（#68）は、運営の答え（11/02、どの段でも数えない）を受けてデッキから外しました（聞かれたときの答えは slides.md の想定問答）。
 """
 
 NOTES["s_aspire"] = """
@@ -63,19 +63,31 @@ EN (Q31, did you profile the network?): Yes, at three levels: IMB after every be
 JP: rankごとのMPI_Isendの回数は、分割から数えた隣のrankの数と相関+1.000（1つの隣に1 stepあたり約1,324通）。メッセージの数は分割で決まり、待ちは計算の不均衡で決まる（#48）。16の最も遅いrankのうち13はノード外の隣を持たない。
 """
 
-NOTES["s_pinning_case_default"] = """
-EN (if asked whether pinning also helps on the Baseline's own decomposition): Yes. On the case-default hierarchical decomposition we ran the setting without and with pinning in turns in the same period. Pinning took 11.2 percent off a step, and the spread between jobs fell from 2.0 to 1.1 percent. Our Baseline ran the unpinned setting later, at 3.650 seconds per step.
+NOTES["s_pinning_decomposition"] = """
+EN (Q41, why did you pin before trying another decomposition?): Unpinned ranks move between cores and leave their memory spread over the node, so the slowest rank is wherever the placement went wrong, and the jobs vary a lot. That also hid what a better decomposition gains. Without pinning, scotch saved 7.5 percent, with pinning 10.5. And pinning saved 11.2 percent with hierarchical but 14.1 with scotch. The slowest rank computed 1.46 times as long as the median rank without pinning, 1.16 times with pinning and 1.06 times with scotch as well.
 
 JP:
-- データ：固定なしは data/start_unpinned.csv（#36 A、commit 0d50e13）の3.6983、3.5850、3.7270（3.670 ± 2.05%）。固定ありは data/decomposition_basic.csv のhierarchical 4ノードの3.2912、3.2593、3.2217（3.257 ± 1.07%）。範囲は重ならない。Baselineは data/baseline_runs.csv（#62）の3.6003、3.5313、3.8170（3.650 ± 4.08%）。固定なしとBaselineの6本を合わせると3.660 ± 2.9%。
-- 日付（図と表には書かない、ユーザー、11/02）：固定なしと固定ありは10/02、Baselineは10/12。このときの固定は、LD_PRELOADでMPI_Initの直後に固定し直す方法（9/21〜10/03に使った）で、Basicのnumactl＋tasksetと同じ速さ（scotchで2.919と2.917）。
-- 第8版の最初の版（11/02朝）では、この図が本編の固定の枚だった（ユーザーが固定の枚にBaselineを載せたいと言ったため）。同じ日の2回目に、ユーザーが第7版の図（scotchでの4通り）の方が各実験の結果を示せると言ったので、本編はscotchの4通り（本編8枚目）に戻し、この図を補足にした。
+- データ（#36、4ノード）：hierarchicalの固定なしは data/start_unpinned.csv の3.6983、3.5850、3.7270（3.670、SD 2.05%）、固定ありは data/decomposition_basic.csv の3.2912、3.2593、3.2217（3.257、SD 1.07%）。scotchの固定ありは同じファイルの2.9154、2.9227、2.9054（2.915）、固定なしは data/pinning.csv のNeither 3.3763、3.4137（3.395）。hierarchicalの2つとscotchの固定ありは10/02に同じ時期に流し、scotchの固定なしは10/03（Basicの固定の方法を決めた4通りの実験）。固定ありはLD_PRELOADでMPI_Initの直後に固定し直す方法で、Basicのnumactl＋見張りと同じ速さ（scotchで2.919と2.917）。
+- 遅いrankの比：hierarchical・固定なしは私たちのBaseline（OpenFOAM profiling、38219862855、rankごとの計算115.02 / 78.56 s）、hierarchical・固定ありはCrayPATの（プロセス − MPI）（#38、37181991433）、scotch・固定ありはBasicの対応付けの前（OpenFOAM profiling、37714968610、104.17 / 97.95 s）。道具が2つ混ざっているので、比の傾向として見せる。
+- 交互でないのは、固定なしのscotchとhierarchicalの比較（10/02と10/03）だけ。固定なしの差（−7.5%）は、ばらつき（SD 2.0%と0.78%）の2倍ほどで、確かな差とまでは言えない。言い方は「固定すると分割の効果がはっきり出た」にとどめる。
+- 11/03まではこの枚は「Pinning with hierarchical」（Baselineと、hierarchicalの固定なし・ありの図）だった。ユーザーが「hierarchicalでpinの実験をやっていたらよかった」と言ったので、その図を本編7枚目に入れ、この枚は固定と分割の掛け合わせにした。
+"""
+
+NOTES["s_renumber"] = """
+EN (Q39, why didn't you change renumberMesh?): In Basic the rules fix it, and all our jobs ran the default, Cuthill–McKee. For the Bonus we measured the other orders on Genkai, with the official case on four nodes, each order once in each of four rounds. No renumbering was 0.7 percent slower, spring 3 percent and a random order 11 percent. Reverse Cuthill–McKee was within the spread, faster in three rounds and slower in one. So no order beat the default, and every order changed Cd, by up to 1.3 percent after 40 iterations.
+
+JP:
+- 出典：data/renumber_genkai.csv、presentation/openfoam/renumber/（README.md、renumber-genkai.pjm、analyse.py）。玄界、4ノード×112 rank、plain scotchの448分割、未改変のv2512（Actions 35722802934のビルド）、40反復、5つの並べ方を1巡に1回ずつ、巡ごとに順番をずらして4巡（PJM 7238151で1〜2巡、7238163で3〜4巡。1つの巡は同じ4ノード）。準備（decomposePar）はPJM 7238148。
+- 既定（Cuthill–McKee）は平均1.958 s/step。RCM −0.19%（巡ごとに−0.38、−0.49、−0.21、+0.31%）、none +0.70%（4巡とも遅い）、spring +3.26%、random +10.6%。私たちの決まり（全候補が全対照より速い）では、どれも残りません。
+- Cdは並べ方ごとに4巡とも同じで、並べ方の間では違います（40反復目、既定0.43768に対してRCM −1.32%、none −1.21%、spring −0.65%、random +0.09%）。固定反復のGauss–Seidelがセルの番号の順に掃くためです。並べ方を変えるなら、F3（公式の反復数で、変更前のrunとCdが±0.5%以内）を確かめる必要があります。
+- 玄界はコアあたりL2 2 MB（ASPIRE-2Aは0.5 MB）、L3はソケットで112.5 MB（ASPIRE-2AはコアあたりL3 4 MB）。4ノードで各rankは約14.6万セルを受け持ちます。ASPIRE-2Aでの時間ではなく、傾向として見せます。
+- renumberMeshのband（番号が最も離れた隣どうしの差、448分割の最大）とprofile（1セルあたり）：既定11,347と2,705、RCM 11,347と2,562、none 146,078と3,880、spring 68,712と3,025、random 147,291と54,368。
 """
 
 NOTES["s_scotch"] = """
 EN (Q30, why does the Basic gain grow with the node count?): Mostly through the decomposition. scotch gains 1.3, 2.5 and 10.5 percent on 1, 2 and 4 nodes, and mapping it onto the node gains only on 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
-JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編8枚目（固定の結果）の3つ目の文の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
+JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編8枚目（分割）の図の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
 """
 
 NOTES["s_cores"] = """

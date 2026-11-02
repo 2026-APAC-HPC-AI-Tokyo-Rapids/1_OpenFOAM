@@ -12,11 +12,13 @@ FIGDIR holds the deck's renders of ../figures.py (deck_figures.py), its per-job 
 the decompositions coloured by node and NUMA domain; build.sh puts them there and runs all three steps.
 
 The output is the HPC part alone (the user, 11/02: the team keeps the HPC and AI parts apart): the cover, the 20 main
-slides of slides.md, the divider, the Q&A index and 19 supporting slides. They are rebuilt in place on input slides, so each
+slides of slides.md, the divider, the Q&A index and 20 supporting slides. They are rebuilt in place on input slides, so each
 keeps a slide id and the team's slide-number box; the supporting slides are hidden from the slide show. The other input
 slides are removed: the AI track, the team's roofline and the shared reproducibility slide, which the user did not want
-(11/01). The notes of the main slides are read from slides.md (script, translation, memo), the others come from notes.py.
-PowerPoint's sections follow the new slide list.
+(11/01). The notes of a main slide are read from slides.md: its script and translation, then the anticipated questions it
+may draw, with their answers from the 想定問答, and the supporting slides that go with it (the user, 11/03: the memos were
+hard to follow there; they stay in slides.md). The other notes come from notes.py. PowerPoint's sections follow the new
+slide list.
 
 The look follows the user (11/01): pure black, bold text; emphasis in the accent blue, never by weight; a unit on every
 number; each figure numbered with a one-sentence caption under it, and each table with one over it; and the content spread
@@ -36,7 +38,7 @@ from pptx.enum.shapes import MSO_SHAPE
 
 from decklib import add_text, arrow_line, bar_chart, box, bullets, clear_slide, picture, set_notes, set_title, shape_text, table
 from notes import NOTES
-from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, HALVED, INK, LIGHT, LINE, MEMORY, MPI, MUTED, NAVY, WHITE
+from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MEMORY, MPI, MUTED, NAVY, RED, WHITE
 
 SRC, OUT, FIG = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 HERE = Path(__file__).resolve().parent
@@ -69,9 +71,24 @@ def check_input():
         raise SystemExit("build_deck.py expects the team deck with the 10/29 OpenFOAM part (slides 1-46, the HPC roofline at 14, the AI title slide at 47); see README.md")
 
 
+def answers(text):
+    """The anticipated questions of slides.md's 想定問答 by number: the question, the slides to show and the English answer
+    with its translation, without the memos."""
+    body = text[text.index("\n## 想定問答"):]
+    body = body[:body.index("\n## ", 1)]
+    blocks = {}
+    for block in re.split(r"\n(?=\*\*Q\d+\. )", body)[1:]:
+        lines = [line for line in block.strip().splitlines() if line.strip() not in ("", "---") and not line.startswith("- （メモ")]
+        blocks[int(re.match(r"\*\*Q(\d+)\.", lines[0]).group(1))] = "\n".join(lines).replace("**", "").replace("`", "")
+    return blocks
+
+
 def plan_notes():
-    """The notes of the 20 main slides from slides.md: the time, the English script, its translation and the memo."""
+    """The notes of the 20 main slides from slides.md: the time, the English script and its translation, then the
+    questions the slide may draw (想定質問, answered from the 想定問答) and its supporting slides (補足), as the user asked
+    (11/03); the memos stay in slides.md."""
     text = PLAN.read_text(encoding="utf-8")
+    qa = answers(text)
     body = text[text.index("\n## 本編"):text.index("\n## 入れなかったもの")]
     notes = []
     for section in body.split("\n### ")[1:]:
@@ -79,11 +96,22 @@ def plan_notes():
         time = re.search(r"（(\d+:\d\d)）$", head).group(1)
         script = re.search(r"^原稿（[^）]*）：(.+)$", rest, re.MULTILINE).group(1)
         translation = re.search(r"^訳：(.+)$", rest, re.MULTILINE).group(1)
-        memo = rest.split("\nメモ：\n", 1)[1].strip().replace("`", "") if "\nメモ：\n" in rest else ""
-        notes.append(f"[{time}]\nEN: {script}\n\n訳（参考）: {translation}\n\nJP:\n{memo}")
+        questions = [int(n) for n in re.findall(r"Q(\d+)", re.search(r"^想定質問：(.+)$", rest, re.MULTILINE).group(1))]
+        supporting = re.search(r"^補足：(.+)$", rest, re.MULTILINE).group(1)
+        notes.append(f"[{time}]\nEN: {script}\n\n訳（参考）: {translation}\n\n想定質問:\n\n" + "\n\n".join(qa[n] for n in questions) + f"\n\n補足: {supporting}")
     if len(notes) != 20:
         raise SystemExit(f"slides.md has {len(notes)} main slides instead of 20; see README.md")
     return notes
+
+
+def check_references(slides):
+    """The supporting slides named in the notes (補足) and in the answers (見せる枚) by number and title must be those of the
+    output deck; prints each that is not, so that slides.md can follow a new order."""
+    titles = {i: sl.shapes.title.text_frame.text.strip().lower() for i, sl in enumerate(slides, 1) if sl.shapes.title is not None}
+    text = PLAN.read_text(encoding="utf-8")
+    for number, title in re.findall(r"(\d+)（([^）]+)）", "\n".join(re.findall(r"^(?:補足|見せる枚)：(.+)$", text, re.MULTILINE))):
+        if titles.get(int(number)) != title.lower():
+            print(f"slides.md: slide {number} is '{titles.get(int(number))}', not '{title}'")
 
 
 check_input()
@@ -124,11 +152,36 @@ def table_caption(s, x, y, w, text, h=0.42):
 
 
 def figure(s, name, x, y, w, text, gap=0.08, h=0.55):
-    """A plot from FIGDIR with its caption under it; returns the bottom of the caption."""
+    """A plot from FIGDIR with its caption under it, and over it the arrows and numbers that deck_plots.py kept out of the
+    image (name.json); returns the bottom of the caption."""
     pic = picture(s, fig(name), x, y, w=w)
     bottom = y + pic.height / EMU
     caption(s, x, bottom + gap, w, text, h=h)
+    marks = FIG / f"{name}.json"
+    if marks.exists():
+        overlay(s, json.loads(marks.read_text(encoding="utf-8")), x, y, w, pic.height / EMU)
     return bottom + gap + h
+
+
+def overlay(s, marks, x, y, w, h):
+    """The arrows (black, the user, 11/03) and the changes and speedups of a plot as slide shapes over its picture at x, y,
+    w x h, so that the user can move them by hand (11/03); their points come in figure fractions from the bottom left, and
+    their sizes in pt at the plot's own size."""
+    scale = w / marks["size"][0]
+
+    def on_slide(point):
+        return x + point[0] * w, y + (1 - point[1]) * h
+
+    for arrow in marks["arrows"]:
+        arrow_line(s, *on_slide(arrow["from"]), *on_slide(arrow["to"]), color=INK, width=2.25)
+    for text in marks["texts"]:
+        lines = text["text"].split("\n")
+        size = round(text["size"] * scale, 1)
+        tw, th = (1.2 if text["align"] == "c" else 1.6), len(lines) * size * 1.6 / 72  # a line of Meiryo, to grab by hand
+        px, py = on_slide(text["at"])
+        left = {"l": px, "c": px - tw / 2, "r": px - tw}[text["align"]]
+        top = {"t": py, "m": py - th / 2, "b": py - th}[text["anchor"]]
+        add_text(s, left, top, tw, th, lines, size=size, color=text["color"], align=text["align"], anchor=text["anchor"])
 
 
 def decomp_panel(s, which, x, y, w=None, h=None):
@@ -243,7 +296,7 @@ def node(s, at, cores, channels, frame=()):
 
 # The flow of the first and the last main slide: the unit, each stage with what it dealt with, and the change from one stage
 # to the next.
-HPC_FLOW = ("s/step", [("Our Baseline", "3.650", "case defaults"), ("Basic", "2.898", "rank balance and binding"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
+HPC_FLOW = ("s/step", [("Our Baseline", "3.650", "case defaults"), ("Basic", "2.898", "binding and rank balance"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
 
 
 def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
@@ -341,8 +394,9 @@ def steps(s, x, y, w, items, size=19, gap=16):
 def m_pinning():
     """Why we pinned, what /proc showed and the fix: the user (11/02) wanted the slide to start from why pinning should help,
     with the NUMA domains, and less text. The node is drawn with one rank (a navy core) whose memory is in its own NUMA
-    domain's two channels (green), and the way to the memory of a domain on the other CPU. What /proc showed is from the scotch jobs
-    without pinning (Neither of the next slide, #36 A3), since scotch came first (the user, 11/02)."""
+    domain's two channels (green), and the way to the memory of a domain on the other CPU. Pinning comes first in Basic
+    (the user, 11/03: we knew the ranks were not pinned and expected pinning to help), so what /proc showed is our
+    Baseline's: 0 of 512 ranks on their own core and 8.7% of a rank's pages local, the median (38219862855)."""
     s = reuse(5)
     set_title(s, "CPU AND MEMORY PINNING")
     at = Node(X0 + 0.05, 3.0, scale=1.3)
@@ -360,26 +414,25 @@ def m_pinning():
         arrow_line(s, cx, cy, mx + at.module_w / 2, my - 0.02, color=arrow, width=2.25)
         add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=color, align="c")
     caption(s, X0, bottom + 0.62, at.w + 0.1, "One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels, one rank in navy and its local memory in green.", h=0.7)
-    steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 7% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
-    set_notes(s, PLAN_NOTES[5])
+    steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 9% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
+    set_notes(s, PLAN_NOTES[4])
     return s
 
 
 def m_decomposition():
-    """The decomposition first (the user, 11/02: the most common way to speed up OpenFOAM, and the Task Rules say "try this
-    first"): the case default and scotch in decomposeParDict's own words, the time per step of each job in a plot with the
-    faces between subdomains under each name instead of a table (the user, 11/02: a comparison of results goes in a plot),
-    and the pictures coloured by node and NUMA domain over the key to their colours. The jobs ran without pinning, our
-    Baseline (#62) and Neither of the pinning experiment on scotch (#36 A3), not in turns; the pinned, alternated
-    comparison is on the pinning results slide. The scotch of the pictures is plain scotch, as in these jobs."""
+    """The decomposition once every rank was pinned (the user, 11/03: pinning first; it was 11/02's first step, as the most
+    common way to speed up OpenFOAM): the case default and scotch in decomposeParDict's own words, each job pinned and in
+    turns (#36) in a plot with the faces between subdomains under each name instead of a table (the user, 11/02: a
+    comparison of results goes in a plot), and the pictures coloured by node and NUMA domain over the key to their colours.
+    The scotch of the pictures is plain scotch, as in these jobs."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
     w = 5.75
     heading(s, X0, 1.3, w, "The case default, as in our Baseline", size=16)
     bottom = code(s, X0, 1.72, w, ["method  hierarchical;", "hierarchicalCoeffs { n (16 8 4); }"])
-    heading(s, X0, bottom + 0.15, w, "The first change we tried", size=16)
+    heading(s, X0, bottom + 0.15, w, "The decomposition we kept", size=16)
     bottom = code(s, X0, bottom + 0.57, w, ["method  scotch;"])
-    figure(s, "p05_decomposition", X0, bottom + 0.2, w, "Each job without pinning on 4 nodes, with the faces between subdomains.")
+    figure(s, "p05_decomposition", X0, bottom + 0.2, w, "Each job of the two decompositions, both pinned, on 4 nodes, with the faces between subdomains.")
     pw = 2.8
     xr = 12.63 - 2 * pw - 0.15
     for i, (which, label) in enumerate((("hier", "hierarchical (16 8 4)"), ("scotch", "scotch"))):  # (16 8 4): the user's hand edit, 11/02
@@ -388,25 +441,19 @@ def m_decomposition():
         panel = decomp_panel(s, which, x, 1.72, w=pw)
     bottom = numa_key(s, xr, 1.72 + panel.height / EMU + 0.1, 2 * pw + 0.15)
     caption(s, xr, bottom + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.62)
-    set_notes(s, PLAN_NOTES[4])
+    set_notes(s, PLAN_NOTES[6])
     return s
 
 
 def m_pinning_results():
-    """The four placements on scotch (#36 A3, data/pinning.csv), the figure the user preferred (11/02: scotch came first and
-    the pinning was measured on it), with the times in a table and the alternated comparison of the two decompositions once
-    both were pinned (#36, data/decomposition_basic.csv). The figure on the Baseline's own decomposition is a supporting
-    slide."""
+    """Pinning before the decomposition (the user, 11/03): on the Baseline's hierarchical decomposition without and with
+    pinning, in turns (#36), and the four placements on scotch (#36 A3), which the user preferred for showing every
+    experiment (11/02), in one plot across the slide; the times are its labels, so the slide says what they mean."""
     s = main_slide(13)
     set_title(s, "PINNING RESULTS")
-    w = 5.75
-    top = table_caption(s, X0, 1.3, w, "Time per step on 4 nodes with scotch under four placements.", h=0.7)
-    # no column of jobs beside a plot that shows them (the user, 11/02); "in alternated jobs" is said once on slide 2
-    rows = [["Pinned", "s/step", "SD"], ["Neither", "3.395", "0.78%"], ["CPU only", "3.474", "2.0%"], ["Memory only", "4.380", ""], ["CPU and memory", "2.917", "0.13%"]]
-    table(s, X0, top + 0.05, [2.85, 1.45, 1.45], rows, row_h=0.5, size=18, aligns=["l", "r", "r"], colors=[None, None, None, None, [NAVY] * 3])
-    bullets(s, X0, top + 2.8, w, 6.95 - top - 2.8, ["Only pinning both took 14.1% off a step.", "Pinned jobs varied less, so smaller gains could be seen.", "Pinned, scotch was 10.5% faster than hierarchical."], size=18, space_after=12)
-    figure(s, "p10_pinning", 6.73, 1.3, 5.9, "Each job under four placements of the ranks on 4 nodes with scotch.")
-    set_notes(s, PLAN_NOTES[6])
+    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 11.2% off a step with hierarchical and 14.1% with scotch.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
+    figure(s, "p10_pinning", 5.1, 1.3, 7.53, "Each job under each placement of the ranks on 4 nodes, with hierarchical and with scotch.")
+    set_notes(s, PLAN_NOTES[5])
     return s
 
 
@@ -430,24 +477,26 @@ def m_mapping():
 
 
 def basic_table(s, x, y, w):
-    """The official runs, our Baseline and Basic on 4 nodes, with the SD of each, the jobs being in the plot beside it (the
-    user, 11/02); returns the bottom."""
-    top = table_caption(s, x, y, w, "Time per step on 4 nodes.")
-    rows = [["Run", "s/step", "SD"], ["Official, hierarchical", "3.415", ""], ["Official, scotch", "3.576", ""], ["Our Baseline", "3.650", "4.1%"], ["Basic", "2.898", "0.07%"]]
-    table(s, x, top + 0.05, [w - 2.5, 1.35, 1.15], rows, row_h=0.47, size=17, aligns=["l", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, NAVY]])
-    return top + 0.05 + 5 * 0.47
+    """Each Basic step against its own control on 4 nodes, as the Bonus results give theirs (the user, 11/03: each step's
+    result in the order of the work): pinning on hierarchical and scotch against hierarchical, both in turns in #36, the
+    node mapping in #63, and Basic against our Baseline, two periods apart; returns the bottom."""
+    top = table_caption(s, x, y, w, "Each Basic step against its control on 4 nodes.")
+    rows = [["Step", "s/step", "Change"], ["CPU and memory pinning", "3.670 → 3.257", "−11.2%"], ["scotch instead of hierarchical", "3.257 → 2.915", "−10.5%"], ["scotch mapped onto the node", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
+    heights = [0.47, 0.62, 0.62, 0.62, 0.62]
+    table(s, x, top + 0.05, [2.3, 1.95, 1.25], rows, row_heights=heights, size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, NAVY]])
+    return top + 0.05 + sum(heights)
 
 
 def m_basic_results():
-    """Basic against the official runs and our Baseline: the times in a table, the plot with the official runs and an arrow
-    (the user, 11/02), and the flow video under the table (moved here from slide 1, 11/01). The slide is built on the input
-    slide that holds the video, so the video keeps its autoplay, which lives in that slide's timing."""
+    """Basic's steps against their controls in a table, the plot with the official runs, our Baseline and Basic and an
+    arrow (the user, 11/02), and the flow video under the table (moved here from slide 1, 11/01). The slide is built on the
+    input slide that holds the video, so the video keeps its autoplay, which lives in that slide's timing."""
     s = reuse(1, keep=("flow-iterations",))
     set_title(s, "BASIC RESULTS")
     bottom = basic_table(s, X0, 1.3, 5.5)
-    vh = 2.0
-    place(s, "flow-iterations", X0, bottom + 0.3, vh * 5.33 / 3.0, vh)  # the video's own 16:9 frame
-    caption(s, X0, bottom + 0.3 + vh + 0.06, 5.5, "Flow around the car over the 150 iterations, drawn with ParaView.")
+    vh = 1.65
+    place(s, "flow-iterations", X0, bottom + 0.25, vh * 5.33 / 3.0, vh)  # the video's own 16:9 frame
+    caption(s, X0, bottom + 0.25 + vh + 0.06, 5.5, "Flow around the car over the 150 iterations, drawn with ParaView.")
     figure(s, "p12_basic", 6.43, 1.3, 6.2, "Each job of the official runs, our Baseline and Basic on 4 nodes, with the mean and SD of each.")
     set_notes(s, PLAN_NOTES[8])
     return s
@@ -471,13 +520,14 @@ def m_basic_mpi():
     rows = [["Call", "Baseline", "Basic"], ["MPI_Waitall", "43.1 s", "10.2 s"], ["MPI_Allreduce", "27.6 s", "12.9 s"], ["MPI_Bcast", "2.5 s", "1.4 s"], ["All MPI calls", "78.3 s", "26.7 s"], ["Share of the time", "46%", "19%"]]
     table(s, xr, top + 0.08, [2.65, 1.59, 1.59], rows, row_h=0.55, size=18, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], None, None, [INK, INK, NAVY], [INK, INK, NAVY]])
     bullets(s, X0, top + 0.08 + 6 * 0.55 + 0.3, XW, 1.2, ["The most frequent calls stayed the same three, with about 5% more calls.", "The wait in Waitall fell by 76% because the ranks now finish their computation together."], size=19, space_after=12)
-    set_notes(s, PLAN_NOTES[9])
+    set_notes(s, PLAN_NOTES[10])
     return s
 
 
 def m_not_helped_basic():
     """Every Basic idea we tried and did not keep, with its result in words, not + or −, and the ones we expected to help in
-    navy (the user, 11/02: show all of them before the Basic profile, and explain the striking ones).
+    navy (the user, 11/02: show all of them, and explain the striking ones), at the end of Basic, before the profile of Basic
+    that starts the Bonus (the user, 11/03).
     Data: data/compiler_options.csv (#36 D), #59 (PGO), #36 and #41 (network), #43 (SMT), REPORT §10 (git c562b50)."""
     s = main_slide(37)
     set_title(s, "WHAT DID NOT HELP IN BASIC")
@@ -485,18 +535,21 @@ def m_not_helped_basic():
     rows = [["Idea", "Time per step"], ["Compiler flags -march=znver3, -O2 and LTO", "no change, at most 0.1% slower"], ["AMD compilers AOCC 5.0 and AOCL 5.1", "no change, within 0.1%"], ["GCC profile-guided optimisation", "0.1% slower"], ["UCX over RC with 55% more network bandwidth", "no change, within 0.1%"], ["Rank reordering with 92% fewer faces between nodes", "0.1% slower"], ["Default OFI transport with the organisers' workarounds", "0.8% slower"], ["OpenFOAM's communication switches", "no gain, and one crashed"], ["glibc malloc thresholds", "0.4% faster, within the spread"], ["Two ranks per core (SMT)", "5.7 times slower"]]
     striking = {1, 2, 3, 4, 5}
     table(s, X0, top + 0.05, [7.3, 4.63], rows, row_h=0.46, size=16, colors=[None] + [[NAVY, NAVY] if i in striking else None for i in range(1, len(rows))])
-    # why the compilers did not help comes with the profile of Basic on the next slides (the user, 11/02)
+    # why the compilers did not help comes in the Bonus, with the memory limit (the user, 11/03)
     bullets(s, X0, top + 0.05 + 0.46 * len(rows) + 0.2, XW, 0.6, ["Network changes cannot shorten the wait for the slowest rank."], size=18, space_after=4)
-    set_notes(s, PLAN_NOTES[10])
+    set_notes(s, PLAN_NOTES[9])
     return s
 
 
 def m_profile_basic():
+    """The bottlenecks after Basic in the rows of the Baseline's table. Outside MPI is told apart into what the cores did
+    (the user, 11/03: say that the computing itself was short, that the cores were not busy): the core counters give the
+    instructions per cycle; CPU utilisation cannot, since a core that waits for memory counts as busy (Q42)."""
     s = reuse(8)
     set_title(s, "PROFILING BASIC")
-    rows = [["Possible bottleneck", "How we measured it", "What we found after Basic"], ["MPI", "CrayPAT", "Fell from 46% to 19% of the time"], ["Outside MPI", "CrayPAT and AMD uProf", "81% of the time with about 0.1 flop per byte in the hottest loops"], ["Core speed", "Core counters and five compiler settings", "0.4 to 0.7 instructions per cycle and no compiler setting helped"], ["Memory bandwidth", "Memory controller counters", "Not readable by users on ASPIRE-2A"]]
+    rows = [["Possible bottleneck", "How we measured it", "What we found after Basic"], ["MPI", "CrayPAT", "Fell from 46% to 19% of the time"], ["Outside MPI", "CrayPAT", "The other 81%, computing and waiting for memory"], ["Computing", "AMD uProf core counters", "Only 0.4 to 0.7 instructions per cycle and about 0.1 flop per byte, so the cores were mostly waiting"], ["Memory bandwidth", "Memory controller counters", "Not readable by users on ASPIRE-2A"]]
     top = table_caption(s, X0, 1.35, XW, "Each possible bottleneck after Basic, how we measured it and what we found.")
-    table(s, X0, top + 0.05, [2.9, 3.9, 5.13], rows, row_heights=[0.58, 0.98, 1.25, 1.25, 0.98], size=18, colors=[None, None, None, None, [INK, INK, NAVY]])
+    table(s, X0, top + 0.05, [2.9, 3.9, 5.13], rows, row_heights=[0.58, 0.98, 0.98, 1.6, 0.98], size=18, colors=[None, None, None, [INK, INK, NAVY], [INK, INK, NAVY]])
     set_notes(s, PLAN_NOTES[11])
     return s
 
@@ -538,13 +591,13 @@ def m_memory_limit():
         usage_bar(s, X0, y, bar_w, 0.4, "CPU", cpu, NAVY)
         usage_bar(s, X0, y + 0.52, bar_w, 0.4, "Memory", memory, MEMORY)
         for i, (line, yy) in enumerate(zip(label, (y, y + 0.52))):
-            add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=HALVED if i == halved else INK, anchor="m")
+            add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=RED if i == halved else INK, anchor="m")
         add_text(s, xr, y - 0.02, xa - xr - 0.15, 0.5, [time], size=23, color=NAVY if k == 2 else INK, anchor="m")
         add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=NAVY if k == 2 else INK, anchor="m")
     for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
         y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
         arrow_line(s, xa, y1, xa, y2 - 0.05, color=INK, width=2.25)
-        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": HALVED}, {"runs": [effect], "color": NAVY if k else INK}], size=15, anchor="m")
+        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": RED}, {"runs": [effect], "color": NAVY if k else INK}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
     caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
     add_text(s, X0, bottom + 0.6, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
@@ -582,11 +635,12 @@ def m_bonus_decomposition():
 
 # The 14 source changes by what they remove (the user, 11/02: the list on two slides, grouped by intent). Each is (patch,
 # what it removes, its change in time per step on 4 nodes against the configuration before it); patches measured together
-# share one value, written once for the rows that stand next to each other (bonus/README.md, data/changes_ab.csv).
+# share one value, written once for the rows that stand next to each other (bonus/README.md, data/changes_ab.csv), with
+# the others measured with them before it, so that the changes stand under each other at the right (the user, 11/03).
 CHANGES_BY_INTENT = [
-    ("Fewer passes over the data", [("0002", "One pass over the matrix of U for all three components", "−2.3%"), ("0004", "Face values computed in the sums, no temporary fields", "−2.8%"), ("0006", "Laplacian coefficients and diagonal in one face loop", "−2.0% with 0008, 0010"), ("0009", "The viscous stress in one loop instead of three passes", None), ("0013", "The turbulence model in 13 instead of 80 cell passes", "−2.5% with 0014"), ("0015", "GAMG correction and restriction done in place", None), ("0016", "Gauss–Seidel residual taken from the last sweep", "−3.8%")]),
-    ("No copies or zero fills", [("0001", "The solvers' residual written in place, not copied", "−3.4%"), ("0011", "No copy of the source in every Gauss–Seidel sweep", "−1.0%"), ("0014", "No zeroing of overwritten coefficients, no U matrix copy", "−2.5% with 0013, 0015")]),
-    ("No values that nobody reads", [("0003", "Six callers skip boundary values they would throw away", "−1.3%"), ("0008", "Pressure reference decided once, not checked every step", "−2.0% with 0006, 0009"), ("0010", "Wall shear stress computed on the walls only", None)]),
+    ("Fewer passes over the data", [("0002", "One pass over the matrix of U for all three components", "−2.3%"), ("0004", "Face values computed in the sums, no temporary fields", "−2.8%"), ("0006", "Laplacian coefficients and diagonal in one face loop", "with 0008, 0010  −2.0%"), ("0009", "The viscous stress in one loop instead of three passes", None), ("0013", "The turbulence model in 13 instead of 80 cell passes", "with 0014  −2.5%"), ("0015", "GAMG correction and restriction done in place", None), ("0016", "Gauss–Seidel residual taken from the last sweep", "−3.8%")]),
+    ("No copies or zero fills", [("0001", "The solvers' residual written in place, not copied", "−3.4%"), ("0011", "No copy of the source in every Gauss–Seidel sweep", "−1.0%"), ("0014", "No zeroing of overwritten coefficients, no U matrix copy", "with 0013, 0015  −2.5%")]),
+    ("No values that nobody reads", [("0003", "Six callers skip boundary values they would throw away", "−1.3%"), ("0008", "Pressure reference decided once, not checked every step", "with 0006, 0009  −2.0%"), ("0010", "Wall shear stress computed on the walls only", None)]),
     ("Fewer global sums", [("0012", "One global sum per CG iteration instead of three", "−0.3%")]),
 ]
 
@@ -605,7 +659,7 @@ def changes_table(s, y, groups, row_h=0.47):
             rows.append([patch, what, gain or ""])
             colors.append([BONUS, INK, INK])
             fills.append(None)
-    frame = table(s, X0, y, [0.85, 7.98, 3.1], rows, row_h=row_h, size=16, aligns=["l", "l", "r"], colors=colors, fills=fills)
+    frame = table(s, X0, y, [0.85, 7.43, 3.65], rows, row_h=row_h, size=16, aligns=["l", "l", "r"], colors=colors, fills=fills)
     for i in intents:
         frame.table.cell(i, 0).merge(frame.table.cell(i, 2))
     for i in merges:
@@ -669,13 +723,13 @@ def residual_diagram(s, x, y, w=5.6):
 def m_examples():
     """Two source changes drawn side by side (the user, 11/02: like the example of U, left and right): 0002 removes passes
     over a matrix and 0001 a copy, two of the four intents, each measured on its own. A thin black line divides the two at
-    the middle of the slide, as the user drew it (11/02)."""
+    the middle of the slide, as the user drew it (11/02), and each change on 4 nodes is red, as they made it (11/03)."""
     s = main_slide(40)
     set_title(s, "TWO SOURCE CHANGES IN PICTURES")
     arrow_line(s, 6.667, 1.01, 6.667, 7.34, color=INK, width=0.5, head=False)
-    for x, title, gain, draw, text in ((X0, "0002 U components in one pass", "−2.3% per step on 4 nodes, −6.4% on 1 node", u_diagram, "The three components of U share one matrix, so one pass over it can update all three."), (7.03, "0001 No copies in the solvers", "−3.4% per step on 4 nodes, −2.2% on 1 node", residual_diagram, "The residual is written straight into its field instead of into a new field that is then copied.")):
+    for x, title, gain, draw, text in ((X0, "0002 U components in one pass", ("−2.3%", "per step on 4 nodes, −6.4% on 1 node"), u_diagram, "The three components of U share one matrix, so one pass over it can update all three."), (7.03, "0001 No copies in the solvers", ("−3.4%", "per step on 4 nodes, −2.2% on 1 node"), residual_diagram, "The residual is written straight into its field instead of into a new field that is then copied.")):
         heading(s, x, 1.3, 5.6, title, size=18)
-        add_text(s, x, 1.7, 5.6, 0.36, [gain], size=16)
+        add_text(s, x, 1.7, 5.6, 0.36, [[(gain[0] + " ", {"color": RED}), (gain[1], {})]], size=16)
         bottom = draw(s, x, 2.15)
         caption(s, x, bottom + 0.08, 5.6, text, h=0.5)
     set_notes(s, PLAN_NOTES[16])
@@ -696,33 +750,17 @@ def m_bonus_results():
     return s
 
 
-TIER_COLOURS = {"Baseline": BASE, "Basic": BASIC, "Bonus": BONUS}
-
-
 def m_scaling():
     """The scaling plot alone, as tall as the slide allows (the user, 11/03: the table of speedups under it made the slide
     busy), with the official runs beside our three tiers at each node count (the user, 11/01). Over it, as slide shapes the
     user can move by hand, how many times faster than on 1 node each of our tiers is at 2 and 4 nodes, over its label
-    (instead of the efficiency, the user, 11/02), and why that passes 4 on 4 nodes, in the empty part over the 4-node jobs.
-    deck_plots.py gives the speedups and those places in p17_scaling.json; the official runs' speedups (4.30 and 3.93 on 4
-    nodes) are in the notes only."""
+    (instead of the efficiency, the user, 11/02; figure() lays them from p17_scaling.json), and why that passes 4 on 4
+    nodes, over the 4-node jobs where the user moved it (11/03). The official runs' speedups (4.30 and 3.93 on 4 nodes) are
+    in the notes only."""
     s = reuse(12)
     set_title(s, "SCALING FROM 1 TO 4 NODES")
-    x, y, w = X0 - 0.1, 1.25, XW + 0.1
-    figure(s, "p17_scaling", x, y, w, "Each job on 1, 2 and 4 nodes on one axis from 0, with the dashes for ideal scaling and the numbers for times faster than on 1 node.", h=0.62)
-    plot = json.loads((FIG / "p17_scaling.json").read_text(encoding="utf-8"))
-    h = w * plot["size"][1] / plot["size"][0]
-
-    def on_slide(fx, fy):
-        """A point of the plot, given in figure fractions from its bottom left, on the slide."""
-        return x + fx * w, y + (1 - fy) * h
-
-    number_h = 0.42
-    for key, mark in plot["marks"].items():
-        cx, top = on_slide(mark["x"], mark["top"])
-        add_text(s, cx - 0.55, top - number_h, 1.1, number_h, [f"{mark['speedup']:.2f}×"], size=17, color=TIER_COLOURS[key.split()[0]], align="c", anchor="b")
-    (left, floor), (right, ceiling) = on_slide(*plot["free"][:2]), on_slide(*plot["free"][2:])
-    add_text(s, left, ceiling + 0.1, right - left, floor - number_h - 0.15 - ceiling - 0.1, ["Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache."], size=18, line=1.05, anchor="b")
+    figure(s, "p17_scaling", X0 - 0.1, 1.25, XW + 0.1, "Each job on 1, 2 and 4 nodes on one axis from 0, with the dashes for ideal scaling and the numbers for times faster than on 1 node.", h=0.62)
+    add_text(s, 8.849, 2.202, 3.386, 1.04, ["Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache."], size=18, line=1.05, anchor="b")
     set_notes(s, PLAN_NOTES[18])
     return s
 
@@ -807,16 +845,21 @@ def s_network():
     return s
 
 
-def s_pinning_case_default():
-    """Pinning on the Baseline's own decomposition, alternated with the same setting unpinned (#36), next to our Baseline's
-    jobs (#62): the main pinning slide of the 8th edition's first build, which the user asked for (11/02) before preferring
-    the four placements on scotch in the main part."""
-    s = supp(41, "PINNING WITH HIERARCHICAL", "s_pinning_case_default")
-    top = table_caption(s, X0, 1.3, 5.75, "Time per step on 4 nodes with the case-default hierarchical decomposition.", h=0.7)
-    rows = [["Run", "s/step", "SD"], ["Our Baseline", "3.650", "4.1%"], ["Not pinned", "3.670", "2.0%"], ["Pinned", "3.257", "1.1%"]]
-    table(s, X0, top + 0.05, [2.95, 1.45, 1.35], rows, row_h=0.55, size=18, aligns=["l", "r", "r"], colors=[None, [BASE, INK, INK], None, [NAVY] * 3])
-    bullets(s, X0, top + 2.5, 5.75, 6.95 - top - 2.5, ["Not pinned and pinned ran in turns in the same period.", "Pinning took 11.2% off a step and its SD fell from 2.0% to 1.1%.", "Our Baseline ran the unpinned setting later."], size=18, space_after=14)
-    figure(s, "ps_pinning", 6.73, 1.3, 5.9, "Each job of our Baseline and of its setting without and with pinning on 4 nodes.")
+def s_pinning_decomposition():
+    """Why pinning came first (Q41): the two decompositions without and with pinning, all on 4 nodes in #36 (data/
+    start_unpinned.csv, decomposition_basic.csv, pinning.csv), each fix gaining more once the other was in place, and the
+    slowest rank's computation over the median one's (OpenFOAM profiling of the Baseline 38219862855 and of Basic before
+    its mapping 37714968610; CrayPAT, process time minus MPI, for pinned hierarchical, #38 37181991433). It took the place
+    of the slide on pinning with hierarchical, which went into the main part (the user, 11/03)."""
+    s = supp(41, "PINNING AND DECOMPOSITION", "s_pinning_decomposition")
+    top = table_caption(s, X0, 1.35, 6.4, "Time per step on 4 nodes, each decomposition without and with pinning.", h=0.7)
+    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.670", "3.257", "−11.2%"], ["scotch", "3.395", "2.915", "−14.1%"], ["scotch against hierarchical", "−7.5%", "−10.5%", ""]]
+    table(s, X0, top + 0.05, [2.9, 1.25, 1.25, 1.3], rows, row_h=0.62, size=17, aligns=["l", "r", "r", "r"], colors=[None, None, None, [NAVY] * 4])
+    xr = 7.6
+    top = table_caption(s, xr, 1.35, 12.63 - xr, "The slowest rank's computation against the median rank's on 4 nodes.", h=0.7)
+    rows = [["Run", "Slowest / median"], ["hierarchical, not pinned", "1.46"], ["hierarchical, pinned", "1.16"], ["scotch, pinned", "1.06"]]
+    table(s, xr, top + 0.05, [3.33, 1.7], rows, row_h=0.62, size=17, aligns=["l", "r"])
+    bullets(s, X0, 4.85, XW, 2.1, ["Each fix gained more once the other was in place.", "Not pinned, the slowest ranks were those the placement slowed, so a better decomposition saved less.", "Pinned, the slowest ranks were those whose subdomains held more work, which scotch evened out."], size=17, space_after=8)
     return s
 
 
@@ -940,6 +983,41 @@ def s_efficiency():
     return s
 
 
+RENUMBER_NAMES = {"CuthillMcKee": "CuthillMcKee, the default", "RCM": "RCM, Cuthill–McKee reversed", "none": "none, the mesh's own order", "spring": "spring", "random": "random"}
+
+
+def s_renumber():
+    """The other cell orders of renumberMesh on Genkai (11/03, the user: show that they would not be faster; Genkai jobs
+    allowed), for Q39, from data/renumber_genkai.csv (../renumber/README.md): each order's time per step against the
+    default in the same round, the mean over the rounds, and its Cd against the default's after the 40 iterations of the
+    rounds (the same in every round)."""
+    s = supp(34, "OTHER RENUMBERINGS ON GENKAI", "s_renumber")
+    with open(DATA / "renumber_genkai.csv", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    timed = {(row["method"], row["run"]): row for row in rows if row["run"].startswith("round")}
+    rounds = sorted({run for _, run in timed})
+    cd40 = {method: float(timed[(method, rounds[0])]["cd"]) for method, _ in timed}
+
+    def ratios(method):
+        return [float(timed[(method, r)]["s_per_step"]) / float(timed[("CuthillMcKee", r)]["s_per_step"]) for r in rounds]
+
+    def change(method):
+        return (sum(ratios(method)) / len(rounds) - 1) * 100
+
+    table_rows = [["renumberMesh method", "Time per step", "Cd after 40 iterations"]]
+    for method, name in RENUMBER_NAMES.items():
+        c = change(method)
+        time = f"{sum(float(timed[(method, r)]['s_per_step']) for r in rounds) / len(rounds):.3f} s/step" if method == "CuthillMcKee" else f"{abs(c):.1f}% {'faster' if c < 0 else 'slower'}"
+        cd = f"{cd40[method]:.4f}" if method == "CuthillMcKee" else f"{(cd40[method] / cd40['CuthillMcKee'] - 1) * 100:+.1f}%".replace("-", "−")
+        table_rows.append([name, time, cd])
+    top = table_caption(s, X0, 1.35, XW, f"Each order against the default over {len(rounds)} rounds of 40 iterations on 4 Genkai nodes, the official case in 448 subdomains.", h=0.42)
+    table(s, X0, top + 0.05, [4.6, 4.0, 3.33], table_rows, row_h=0.52, size=16, aligns=["l", "r", "r"], colors=[None, [NAVY] * 3, None, None, None, None])
+    faster = sum(r < 1 for r in ratios("RCM"))
+    cd_moves = max(abs(cd40[m] / cd40["CuthillMcKee"] - 1) * 100 for m in RENUMBER_NAMES)
+    bullets(s, X0, top + 0.05 + 0.52 * len(table_rows) + 0.25, XW, 2.3, [f"A random order was {change('random'):.0f}% slower, so the order matters, and no order beat the default.", f"RCM was faster in {faster} of the {len(rounds)} rounds only, within the spread between runs.", f"Every order changed Cd, by up to {cd_moves:.1f}% after 40 iterations, since Gauss–Seidel sweeps the cells in their order.", "Genkai has 2 MB of L2 per core against 0.5 MB on ASPIRE-2A, so this shows the trend, not the time on ASPIRE-2A."], size=16, space_after=6)
+    return s
+
+
 def fill_index(s, groups):
     """Q&A index: one clickable line per supporting slide in two columns; call after the slide order is final."""
     set_title(s, "Q&A INDEX")
@@ -949,10 +1027,10 @@ def fill_index(s, groups):
             add_text(s, x, y, 5.85, 0.42, [name], size=18, color=NAVY)
             y += 0.5
             for title, target in items:
-                line = add_text(s, x + 0.1, y, 5.75, 0.4, [[(f"{prs.slides.index(target) + 1}", {"color": NAVY}), ("   " + title, {})]], size=16, anchor="m")
+                line = add_text(s, x + 0.1, y, 5.75, 0.38, [[(f"{prs.slides.index(target) + 1}", {"color": NAVY}), ("   " + title, {})]], size=16, anchor="m")
                 line.click_action.target_slide = target
-                y += 0.42
-            y += 0.32
+                y += 0.4
+            y += 0.28
     set_notes(s, NOTES["index"])
 
 
@@ -976,11 +1054,11 @@ def fix_sections():
 # ====================================================================== assemble
 cover = S[0]
 set_notes(cover, NOTES["cover"])
-main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_decomposition(), m_pinning(), m_pinning_results(), m_mapping(), m_basic_results(), m_basic_mpi(), m_not_helped_basic(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
+main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_pinning(), m_pinning_results(), m_decomposition(), m_mapping(), m_basic_results(), m_not_helped_basic(), m_basic_mpi(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
 COUNT.update(prefix="S", Figure=0, Table=0)
 divider = S[21]
 index_slide = reuse(22)
-groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning with hierarchical", s_pinning_case_default()),("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency())])]
+groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning and decomposition", s_pinning_decomposition()), ("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency()), ("Other renumberings on Genkai", s_renumber())])]
 order = [cover] + main + [divider, index_slide] + [sl for _, items in groups for _, sl in items]
 
 sldIdLst = prs.slides._sldIdLst
@@ -1002,6 +1080,7 @@ for rId, rel in list(prs.part.rels.items()):
     if "changesInfo" in rel.reltype:
         prs.part.rels.pop(rId)
 
+check_references(prs.slides)
 prs.save(OUT)
 print("saved", OUT, "with", len(prs.slides), "slides")
 for i, sl in enumerate(prs.slides, 1):
