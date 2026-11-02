@@ -271,12 +271,14 @@ def variability(output):
             continue
         median = statistics.median(value for _, value, _ in runs)
         points.extend((start, (value / median - 1) * 100, nodes) for start, value, nodes in runs)
-    colors = {1: "#9ecae1", 2: "#4292c6", 4: "#08519c"}
+    # greys and shapes, not colours: only Baseline, Basic and Bonus have colours on the slides (the user, 11/03)
+    styles = {1: ("#d0d0d0", "o"), 2: ("#8c8c8c", "s"), 4: ("#3c3c3c", "^")}
     figure, (top, bottom) = plt.subplots(2, 1, figsize=WIDE, sharex=True, gridspec_kw={"height_ratios": [1, 1.6]})
     for nodes in (1, 2, 4):
         selected = [(start, deviation) for start, deviation, n in points if n == nodes]
+        color, marker = styles[nodes]
         for axis in (top, bottom):
-            axis.scatter([start for start, _ in selected], [deviation for _, deviation in selected], s=36, color=colors[nodes], edgecolor="black", linewidth=0.4, label=f"{nodes} node{'s' if nodes > 1 else ''}", zorder=3)
+            axis.scatter([start for start, _ in selected], [deviation for _, deviation in selected], s=36, color=color, marker=marker, edgecolor="black", linewidth=0.4, label=f"{nodes} node{'s' if nodes > 1 else ''}", zorder=3)
     top.set_ylabel("all runs (%)")
     top.set_ylim(-10, 100)
     bottom.set_ylim(-1.6, 1.6)

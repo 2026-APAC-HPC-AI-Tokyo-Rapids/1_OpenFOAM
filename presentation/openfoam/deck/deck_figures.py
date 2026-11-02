@@ -10,7 +10,6 @@ usage: deck_figures.py <path/to/figures.py> <output_dir>
 - The tier colours come from palette.py, and the labels that figures.py draws in red become navy (red is for what is slow
   or wrong on the slides), so the figures match the slide text.
 - Labels follow the slides: s/step, no space before %, a minus sign instead of a hyphen, and bold text.
-figures.py itself is unchanged, so the figures of the report keep their style.
 """
 
 import importlib.util
