@@ -22,3 +22,7 @@ GRID = "E4E9F1"  # chart gridlines and bar tracks
 WHITE = "FFFFFF"
 COMPUTATION = "A9BCDD"  # computation in the call-stack figures (the phase bars and the flame graph)
 MPI = "C7A3C2"  # MPI in the call-stack figures
+# the node figures (the user's hand edit of the memory-limit slide, 11/02): the cores that run ranks are NAVY and the memory
+# channels in use green like a circuit board, the theme's green darker by 25% as the user chose it; what was halved is red
+MEMORY = "548235"
+HALVED = "FF0000"

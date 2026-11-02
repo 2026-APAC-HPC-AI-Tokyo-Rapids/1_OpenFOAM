@@ -80,6 +80,10 @@ AIパートのチームメイトから、デッキについて指摘がありま
   - 19枚目：Bonusの倍率が小さい理由の文を原稿から外した（メモに残した）。
   - 20枚目：紺を「予想外だったもの」と言い、最後に「This ends the HPC part.」で終える。
   - 表紙のノートの日本語のメモを外した（ユーザーが消していた）。
+- 第8版の5回目（11/02深夜、ユーザーが4回目の版を見て）：
+  - CPUとメモリの図（6枚目のノードの絵、13枚目の帯）：rankが動くコアを紺、使うメモリチャネルを緑に分けた（ユーザー：`_tmp`で手直ししたように色を分ける。メモリは基板っぽい緑。緑はユーザーが選んだテーマの緑の25%暗い色、548235）。13枚目は、半分にした数（64 ranks、8 channels、Half the cores、Half the channels）を赤に、1つ目の矢印を黒にしたユーザーの手直しも取り込んだ。
+  - 図からジョブの本数を外した（ユーザー：グラフの「3 jobs」などは不要）。目盛りの本数、1本だけの公式の結果のSDの代わりの「1 job」、scalingの凡例の「1 job」、補足の各変更の図の「3 v 3」。本数は点で分かる。
+  - renumberMeshを詳しく調べ直した（ユーザーの質問：問題文では取り組むべきものだが、やっていない。どれくらい効果が見込めるか）。答えは11枚目のメモとQ39。
 
 ## 外せないもの
 
@@ -132,8 +136,9 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 標語や対句（「Benchmarks decide, profiles explain」など）、「What we changed」「How we worked」のような見出し、中黒（·）でのつなぎは使いません。
 - 色は今のデッキの色合い（`deck/palette.py`）のままにします。黒い文字は完全な黒（#000000）です。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
 - スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。Baseline、Basic、Bonusの語は段の色です。
+- CPUとメモリの図では、rankが動くコアを紺、使うメモリチャネルを基板のような緑にして分けます（ユーザー、11/02の5回目。`_tmp`での手直しのとおり、`palette.MEMORY`）。
 - 数値には、よほど場所が足りないとき以外、単位を付けます（2.898 s/step、290 M calls、43.1 s）。1 stepの時間の単位はs/stepで、sと略しません。表の見出しや行の名前にs/stepと書いたときは、値には単位を付けません（ユーザー、11/02の2回目）。図の平均の数字には「2.898 s/step」と書き、群が近い図では単位を次の行に置きます。
-- 図は今のもの（`deck/deck_plots.py`の各ジョブの点の図など）を流用し、時間は縦軸にします。プロットには、点の近くに必ず平均（単位付き）と標準偏差（SD）、ジョブの本数を書きます。図の中の見出しも、コロンを使わない文にします。
+- 図は今のもの（`deck/deck_plots.py`の各ジョブの点の図など）を流用し、時間は縦軸にします。プロットには、点の近くに必ず平均（単位付き）と標準偏差（SD）を書きます。ジョブの本数は点で分かるので、目盛りにも凡例にも書きません（ユーザー、11/02の5回目）。図の中の見出しも、コロンを使わない文にします。
 - 時間を比べるときは、小さくてもよいので各ジョブの図にします。図の横の表には、ジョブの本数を書きません（図で本数、時間、SDが分かるため。ユーザー、11/02の4回目）。
 - 時間の軸は原点0から描きます。ばらつきを見るために範囲を狭めるときは、0から範囲の下までを細い帯に縮め、軸に波線を入れて省略を示します（ユーザー、11/02、`deck_plots.py`の`zoomed()`）。段どうしの変化は、図に矢印と%で書きます。
 - 文字の大きさは、本文18 pt以上、表16 pt以上です。余白が多い枚は、図を大きくするか、文字を大きくするか、行間を広げて、ものが平均的に置かれた状態にします。
@@ -142,7 +147,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 ## 数値の決まり（有効数字）
 
 - s/stepは有効数字4桁にします（3.650、2.898、2.360、14.57、6.372）。Basic以降の4ノードのジョブの標準偏差は0.002〜0.004 s（0.07〜0.16%）で、4桁目がちょうどその大きさです。1%未満の差もこの桁なら見えます。これより細かい桁はノイズです。
-- 標準偏差は%で書きます（SD 0.07%）。図では平均の横に「2.898 s/step」「SD 0.07% over 5 jobs」のように書きます。
+- 標準偏差は%で書きます（SD 0.07%）。図では平均の上に「2.898 s/step」「SD 0.07%」と書きます。1本だけの公式の結果には、SDを書きません。
 - %は小数1桁にします（−20.6%、−18.6%、−0.7%）。0.1%に満たない差は「within 0.1%」と書きます。
 - 倍率は有効数字3桁（1.55×、4.61×）です。scalingは、並列効率ではなく1ノードの何倍速いかで示します（11/02）。
 - Cdの差は、F3の照合に使った値の桁（−0.00041%など）で書きます。他者の値は出典の桁のまま引きます（主催者の3.415）。
@@ -205,7 +210,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | 10 | MPI after Basic | 4枚目と同じ2つの表（回数と時間、rankあたり）をBaselineとBasicで。回数は同じ3つで、待ちが減った | Table 7、Table 8 | 0:35 |
 | 11 | What did not help in Basic | Basicで試して残さなかった手の全部。効きそうだと思った手（紺）と、ネットワークが効かなかった理由 | Table 9 | 0:30 |
 | 12 | Profiling Basic | 3枚目と同じ見方の表。MPIは46% → 19%、MPIの外が81%、メモリのカウンタは読めない | Table 10 | 0:35 |
-| 13 | Measuring the memory limit | コアを半分、チャネルを半分にした配置を、CPUとメモリの帯で。1 stepの約97%が帯域に比例 | Figure 10 3つの配置のノード | 0:45 |
+| 13 | Measuring the memory limit | コアを半分、チャネルを半分にした配置を、CPUとメモリの帯で。1 stepの約97%が帯域に比例 | Figure 10 3つの配置のノード | 0:50 |
 | 14 | multiLevel decomposition | Basicの範囲外の分割、Basicの対応付けとの違い（`decomposeParDict`を左右に）、得られること（面の表）、BasicとmultiLevelのNUMAごとの絵と凡例 | Table 11、Figure 11 分割の絵 | 0:40 |
 | 15 | Source changes by intent (1/2) | 14の変更の考え方。運ぶデータを減らす。7つは配列をなめる回数を減らす | Table 12 | 0:30 |
 | 16 | Source changes by intent (2/2) | 残りの7つ（コピー、使われない値、大域和） | Table 13 | 0:20 |
@@ -336,7 +341,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - The case default, as in our Baseline：`method  hierarchical;`、`hierarchicalCoeffs { n (16 8 4); }`
 - The first change we tried：`method  scotch;`
 
-図（左下、Figure 3）：`deck/deck_plots.py`の`p05_decomposition`。BaselineのhierarchicalとNeither（固定なしのscotch）の各ジョブ、原点0から波線で省略した軸、矢印（−7.0%）。目盛りに分割の名前、サブ領域の間の面の数（4.31 M、2.93 M）、ジョブの本数。注釈は「Each job without pinning on 4 nodes, with the faces between subdomains.」
+図（左下、Figure 3）：`deck/deck_plots.py`の`p05_decomposition`。BaselineのhierarchicalとNeither（固定なしのscotch）の各ジョブ、原点0から波線で省略した軸、矢印（−7.0%）。目盛りに分割の名前とサブ領域の間の面の数（4.31 M、2.93 M）。注釈は「Each job without pinning on 4 nodes, with the faces between subdomains.」
 
 凡例（絵の下）：node 1〜4の名前の下に、それぞれ8つのNUMA領域の濃淡。
 
@@ -359,7 +364,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ### 6. CPU and memory pinning（0:45）
 
-スライド：左にノードのアイコンの図（Figure 5。CPU 0とCPU 1、それぞれ4つのNUMA領域、各領域に16コアと2本のメモリチャネル。1つのrank（紺のコア）から、自分の領域のチャネル（local memory、紺の矢印）と、もう一方のCPUの領域のチャネル（remote memory、灰色の矢印）へ）。右に4つの段（ユーザー、11/02：なぜ固定するのかから話す。文は短く）：
+スライド：左にノードのアイコンの図（Figure 5。CPU 0とCPU 1、それぞれ4つのNUMA領域、各領域に16コアと2本のメモリチャネル。1つのrank（紺のコア）から、自分の領域のチャネル（local memory、緑のチャネルと緑の矢印）と、もう一方のCPUの領域のチャネル（remote memory、灰色の矢印）へ。CPUは紺、メモリは緑で分ける）。右に4つの段（ユーザー、11/02：なぜ固定するのかから話す。文は短く）：
 
 - Expected：A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest.
 - Found：During the solve no rank stayed on its own core and only 7% of its memory was local.
@@ -375,7 +380,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - Foundの数値：scotchで固定なしのrun（次の枚のNeither、#36 A3、37131371136）の`/proc`で、solverの実行中に自分のコアに固定されていたrankは各ノード0/128、自分のNUMA領域にあるページはrankの中央値で7%でした（8領域に均等に散れば12.5%）。Baseline（hierarchical、#62、38219862855）でも0/512、8.7%です。頼んだ配置と、実行中の`/proc`で見た実際の配置を分けて確かめたことが、この発見の要点です。
 - やさしい説明：NUMAと固定（11/01、ユーザーの質問から）：
   - ノードの中の階層：1ノードにCPU（ソケット）が2つあり、1つのCPUは4つのNUMA領域に分かれています（ノードで8つ）。1つのNUMA領域は、16コアと、そこに直結した2本のメモリチャネル（DRAM）の組です。L3（32 MB）は8コアずつで共有するので、1つの領域に2つあります。ノード全体では128コアに16チャネル（理論409.6 GB/s、STREAM約279 GB/s）で、1つの領域では16コアが2本（理論51.2 GB/s、STREAM約35 GB/s）を分け合います。
-  - どのコアもノードの全メモリを読めます。ただ、自分の領域のDRAMは近くて速く、ほかの領域のDRAMはCPUの中の接続（もう一方のソケットならソケット間の接続も）を通るので遅く、ほかの領域の帯域も食います。図の紺の矢印（local）と灰色の矢印（remote）がこれです。
+  - どのコアもノードの全メモリを読めます。ただ、自分の領域のDRAMは近くて速く、ほかの領域のDRAMはCPUの中の接続（もう一方のソケットならソケット間の接続も）を通るので遅く、ほかの領域の帯域も食います。図の緑の矢印（local）と灰色の矢印（remote）がこれです。
   - コアを固定する：rankを特定のコアに縛り、OSに別のコアへ動かさせないことです。動かされると、L1、L2、L3に載っていたデータが使えなくなり、別の領域へ動けば自分のデータが遠いメモリに残ります。2つのrankが同じコアに乗って、片方が待つこともあります。
   - メモリを固定する：rankのデータを、どの領域のDRAMに置くかを決めることです。Linuxは既定で、ページに最初に書き込んだときに動いていたコアの領域にそのページを置き、後からは動かしません（first touch）。今回は固定が外れてrankが動き回るうちにデータを書いたので、ページが8つの領域に散らばり、自分の領域にあるのは7%だけでした。`numactl --membind`は、rankが動き出す前に「この領域のDRAMにだけ置く」と決める指定です。
   - コアとメモリの両方を固定して初めて、rankは自分の領域の近いDRAMから読み続け、自分のデータをL1〜L3に載せたまま使い続けられます。片方だけでは速くならなかったことは、次の枚（scotchでの4通りの比較）にあります。
@@ -553,8 +558,14 @@ scotchCoeffs
 - 11/02の4回目（ユーザー）：コンパイラが効かない理由（ループは命令ではなくメモリを待っている）は後の枚で分かるので、ここでは言わず、スライドの1行目も外しました。12枚目の原稿で「だからコンパイラの設定が効かなかった」と言います。renumberMeshは原稿から外しました（下の項目、Q39）。
 - renumberMeshを変えなかったこと（ユーザー、11/02の4回目：変えなかったことを聞かれそう。効果がなかった根拠はある？効きそうなものはある？やっていないのはマイナスの印象。Basicで変えられないのか問題文を確かめて）。自分からは言わず、聞かれたらQ39で答えます：
   - 問題文：Basicでは変えられません。Task Rulesの補遺F1（l.204）「`renumberMesh -constant -overwrite -parallel` runs exactly as written, with its default method. Adding `-dict`, `-renumber-method`, or `-renumber-coeffs` is Bonus work.」、FAQ（l.262）「Can I add `-dict` to `renumberMesh`? Not in Basic. Yes in Bonus.」。Allowed Optimizationsの「Mesh renumbering: Use of official v2512 `renumberMesh`」（l.70）は公式のrenumberMeshを使うことで、どう流すかは補遺F1が決めています。Bonusの例にも「Other renumbering methods or options (`-dict`, `-renumber-method`, `blockSize`, `zoltan` …)」（F2）とあります。
-  - 効果が小さいと見た根拠：既定ですでにCuthill–McKeeで並べている（bandwidth 2.27e11 → 1.66e11）。玄界の旧課題では、ブロック局所のCuthill–McKeeがCuthill–McKeeに上乗せしたのは0.03ポイントだけ（+0.91%と+0.94%）。ASPIRE-2Aのプロファイルでは、遅いrankの余分な時間は全部の面のループに散らばっていて、セルの並びを指していなかった（#40、#41）。
-  - 効きそうなもの：Bonusの後、最も遅いrankはDRAMから最も多く読むrankなので（cyclesとDRAMからのrefillの相関r = +0.69、#66）、各サブ領域のセルをキャッシュに合うように並べ直せば、遅いrankの読み込みが減る可能性はあります。v2512の`renumberMesh`は、Bonusなら`-renumber-method`と`-renumber-coeffs`で並べ方を変えられ（Cuthill–McKeeを逆順にする`reverse`、`structured`、`spring`など。#69の候補R1）、`-dict`で`blockSize`（ブロックごとに並べる）も使えます。見込みは数%以下で、ソースの変更を優先して試していません（20枚目のメモの「次の手」）。今はASPIRE-2Aに入れないので確かめられません（11/02の2回目のユーザーの「やってないのもったいない、早くなる方法あったりしたんじゃないの？」への答えも同じ）。
+  - 効果が小さいと見た根拠：
+    - 既定ですでにCuthill–McKeeで並べている。Basicの4ノードのログ（Boxの`openfoam/results/4node/renumberMesh.log`）では、band（番号が最も離れた隣どうしの差）が128,811 → 14,165、profile（各セルから、番号が最も離れた隣までの差の和）が2.27e11 → 1.66e11で、1セルあたり3,471 → 2,536です。
+    - 面を順に回るループが同時に触るセルは、この約2,500個です。Uとgrad(U)なら約240 KBで、Zen 3のコアごとのL2（512 KB）に収まります。つまり各セルの値は、ループごとにほぼ1回だけDRAMから読まれています。並べ替えで減らせるDRAMの読み込みは、ほとんど残っていません（1 stepの約97%はメモリ帯域に沿う、13枚目）。
+    - 玄界の旧課題（cavity3D-64M、1本ずつ）では、なしに対してCuthill–McKeeが+0.91%、ブロック局所のCuthill–McKeeが+0.94%でした。上乗せは0.03ポイントで、ばらつきの中です。
+    - ASPIRE-2Aのプロファイルでは、遅いrankの余分な時間は全部の面のループに散らばっていて、セルの並びを指していませんでした（#40、#41）。
+    - 見込み：1 stepで1%未満、最も遅いrankの差（Bonusの後で中央値の1.07倍）の一部が並びのせいだとしても、数%までです。
+  - Bonusでの注意（11/02深夜に確かめた）：この課題のソルバは、どれも反復回数を固定したGauss–Seidelです（pのGAMGの平滑化、U、k、omegaのsmoothSolver。`fvSolution.fixedIter`）。掃く順番はセルの番号の順なので、並べ替えると毎回の近似解が変わり、Cdも変わります（coefficient.datはビット一致しない）。だから並べ替えはF3の±0.5%の確認が要ります。私たちの変更でも、Gauss–Seidelの更新の順を変えた重ね合わせはCdを1.20%動かし、F3を外れました（20枚目）。分割を変えるだけでも、150 stepのCdは数%違います（公式のhierarchical 0.2739、scotch 0.2840、Basic 0.2930）。
+  - 効きそうなもの：Bonusの後、最も遅いrankはDRAMから最も多く読むrankなので（cyclesとDRAMからのrefillの相関r = +0.69、#66）、各サブ領域のセルをキャッシュに合うように並べ直せば、遅いrankの読み込みが減る可能性はあります。v2512の`renumberMesh`は、Bonusなら`-renumber-method`と`-renumber-coeffs`で並べ方を変えられ（Cuthill–McKeeを逆順にする`reverse`、`structured`、`spring`、`random`、`manual`、`none`。#69の候補R1。SloanはBoost、zoltanはZoltanのライブラリが要り、玄界の私たちのビルドにはどちらも入っていない）、`-dict`で`blockSize`（各サブ領域をブロックに分けてから中を並べる）や`sortCoupledFaceCells`（プロセッサ境界のセルを最後にする）も使えます。v2512のソース（玄界のミラーのタグOpenFOAM-v2512）で確かめました。見込みは上のとおり小さく、ソースの変更を優先して試していません（20枚目のメモの「次の手」）。今はASPIRE-2Aに入れないので確かめられません（11/02の2回目のユーザーの「やってないのもったいない、早くなる方法あったりしたんじゃないの？」への答えも同じ）。
 - renumberMeshの経緯（ユーザーの質問、11/02「renumberMeshってなんかやった？」）：ASPIRE-2Aでは変えても外しても測っていません。全runがAllrunの`renumberMesh -constant -overwrite -parallel`を、既定の方法（Cuthill–McKee）で流しています（Boxの`openfoam/results/4node/renumberMesh.log`：`Using renumber-method: CuthillMcKee [default]`、bandwidthは2.27e11 → 1.66e11）。Basicでは、renumberMeshは書かれたとおりに既定の方法で流す決まりで、`-dict`、`-renumber-method`、`-renumber-coeffs`を足すのはBonusの作業です（`tasks/README.md`の補遺、Task Rules l.204）。候補には3回挙げましたが流していません（#37 F3：既定がすでにCuthill–McKeeで、玄界で1%未満、どのプロファイルもセルの並びを指していなかった。#40/#41：遅いrankの余分な時間は全部の面のループに散らばっていた。#69の候補R1（`reverse`、`structured`）は未実施）。唯一の試験は玄界の旧課題（cavity3D-64M、v2606、448 rank、2026-08-13）で、なしに対してCuthill–McKeeが+0.91%（FVOPS、高いほど速い）、ブロック局所のCuthill–McKeeが+0.94%で、採用していません（`research/runtime-optimization-experiments.md`のPhase 5。1本ずつ）。
 - 行ごとの数値と出典：
   - コンパイラのフラグ：`-march=znver3` +0.03%、`-O2` +0.02%、LTO +0.13%（3対3、対照と範囲が重なる、`data/compiler_options.csv`、#36 D）。
@@ -595,13 +606,13 @@ scotchCoeffs
 - コンパイラ：11枚目の表の1〜3行目（±0.13%以内）。
 - ASPIRE-2AのノードではSTREAMが16コア（L3ごとに1コア）で約290 GB/sに飽和します（#36）。
 
-### 13. Measuring the memory limit（0:45）
+### 13. Measuring the memory limit（0:50）
 
-スライド：3つの配置を縦に並べます（Figure 10）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが紺）。箱とチャネルは2つずつNUMA領域にまとめ、領域の間に隙間、CPUの間にもっと広い隙間を空けます（ユーザー、11/02の3回目）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を紺）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」「Half the channels / 2.2 times the time」）。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
+スライド：3つの配置を縦に並べます（Figure 10）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが緑）。箱とチャネルは2つずつNUMA領域にまとめ、領域の間に隙間、CPUの間にもっと広い隙間を空けます（ユーザー、11/02の3回目）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を赤）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」は黒の矢印、「Half the channels / 2.2 times the time」は紺の矢印。どちらも原因を赤）。色はユーザーの手直し（11/02の5回目に取り込み）：CPUは紺、メモリは基板っぽい緑。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
 
-原稿（約45秒）：So we tested the memory by moving the ranks. Each row is one node, with its CPU blocks of eight cores above its sixteen memory channels, grouped by NUMA domain and in blue where in use. With half the cores on all sixteen channels, a step took the same time, so the cores do not set the speed. With the same 64 ranks on eight channels, it took 2.2 times as long, and STREAM, the standard memory bandwidth benchmark, fell by the same factor on the same nodes. So about 97 percent of a step follows the memory bandwidth.
+原稿（約50秒）：So we tested the memory by moving the ranks. Each row is one node, with its CPU blocks of eight cores above its sixteen memory channels, grouped by NUMA domain, the cores in use in blue and the channels in use in green. With half the cores on all sixteen channels, a step took the same time, so the cores do not set the speed. With the same 64 ranks on eight channels, it took 2.2 times as long, and STREAM, the standard memory bandwidth benchmark, fell by the same factor on the same nodes. So about 97 percent of a step follows the memory bandwidth.
 
-訳：そこで、rankを動かしてメモリを確かめました。各段が1つのノードで、8コアずつのCPUの箱の下に16本のメモリチャネルを並べ、NUMA領域ごとにまとめて、使っているところを紺で示しています。16本のチャネルを全部使ったままコアを半分にすると、1 stepの時間は同じだったので、速さを決めているのはコアではありません。同じ64 rankを8本のチャネルに詰めると2.2倍かかり、メモリ帯域の標準的なベンチマークであるSTREAMも、同じノードで同じ比だけ落ちました。だから1 stepの約97%は、メモリ帯域に沿っています。
+訳：そこで、rankを動かしてメモリを確かめました。各段が1つのノードで、8コアずつのCPUの箱の下に16本のメモリチャネルを並べ、NUMA領域ごとにまとめて、使っているコアを紺、使っているチャネルを緑で示しています。16本のチャネルを全部使ったままコアを半分にすると、1 stepの時間は同じだったので、速さを決めているのはコアではありません。同じ64 rankを8本のチャネルに詰めると2.2倍かかり、メモリ帯域の標準的なベンチマークであるSTREAMも、同じノードで同じ比だけ落ちました。だから1 stepの約97%は、メモリ帯域に沿っています。
 
 メモ：
 - 図の読み方（ユーザーの質問、11/02の2回目「4コアをフル、8コアを半分で合ってる？」）：1つの箱は1コアではなく、L3を共有する8コアの組です（1 CPUに8つ、1ノードに16）。spread64はCPUごとに8つの箱がどれも半分（各L3の8コアのうち4コア）、packed64はCPUごとに4つの箱が満杯（最初の2つのNUMA領域の32コア）で4つが空です。どちらも1 CPUに32 rank、1ノードに64 rankです。箱は2つずつNUMA領域にまとめ、領域の間に隙間を、CPUの間にもっと広い隙間を空けました（ユーザー、11/02：NUMA別に空白）。チャネルも同じく、1つのNUMA領域に2本です。
@@ -778,7 +789,7 @@ scotchCoeffs                   multiLevelCoeffs
   - bound()の平均を対象のセルだけで（0017）：大域和が1回増えて、節約より高くつくので流していません（#69）。
 - 強調した行（紺）：予想外だったもの（ユーザー、11/02の4回目の言い方）。重みとMETIS（面をそろえれば速くなりそうなのに遅くなった）、GAMGの最粗段を集めるもの（大域和の大半を消したのに効かなかった）、重ね合わせ（通信を隠す定番の手なのに遅く、Cdも動いた）。
 - ほかに：境界の交換と計算を重ねる余地は1%未満と見積もり（#49）、代わりに使われない交換を省いた（0003）。計測区間のファイルI/Oは1 stepの約0.01%で、律速ではありません（#46）。
-- 今の律速と次の手（Q20、Q34）：U・k・ωの組み立てを項をまたいで融合すれば、運ぶバイトをさらに減らせます。rank間の差（最も遅いrankの計算は中央値の1.07倍）は、セル数ではなくDRAMからの読み込み量に沿う（r = +0.69、#66）ので、サブ領域ごとのセルの並べ替えが効くはずです。どちらも数%の見込みです。英語の答え：「Move fewer bytes still. Fusing the assembly of U, k and omega across terms removes a few more passes over the face arrays, and renumbering the cells of each subdomain for locality would help the slowest ranks, which read the most from DRAM. We expect a few per cent from these.」
+- 今の律速と次の手（Q20、Q34）：U・k・ωの組み立てを項をまたいで融合すれば、運ぶバイトをさらに減らせます。rank間の差（最も遅いrankの計算は中央値の1.07倍）は、セル数ではなくDRAMからの読み込み量に沿う（r = +0.69、#66）ので、サブ領域ごとのセルの並べ替えが効くかもしれません（並べ替えだけなら1%未満、多くても数%の見込みで、Cdが動くのでF3の確認も要る。11枚目のメモ）。合わせて数%の見込みです。英語の答え：「Move fewer bytes still. Fusing the assembly of U, k and omega across terms removes a few more passes over the face arrays, and renumbering the cells of each subdomain for locality might help the slowest ranks, which read the most from DRAM. We expect a few per cent from these.」
 - 最後の2文（11/02の2回目と4回目）：#68のおまけとまとめの枚を消したので、この枚で最終結果に戻り（1枚目の流れと同じ数字）、「This ends the HPC part.」（以上でHPC側の発表を終わります、ユーザー）で終えます。AIパートへ渡す一言を足すかはチームで決めます。
 
 ## 入れなかったもの
@@ -1125,11 +1136,12 @@ scotchCoeffs                   multiLevelCoeffs
 
 **Q39. Why didn't you change renumberMesh?**（なぜrenumberMeshを変えなかったのですか）
 見せる枚：12（What did not help in Basic）、21（What did not help in the Bonus）
-- In Basic the rules fix it. renumberMesh runs exactly as Allrun writes it, with its default method, Cuthill–McKee, and every one of our jobs ran it that way. Other methods and options are Bonus work. In the Bonus we expected little from it. The default already orders the cells, and on Genkai, with another 64-million-cell case, a block-local ordering gained only 0.03 points more than Cuthill–McKee. Our profiles spread the extra time of the slow ranks over all face loops instead of pointing at the cell order. Renumbering each subdomain for locality could still help the slowest ranks, which read the most from DRAM, and it is next on our list, but we expect a few percent at most.
+- In Basic the rules fix it. renumberMesh runs exactly as Allrun writes it, with its default method, Cuthill–McKee, and every one of our jobs ran it that way. Other methods and options are Bonus work. In the Bonus we expected little from it. After the default order, a face loop touches about 2,500 cells at a time, which stay in each core's L2 cache, so each value is already read from DRAM about once per loop. On Genkai, with another 64-million-cell case, a block-local ordering gained only 0.03 points more than Cuthill–McKee. Our profiles spread the extra time of the slow ranks over all face loops instead of pointing at the cell order. A new order would also change Cd, because the fixed Gauss–Seidel sweeps follow the cell numbers, so it would need the ±0.5% check. Renumbering each subdomain for locality could still help the slowest ranks, which read the most from DRAM, and it is next on our list, but we expect under one percent, a few at most.
 
 訳：
-- Basicではルールで決まっています。renumberMeshはAllrunに書かれたとおり、既定の方法のCuthill–McKeeで流すことになっていて、私たちのジョブもすべてそうしています。ほかの方法やオプションはBonusの作業です。Bonusでは、効果は小さいと見ていました。既定の方法がすでにセルを並べ替えていて、玄界で別の6400万セルのケースを使ったときは、ブロックごとの並べ方がCuthill–McKeeに上乗せしたのは0.03ポイントだけでした。私たちのプロファイルでも、遅いrankの余分な時間は、セルの並びではなく、全部の面のループに散らばっていました。各サブ領域のセルを局所性のために並べ直すことは、DRAMから最も多く読む最も遅いrankには効くかもしれず、次の候補ですが、見込みは数%以下です。
+- Basicではルールで決まっています。renumberMeshはAllrunに書かれたとおり、既定の方法のCuthill–McKeeで流すことになっていて、私たちのジョブもすべてそうしています。ほかの方法やオプションはBonusの作業です。Bonusでは、効果は小さいと見ていました。既定の並びで、面のループが一度に触るセルは約2,500個で、各コアのL2キャッシュに収まるので、それぞれの値はすでにループごとにほぼ1回だけDRAMから読まれています。玄界で別の6400万セルのケースを使ったときは、ブロックごとの並べ方がCuthill–McKeeに上乗せしたのは0.03ポイントだけでした。私たちのプロファイルでも、遅いrankの余分な時間は、セルの並びではなく、全部の面のループに散らばっていました。また、反復回数を固定したGauss–Seidelはセルの番号の順に掃くので、並びを変えるとCdも変わり、±0.5%の確認が要ります。各サブ領域のセルを局所性のために並べ直すことは、DRAMから最も多く読む最も遅いrankには効くかもしれず、次の候補ですが、見込みは1%未満、多くても数%です。
 
+- （メモ、11/02深夜）L2に収まる話、Cdが変わる話、v2512で選べる並べ方は、本編11枚目のメモにあります（Basicの4ノードのrenumberMeshのログ、v2512のソース、`fvSolution.fixedIter`、重ね合わせのCd −1.20%）。
 - （メモ、11/02の4回目に足した）ユーザー：変えなかったことを聞かれそう。やっていないのはマイナスの印象なので、根拠と次の手を言えるように。規則の出典はTask Rulesの補遺F1（l.204）、FAQ（l.262）、F2のBonusの例です。玄界の旧課題はcavity3D-64M、v2606、448 rank、2026-08-13の1本ずつで、なしに対してCuthill–McKee +0.91%、ブロック局所 +0.94%（FVOPS、`research/runtime-optimization-experiments.md`のPhase 5）。プロファイルは#40、#41、最も遅いrankとDRAMは#66（r = +0.69）。本編11枚目のメモも見てください。
 
 ---

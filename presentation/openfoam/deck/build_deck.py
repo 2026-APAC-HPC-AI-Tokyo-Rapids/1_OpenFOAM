@@ -35,7 +35,7 @@ from pptx.enum.shapes import MSO_SHAPE
 
 from decklib import add_text, arrow_line, bar_chart, box, bullets, clear_slide, picture, set_notes, set_title, shape_text, table
 from notes import NOTES
-from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MPI, MUTED, NAVY, WHITE
+from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, HALVED, INK, LIGHT, LINE, MEMORY, MPI, MUTED, NAVY, WHITE
 
 SRC, OUT, FIG = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 HERE = Path(__file__).resolve().parent
@@ -181,8 +181,8 @@ def code(s, x, y, w, lines, size=15):
 
 # The ASPIRE-2A node as icons (the user asked for memory and CPU icons, 11/02): two CPUs, each a chip with pins holding its
 # four NUMA domains of 16 cores, and under each domain its two memory channels drawn as memory modules. A core that runs a
-# rank and a channel in use are navy, the others grey. In a domain the top two rows of cores share one L3, the bottom two
-# the other.
+# rank is navy and a channel in use green, so that CPU and memory differ (the user, 11/02, as in their hand edit of the
+# memory-limit slide); the others are grey. In a domain the top two rows of cores share one L3, the bottom two the other.
 OFF = "D5D9E0"  # a core without a rank, or a memory channel not in use
 
 
@@ -234,7 +234,7 @@ def node(s, at, cores, channels, frame=()):
         for m in range(2):
             mx, my = at.module(d, m)
             used = m < channels[d]
-            box(g, mx, my, at.module_w, at.module_h, fill=NAVY if used else OFF, radius=0.12)
+            box(g, mx, my, at.module_w, at.module_h, fill=MEMORY if used else OFF, radius=0.12)
             for k in range(3):  # the memory chips on the module
                 box(g, mx + at.module_w * 0.2, my + at.module_h * (0.1 + k * 0.28), at.module_w * 0.6, at.module_h * 0.2, fill=WHITE if used else LIGHT, radius=0.1)
     return g
@@ -340,7 +340,7 @@ def steps(s, x, y, w, items, size=19, gap=16):
 def m_pinning():
     """Why we pinned, what /proc showed and the fix: the user (11/02) wanted the slide to start from why pinning should help,
     with the NUMA domains, and less text. The node is drawn with one rank (a navy core) whose memory is in its own NUMA
-    domain's two channels, and the way to the memory of a domain on the other CPU. What /proc showed is from the scotch jobs
+    domain's two channels (green), and the way to the memory of a domain on the other CPU. What /proc showed is from the scotch jobs
     without pinning (Neither of the next slide, #36 A3), since scotch came first (the user, 11/02)."""
     s = reuse(5)
     set_title(s, "CPU AND MEMORY PINNING")
@@ -353,11 +353,11 @@ def m_pinning():
     cx, cy = at.core(1, 5)
     cx, cy = cx + at.cell / 2, cy + at.cell / 2
     bottom = at.y + at.h
-    for d, m, color, label in ((1, 0, NAVY, "local memory"), (6, 1, FAINT, "remote memory")):
+    for d, m, color, label in ((1, 0, MEMORY, "local memory"), (6, 1, FAINT, "remote memory")):
         mx, my = at.module(d, m)
         arrow_line(s, cx, cy, mx + at.module_w / 2, my - 0.02, color=color, width=2.25)
-        add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=NAVY if color == NAVY else INK, align="c")
-    caption(s, X0, bottom + 0.62, at.w + 0.1, "One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels, and one rank in navy.", h=0.7)
+        add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=INK if color == FAINT else color, align="c")
+    caption(s, X0, bottom + 0.62, at.w + 0.1, "One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels, one rank in navy and its local memory in green.", h=0.7)
     steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 7% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
     set_notes(s, PLAN_NOTES[5])
     return s
@@ -500,16 +500,16 @@ def m_profile_basic():
 
 
 # The placement experiment of #61 on 4 nodes, drawn plainly (the user, 11/02: CPU and memory named, the halves easy to see):
-# per node 16 CPU blocks, each the 8 cores that share an L3, filled as far as their cores run ranks, and 16 memory channels,
-# navy where in use, 8 of each per CPU. spread64 runs 4 ranks on every L3; packed64 fills the first two NUMA domains of each
+# per node 16 CPU blocks, each the 8 cores that share an L3, filled in navy as far as their cores run ranks, and 16 memory
+# channels, green where in use, 8 of each per CPU. spread64 runs 4 ranks on every L3; packed64 fills the first two NUMA domains of each
 # CPU (L3s 0-3 and 8-11; TASK #61: local rank l on CPU (l / 32) × 64 + l % 32) and so uses only their 8 channels.
 FIRST_HALVES = [1.0 if k % 8 < 4 else 0.0 for k in range(16)]
 PLACEMENT_ROWS = [(("128 ranks", "16 channels"), [1.0] * 16, [1.0] * 16, "2.920 s/step", "STREAM 274 GB/s", None), (("64 ranks", "16 channels"), [0.5] * 16, [1.0] * 16, "2.887 s/step", "STREAM 279 GB/s", 0), (("64 ranks", "8 channels"), FIRST_HALVES, FIRST_HALVES, "6.347 s/step", "STREAM 125 GB/s", 1)]
 
 
-def usage_bar(s, x, y, w, h, label, fill):
+def usage_bar(s, x, y, w, h, label, fill, color):
     """A label and a row of 16 blocks, 8 per CPU in its 4 NUMA domains of 2, with a gap between NUMA domains and a wider one
-    between the CPUs (the user, 11/02); each block is navy from the bottom up to fill[k] (0 to 1) and grey above it."""
+    between the CPUs (the user, 11/02); each block is color from the bottom up to fill[k] (0 to 1) and grey above it."""
     add_text(s, x, y, 1.15, h, [label], size=17, anchor="m")
     x0, gap, numa_gap, cpu_gap = x + 1.2, 0.035, 0.12, 0.28
     cell = (w - 1.2 - 8 * gap - 6 * numa_gap - cpu_gap) / 16
@@ -518,32 +518,33 @@ def usage_bar(s, x, y, w, h, label, fill):
         cx = x0 + k * cell + (k + 1) // 2 * gap + (numa - cpu) * numa_gap + cpu * cpu_gap
         box(s, cx, y, cell, h, fill=OFF, radius=0.12)
         if f:
-            box(s, cx, y + h * (1 - f), cell, h * f, fill=NAVY, radius=0.12)
+            box(s, cx, y + h * (1 - f), cell, h * f, fill=color, radius=0.12)
 
 
 def m_memory_limit():
     """No memory-controller counters on ASPIRE-2A, so the placement experiment of #61 stands in: Basic before the mapping,
     4 nodes, every rank pinned, STREAM triad on the same nodes after the solver. Each placement is one node as a row of CPU
     blocks over a row of memory channels, so that the halved resource can be seen (the user, 11/02: simpler than the chips
-    of the 8th edition's first build); then the ranks and channels per node, the halved one in navy, the time and the
-    bandwidth, and arrows between the rows."""
+    of the 8th edition's first build); then the ranks and channels per node, the time and the bandwidth, and arrows between
+    the rows. The colours are the user's hand edit (11/02): the cores in navy and the channels in green, what was halved in
+    red, the step that took 2.2 times as long in navy and the arrow to the same time in black."""
     s = reuse(9)
     set_title(s, "MEASURING THE MEMORY LIMIT")
     pitch, top, bar_w, xc, xr, xa = 1.5, 1.45, 4.95, 5.8, 7.65, 10.45
     for k, (label, cpu, memory, time, bandwidth, halved) in enumerate(PLACEMENT_ROWS):
         y = top + k * pitch
-        usage_bar(s, X0, y, bar_w, 0.4, "CPU", cpu)
-        usage_bar(s, X0, y + 0.52, bar_w, 0.4, "Memory", memory)
+        usage_bar(s, X0, y, bar_w, 0.4, "CPU", cpu, NAVY)
+        usage_bar(s, X0, y + 0.52, bar_w, 0.4, "Memory", memory, MEMORY)
         for i, (line, yy) in enumerate(zip(label, (y, y + 0.52))):
-            add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=NAVY if i == halved else INK, anchor="m")
+            add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=HALVED if i == halved else INK, anchor="m")
         add_text(s, xr, y - 0.02, xa - xr - 0.15, 0.5, [time], size=23, color=NAVY if k == 2 else INK, anchor="m")
         add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=NAVY if k == 2 else INK, anchor="m")
     for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
         y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
-        arrow_line(s, xa, y1, xa, y2 - 0.05, color=NAVY if k else FAINT, width=2.25)
-        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [cause, effect], size=15, color=NAVY if k else INK, anchor="m")
+        arrow_line(s, xa, y1, xa, y2 - 0.05, color=NAVY if k else INK, width=2.25)
+        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": HALVED}, {"runs": [effect], "color": NAVY if k else INK}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
-    caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks and the channels in use in navy.", h=0.4)
+    caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
     add_text(s, X0, bottom + 0.6, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
     set_notes(s, PLAN_NOTES[12])
     return s

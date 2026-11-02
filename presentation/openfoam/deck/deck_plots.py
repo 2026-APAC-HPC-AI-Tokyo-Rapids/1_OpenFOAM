@@ -7,8 +7,9 @@
 usage: deck_plots.py <path/to/figures.py> <output_dir>
 
 Every point is one job's official time per step and a bar is the mean of the jobs, so a plot shows the change, the scaling
-and how many jobs stand behind each number. Time runs up the vertical axis, every mean is written next to its jobs with its
-unit and the standard deviation of the jobs, and all text is bold, as on the slides (the user, 11/01). Every time axis starts
+and how many jobs stand behind each number, which is therefore not written (the user, 11/02). Time runs up the vertical axis,
+every mean is written next to its jobs with its unit and the standard deviation of the jobs, and all text is bold, as on the
+slides (the user, 11/01). Every time axis starts
 at 0; where the jobs need a narrow range to show their spread, the part below it is squeezed and marked with a wavy break
 (zoomed(), the user, 11/02). The data and their readers come from figures.py, the colours from palette.py. A plot is drawn at
 its size on the slide, so 12 pt here is 12 pt there.
@@ -75,9 +76,9 @@ def four(value):
 
 
 def sd_text(values):
-    """The jobs' standard deviation in % of their mean ('SD 0.07%'), or '1 job'."""
+    """The jobs' standard deviation in % of their mean ('SD 0.07%'); a single job has none."""
     if len(values) < 2:
-        return "1 job"
+        return ""
     sd = statistics.stdev(values) / statistics.fmean(values) * 100
     return f"SD {sd:.2f}%" if sd < 1 else f"SD {sd:.1f}%"
 
@@ -85,7 +86,8 @@ def sd_text(values):
 def stats(values, stacked=False):
     """The mean of a group of jobs in four significant figures with its unit, s/step written out (the user, 11/02: never
     shortened to s), then the SD; stacked puts the unit on a line of its own where the groups stand close together."""
-    return f"{four(statistics.fmean(values))}{chr(10) if stacked else ' '}s/step\n{sd_text(values)}"
+    mean = f"{four(statistics.fmean(values))}{chr(10) if stacked else ' '}s/step"
+    return "\n".join(filter(None, (mean, sd_text(values))))
 
 
 def jobs(axis, x, values, color, width=0.3, hollow=False):
@@ -104,10 +106,6 @@ def label_above(axis, x, values, color=INK, size=12, text=None, top=None, stacke
     """The mean and SD of the jobs at x (or text), above the highest job, or above top when a mark drawn there is higher."""
     y = max(values) if top is None else max(max(values), top)
     axis.annotate(text or stats(values, stacked), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
-
-
-def jobs_label(n):
-    return f"{n} job{'s' if n > 1 else ''}"
 
 
 def colour_ticks(labels, colors):
@@ -164,7 +162,7 @@ def rule():
         if max(candidate) < min(control):
             axis.axhspan(max(candidate), min(control), color=GRID, zorder=0)
         axis.set_title(title, color=color)
-        axis.set_xticks([0, 1], [f"control\n{jobs_label(len(control))}", f"candidate\n{jobs_label(len(candidate))}"], fontsize=10.5)
+        axis.set_xticks([0, 1], ["control", "candidate"], fontsize=10.5)
         colour_ticks(axis.get_xticklabels(), [INK, color])
         axis.set_xlim(-0.7, 1.7)
         low, high = min(control + candidate), max(control + candidate)
@@ -176,7 +174,7 @@ def rule():
 
 def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
-    colour, hollow), with its mean and SD, or '1 job', above it. Each (i, j) in arrows joins the means of groups i and j
+    colour, hollow), with its mean and SD (none for a single job) above it. Each (i, j) in arrows joins the means of groups i and j
     with an arrow and writes the change between them to its left, at the height along the arrow from its end (0) to its
     start (1), lower where a job of group i stands at the middle."""
     figure, axis = plt.subplots(figsize=size, layout="constrained")
@@ -198,7 +196,7 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
 
 def official(method):
     """The official 4-node run of one method as a group for tiers(): hierarchical hollow, scotch grey, as in scaling()."""
-    return (f"Official\n{method}\n1 job", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
+    return (f"Official\n{method}", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
 
 
 # The four ways of placing the ranks on scotch (#36 A3): tick label, configuration in pinning.csv, colour
@@ -211,7 +209,7 @@ def decomposition():
     decomposePar log under its name (the user, 11/02: a comparison of results goes in a plot, small if need be, which
     shows the jobs, the time and the SD)."""
     scotch = runs("pinning.csv", "configuration")[PLACEMENTS[0][1]]
-    groups = [("hierarchical\n4.31 M faces\n3 jobs", BASELINE[4], BASE, False), ("scotch\n2.93 M faces\n2 jobs", scotch, BASIC, False)]
+    groups = [("hierarchical\n4.31 M faces", BASELINE[4], BASE, False), ("scotch\n2.93 M faces", scotch, BASIC, False)]
     # the change is written low on its arrow, clear of the Baseline job at 3.53 s/step that stands at the middle
     tiers("p05_decomposition", groups, (5.75, 3.0), 3.2, 4.1, [3.4, 3.6, 3.8, 4.0], arrows=[(0, 1)], ylabel="s/step, each job", along=0.1)
 
@@ -221,7 +219,7 @@ def pinning():
     arrow from Neither to both. The user preferred this figure to the one on the Baseline's decomposition (11/02): scotch
     came first, the lost binding was found while running it and the pinning was measured on it."""
     data = runs("pinning.csv", "configuration")
-    groups = [(f"{label}\n{jobs_label(len(data[key]))}", data[key], color, False) for label, key, color in PLACEMENTS]
+    groups = [(label, data[key], color, False) for label, key, color in PLACEMENTS]
     tiers("p10_pinning", groups, (5.9, 4.95), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 3)])
 
 
@@ -230,14 +228,14 @@ def pinning_case_default():
     it, alternated, next to our Baseline's own jobs (#62), which ran the same setting later."""
     unpinned = runs("start_unpinned.csv", "nodes")[4]
     pinned = runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")]
-    groups = [("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Not pinned\n3 jobs", unpinned, FAINT, False), ("Pinned\n3 jobs", pinned, BASIC, False)]
+    groups = [("Our Baseline", BASELINE[4], BASE, False), ("Not pinned", unpinned, FAINT, False), ("Pinned", pinned, BASIC, False)]
     tiers("ps_pinning", groups, (5.9, 4.95), 2.9, 4.05, [3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(1, 2)])
 
 
 def mapping():
     """Main slide 8: plain scotch against scotch mapped onto the node (scotchCoeffs domains (2 4 16)), both pinned, 5 jobs
     each alternated on 4 nodes (#63)."""
-    groups = [("plain scotch\n5 jobs", CHANGES[("mapping", 4, "control")], FAINT, False), ("scotch mapped\nonto the node\n5 jobs", CHANGES[("mapping", 4, "candidate")], BASIC, False)]
+    groups = [("plain scotch", CHANGES[("mapping", 4, "control")], FAINT, False), ("scotch mapped\nonto the node", CHANGES[("mapping", 4, "candidate")], BASIC, False)]
     tiers("p09_mapping", groups, (5.9, 4.95), 2.87, 2.945, [2.88, 2.90, 2.92, 2.94], arrows=[(0, 1)])
 
 
@@ -264,14 +262,14 @@ def scotch():
 
 def basic_4node():
     """Main slides 9 and 10: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
-    groups = [official("hierarchical"), official("scotch"), ("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False)]
+    groups = [official("hierarchical"), official("scotch"), ("Our Baseline", BASELINE[4], BASE, False), ("Basic", FINAL[("Basic", 4)], BASIC, False)]
     tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.15, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)], stacked=True)
 
 
 def bonus_4node():
     """Main slide 18: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement;
     the user asked for the official runs and the Baseline here, 11/02)."""
-    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False), ("Bonus\n3 jobs", FINAL[("Bonus", 4)], BONUS, False)]
+    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline", BASELINE[4], BASE, False), ("Basic", FINAL[("Basic", 4)], BASIC, False), ("Bonus", FINAL[("Bonus", 4)], BONUS, False)]
     tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.25, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11, stacked=True)
 
 
@@ -311,7 +309,7 @@ def scaling():
     axis.set_ylim(0, 18.5)
     axis.set_yticks([0, 4, 8, 12, 16])
     finish(axis, "s/step, each job")
-    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor="white", markeredgecolor=MUTED, markeredgewidth=1.6, label="official hierarchical, 1 job"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.5, label="official scotch, 1 job")], frameon=False, loc="upper right", fontsize=11)
+    axis.legend(handles=[Line2D([], [], linestyle="--", color=MUTED, linewidth=1.3, label="ideal from 1 node"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor="white", markeredgecolor=MUTED, markeredgewidth=1.6, label="official hierarchical"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.5, label="official scotch")], frameon=False, loc="upper right", fontsize=11)
     save(figure, "p17_scaling")
 
 
@@ -355,10 +353,9 @@ def each_change():
         jobs(axis, index - 0.17, [(value / mean - 1) * 100 for value in control], FAINT, width=0.13)
         after = jobs(axis, index + 0.17, [(value / mean - 1) * 100 for value in candidate], BONUS, width=0.13)
         axis.text(index + 0.17, after - 0.25, f"{percent(candidate, control)}\n{sd_text(candidate)}", ha="center", va="top", fontsize=8, color=NAVY, linespacing=1.0)
-        axis.text(index, 0.42, f"{len(control)} v {len(candidate)}", ha="center", va="bottom", fontsize=9, color=INK)
     axis.set_xticks(range(len(EACH)), [label for _, label in EACH], fontsize=9.5)
     axis.set_xlim(-0.6, len(EACH) - 0.3)
-    axis.set_ylim(-4.9, 0.95)
+    axis.set_ylim(-4.9, 0.6)
     finish(axis, "Each job against the mean of its control (%)")
     axis.legend(handles=[Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=FAINT, markeredgecolor="black", markeredgewidth=0.45, label="before (control)"), Line2D([], [], marker="o", linestyle="", markersize=7, markerfacecolor=BONUS, markeredgecolor="black", markeredgewidth=0.45, label="after (candidate)")], frameon=False, loc="lower left", ncols=2)
     save(figure, "ps_each")
