@@ -54,6 +54,10 @@ X0, XW = 0.70, 11.93  # left edge and width of the content area; the title ends 
 # tree and multiLevel; the second is the first's rows at 1.5 times the scale, so both take the same top and bottom crops
 DECOMP_COLUMNS = {"hier": ("decomposition-numa", 0.0, 0.667), "scotch": ("decomposition-numa", 0.333, 0.334), "basic": ("decomposition-numa-scotch-domains-vs-multilevel", 0.0, 0.5), "multi": ("decomposition-numa-scotch-domains-vs-multilevel", 0.5, 0.0)}
 PANEL_TOP, ALL_BOTTOM = 0.113, 0.085
+# The car and the centre plane without the small labels both pictures print at the top of each view (the plain scotch
+# column of 10/09 still says "Basic: scotch"), as rows in fractions of the height, the same in both pictures: the car from
+# under its label to where the plane starts, the plane from under its label to the gap over the cross-section.
+CAR_ROWS, PLANE_ROWS = (0.1145, 0.4279), (0.4380, 0.6550)
 # the hue of each node in those pictures (decomposition/render.py), its 8 NUMA domains shaded from 45% darker to 45% lighter
 NODE_HUES = [(0.12, 0.47, 0.71), (1.0, 0.50, 0.05), (0.17, 0.63, 0.17), (0.58, 0.40, 0.74)]
 P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main"
@@ -172,8 +176,9 @@ def overlay(s, marks, x, y, w, h):
     def on_slide(point):
         return x + point[0] * w, y + (1 - point[1]) * h
 
-    for arrow in marks["arrows"]:
-        arrow_line(s, *on_slide(arrow["from"]), *on_slide(arrow["to"]), color=INK, width=2.25)
+    # named so that the Selection Pane shows which arrow and which number is which
+    for k, arrow in enumerate(marks["arrows"], 1):
+        arrow_line(s, *on_slide(arrow["from"]), *on_slide(arrow["to"]), color=INK, width=2.25).name = f"Arrow {k}"
     for text in marks["texts"]:
         lines = text["text"].split("\n")
         size = round(text["size"] * scale, 1)
@@ -181,14 +186,17 @@ def overlay(s, marks, x, y, w, h):
         px, py = on_slide(text["at"])
         left = {"l": px, "c": px - tw / 2, "r": px - tw}[text["align"]]
         top = {"t": py, "m": py - th / 2, "b": py - th}[text["anchor"]]
-        add_text(s, left, top, tw, th, lines, size=size, color=text["color"], align=text["align"], anchor=text["anchor"])
+        add_text(s, left, top, tw, th, lines, size=size, color=text["color"], align=text["align"], anchor=text["anchor"], name=f"Number {lines[0]}")
 
 
-def decomp_panel(s, which, x, y, w=None, h=None):
-    """One column of a decomposition picture coloured by node and NUMA domain (the user, 11/02), its three views stacked;
-    build.sh copies the pictures into FIGDIR."""
+def decomp_panel(s, which, x, y, w, views=3):
+    """One column of a decomposition picture coloured by node and NUMA domain (the user, 11/02), its three views stacked,
+    or with views=2 the car over the centre plane without their labels; build.sh copies the pictures into FIGDIR. Returns
+    the bottom."""
     name, left, right = DECOMP_COLUMNS[which]
-    return picture(s, fig(name), x, y, w, h, crop=(left, PANEL_TOP, right, ALL_BOTTOM))
+    for top, bottom in [(PANEL_TOP, 1 - ALL_BOTTOM)] if views == 3 else [CAR_ROWS, PLANE_ROWS]:
+        y += picture(s, fig(name), x, y, w, crop=(left, top, right, 1 - bottom)).height / EMU
+    return y
 
 
 def numa_shade(domain):
@@ -419,59 +427,63 @@ def m_pinning():
     return s
 
 
+# Faces between subdomains on different nodes, sockets and NUMA domains, and in all, counted (11/03) from the decomposePar
+# logs of the 512 subdomains with rank r on node r // 128, socket r // 64 and NUMA domain r // 16: hierarchical and plain
+# scotch from the organisers' 4-node runs (tasks/4.3-aspire2a-logs/{hierarchical,scotch}-4node/10_decomposePar.log, the same
+# decompositions as ours, ../decomposition/README.md), scotch on the node tree from Basic's (Box openfoam/results/4node/).
+FACES = {"hier": (2331023, 2467577, 3628785, 4306118), "scotch": (337324, 492282, 1047405, 2927022), "basic": (260748, 387196, 938403, 3022295)}
+
+
 def m_decomposition():
-    """The decomposition once every rank was pinned (the user, 11/03: pinning first; it was 11/02's first step, as the most
-    common way to speed up OpenFOAM): the case default and scotch in decomposeParDict's own words, each job pinned and in
-    turns (#36) in a plot with the faces between subdomains under each name instead of a table (the user, 11/02: a
-    comparison of results goes in a plot), and the pictures coloured by node and NUMA domain over the key to their colours.
-    The scotch of the pictures is plain scotch, as in these jobs."""
+    """Basic's three decompositions side by side, once every rank was pinned (the user, 11/03: hierarchical, plain scotch
+    and scotch on the node tree with their pictures and faces, then a slide of their results): each in decomposeParDict's
+    own words (the user, 11/02), its picture coloured by node and NUMA domain, the car and the centre plane, and its faces in
+    all and between nodes, over the key to the colours. The node tree's weights stand as (…); the next slide gives their
+    meaning."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
-    w = 5.75
-    heading(s, X0, 1.3, w, "The case default, as in our Baseline", size=16)
-    bottom = code(s, X0, 1.72, w, ["method  hierarchical;", "hierarchicalCoeffs { n (16 8 4); }"])
-    heading(s, X0, bottom + 0.15, w, "The decomposition we kept", size=16)
-    bottom = code(s, X0, bottom + 0.57, w, ["method  scotch;"])
-    figure(s, "p05_decomposition", X0, bottom + 0.2, w, "Each job of the two decompositions, both pinned, on 4 nodes, with the faces between subdomains.")
-    pw = 2.8
-    xr = 12.63 - 2 * pw - 0.15
-    for i, (which, label) in enumerate((("hier", "hierarchical (16 8 4)"), ("scotch", "scotch"))):  # (16 8 4): the user's hand edit, 11/02
-        x = xr + i * (pw + 0.15)
-        add_text(s, x, 1.3, pw, 0.4, [label], size=18, color=NAVY, align="c")
-        panel = decomp_panel(s, which, x, 1.72, w=pw)
-    bottom = numa_key(s, xr, 1.72 + panel.height / EMU + 0.1, 2 * pw + 0.15)
-    caption(s, xr, bottom + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.62)
+    pw = 3.2
+    gap = (XW - 3 * pw) / 2
+    columns = (("hier", "hierarchical (16 8 4)", ["method  hierarchical;", "hierarchicalCoeffs", "{ n  (16 8 4); }"]), ("scotch", "scotch", ["method  scotch;"]), ("basic", "scotch on the node tree", ["method  scotch;", "scotchCoeffs", "{ domains  (2 4 16);", "  domainWeights  (…); }"]))
+    for k, (which, label, lines) in enumerate(columns):
+        x = X0 + k * (pw + gap)
+        add_text(s, x - 0.3, 1.25, pw + 0.6, 0.4, [label], size=18, color=NAVY, align="c")
+        code(s, x, 1.68, pw, lines, size=12)
+        bottom = decomp_panel(s, which, x, 2.58, pw, views=2)
+        between_nodes, _, _, every = FACES[which]
+        add_text(s, x, bottom + 0.06, pw, 0.5, [f"{every / 1e6:.2f} M faces in all", f"{between_nodes / 1e6:.2f} M between nodes"], size=15, align="c")
+    key = numa_key(s, X0, bottom + 0.62, XW)
+    caption(s, X0, key + 0.1, XW, "Each decomposition on the car and the centre plane, one hue per node and one shade per NUMA domain.", h=0.38)
     set_notes(s, PLAN_NOTES[6])
     return s
 
 
 def m_pinning_results():
-    """Pinning before the decomposition (the user, 11/03): on the Baseline's hierarchical decomposition without and with
-    pinning, in turns (#36), and the four placements on scotch (#36 A3), which the user preferred for showing every
-    experiment (11/02), in one plot across the slide; the times are its labels, so the slide says what they mean."""
+    """Pinning first, on our Baseline's own decomposition (the user, 11/03: the fix of the lost binding comes first, so
+    hierarchical, not scotch; without pinning the decompositions cannot be compared and the jobs spread): hierarchical
+    without and with pinning, in turns (#36). Each half alone was measured on scotch only and is a supporting slide."""
     s = main_slide(13)
     set_title(s, "PINNING RESULTS")
-    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 11.2% off a step with hierarchical and 14.1% with scotch.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
-    figure(s, "p10_pinning", 5.1, 1.3, 7.53, "Each job under each placement of the ranks on 4 nodes, with hierarchical and with scotch.")
+    bullets(s, X0, 1.5, 5.75, 5.4, ["Pinning took 11.2% off a step with our Baseline's decomposition, hierarchical.", "Pinned jobs varied less, from 2.0% to 1.1%, so decompositions could now be compared."], size=20, space_after=30)
+    figure(s, "p10_pinning", 6.73, 1.3, 5.9, "Each job of hierarchical without and with pinning on 4 nodes.")
     set_notes(s, PLAN_NOTES[5])
     return s
 
 
-def m_mapping():
-    """Basic's last change, scotch mapped onto the node tree, in decomposeParDict's own words (the user, 11/02). The
-    dictionary is the one run/prepare.pbs writes but for the strategy string, Scotch 6.1's default mapping strategy with an
-    exact final balance of 1% (#38, #63). In Scotch the weights become the costs 64, 8, 4 and 1 of a link between nodes,
-    sockets, NUMA domains and cores (#38). Faces against plain scotch from the decomposePar logs (REPORT §6.3); jobs of #63,
-    5 v 5 alternated."""
+def m_decomposition_results():
+    """The results of the three decompositions (the user, 11/03): their faces between nodes, sockets and NUMA domains in a
+    table (FACES), what the node tree's weights mean (in Scotch they become the costs 64, 8, 4 and 1 of a link between
+    nodes, sockets, NUMA domains and cores, #38), and each job of the two comparisons in turns, all pinned: hierarchical
+    against scotch (#36) and plain scotch against the node tree (#63, Basic's record)."""
     s = reuse(15)
-    set_title(s, "SCOTCH ON THE NODE TREE")
-    w = 5.75
-    heading(s, X0, 1.3, w, "decomposeParDict of Basic", size=16)
-    bottom = code(s, X0, 1.72, w, ["method  scotch;", "scotchCoeffs", "{", "    domains        (2 4 16);", "    domainWeights  (0.125 0.0625 0.015625);", "    strategy       \"…\";", "}"])
-    top = table_caption(s, X0, bottom + 0.25, w, "The tree that domains describes, with its faces against plain scotch.", h=0.7)
-    rows = [["Between two", "Cost", "Faces"], ["nodes", "64", "−22.7%"], ["sockets", "8", "−21.3%"], ["NUMA domains", "4", "−10.4%"], ["cores", "1", "+3.3%"]]
-    table(s, X0, top + 0.05, [2.85, 1.2, 1.7], rows, row_h=0.44, size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], [INK, INK, NAVY], [INK, INK, NAVY], None])
-    figure(s, "p09_mapping", 6.73, 1.3, 5.9, "Each job of plain scotch and of scotch mapped onto the node, both pinned, on 4 nodes.")
+    set_title(s, "DECOMPOSITION RESULTS")
+    w = 5.95
+    top = table_caption(s, X0, 1.3, w, "Faces between subdomains on different nodes, sockets and NUMA domains, in millions.", h=0.7)
+    labels = ["Nodes", "Sockets", "NUMA domains", "In all"]
+    rows = [["", "hierarchical", "scotch", "node tree"]] + [[label] + [f"{FACES[which][k] / 1e6:.2f}" for which in ("hier", "scotch", "basic")] for k, label in enumerate(labels)]
+    table(s, X0, top + 0.05, [2.05, 1.6, 0.95, 1.35], rows, row_h=0.58, size=16, aligns=["l", "r", "r", "r"])
+    bullets(s, X0, top + 0.05 + 5 * 0.58 + 0.35, w, 1.2, ["On the node tree a face between nodes costs 64 times one between cores."], size=19)
+    figure(s, "p05_decomposition", 6.78, 1.3, 5.85, "Each job of hierarchical against scotch and of scotch against the node tree, all pinned, on 4 nodes.")
     set_notes(s, PLAN_NOTES[7])
     return s
 
@@ -481,7 +493,7 @@ def basic_table(s, x, y, w):
     result in the order of the work): pinning on hierarchical and scotch against hierarchical, both in turns in #36, the
     node mapping in #63, and Basic against our Baseline, two periods apart; returns the bottom."""
     top = table_caption(s, x, y, w, "Each Basic step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["CPU and memory pinning", "3.670 → 3.257", "−11.2%"], ["scotch instead of hierarchical", "3.257 → 2.915", "−10.5%"], ["scotch mapped onto the node", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
+    rows = [["Step", "s/step", "Change"], ["CPU and memory pinning", "3.670 → 3.257", "−11.2%"], ["scotch instead of hierarchical", "3.257 → 2.915", "−10.5%"], ["scotch on the node tree", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
     heights = [0.47, 0.62, 0.62, 0.62, 0.62]
     table(s, x, top + 0.05, [2.3, 1.95, 1.25], rows, row_heights=heights, size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, NAVY]])
     return top + 0.05 + sum(heights)
@@ -626,8 +638,8 @@ def m_bonus_decomposition():
     for i, (which, label) in enumerate((("basic", "scotch (2 4 16)"), ("multi", "multiLevel (4 2 4 16)"))):
         x = xr + i * (pw + 0.15)
         add_text(s, x - 0.15, 1.3, pw + 0.18, 0.42, [label], size=18, color=NAVY, align="c")
-        panel = decomp_panel(s, which, x, 1.72, w=pw)
-    bottom = numa_key(s, xr, 1.72 + panel.height / EMU + 0.1, 2 * pw + 0.15)
+        panel_bottom = decomp_panel(s, which, x, 1.72, pw)
+    bottom = numa_key(s, xr, panel_bottom + 0.1, 2 * pw + 0.15)
     caption(s, xr, bottom + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
     set_notes(s, PLAN_NOTES[13])
     return s
@@ -767,14 +779,17 @@ def m_scaling():
 
 def m_not_helped_bonus():
     """Every Bonus idea we tried and did not keep, with its result in words and the striking ones in navy, and what limits
-    a step now (the user, 11/02). Data: #33, #35, #37, #45, #49, #69, bonus/README.md."""
+    a step now (the user, 11/02). Data: #33, #35, #37, #45, #49, #69, bonus/README.md. renumberMesh's other cell orders are
+    judged from what renumbering does, not run on ASPIRE-2A (the user, 11/03: rejecting them in principle is enough; the run
+    on Genkai stays a supporting slide): with the default Cuthill-McKee each cell's neighbours are already in cache, and
+    what still comes from DRAM, each array once per pass, no order changes."""
     s = reuse(14)
     set_title(s, "WHAT DID NOT HELP IN THE BONUS")
     top = table_caption(s, X0, 1.3, XW, "Each Bonus idea we tried and did not keep, with its time per step against its control on 4 nodes.")
-    rows = [["Idea", "Time per step"], ["Cell weights to balance the faces in scotch or multiLevel", "2.2% to 6.5% slower"], ["METIS balancing both cells and faces", "1.5% slower"], ["GAMG coarsest level gathered on one rank", "5.0% slower"], ["The same on one rank per node or per NUMA domain", "1.0% slower or 0.3% faster"], ["UCX over RC between nodes", "0.2% faster, within the spread"], ["Gauss–Seidel overlapped with its halo exchange", "8.3% slower and Cd 1.2% lower"], ["bound() averaging only the bounded cells", "not run, one more global sum"]]
+    rows = [["Idea", "Time per step"], ["Cell weights to balance the faces in scotch or multiLevel", "2.2% to 6.5% slower"], ["METIS balancing both cells and faces", "1.5% slower"], ["GAMG coarsest level gathered on one rank", "5.0% slower"], ["The same on one rank per node or per NUMA domain", "1.0% slower or 0.3% faster"], ["UCX over RC between nodes", "0.2% faster, within the spread"], ["Gauss–Seidel overlapped with its halo exchange", "8.3% slower and Cd 1.2% lower"], ["bound() averaging only the bounded cells", "not run, one more global sum"], ["Other cell orders in renumberMesh", "not run, neighbours already in cache"]]
     striking = {1, 2, 3, 6}
-    table(s, X0, top + 0.05, [7.2, 4.73], rows, row_h=0.45, size=16, colors=[None] + [[NAVY, NAVY] if i in striking else None for i in range(1, len(rows))])
-    bullets(s, X0, top + 0.05 + 0.45 * len(rows) + 0.15, XW, 1.3, ["Balancing the faces unbalanced the cells, and fewer ranks in the global sums did not shorten the wait.", [("Now a step is limited by memory traffic and by the ranks that read the most from DRAM.", {"color": NAVY})]], size=18, space_after=6)
+    table(s, X0, top + 0.05, [6.85, 5.08], rows, row_h=0.43, size=16, colors=[None] + [[NAVY, NAVY] if i in striking else None for i in range(1, len(rows))])
+    bullets(s, X0, top + 0.05 + 0.43 * len(rows) + 0.15, XW, 1.3, ["Balancing the faces unbalanced the cells, and fewer ranks in the global sums did not shorten the wait.", [("Now a step is limited by memory traffic and by the ranks that read the most from DRAM.", {"color": NAVY})]], size=18, space_after=6)
     set_notes(s, PLAN_NOTES[19])
     return s
 
@@ -845,21 +860,20 @@ def s_network():
     return s
 
 
-def s_pinning_decomposition():
-    """Why pinning came first (Q41): the two decompositions without and with pinning, all on 4 nodes in #36 (data/
-    start_unpinned.csv, decomposition_basic.csv, pinning.csv), each fix gaining more once the other was in place, and the
-    slowest rank's computation over the median one's (OpenFOAM profiling of the Baseline 38219862855 and of Basic before
-    its mapping 37714968610; CrayPAT, process time minus MPI, for pinned hierarchical, #38 37181991433). It took the place
-    of the slide on pinning with hierarchical, which went into the main part (the user, 11/03)."""
-    s = supp(41, "PINNING AND DECOMPOSITION", "s_pinning_decomposition")
-    top = table_caption(s, X0, 1.35, 6.4, "Time per step on 4 nodes, each decomposition without and with pinning.", h=0.7)
-    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.670", "3.257", "−11.2%"], ["scotch", "3.395", "2.915", "−14.1%"], ["scotch against hierarchical", "−7.5%", "−10.5%", ""]]
-    table(s, X0, top + 0.05, [2.9, 1.25, 1.25, 1.3], rows, row_h=0.62, size=17, aligns=["l", "r", "r", "r"], colors=[None, None, None, [NAVY] * 4])
-    xr = 7.6
-    top = table_caption(s, xr, 1.35, 12.63 - xr, "The slowest rank's computation against the median rank's on 4 nodes.", h=0.7)
-    rows = [["Run", "Slowest / median"], ["hierarchical, not pinned", "1.46"], ["hierarchical, pinned", "1.16"], ["scotch, pinned", "1.06"]]
-    table(s, xr, top + 0.05, [3.33, 1.7], rows, row_h=0.62, size=17, aligns=["l", "r"])
-    bullets(s, X0, 4.85, XW, 2.1, ["Each fix gained more once the other was in place.", "Not pinned, the slowest ranks were those the placement slowed, so a better decomposition saved less.", "Pinned, the slowest ranks were those whose subdomains held more work, which scotch evened out."], size=17, space_after=8)
+def s_pinning_detail():
+    """The pinning beyond the main part, for Q41 and "why both halves?": each half alone on scotch (#36 A3, the experiment
+    that chose numactl and the watcher for Basic; the main part shows the pinning on the Baseline's hierarchical, the user,
+    11/03), and the two decompositions without and with pinning, all on 4 nodes in #36 (data/start_unpinned.csv,
+    decomposition_basic.csv, pinning.csv), each fix gaining more once the other was in place. The slowest rank's
+    computation over the median one's: OpenFOAM profiling of the Baseline 38219862855 and of Basic before its mapping
+    37714968610; CrayPAT, process time minus MPI, for pinned hierarchical, #38 37181991433."""
+    s = supp(41, "PINNING IN DETAIL", "s_pinning_detail")
+    figure(s, "ps_pinning", X0 - 0.05, 1.3, 6.1, "Each job with each half of the pinning alone and with both, scotch on 4 nodes.")
+    xr = 7.05
+    top = table_caption(s, xr, 1.35, 12.63 - xr, "Time per step on 4 nodes, each decomposition without and with pinning.", h=0.7)
+    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical", "3.670", "3.257", "−11.2%"], ["scotch", "3.395", "2.915", "−14.1%"], ["scotch's gain", "−7.5%", "−10.5%", ""]]
+    table(s, xr, top + 0.05, [1.7, 1.3, 1.2, 1.38], rows, row_h=0.55, size=16, aligns=["l", "r", "r", "r"], colors=[None, None, None, [NAVY] * 4])
+    bullets(s, xr, top + 0.05 + 4 * 0.55 + 0.3, 12.63 - xr, 6.95 - top - 2.55, ["Pinning only the CPU came after the memory was placed, and pinning only the memory let the rank move away from it.", "Each fix gained more once the other was in place.", "The slowest rank computed 1.46 times as long as the median not pinned, 1.16 pinned and 1.06 with scotch as well."], size=16, space_after=8)
     return s
 
 
@@ -1054,11 +1068,11 @@ def fix_sections():
 # ====================================================================== assemble
 cover = S[0]
 set_notes(cover, NOTES["cover"])
-main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_pinning(), m_pinning_results(), m_decomposition(), m_mapping(), m_basic_results(), m_not_helped_basic(), m_basic_mpi(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
+main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_pinning(), m_pinning_results(), m_decomposition(), m_decomposition_results(), m_basic_results(), m_not_helped_basic(), m_basic_mpi(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
 COUNT.update(prefix="S", Figure=0, Table=0)
 divider = S[21]
 index_slide = reuse(22)
-groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning and decomposition", s_pinning_decomposition()), ("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency()), ("Other renumberings on Genkai", s_renumber())])]
+groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning in detail", s_pinning_detail()), ("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency()), ("Other renumberings on Genkai", s_renumber())])]
 order = [cover] + main + [divider, index_slide] + [sl for _, items in groups for _, sl in items]
 
 sldIdLst = prs.slides._sldIdLst

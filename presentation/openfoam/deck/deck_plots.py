@@ -241,64 +241,70 @@ def official(method):
     return (f"Official\n{method}", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
 
 
-# The four ways of placing the ranks on scotch (#36 A3): tick label, configuration in pinning.csv, colour
-PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Memory\nonly", "numactl --membind only", FAINT), ("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC)]
+# The four ways of placing the ranks on scotch (#36 A3): tick label, configuration in pinning.csv, colour. Pinned jobs that
+# are not Basic's record are navy, the tier's yellow being kept for the record (the user, 11/03: it confused).
+PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Memory\nonly", "numactl --membind only", FAINT), ("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", NAVY)]
 
 
 def pinning():
-    """Main slide 6: pinning before the decomposition (the user, 11/03: we knew the ranks were not pinned and expected
-    pinning to help, and wished for the experiment on hierarchical). On the Baseline's decomposition, hierarchical, the
-    ranks with neither half pinned and with both, in turns on 4 nodes (#36, data/start_unpinned.csv and the hierarchical
-    jobs of data/decomposition_basic.csv, pinned right after MPI_Init); beside it the four placements on scotch a day later
-    (#36 A3, data/pinning.csv), which showed that both halves are needed. An arrow from neither to both in each."""
-    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], FAINT, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], BASIC, False)]
+    """Main slide 6: pinning first, on our Baseline's decomposition, hierarchical (the user, 11/03: we knew the ranks were
+    not pinned and expected pinning to help; without pinning the decompositions cannot be compared and the jobs vary):
+    neither half pinned and both, in turns on 4 nodes (#36, data/start_unpinned.csv and the hierarchical jobs of
+    data/decomposition_basic.csv, pinned right after MPI_Init), with an arrow from one to the other."""
+    groups = [("Not pinned", runs("start_unpinned.csv", "nodes")[4], FAINT, False), ("Pinned", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], NAVY, False)]
+    tiers("p10_pinning", groups, (5.9, 4.95), 2.9, 4.05, [3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(0, 1)])
+
+
+def pinning_halves():
+    """Supporting slide: each half of the pinning alone and both, on scotch (#36 A3, data/pinning.csv), the experiment that
+    chose numactl and the watcher for Basic, with an arrow from neither to both. It is on scotch, so it is not in the main
+    part, which tells the pinning on the Baseline's hierarchical (the user, 11/03)."""
     data = runs("pinning.csv", "configuration")
-    scotch = [(label, data[key], color, False) for label, key, color in PLACEMENTS]
-    # the change of the first, short arrow stands left of it, so the axis starts further left
-    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05)
+    groups = [(label, data[key], color, False) for label, key, color in PLACEMENTS]
+    tiers("ps_pinning", groups, (6.1, 4.7), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 3)], label_size=11.5, stacked=True)
+
+
+def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size=11.5, stacked=False):
+    """Panels side by side, each a control and a candidate (tick label, values, colour) on its own axis from 0 (zoomed()),
+    with an arrow from one to the other and the change, both as slide shapes (layout())."""
+    figure, axes = plt.subplots(1, len(panels), figsize=size, layout="constrained")
+    marks, changes = [], []
+    for k, (axis, groups) in enumerate(zip(axes, panels)):
+        for x, (_, values, color) in enumerate(groups):
+            jobs(axis, x, values, color)
+            label_above(axis, x, values, color=INK if color == FAINT else color, size=label_size, stacked=stacked)
+        axis.set_xticks([0, 1], [label for label, _, _ in groups])
+        colour_ticks(axis.get_xticklabels(), [INK if color == FAINT else color for _, _, color in groups])
+        axis.set_xlim(-0.6, 1.6)
+        if titles:
+            axis.set_title(titles[k])
+        before, after = groups[0][1], groups[1][1]
+        both = before + after
+        span = max(both) - min(both)
+        bottom, top = min(both) - span * 0.15, max(both) + span * (0.95 if stacked else 0.75)
+        zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
+        finish(axis, ylabel if k == 0 else "")
+        start, end = (0.4, statistics.fmean(before)), (0.5, statistics.fmean(after))
+        marks.append((axis, start, end))
+        changes.append((axis, (0.34, (start[1] + end[1]) / 2), percent(after, before), {"align": "r", "anchor": "m", "size": 15, "color": palette.NAVY}))
+    layout(figure, name, marks, changes)
+    save(figure, name)
 
 
 def decomposition():
-    """Main slide 7: the case-default hierarchical against scotch, both pinned, in turns on 4 nodes (#36,
-    data/decomposition_basic.csv), with the faces between subdomains of each from its decomposePar log under its name (the
-    user, 11/02: a comparison of results goes in a plot, small if need be, which shows the jobs, the time and the SD)."""
+    """Main slide 8: Basic's two decompositions, each against its control in turns on 4 nodes with every rank pinned:
+    hierarchical against scotch (#36, data/decomposition_basic.csv) and plain scotch against scotch on the node tree (#63;
+    those jobs are Basic's record, so only they take the tier's colour)."""
     data = runs("decomposition_basic.csv", "nodes", "method")
-    groups = [("hierarchical\n4.31 M faces", data[(4, "hierarchical")], FAINT, False), ("scotch\n2.93 M faces", data[(4, "scotch")], BASIC, False)]
-    tiers("p05_decomposition", groups, (5.75, 3.0), 2.75, 3.45, [2.8, 3.0, 3.2, 3.4], arrows=[(0, 1)], ylabel="s/step, each job")
-
-
-def mapping():
-    """Main slide 8: plain scotch against scotch mapped onto the node (scotchCoeffs domains (2 4 16)), both pinned, 5 jobs
-    each in turns on 4 nodes (#63)."""
-    groups = [("plain scotch", CHANGES[("mapping", 4, "control")], FAINT, False), ("scotch mapped\nonto the node", CHANGES[("mapping", 4, "candidate")], BASIC, False)]
-    tiers("p09_mapping", groups, (5.9, 4.95), 2.87, 2.945, [2.88, 2.90, 2.92, 2.94], arrows=[(0, 1)])
+    panels = [[("hierarchical", data[(4, "hierarchical")], FAINT), ("scotch", data[(4, "scotch")], NAVY)], [("scotch", CHANGES[("mapping", 4, "control")], FAINT), ("on the\nnode tree", CHANGES[("mapping", 4, "candidate")], BASIC)]]
+    pairs("p05_decomposition", panels, (6.0, 4.75), titles=["Decomposition", "Node tree"], ylabel="s/step on 4 nodes, each job", stacked=True)
 
 
 def scotch():
     """Supporting slide: scotch against the case-default hierarchical decomposition at 1, 2 and 4 nodes, same placement,
-    with an arrow and the change from one to the other in each panel as slide shapes (layout())."""
+    scotch in navy as these jobs are not Basic's record."""
     data = runs("decomposition_basic.csv", "nodes", "method")
-    figure, axes = plt.subplots(1, 3, figsize=(11.9, 4.2), layout="constrained")
-    marks, changes = [], []
-    for axis, n in zip(axes, NODES):
-        hierarchical, split = data[(n, "hierarchical")], data[(n, "scotch")]
-        for x, values, color in ((0, hierarchical, FAINT), (1, split, BASIC)):
-            jobs(axis, x, values, color)
-            label_above(axis, x, values, color=BASIC if color == BASIC else INK, size=11.5)
-        axis.set_xticks([0, 1], ["hierarchical", "scotch"])
-        colour_ticks(axis.get_xticklabels(), [INK, BASIC])
-        axis.set_xlim(-0.6, 1.6)
-        axis.set_title(f"{n} node{'s' if n > 1 else ''}")
-        both = hierarchical + split
-        span = max(both) - min(both)
-        bottom, top = min(both) - span * 0.15, max(both) + span * 0.75
-        zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
-        finish(axis, "s/step, each job" if n == 1 else "")
-        start, end = (0.4, statistics.fmean(hierarchical)), (0.5, statistics.fmean(split))
-        marks.append((axis, start, end))
-        changes.append((axis, (0.34, (start[1] + end[1]) / 2), percent(split, hierarchical), {"align": "r", "anchor": "m", "size": 15, "color": palette.NAVY}))
-    layout(figure, "p11_scotch", marks, changes)
-    save(figure, "p11_scotch")
+    pairs("p11_scotch", [[("hierarchical", data[(n, "hierarchical")], FAINT), ("scotch", data[(n, "scotch")], NAVY)] for n in NODES], (11.9, 4.2), titles=[f"{n} node{'s' if n > 1 else ''}" for n in NODES])
 
 
 def basic_4node():
@@ -522,8 +528,8 @@ def flame(levels=14):
 
 rule()
 pinning()
+pinning_halves()
 decomposition()
-mapping()
 scotch()
 basic_4node()
 bonus_4node()

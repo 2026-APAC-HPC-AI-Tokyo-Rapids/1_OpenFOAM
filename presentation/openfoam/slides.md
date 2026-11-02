@@ -100,6 +100,13 @@ AIパートのチームメイトから、デッキについて指摘がありま
   - 15、16枚目：一緒に測った変更は「with 0008, 0010  −2.0%」と、withを前に、%を右端にそろえた（ユーザー：%を縦に比べやすく）。
   - ユーザーの手直し（11/03 2:24の保存）を取り込んだ：17枚目の「−2.3%」「−3.4%」を赤に、19枚目の4倍を超える理由の文の位置。
   - renumberMeshのほかの並べ方を玄界で測った（ユーザー：ほかの方法では速くならないと否定できればよい。玄界でのテストはしてよい）。課題のケースを4ノード448 rankで、既定のCuthill–McKee、逆順（RCM）、並べ替えなし、spring、乱数の順を40反復ずつ、4巡。既定に対してRCM −0.2%（ばらつきの中、1巡は遅い）、なし+0.7%、spring +3.3%、乱数+10.6%で、既定より速い並べ方はなかった。どの並べ方もCdを変えた（40反復目で最大1.3%）。補足43枚目（Other renumberings on Genkai）を足し、Q39の答えを「測った」形にした（`renumber/README.md`、`data/renumber_genkai.csv`）。
+- 第8版の8回目（11/03、ユーザーが7回目の版を見て）：
+  - 6枚目（固定の結果）をhierarchicalだけにした（ユーザー：固定が外れていたのを直すのが最初なのに、scotchを使っているのは妙に見える。hierarchicalで固定が外れていると分かって固定の実験をし、その後にscotchを試した、という順がきれい。固定していないと分割の評価が難しく、ばらつきも大きい）。#36のhierarchicalの固定なし・ありで−11.2%、SD 2.0% → 1.1%。片方だけの固定（scotchでしか測っていない）の4通りは補足30枚目（Pinning in detail）へ移した。
+  - 分割を2枚にした（ユーザー：Basicでdomain別にしたものと普通のscotchの、可視化した絵があるので並べて見せたい。分割方法と面の3種類を示し、その結果の枚、の2枚に）。7枚目（Decomposition）は3つの分割（hierarchical (16 8 4)、scotch、ノードの木）を`decomposeParDict`、車体と中心断面の絵、面の数で並べ、8枚目（Decomposition results）は段ごとの面の表と、hierarchical対scotch（−10.5%）、scotch対ノードの木（−0.7%）の各ジョブ。面は`decomposePar.log`をノード、ソケット、NUMA領域ごとに数え直した。
+  - 図で、Basicの段の色をBasicの記録のジョブにだけ使うようにした（ユーザー：混乱するので）。固定した記録でないジョブは紺。
+  - -xx.x%の矢印と数字は7回目から図形なので、選択ウィンドウで分かるように「Arrow k」「Number …」と名前を付けた（ユーザー：矢印もpowerpointのオブジェクトに）。
+  - 15、16枚目の原稿を軽くした（ユーザー：patchのところの原稿はもっと軽くしてパパっと進んでもいい）。30秒と20秒 → 20秒と15秒。17枚目は図の説明なのでそのまま。
+  - 20枚目の表に「Other cell orders in renumberMesh | not run, neighbours already in cache」を足し、原稿に1文足した（ユーザー：ほかの並べ方の原理を検討して効果がないと判断した、と表に載せてよいか。ほかのクラスタの結果はあまり使いたくない。理論的に否定できれば十分）。Q39も原理から答える形にし、玄界の結果は「測ったか」と聞かれたときだけ（補足43枚目）にした。
 
 ## 外せないもの
 
@@ -129,7 +136,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 - 1枚目：結果（公式の結果と、Baseline → Basic → Bonus）と、BasicとBonusでどの律速に何をしたか。
 - 2枚目：何を残すかの決め方。この後の数字は全部これで決めたので、結果より前に言います。
-- Baseline → Basic（3〜10枚目）：律速の候補ごとの測り方。MPIが46%で、その大半（42%）は他のrankを待つ時間で、rankを待たせるものはBasicで変えられる（3）→ MPIの中身は待ちで、同じセル数なのに遅いrankがいる（4）→ 置き場所を確かめると、NUMAのために固定するはずが外れていた（5）→ hierarchicalで固定の効果、scotchで片方だけの固定、ばらつき（6）→ 固定した上で、分割をscotchにする（7）→ scotchをノードの木に写す（8）→ Basicの結果と段ごとの表（9）→ Basicで効かなかった手（10）。11/03に「固定 → 分割」の順にしました（ユーザー。経緯の7回目）。
+- Baseline → Basic（3〜10枚目）：律速の候補ごとの測り方。MPIが46%で、その大半（42%）は他のrankを待つ時間で、rankを待たせるものはBasicで変えられる（3）→ MPIの中身は待ちで、同じセル数なのに遅いrankがいる（4）→ 置き場所を確かめると、NUMAのために固定するはずが外れていた（5）→ Baselineの分割（hierarchical）のまま固定の効果とばらつきを測る。固定してはじめて分割を比べられる（6）→ 3つの分割を設定、絵、面の数で並べる（7）→ 段ごとの面の表と、固定した上での分割の比較（8）→ Basicの結果と段ごとの表（9）→ Basicで効かなかった手（10）。11/03に「固定 → 分割」の順にし（経緯の7回目）、8回目に固定をhierarchicalだけで見せ、分割を2枚にしました（ユーザー）。
 - Basic → Bonus（11〜18枚目）：Bonusのために、3枚目と同じ見方でBasicをプロファイルする。MPIの待ちが減った（11）→ 残りはMPIの外で、コアは計算で忙しくない。メモリのカウンタは読めない（12）→ 読めないメモリ帯域を、配置の実験とSTREAMで確かめ、コンパイラが効かなかった理由もここで言う（13）→ 分割を機械の階層に沿わせる（14）→ 運ぶデータを減らすソースの変更の一覧（15、16）と図にした例（17）→ 結果（18）。
 - scalingと終わり（19、20枚目）：1/2/4ノードと、4ノードで4倍を超える理由（19）→ Bonusで効かなかった手と、今の律速（20）。最後の1文で最終結果（2.360 s/step、Baselineより35.3%短い）に戻って終えます。結論だけの枚は置きません（1枚目が要約を兼ねる）。
 - デッキでは、チームの表紙（1枚目）の次に、この20枚が2〜21枚目として並びます。この文書の番号は、表紙を数えない番号です。
@@ -152,6 +159,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 標語や対句（「Benchmarks decide, profiles explain」など）、「What we changed」「How we worked」のような見出し、中黒（·）でのつなぎは使いません。
 - 色は今のデッキの色合い（`deck/palette.py`）のままにします。黒い文字は完全な黒（#000000）です。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
 - スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。Baseline、Basic、Bonusの語は段の色です。
+- 図でBasicの段の色を使うのは、Basicの記録のジョブ（ノードの木の5本）だけです。固定した、記録ではないジョブ（固定したhierarchicalやplain scotchなど）は紺、その対照は薄い灰色にします（ユーザー、11/03の8回目：混乱するので）。
 - CPUとメモリの図では、rankが動くコアを紺、使うメモリチャネルを基板のような緑にして分けます（ユーザー、11/02の5回目。`_tmp`での手直しのとおり、`palette.MEMORY`）。
 - 矢印は黒にします（ユーザー、11/03。1枚目の流れの矢印は手直しのとおり3 pt）。remote memoryへの矢印だけは灰色です。図の中の変化の%は紺のままです。17枚目の変更の図の上の4ノードの変化は、ユーザーの手直しのとおり赤です（11/03）。
 - 図の矢印と変化の%、scalingの倍率は、図の画像に入れず、PowerPointの図形として図の上に重ねます。時間（平均とSD）は画像のままです（ユーザー、11/03：手で微調整するので）。`deck_plots.py`が図ごとに矢印と文字の位置を`<図>.json`に書き、`build_deck.py`の`overlay()`が重ねます。
@@ -161,8 +169,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 時間を比べるときは、小さくてもよいので各ジョブの図にします。図の横の表には、ジョブの本数を書きません（図で本数、時間、SDが分かるため。ユーザー、11/02の4回目）。
 - 時間の軸は原点0から描きます。ばらつきを見るために範囲を狭めるときは、0から範囲の下までを細い帯に縮め、軸に波線を入れて省略を示します（ユーザー、11/02、`deck_plots.py`の`zoomed()`）。段どうしの変化は、図に矢印と%で書きます。
 - 文字の大きさは、本文18 pt以上、表16 pt以上です。余白が多い枚は、図を大きくするか、文字を大きくするか、行間を広げて、ものが平均的に置かれた状態にします。
-- 原稿は英語です。聞く側の余裕も見て、1分に約130語（1秒に約2.2語）として時間を見積もります。第8版は約12分半です（HPCとAIを合わせて15〜20分の中で、チームが配分を決める）。
-- ノートには、英語の原稿、訳、その枚に関係しそうな想定質問（重なってよい。答えは想定問答の節から引く）、関係する補足の枚を書きます（ユーザー、11/03：メモは乱雑で分かりにくい）。各枚の節の「想定質問：」と「補足：」の行から作ります。補足は「30（Pinning and decomposition）」のように、デッキの番号と見出しで書き、ビルドが見出しと照らし合わせます。メモはこの文書だけに残します。
+- 原稿は英語です。聞く側の余裕も見て、1分に約130語（1秒に約2.2語）として時間を見積もります。第8版は約12分20秒です（HPCとAIを合わせて15〜20分の中で、チームが配分を決める）。
+- ノートには、英語の原稿、訳、その枚に関係しそうな想定質問（重なってよい。答えは想定問答の節から引く）、関係する補足の枚を書きます（ユーザー、11/03：メモは乱雑で分かりにくい）。各枚の節の「想定質問：」と「補足：」の行から作ります。補足は「30（Pinning in detail）」のように、デッキの番号と見出しで書き、ビルドが見出しと照らし合わせます。メモはこの文書だけに残します。
 
 ## 数値の決まり（有効数字）
 
@@ -190,8 +198,8 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | 変更 | 対照 → 候補（s/step） | 変化 | 本数 |
 |---|---|---:|---|
 | 固定（hierarchicalで、6枚目） | 3.670 → 3.257 | −11.2% | 3対3 |
-| scotch（固定あり、7枚目） | 3.257 → 2.915 | −10.5% | 3対3 |
-| 固定（scotchで、6枚目の4通り） | 3.395 → 2.917 | −14.1% | 2対3 |
+| scotch（固定あり、8枚目） | 3.257 → 2.915 | −10.5% | 3対3 |
+| 固定（scotchで、補足30枚目の4通り） | 3.395 → 2.917 | −14.1% | 2対3 |
 | scotch（固定なし、補足30枚目。交互ではない） | 3.670 → 3.395 | −7.5% | 3対2 |
 | ノードの木への対応付け（8枚目） | 2.918 → 2.898 | −0.7% | 5対5 |
 | multiLevel（対照はscotchの既定） | 2.918 → 2.873 | −1.5% | 4対4 |
@@ -214,7 +222,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 （約97%：配置の実験（#61）の、全チャネルの2.887 s/stepと半分のチャネルの6.347 s/step、STREAMの279と125 GB/sから、「帯域に比例する部分＋比例しない部分」に当てはめた見積もりです。比例しない部分は1 stepあたり約0.08 sです。半分のチャネルの配置はL3も半分にするので、「メモリ側（DRAMの帯域とL3）」の寄与です。これらは別々のrunと道具の値で、VTuneのtop-downのように足して100%にはなりません。）
 
-## 本編（20枚、約12分半）
+## 本編（20枚、約12分20秒）
 
 | # | 見出し | 載せること | 図・表 | 目安 |
 |---|---|---|---|---|
@@ -223,23 +231,23 @@ AIパートのチームメイトから、デッキについて指摘がありま
 | 3 | Profiling the Baseline | 自分たちのビルドと3.650 s/step（SD 4.1%）。律速の候補ごとの測り方と結果。MPIは46%で、その大半（42%）は他のrankを待つ時間。待たせるものはBasicで変えられるので、MPIから見た | Table 1 | 1:00 |
 | 4 | MPI calls on 4 nodes | 回数の上位3つと時間の上位3つを2つの表に。512 rankの合計とrankあたり。待ちと、最速・最遅のrank | Table 2、Table 3 | 0:45 |
 | 5 | CPU and memory pinning | なぜ固定するか（NUMA）、`/proc`で見つけたこと（Baseline）、原因、直し方 | Figure 3 ノードのアイコンの図 | 0:45 |
-| 6 | Pinning results | hierarchicalで固定なしと両方の固定（−11.2%）、scotchで4通り（−14.1%）を1つの図に。片方だけでは効かない。SDも小さくなった | Figure 4 2つの分割と各配置の各ジョブ | 0:45 |
-| 7 | Decomposition | 固定した上で分割をscotchに。hierarchicalとscotchを`decomposeParDict`の書き方で、固定した各ジョブの図（目盛りに面の数、−10.5%）、NUMAごとの色の絵と凡例 | Figure 5 各ジョブ、Figure 6 分割の絵 | 0:50 |
-| 8 | Scotch on the node tree | `scotchCoeffs`のdomains (2 4 16)とdomainWeights。木の段ごとの重みと面の変化、各ジョブ | Table 4、Figure 7 plain scotchと対応付けの各ジョブ | 0:45 |
-| 9 | Basic results | 段ごとの比較の表（固定、scotch、ノードの木、Baselineに対して）と、公式の結果、Baseline、Basicの各ジョブの図。ばらつきも小さくなった | Table 5、Figure 8 流れの動画（話さない）、Figure 9 各ジョブ | 0:35 |
+| 6 | Pinning results | Baselineの分割（hierarchical）で固定なしと固定ありの各ジョブ（−11.2%）。ばらつきが小さくなり、分割を比べられるようになった | Figure 4 各ジョブ | 0:30 |
+| 7 | Decomposition | 3つの分割（hierarchical、scotch、ノードの木）を`decomposeParDict`の書き方と、NUMAごとの色の絵（車体と中心断面）と、面の数（全体とノード間）で並べる。色の凡例 | Figure 5 分割の絵 | 0:50 |
+| 8 | Decomposition results | ノード、ソケット、NUMA領域の間の面の表。ノードの木のコスト。hierarchical対scotch（−10.5%）とscotch対ノードの木（−0.7%）の各ジョブ | Table 4、Figure 6 各ジョブ | 0:40 |
+| 9 | Basic results | 段ごとの比較の表（固定、scotch、ノードの木、Baselineに対して）と、公式の結果、Baseline、Basicの各ジョブの図。ばらつきも小さくなった | Table 5、Figure 7 流れの動画（話さない）、Figure 8 各ジョブ | 0:35 |
 | 10 | What did not help in Basic | Basicで試して残さなかった手の全部。効きそうだと思った手（紺）と、ネットワークが効かなかった理由（コンパイラは結果だけ） | Table 6 | 0:30 |
 | 11 | MPI after Basic | Bonusのために、4枚目と同じ2つの表（回数と時間、rankあたり）をBaselineとBasicで。回数は同じ3つで、待ちが減った | Table 7、Table 8 | 0:35 |
 | 12 | Profiling Basic | 3枚目と同じ見方の表。MPIは46% → 19%、MPIの外が81%で、コアは計算で忙しくない（1サイクルに0.4〜0.7命令）、メモリのカウンタは読めない | Table 9 | 0:35 |
-| 13 | Measuring the memory limit | コアを半分、チャネルを半分にした配置を、CPUとメモリの帯で。コンパイラが効かなかった理由。1 stepの約97%が帯域に比例 | Figure 10 3つの配置のノード | 0:55 |
-| 14 | multiLevel decomposition | Basicの範囲外の分割、Basicの対応付けとの違い（`decomposeParDict`を左右に）、得られること（面の表）、BasicとmultiLevelのNUMAごとの絵と凡例 | Table 10、Figure 11 分割の絵 | 0:40 |
-| 15 | Source changes by intent (1/2) | 14の変更の考え方。運ぶデータを減らす。7つは配列をなめる回数を減らす | Table 11 | 0:30 |
-| 16 | Source changes by intent (2/2) | 残りの7つ（コピー、使われない値、大域和） | Table 12 | 0:20 |
-| 17 | Two source changes in pictures | 0002（Uを1回で）と0001（コピーなし）を左右に図で | Figure 12、Figure 13 | 0:30 |
-| 18 | Bonus results | 公式の結果と3つの段の各ジョブ。段ごとの比較の表。Cd | Table 13、Figure 14 | 0:35 |
-| 19 | Scaling from 1 to 4 nodes | 1/2/4ノードの各ジョブを大きな図で。1ノードの何倍速いかと、4倍を超える理由（L3）を図に重ねる | Figure 15 | 0:35 |
-| 20 | What did not help in the Bonus | Bonusで試して残さなかった手の全部（予想外だったものを紺に）と、今の律速。最後に最終結果と、HPCの発表の終わり | Table 14 | 0:45 |
+| 13 | Measuring the memory limit | コアを半分、チャネルを半分にした配置を、CPUとメモリの帯で。コンパイラが効かなかった理由。1 stepの約97%が帯域に比例 | Figure 9 3つの配置のノード | 0:55 |
+| 14 | multiLevel decomposition | Basicの範囲外の分割、Basicの対応付けとの違い（`decomposeParDict`を左右に）、得られること（面の表）、BasicとmultiLevelのNUMAごとの絵と凡例 | Table 10、Figure 10 分割の絵 | 0:40 |
+| 15 | Source changes by intent (1/2) | 14の変更の考え方。運ぶデータを減らす。7つは配列をなめる回数を減らす | Table 11 | 0:20 |
+| 16 | Source changes by intent (2/2) | 残りの7つ（コピー、使われない値、大域和） | Table 12 | 0:10 |
+| 17 | Two source changes in pictures | 0002（Uを1回で）と0001（コピーなし）を左右に図で | Figure 11、Figure 12 | 0:30 |
+| 18 | Bonus results | 公式の結果と3つの段の各ジョブ。段ごとの比較の表。Cd | Table 13、Figure 13 | 0:35 |
+| 19 | Scaling from 1 to 4 nodes | 1/2/4ノードの各ジョブを大きな図で。1ノードの何倍速いかと、4倍を超える理由（L3）を図に重ねる | Figure 14 | 0:35 |
+| 20 | What did not help in the Bonus | Bonusで試して残さなかった手の全部（予想外だったものを紺に。renumberMeshのほかの並べ方は原理から流さなかった行）と、今の律速。最後に最終結果と、HPCの発表の終わり | Table 14 | 0:55 |
 
-原稿は合わせて約1,650語です。1分に約130語で見積もると原稿だけで約12分40秒です（1分に140語なら約11分50秒。第7版は14枚で約10分）。HPCとAIの発表は合わせて15〜20分（`tasks/2. OpenFOAM HPC Task Rules.md`のPresentation Guidelines。配分はチームが決める）なので、AIパートの時間と合わせて決めます。削るときは下の「時間が足りないとき（削る順）」の順にします。
+原稿は合わせて約1,600語です。1分に約130語で見積もると原稿だけで約12分20秒です（1分に140語なら約11分20秒。第7版は14枚で約10分）。HPCとAIの発表は合わせて15〜20分（`tasks/2. OpenFOAM HPC Task Rules.md`のPresentation Guidelines。配分はチームが決める）なので、AIパートの時間と合わせて決めます。削るときは下の「時間が足りないとき（削る順）」の順にします。
 
 ### 1. OpenFOAM on ASPIRE-2A（0:30）
 
@@ -379,127 +387,107 @@ AIパートのチームメイトから、デッキについて指摘がありま
 訳：rankの速さは、まずどこで動くかで決まります。1ノードには、4つのNUMA領域を持つCPUが2つあり、各領域は16コアと2本のメモリチャネルでできています。1つのコアに留まるrankは、自分のデータを自分の領域のメモリ、つまり一番近いメモリに置いたまま使えるので、固定すれば、メモリをよく使うコードは速くなり、runごとの結果もそろうのがふつうです。ところが、実行中に全rankの/procを読むと、どのrankも自分のコアに留まっておらず、自分の領域にあるメモリは9%だけでした。MPI_Initが、launcherのかけた固定を外していたのです。今は、numactlが各rankの起動前にメモリを縛り、見張りのプロセスがtasksetでrankを固定し直します。
 
 想定質問：Q17、Q41、Q27、Q40
-補足：30（Pinning and decomposition）、25（Build, MPI and run settings）
+補足：30（Pinning in detail）、25（Build, MPI and run settings）
 
 メモ：
-- 流れ（ユーザー、11/03）：固定されていないと分かっていて、固定すれば速くなると予想できたので、分割より先に直した、という順です。実際の順も同じです。ASPIRE-2Aでは最初からscotchで流していましたが（玄界とGadiの経験から）、9/20〜21に2ノードのrunの配置の記録で、MPI_Initの後に全rankが256 CPUに広がることを見つけ（`TASK_2a.md`）、LD_PRELOADでMPI_Initの直後に固定し直すinterposerで直しました。分割を測って比べたのは、その後です（#36、10/02）。10/02〜03（#36 A3）に、Basicでは使えないLD_PRELOADを外す方法を探して、scotchで4通りの固定を測り（次の枚）、numactl＋見張りを採りました。第8版の2回目〜6回目は、分割を先にしていました（分割はOpenFOAMで最も一般的な手、というユーザーの11/02の案）。
+- 流れ（ユーザー、11/03）：固定されていないと分かっていて、固定すれば速くなると予想できたので、分割より先に直した、という順です。実際の順も同じです。ASPIRE-2Aでは最初からscotchで流していましたが（玄界とGadiの経験から）、9/20〜21に2ノードのrunの配置の記録で、MPI_Initの後に全rankが256 CPUに広がることを見つけ（`TASK_2a.md`）、LD_PRELOADでMPI_Initの直後に固定し直すinterposerで直しました。分割を測って比べたのは、その後です（#36、10/02）。10/02〜03（#36 A3）に、Basicでは使えないLD_PRELOADを外す方法を探して、scotchで4通りの固定を測り（補足30枚目）、numactl＋見張りを採りました。第8版の2回目〜6回目は、分割を先にしていました（分割はOpenFOAMで最も一般的な手、というユーザーの11/02の案）。
 - Foundの数値：私たちのBaseline（hierarchical、固定なし、#62、38219862855）の`/proc`で、solverの実行中に自分のコアに固定されていたrankは0/512、自分のNUMA領域にあるページはrankの中央値で8.7%でした（8領域に均等に散れば12.5%）。scotchで固定なしのrun（#36 A3、37131371136）でも0/128、7%です（第8版の6回目までは、scotchの7%を書いていた）。頼んだ配置と、実行中の`/proc`で見た実際の配置を分けて確かめたことが、この発見の要点です。
 - やさしい説明：NUMAと固定（11/01、ユーザーの質問から）：
   - ノードの中の階層：1ノードにCPU（ソケット）が2つあり、1つのCPUは4つのNUMA領域に分かれています（ノードで8つ）。1つのNUMA領域は、16コアと、そこに直結した2本のメモリチャネル（DRAM）の組です。L3（32 MB）は8コアずつで共有するので、1つの領域に2つあります。ノード全体では128コアに16チャネル（理論409.6 GB/s、STREAM約279 GB/s）で、1つの領域では16コアが2本（理論51.2 GB/s、STREAM約35 GB/s）を分け合います。
   - どのコアもノードの全メモリを読めます。ただ、自分の領域のDRAMは近くて速く、ほかの領域のDRAMはCPUの中の接続（もう一方のソケットならソケット間の接続も）を通るので遅く、ほかの領域の帯域も食います。図の黒の矢印（local）と灰色の矢印（remote）がこれです。
   - コアを固定する：rankを特定のコアに縛り、OSに別のコアへ動かさせないことです。動かされると、L1、L2、L3に載っていたデータが使えなくなり、別の領域へ動けば自分のデータが遠いメモリに残ります。2つのrankが同じコアに乗って、片方が待つこともあります。
   - メモリを固定する：rankのデータを、どの領域のDRAMに置くかを決めることです。Linuxは既定で、ページに最初に書き込んだときに動いていたコアの領域にそのページを置き、後からは動かしません（first touch）。今回は固定が外れてrankが動き回るうちにデータを書いたので、ページが8つの領域に散らばり、自分の領域にあるのは9%だけでした。`numactl --membind`は、rankが動き出す前に「この領域のDRAMにだけ置く」と決める指定です。
-  - コアとメモリの両方を固定して初めて、rankは自分の領域の近いDRAMから読み続け、自分のデータをL1〜L3に載せたまま使い続けられます。片方だけでは速くならなかったことは、次の枚（scotchでの4通りの比較）にあります。
+  - コアとメモリの両方を固定して初めて、rankは自分の領域の近いDRAMから読み続け、自分のデータをL1〜L3に載せたまま使い続けられます。片方だけでは速くならなかったことは、補足30枚目（scotchでの4通りの比較）にあります。
   - 誰が何を決めるか（MPIはOpen MPIではなくCray MPICHです）：メッシュ → rankはOpenFOAMの分割（decomposePar）が決め、サブ領域 i をrank i が解きます。rank → コアは、ランチャー（PALSの`mpiexec --cpu-bind`）の固定と、見張りの`taskset`での戻しが決めます（1ノード128 rankで、ノードの中ではk番目のrankがk番のコア）。コア → メモリは、`numactl --membind`でそのコアのNUMA領域のDRAMに置きます。L3はキャッシュなので割り当てるものではなく、コアを固定すれば、そのコアの組のL3を自動で使います。
-  - この3つがつながるので、サブ領域 i → rank i → コア → NUMA領域 → そのDRAM と決まります。8枚目の「ノードの木」は、面を多く共有する隣どうしのサブ領域に、同じ領域、同じソケット、同じノードに乗る番号を振る工夫です。
+  - この3つがつながるので、サブ領域 i → rank i → コア → NUMA領域 → そのDRAM と決まります。7枚目の「ノードの木」は、面を多く共有する隣どうしのサブ領域に、同じ領域、同じソケット、同じノードに乗る番号を振る工夫です。
 - 固定が外れた原因：診断ジョブ（PBS 24944881、2ノード、256 rank）で、全rankが`MPI_Init`の直前は1 CPUに固定され、直後は256 CPUに広がっていました。サイトの推奨どおりの書き方（`--cpu-bind depth -d 1`）でも、既定のOFIでもUCXでも同じでした（`TASK_2a.md`）。サイトのMPI（PALSとCray MPICH）のどこが外すのかまでは突き止めていません。
 - numactlが効く理由：exec前に設定したメモリの方針はプロセスのもので、`MPI_Init`は外しません。見張りは`run/keep-rank-affinity.sh`で、各ノードに1つ置き、`simpleFoam`のプロセスが現れたらすぐ、そのlocal rankのコアに`taskset`で戻します。全ジョブのログで、各ノード128/128 rankが固定されています（REPORT §6.1）。
 - `LD_PRELOAD`はBasicでは使えないので、ジョブスクリプトだけでできる形にしました（F1：job script、rank placement、affinity。Q17）。
 - 両方固定した後、自分の領域にあるメモリは58%です（domainsを入れる前のBasicで、ノード0の128 rankを`/proc`で見た中央値）。100%にならないのは、共有ライブラリやMPIの共有バッファのように複数のrankが使う部分は1つの領域にしか置けないためと考えていますが、確かめていません。
 - 主催者のASPIRE-2Aのノートには固定の話がなく、主催者の参照runも固定していません。同じ機械を使うチームとの一番の差です（Q27）。
 
-### 6. Pinning results（0:45）
+### 6. Pinning results（0:30）
 
-スライド：左に3行、右に図（Figure 4、`deck/deck_plots.py`の`p10_pinning`）。図は1つの軸に、hierarchical（Baselineの分割）のNeither（固定なし）とCPU and memory（両方の固定）、scotchのNeither、CPU only、Memory only、CPU and memoryの各ジョブを並べ、原点0から波線で省略します。各分割のNeitherからCPU and memoryへの矢印と%（−11.2%、−14.1%）は図形で重ねます。注釈は「Each job under each placement of the ranks on 4 nodes, with hierarchical and with scotch.」。ユーザー、11/03：hierarchicalで固定の実験をしていたらすごく良かったかも（#36にあった）。11/02の2回目：scotchでの4通りの図は各実験の結果を示せてよい。両方を1つの図にしました。
+スライド：左に2行、右に図（Figure 4、`deck/deck_plots.py`の`p10_pinning`）。図は、Baselineの分割（hierarchical）の固定なしと固定ありの各ジョブ（#36、交互に3本ずつ）で、原点0から波線で省略し、矢印と%（−11.2%）は図形で重ねます。注釈は「Each job of hierarchical without and with pinning on 4 nodes.」。11/03の8回目（ユーザー）：固定が外れていたのを直すのが最初なのに、scotchを使っているのは妙に見える。hierarchicalで固定が外れていると分かって固定の実験をし、その後にscotchを試した、という順がきれい（固定していないと分割の評価が難しく、ばらつきも大きい）。片方だけの固定はscotchでしか測っていないので、補足30枚目へ移しました。固定したジョブは紺で、Basicの段の色（黄）はBasicの記録のジョブにだけ使います（ユーザー：混乱するので）。
 
-- Pinning both took 11.2% off a step with hierarchical and 14.1% with scotch.
-- Pinning only the CPU or only the memory did not help.
-- Pinned jobs varied less, so smaller gains could be seen.
+- Pinning took 11.2% off a step with our Baseline's decomposition, hierarchical.
+- Pinned jobs varied less, from 2.0% to 1.1%, so decompositions could now be compared.
 
-原稿（約45秒）：We measured the pinning first on the Baseline's decomposition, hierarchical, where pinning both the CPU and the memory took 11.2 percent off a step. We also pinned each half alone on scotch, the decomposition we come to next. Pinning only the CPU came 12 to 16 seconds after each rank started, when its memory was already placed, and pinning only the memory let the rank move away from it. Only both together helped, here by 14.1 percent. The pinned jobs also varied less, so our rule could see smaller gains.
+原稿（約30秒）：We fixed the pinning first and measured it on our Baseline's decomposition, hierarchical. It took 11.2 percent off a step. The pinned jobs also varied less, from 2.0 to 1.1 percent. Without pinning, the slowest rank was wherever the placement went wrong, so only now could we compare decompositions fairly.
 
-訳：固定は、まずBaselineの分割、hierarchicalで測りました。CPUとメモリの両方を固定すると、1 stepが11.2%短くなりました。次の枚で扱う分割、scotchでは、片方ずつの固定も測りました。CPUだけを固定すると、各rankが起動してから12〜16秒後で、そのときにはメモリはもう置かれていました。メモリだけを固定すると、rankがメモリから離れて動いてしまいました。両方を固定したときだけ効き、ここでは14.1%短くなりました。固定したジョブはばらつきも小さく、私たちの決まりでより小さな改善まで確かめられるようになりました。
+訳：まず固定を直し、Baselineの分割、hierarchicalで効果を測りました。1 stepが11.2%短くなりました。固定したジョブはばらつきも小さく、2.0%から1.1%になりました。固定していないと、最も遅いrankは置き場所がうまくいかなかったところに出るので、ここで初めて分割を公平に比べられるようになりました。
 
-想定質問：Q41、Q15、Q17、Q27
-補足：30（Pinning and decomposition）
+想定質問：Q41、Q17、Q15、Q27
+補足：30（Pinning in detail）
 
 メモ：
-- 図（11/03）：hierarchicalの2つは#36（10/02）の同じ時期の3本ずつで、固定なしは`data/start_unpinned.csv`（3.6983、3.5850、3.7270。3.670、SD 2.0%）、固定ありは`data/decomposition_basic.csv`のhierarchical 4ノード（3.2912、3.2593、3.2217。3.257、SD 1.1%）。範囲は重なりません。このときの固定はLD_PRELOADでMPI_Initの直後に固定し直す方法で、Basicのnumactl＋見張りと同じ速さです（scotchで2.919と2.917）。scotchの4つは`data/pinning.csv`（#36 A3、10/03）。図と表には日付を書きません。第8版の最初の版の本編の図（Baselineと、hierarchicalの固定なし・あり）は補足30枚目にありましたが、11/03にその比較を本編のこの図に入れ、補足30枚目は固定と分割の掛け合わせの枚にしました。scotchの4通りの時間の表は、時間が図にあるので外しました。
-- scotchの4通りの中身：Neither＝PALSの`--cpu-bind`と`--mem-bind`だけ（MPI_Initで外れる。solve中の固定は0/128、自分の領域のページ7%）。CPU only＝見張りの`taskset`だけ（起動12〜16秒後に固定し直す、128/128）。Memory only＝`numactl --membind`だけ（0/128、57%）。CPU and memory＝`numactl --membind`＋見張り（128/128、58%、Basicで採用）。時間はNeither 3.395（2本、SD 0.78%）、CPU only 3.474（3本、SD 2.0%）、Memory only 4.380（1本）、CPU and memory 2.917（3本、SD 0.13%）。同じファイルに、LD_PRELOADの固定（2.919 s、2本）と、PALSの`--mem-bind`＋見張り（3.469 s、2本、40%）もあります。
-- CPU onlyがNeitherより速くならなかった理由（平均は2.3%遅いが、範囲はわずかに重なる）：見張りが固定し直すまでの数秒（メッシュの読み込みとfieldの確保）に、ページが別のNUMA領域に置かれ、そのまま残るからと考えています（#36。最初の25 stepから遅い）。Memory onlyは、メモリは自分の領域にあるのにrankが別のコア（別の領域）へ動くので、ほぼすべての読み書きが遠いメモリになります（Neitherより29%遅い）。
-- ばらつき（ユーザー、11/02の1回目：固定でSDが小さくなることも話す）：Baseline 4.1%、hierarchicalの固定なし2.0% → 固定あり1.1%、scotchのNeither 0.78%（2本）→ 両方0.13%。固定したscotchの29本（4ノード、10月初め）のSDは0.19%です。固定が外れていると、遅いrankがrunごとに違う場所に出るので、ジョブのばらつきが大きくなります。2枚目の決まり（全ジョブが対照より速い）は、ばらつきが小さいほど小さな改善を通します（SDの3倍の改善が3対3で89%通る）。
-- 固定と分割の関係（Q41、補足30枚目）：固定なしでscotchは7.5%、固定ありで10.5%短くし、固定はhierarchicalで11.2%、scotchで14.1%短くしました。互いに相手の効果を大きくしています。最も遅いrankの計算は、中央値の1.46倍（固定なし、Baseline）→ 1.16倍（固定あり、hierarchical）→ 1.06倍（固定あり、scotch）です。固定なしのscotch対hierarchicalは交互ではない（10/02と10/03）ので、原稿では言いません。
-- ユーザーの質問（11/02の1回目）「NeitherはBaselineより速い。裏で何か最適化した？」への答え：していません。scotchのNeitherはscotch（固定なし）、Baselineはhierarchical（固定なし）で、その差は分割です（補足30枚目の−7.5%）。
+- 図：#36（10/02）の同じ時期の3本ずつです。固定なしは`data/start_unpinned.csv`（3.6983、3.5850、3.7270。3.670、SD 2.0%）、固定ありは`data/decomposition_basic.csv`のhierarchical 4ノード（3.2912、3.2593、3.2217。3.257、SD 1.1%）で、範囲は重なりません。このときの固定はLD_PRELOADでMPI_Initの直後に固定し直す方法で、Basicのnumactl＋見張りと同じ速さです（scotchで2.919と2.917）。図と表には日付を書きません。
+- 片方だけの固定（CPUだけ、メモリだけ）：scotchでしか測っていない（#36 A3、10/03、Basicの固定の方法を決めた実験）ので、補足30枚目に置きました。CPUだけは起動12〜16秒後の固定で、メモリがもう置かれていて効かず、メモリだけはrankがメモリから離れて動き、最も遅くなりました（Neither 3.395、CPU only 3.474、Memory only 4.380、両方2.917 s/step）。聞かれたら補足30枚目を見せます。
+- 時系列：実際には、ASPIRE-2Aでは最初からscotchで流していて（玄界とGadiの経験から）、9/20〜21に固定が外れていると分かって直しました。その後、10/02に固定なしと固定ありのhierarchical、固定ありのscotchを同じ時期に測り（#36）、10/03にscotchで片方ずつの固定を測っています。スライドの順（固定 → 分割）は、この測った順と同じです。原稿では「hierarchicalを流していて見つけた」とは言いません（Baselineの`/proc`で見つかったことは本当です）。
+- ばらつき：Baseline 4.1%、hierarchicalの固定なし2.0% → 固定あり1.1%、scotchで固定ありは0.13%。固定が外れていると、遅いrankがrunごとに違う場所に出るので、ジョブのばらつきが大きくなります。2枚目の決まり（全ジョブが対照より速い）は、ばらつきが小さいほど小さな改善を通します。
+- 固定と分割の関係（Q41、補足30枚目）：固定なしでscotchは7.5%、固定ありで10.5%縮め、固定はhierarchicalで11.2%、scotchで14.1%縮めました。最も遅いrankの計算は、中央値の1.46倍（固定なし）→ 1.16倍（固定あり、hierarchical）→ 1.06倍（固定あり、scotch）です。
 
 ### 7. Decomposition（0:50）
 
-スライド：左に、ケース既定の分割とscotchを`decomposeParDict`の書き方で示し（ユーザー、11/02の2回目：multiLevelやscotchのdomainsはOpenFOAMの文法で示した方が分かりやすい）、その下に各ジョブの図（Figure 5）。右にhierarchicalとscotchの分割の絵（Figure 6、ノードとNUMA領域ごとの色）と、その下に色の凡例。11/03から、固定した後の枚です（ユーザー：固定が先）。
+スライド：3つの分割を左右に並べます（ユーザー、11/03の8回目：Basicでdomain別にしたものと普通のscotchをやっていて、可視化した絵もあるので並べて見せたい。分割方法と面の3種類を示し、その結果の枚、という2枚に）。各列に、見出し（hierarchical (16 8 4)、scotch、scotch on the node tree）、`decomposeParDict`の行、ノードとNUMA領域ごとに塗った分割の絵（Figure 5。車体と中心断面の2段）、その下に面の数（全体とノード間）。下に色の凡例。
 
-左上の見出しとコード：
+各列のコード：
+- hierarchical (16 8 4)：`method  hierarchical;`、`hierarchicalCoeffs`、`{ n  (16 8 4); }`
+- scotch：`method  scotch;`
+- scotch on the node tree：`method  scotch;`、`scotchCoeffs`、`{ domains  (2 4 16);`、`  domainWeights  (…); }`
 
-- The case default, as in our Baseline：`method  hierarchical;`、`hierarchicalCoeffs { n (16 8 4); }`
-- The decomposition we kept：`method  scotch;`
+面の数（絵の下）：4.31 M faces in all、2.33 M between nodes ／ 2.93 M、0.34 M ／ 3.02 M、0.26 M。
 
-図（左下、Figure 5）：`deck/deck_plots.py`の`p05_decomposition`。どちらも固定したhierarchicalとscotchの各ジョブ（#36、交互に3本ずつ）、原点0から波線で省略した軸、矢印と%（−10.5%、図形）。目盛りに分割の名前とサブ領域の間の面の数（4.31 M、2.93 M）。注釈は「Each job of the two decompositions, both pinned, on 4 nodes, with the faces between subdomains.」
+原稿（約50秒）：With every rank pinned, the slowest ranks were those whose subdomains held more work, so we turned to the decomposition. The pictures show three decompositions, coloured by node and NUMA domain. The case default, hierarchical, cuts the mesh into 16 by 8 by 4 slabs of equal cells, and the ranks whose slabs held much of the car's surface computed more. scotch instead cuts the mesh as a graph, keeping the cells within 1 percent of equal with as few faces between subdomains as possible. On the node tree, scotch is also told that a node has two sockets of four NUMA domains of sixteen cores, so it keeps subdomains that share many faces together.
 
-凡例（絵の下）：node 1〜4の名前の下に、それぞれ8つのNUMA領域の濃淡。
+訳：すべてのrankを固定すると、最も遅いrankは、サブ領域に仕事を多く含むrankになったので、分割に取りかかりました。絵は3つの分割を、ノードとNUMA領域ごとに塗ったものです。ケース既定のhierarchicalは、メッシュを16×8×4の、セル数の等しい板に切り、車の表面を多く含む板を受け持つrankは計算が多くなりました。scotchは、代わりにメッシュをグラフとして、セル数を1%以内でそろえたまま、サブ領域の間の面ができるだけ少なくなるように切ります。ノードの木では、scotchに、1ノードが2つのソケット、各4つのNUMA領域、各16コアであることも教えるので、面を多く共有するサブ領域どうしを近くにまとめます。
 
-原稿（約50秒）：With every rank pinned, the slowest ranks were those whose subdomains held more work. Our Baseline used the case default, hierarchical, which cuts the mesh into 16 by 8 by 4 slabs of equal cells. The pictures colour each subdomain by node and NUMA domain. The ranks whose slabs held much of the car's surface computed more. scotch instead cuts the mesh as a graph, with as few faces between subdomains as possible. It kept the cells within about 1 percent of equal, and as the figure shows, it had 32 percent fewer faces between subdomains and took 10.5 percent off a step.
-
-訳：すべてのrankを固定すると、最も遅いrankは、サブ領域に仕事を多く含むrankになりました。私たちのBaselineは、ケース既定のhierarchicalで、メッシュを16×8×4の、セル数の等しい板に切ります。絵は、各サブ領域をノードとNUMA領域ごとに塗ったものです。車の表面を多く含む板を受け持つrankは、計算が多くなりました。scotchは、代わりにメッシュをグラフとして、サブ領域の間の面ができるだけ少なくなるように切ります。セル数の差を約1%以内でそろえたまま、図のとおり、サブ領域の間の面を32%減らし、1 stepの時間を10.5%短くしました。
-
-想定質問：Q19、Q4、Q30、Q21、Q41
-補足：31（Hierarchical against scotch）、33（Decompositions we tried）、30（Pinning and decomposition）
+想定質問：Q19、Q4、Q21、Q10
+補足：33（Decompositions we tried）、31（Hierarchical against scotch）
 
 メモ：
-- 11/03（ユーザー：固定が先）：図を、固定なしの2つ（Baselineと#36 A3のNeither、交互ではない、−7.0%）から、固定した2つ（#36、交互に3本ずつ）に替えました。これで、2枚目の決まり（交互に流す）から外れる比較が本編からなくなりました。見出し「The first change we tried」は「The decomposition we kept」にしました。
-- 図の時間：`data/decomposition_basic.csv`の4ノード。hierarchical 3.2912、3.2593、3.2217（3.257、SD 1.1%）、scotch 2.9154、2.9227、2.9054（2.915、SD 0.30%）、範囲は重なりません。固定はLD_PRELOAD（Basicのnumactl＋見張りと同じ速さ）。1/2ノードでは−1.3／−2.5%です（補足31枚目、Q30）。ノード数が多いほど効く理由は確かめていません。
-- 1文目の根拠：固定したrunで、rankごとの計算時間の最大/中央値がhierarchicalで1.16、scotchで1.06でした（CrayPATの（プロセス − MPI）、#38、37181991433、37176272426、37182420190）。hierarchicalの偏りは、壁の面（車の表面）の数と相関しました（#38）。固定なしのBaselineでは1.46で、置き場所による偏りが上乗せされていました（補足30枚目）。
-- scotchの分け方（ユーザーの質問、11/02の4回目「面の接触数を減らすように分割する方法？」）：はい。scotchはメッシュをグラフ（セルが点、隣り合うセルの共有面が辺）として分割し、各部分のセル数をほぼそろえる条件の下で、切る辺の数、つまりサブ領域の間の面の数をできるだけ少なくします（ここでは最大のサブ領域が平均の+1.07%）。hierarchicalは座標の方向に順に切るだけで、面の数は見ません。
-- 分割はOpenFOAMの高速化で最も一般的な手で、Task Rulesも「Decomposition (try this first): method, number of MPI ranks, and the settings for that method. Compiler flags and MPI tuning will not fix a bad decomposition.」と書いています。ASPIRE-2Aでは最初からscotchで流していました（玄界とGadiの経験から）。ケース既定のhierarchicalは公式の基準として後から測り（#34、9/24）、2つを比べたのは固定の後です（#36、10/02）。
-- 面の数とサブ領域の大きさ：`decomposePar.log`から（Boxの`presentation/openfoam/decomposition/README.md`）。hierarchicalは431万面、最大のサブ領域は平均の+0.002%。scotchは293万面（−32%）、最大+1.07%。
-- 絵：Boxの`decomposition-numa.png`（#39、10/09、`decomposePar -cellDist`、セル数と共有面の数は計測runの`decomposePar.log`と全部一致）。色はノードを色相（青、橙、緑、紫）、ノードの中の8つのNUMA領域を濃淡で分けています（rank rはノードr // 128、NUMA領域(r // 16) % 8）。scotchの列はdomains (2 4 16)を入れる前のplain scotchで、この図のscotchと同じ分け方です（ユーザーの質問「numaごとのdecompositionの画像はdomain(2,4,16)のあと？」への答え：前です。照合したのは10/05ごろのBasicの4ノードrun 37202026690で、domainsはまだ入っていなかった）。domainsを入れたscotchの絵は11/02に玄界で作り、14枚目にmultiLevelと並べて載せました（分割は計測runと全部一致。Boxの`decomposition-numa-scotch-domains-vs-multilevel.png`、`decomposition/README.md`）。
-- 凡例：Boxの絵の下にある凡例と同じ色を、PowerPointの図形で描いています（`decomposition/render.py`のノードの色相、青、橙、緑、紫と、NUMA領域ごとに45%暗い色から45%明るい色までの8つの濃淡。`build_deck.py`の`numa_key()`）。node 1がrank 0〜127です。
-- 分け方：hierarchical (16 8 4)は、x方向に16、y方向に8、z方向に4つ、セル数が等しくなるように平らに切ります。`hierarchicalCoeffs`には`delta 0.001`と`order xyz`もありますが、スライドでは`n`だけにしました（既定の値）。
-- ISC26の課題（Task 5）の「分割方法を変えて、性能への効果を示す」に当たります。試した分割の全部は補足の33枚目です。
+- 11/03の8回目（ユーザー）：分割を2枚にしました。この枚は3つの分割とその面、次の枚がその結果です。第8版の7回目までは、分割の枚（hierarchicalとplain scotch）とノードの木の枚（`decomposeParDict`、重みと面の表、各ジョブの図）が別でした。
+- 面の数：11/03に`decomposePar.log`の「Number of faces shared with processor」を、rank rをノードr // 128、ソケットr // 64、NUMA領域r // 16として数え直しました。hierarchicalとplain scotchは主催者の4ノードrun（`tasks/4.3-aspire2a-logs/hierarchical-4node/`と`scotch-4node/`の`10_decomposePar.log`。私たちの分割と同じであることは`decomposition/README.md`で確かめてある）、ノードの木はBasicの4ノードrun（Boxの`openfoam/results/4node/decomposePar.log`）です。全体：4,306,118、2,927,022、3,022,295。ノード間：2,331,023、337,324、260,748。ソケット間：2,467,577、492,282、387,196。NUMA領域間：3,628,785、1,047,405、938,403。hierarchicalのノード間が多いのは、z方向の4つの層がそのまま4つのノードになるからです（rankの番号がx、y、zの順）。
+- 絵：hierarchicalとplain scotchはBoxの`decomposition-numa.png`（#39、10/09）、ノードの木は11/02に玄界で作った`decomposition-numa-scotch-domains-vs-multilevel.png`（分割は計測runと全部一致）です。どちらも上2段（車体と中心断面）だけを、各段の左上の小さなラベルを外して切り出しました（`build_deck.py`の`CAR_ROWS`と`PLANE_ROWS`。10/09の絵のplain scotchの列のラベルは「Basic: scotch」のままで、今のBasic（ノードの木）と食い違うため。断面の上の約4%が欠ける）。色はノードを色相（青、橙、緑、紫）、ノードの中の8つのNUMA領域を濃淡で分けています（rank rはノードr // 128、NUMA領域(r // 16) % 8）。
+- 1文目の根拠：固定したrunで、rankごとの計算時間の最大/中央値がhierarchicalで1.16、scotchで1.06でした（CrayPATの（プロセス − MPI）、#38）。hierarchicalの偏りは、壁の面（車の表面）の数と相関しました（#38）。
+- scotchの分け方（ユーザーの質問、11/02の4回目）：メッシュをグラフ（セルが点、隣り合うセルの共有面が辺）として分割し、各部分のセル数をほぼそろえる条件の下で、切る辺の数、つまりサブ領域の間の面の数をできるだけ少なくします（最大のサブ領域が平均の+1.07%）。hierarchicalは座標の方向に順に切るだけで、面の数は見ません（最大+0.002%）。
+- ノードの木の仕組み：未改変のv2512の`scotchDecomp`は、`domains`と`domainWeights`から木構造の対象アーキテクチャ（Scotchのtree-leaf）を作り、分割をその木へ写します。`domains`の積（128）が`numberOfSubdomains`（512）より小さいので、重み1の最上段（ノード）が自動で加わります。重み（0.125 0.0625 0.015625）は整数に直され、リンクの重みが「ノード64 / ソケット8 / NUMA 4 / コア1」になります（#38）。コードで省いた`strategy`は、Scotch 6.1の既定の戦略（`SCOTCH_stratGraphMapBuild`、512分割、偏りの許容0.01）に`SCOTCH_STRATBALANCE`の項（最後の厳密な均衡化`x{bal=0.01}`など）を足したもので、全文は`submission/openfoam/run/prepare.pbs`にあります。domainsとdomainWeightsだけの版は−0.66%、strategyを足して−0.82%でした（#38）。
+- Basicの範囲であること：分割の方法はscotchのままで、その係数（`scotchCoeffs`）を変えるだけです（F1、Q10）。multiLevel（Bonus）との違いは14枚目です。
+- 流れ：分割はOpenFOAMの高速化で最も一般的な手で、Task Rulesも「Decomposition (try this first)…」と書いています。ASPIRE-2Aでは最初からscotchで流していました（玄界とGadiの経験から）。比べて測ったのは固定の後です（#36、10/02）。
+- ISC26の課題（Task 5）の「分割方法を変えて、性能への効果を示す」に当たります（この枚と次の枚）。試した分割の全部は補足の33枚目です。
 
-### 8. Scotch on the node tree（0:45）
+### 8. Decomposition results（0:40）
 
-スライド：左に`decomposeParDict`の`scotchCoeffs`（ユーザー、11/02の2回目：scotchのdomainsはOpenFOAMの書き方で示す）と表（Table 5）、右に図（Figure 7）。
+スライド：左に表（Table 4）と1行、右に図（Figure 6、`p05_decomposition`。左の枠がhierarchical対scotch（#36、交互に3本ずつ）、右の枠がplain scotch対ノードの木（#63、5本ずつ）。どれも固定あり。矢印と%（−10.5%、−0.7%）は図形）。ノードの木のジョブはBasicの記録なので段の色、ほかは灰と紺です。
 
-左上の見出しとコード（decomposeParDict of Basic）：
+表の注釈（表の上）：Table 4. Faces between subdomains on different nodes, sockets and NUMA domains, in millions.
 
-```
-method  scotch;
-scotchCoeffs
-{
-    domains        (2 4 16);
-    domainWeights  (0.125 0.0625 0.015625);
-    strategy       "…";
-}
-```
+| | hierarchical | scotch | node tree |
+|---|---:|---:|---:|
+| Nodes | 2.33 | 0.34 | 0.26 |
+| Sockets | 2.47 | 0.49 | 0.39 |
+| NUMA domains | 3.63 | 1.05 | 0.94 |
+| In all | 4.31 | 2.93 | 3.02 |
 
-表の注釈（表の上）：Table 5. The tree that domains describes, with its faces against plain scotch.
+- On the node tree a face between nodes costs 64 times one between cores.
 
-| Between two | Cost | Faces |
-|---|---:|---:|
-| nodes | 64 | −22.7% |
-| sockets | 8 | −21.3% |
-| NUMA domains | 4 | −10.4% |
-| cores | 1 | +3.3% |
+原稿（約40秒）：The table counts the faces between subdomains on different nodes, sockets and NUMA domains. scotch had far fewer than hierarchical. On the node tree, where a face between nodes costs 64 times one between cores, scotch cut the faces between nodes, sockets and NUMA domains by 10 to 23 percent, while all faces rose by 3 percent. The figure shows each job, all pinned. scotch took 10.5 percent off a step against hierarchical, and the node tree another 0.7 percent.
 
-図：plain scotch（灰）とdomainsを入れたscotch（黄）の各5本、原点0から波線で省略した軸、矢印（−0.7%）。注釈は「Each job of plain scotch and of scotch mapped onto the node, both pinned, on 4 nodes.」
+訳：表は、ノード、ソケット、NUMA領域をまたぐサブ領域の間の面を数えたものです。scotchはhierarchicalよりはるかに少なくなりました。ノードの木では、ノードの間の面がコアの間の面の64倍の重さになるので、scotchはノード、ソケット、NUMA領域の間の面を10〜23%減らし、面の全体は3%増えました。図は各ジョブで、どれも固定しています。scotchはhierarchicalより1 stepを10.5%短くし、ノードの木でさらに0.7%短くなりました。
 
-原稿（約45秒）：Then we told scotch about the node. In decomposeParDict, domains describes a node as two sockets of four NUMA domains of sixteen cores, and OpenFOAM adds the four nodes on top. The weights make a face between two nodes cost 64 times one between two cores, as the table shows, so scotch keeps subdomains that share many faces close together. The strategy keeps the cells within 1 percent of equal. Faces between nodes, sockets and NUMA domains fell by 10 to 23 percent, while all faces rose by 3 percent. Against plain scotch, this took another 0.7 percent off a step.
-
-訳：次に、scotchにノードの形を教えました。decomposeParDictで、domainsは1ノードを「2つのソケット、各4つのNUMA領域、各16コア」と表し、OpenFOAMがその上に4つのノードを足します。表のとおり、重みによって、2つのノードの間の面は、2つのコアの間の面の64倍の重さになるので、scotchは面を多く共有するサブ領域どうしを近くに置きます。strategyは、セル数を1%以内でそろえます。ノード、ソケット、NUMA領域の間の面は10〜23%減り、面の全体は3%増えました。比べると、これで1 stepがさらに0.7%短くなりました。
-
-想定質問：Q10、Q4、Q30
-補足：33（Decompositions we tried）
+想定質問：Q10、Q30、Q29、Q41
+補足：31（Hierarchical against scotch）、33（Decompositions we tried）、30（Pinning in detail）
 
 メモ：
-- 11/02の4回目（ユーザー）：「交互に流して」は2枚目で言っているので言いません。図の注釈からも「alternated」を外しました（比較は5対5の交互です）。
-- 中身（ユーザー、11/02の2回目）：`run/prepare.pbs`がBasicのときに書く`scotchCoeffs`そのままです。`strategy`の中身は長いので「…」にしました（全文は`submission/openfoam/run/prepare.pbs`）。Scotch 6.1が既定で組み立てる戦略（`SCOTCH_stratGraphMapBuild`、512分割、偏りの許容0.01）に、`SCOTCH_STRATBALANCE`の項（最後の厳密な均衡化`x{bal=0.01}`など）を足しただけです。偏りを抑えたのは、計算時間がセル数でほぼ決まり、偏ると遅くなったからです（#37、#45）。domainsとdomainWeightsだけの版は−0.66%、strategyを足して−0.82%でした（#38）。
-- 仕組み：未改変のv2512の`scotchDecomp`は、`domains`と`domainWeights`から木構造の対象アーキテクチャ（Scotchのtree-leaf）を作り、分割をその木へ写します（`scotchDecomp.H`に使い方）。`domains`の積（128）が`numberOfSubdomains`（512）より小さいので、重み1の最上段（ノード）が自動で加わります。重みは整数に直され、512 rankではリンクの重みが「ノード64 / ソケット8 / NUMA 4 / コア1」になります（#38。整数への変換が切り捨てなので、2進で正確に表せる値にした）。表の「Cost」はこれです。分割した後に割り当て直すのではなく、1回の分割の中で、面を多く共有する塊どうしを同じノード、ソケット、NUMA領域に入れます（ユーザーの言う「scotchでdomainごとに分ける」）。
-- 面の数（REPORT §6.3、`decomposePar.log`から、plain scotchに対して）：ノード間−22.7%、ソケット間−21.3%、NUMA領域間−10.4%、コアの間（サブ領域の間の全部の面）+3.3%。1つのサブ領域の隣の数の最大は66 → 40です。
-- 図：#63の5対5（交互）。対照（plain scotch）2.918 s（SD 0.22%）、候補2.898 s（SD 0.07%）で、全runが対照より速く、2枚目の決まりを通りました（2枚目の図のKeptと同じデータ）。1・2ノードではほぼ変わりません（+0.29%、+0.07%、#38）。
-- Basicの範囲であること：分割の方法はscotchのままで、その係数（`scotchCoeffs`）を変えるだけです（F1、Q10）。
-- 絵：domainsを入れたscotchの分割の絵は、11/02に玄界で作りました（7枚目の絵は入れる前のplain scotch）。分割は計測runと全部一致し、multiLevelと同じ画角と色で並べた絵がBoxの`decomposition-numa-scotch-domains-vs-multilevel.png`にあります（`decomposition/README.md`の「玄界での作り直し」）。デッキでは14枚目にmultiLevelと並べて載せました（11/02の4回目、ユーザー：scotchの絵を更新して載せる）。この枚はコード、表、図で埋まっているので載せていません。
-- multiLevel（Bonus）との違いは14枚目です。Basicで採用したのは、scotch、固定、ノードの木の3つです。
+- 図：左の枠は`data/decomposition_basic.csv`の4ノード（#36、10/02、交互に3本ずつ、固定はLD_PRELOAD）。hierarchical 3.2912、3.2593、3.2217（3.257、SD 1.1%）、scotch 2.9154、2.9227、2.9054（2.915、SD 0.30%）。右の枠は#63（10/15〜16、5対5の交互）の対照（plain scotch 2.918、SD 0.22%）と候補（ノードの木2.898、SD 0.07%。Basicの記録の5本）。2つの比較は時期が違うので、枠を分けました。図の中の見出しは「Decomposition」と「Node tree」です。
+- ノード間の面が7分の1になっても、それだけで速くなったわけではありません。ノード間の面を92%減らしたrankの並べ替えは効きませんでした（10枚目）。scotchの10.5%は、主にrankごとの計算がそろったためです（最大/中央値1.16 → 1.06、Q41）。
+- 1/2ノードでは、scotch対hierarchicalは−1.3／−2.5%（補足31枚目、Q30）、ノードの木はほぼ変わりません（+0.29%、+0.07%、#38）。
+- ノードの木のplain scotchに対する変化は、ノード間−22.7%、ソケット間−21.3%、NUMA領域間−10.4%、全体+3.3%（REPORT §6.3と同じ）。1つのサブ領域の隣の数の最大は66 → 40です。表の数字の出典は7枚目のメモです。
+- 第8版の7回目までの「Scotch on the node tree」の枚は、11/03の8回目にこの枚と7枚目に分けて入れました（ユーザー）。重みとコストの表は、表の行（ノード、ソケット、NUMA領域）と1行の文にまとめました。
 
 ### 9. Basic results（0:35）
 
-スライド：左上に表、左下に流れの動画（Figure 8、話さない）、右に図（Figure 9）。ユーザー、11/02：公式の結果もプロットする、時間は文ではなく表で、矢印も（2回目に「良くなっている」）。11/03：表を、Bonusの結果と同じ形の段ごとの比較にした（ユーザー：固定もdomainsもBasicの結果の時間に見えて、各段の結果が足りない）。公式の結果の時間は図のラベルにあります。
+スライド：左上に表、左下に流れの動画（Figure 7、話さない）、右に図（Figure 8）。ユーザー、11/02：公式の結果もプロットする、時間は文ではなく表で、矢印も（2回目に「良くなっている」）。11/03：表を、Bonusの結果と同じ形の段ごとの比較にした（ユーザー：固定もdomainsもBasicの結果の時間に見えて、各段の結果が足りない）。公式の結果の時間は図のラベルにあります。
 
 表の注釈（表の上）：Table 5. Each Basic step against its control on 4 nodes.
 
@@ -507,24 +495,24 @@ scotchCoeffs
 |---|---:|---:|
 | CPU and memory pinning | 3.670 → 3.257 | −11.2% |
 | scotch instead of hierarchical | 3.257 → 2.915 | −10.5% |
-| scotch mapped onto the node | 2.918 → 2.898 | −0.7% |
+| scotch on the node tree | 2.918 → 2.898 | −0.7% |
 | Basic against our Baseline | 3.650 → 2.898 | −20.6% |
 
 図：公式の結果2本（hierarchicalは白抜き、scotchは灰色）、Baselineの3本、Basicの5本。原点0から波線で省略した軸。BaselineからBasicへの矢印と%（−20.6%、図形）。
 
-原稿（約35秒）：With these three changes, Basic took 2.898 seconds per step on four nodes, 20.6 percent less than our Baseline. The table gives each step against its own control, 11.2 percent for the pinning, 10.5 for scotch and 0.7 for the mapping. The figure also shows the official runs, which used the site's module without pinning. Basic was 15 percent faster than the faster of them, and the spread between identical jobs fell from 4.1 to 0.07 percent.
+原稿（約35秒）：With these three changes, Basic took 2.898 seconds per step on four nodes, 20.6 percent less than our Baseline. The table gives each step against its own control, 11.2 percent for the pinning, 10.5 for scotch and 0.7 for the node tree. The figure also shows the official runs, which used the site's module without pinning. Basic was 15 percent faster than the faster of them, and the spread between identical jobs fell from 4.1 to 0.07 percent.
 
-訳：この3つの変更で、Basicは4ノードで1 step 2.898秒になり、私たちのBaselineより20.6%短くなりました。表は、各段をそれぞれの対照と比べたもので、固定で11.2%、scotchで10.5%、対応付けで0.7%でした。図には公式の結果も載せています。サイトのモジュールで、固定なしで流したものです。Basicはその速いほうより15%速く、同じジョブどうしのばらつきは4.1%から0.07%に小さくなりました。
+訳：この3つの変更で、Basicは4ノードで1 step 2.898秒になり、私たちのBaselineより20.6%短くなりました。表は、各段をそれぞれの対照と比べたもので、固定で11.2%、scotchで10.5%、ノードの木で0.7%でした。図には公式の結果も載せています。サイトのモジュールで、固定なしで流したものです。Basicはその速いほうより15%速く、同じジョブどうしのばらつきは4.1%から0.07%に小さくなりました。
 
 想定質問：Q15、Q22、Q27、Q18
-補足：27（The organisers' reference）、28（Reproducing our results）、30（Pinning and decomposition）
+補足：27（The organisers' reference）、28（Reproducing our results）、30（Pinning in detail）
 
 メモ：
 - 表の各行（11/03）：固定は#36のhierarchicalの固定なし（3本）と固定あり（3本）、scotchは#36の固定したhierarchicalとscotch（交互に3本ずつ）、対応付けは#63の5対5、最後の行は時期の違うBaseline（#62、10/12）とBasic（#63、10/15〜16）です。各段を掛け合わせると3.650 × 0.888 × 0.895 × 0.993 ≈ 2.88で、実際の2.898との差（約0.6%）は時期の違いです。表のJobsの列は、図で本数が分かるので外しています（ユーザー、11/02の4回目）。公式の結果は1本ずつ、Baselineは3本、Basicは5本です。
 - 公式の結果（Official）：`tasks/5. Common Baselines.md`（4ノード、サイトの`OpenFOAM/2512`モジュール、ケース既定、Allrun一式を1ジョブずつ、オプションなしのmpirun、固定なし）。Basicは公式のhierarchical（3.415）に対して−15.1%、scotch（3.576）に対して−19.0%です。
-- ユーザーの質問（11/02）「officialはpinされていなくて、scotchが遅くなっている？」への答え：はい、公式の結果は固定していません。そのうえ1ジョブずつです。主催者のscotchのジョブは4ノードで12%もばらついている（補足の27枚目）ので、1本ずつではhierarchicalとscotchのどちらが速いかは決められません。固定した私たちの交互の比較では、scotchがhierarchicalより10.5%速かった（7枚目、補足31枚目）。
+- ユーザーの質問（11/02）「officialはpinされていなくて、scotchが遅くなっている？」への答え：はい、公式の結果は固定していません。そのうえ1ジョブずつです。主催者のscotchのジョブは4ノードで12%もばらついている（補足の27枚目）ので、1本ずつではhierarchicalとscotchのどちらが速いかは決められません。固定した私たちの交互の比較では、scotchがhierarchicalより10.5%速かった（8枚目、補足31枚目）。
 - 流れの動画は、見せるだけで原稿では触れません。玄界で流した可視化用のrun（未改変v2512、4ノード448 rank、scotch、150反復。Boxの`presentation/openfoam/flow/README.md`）で、ASPIRE-2AのBasicのrunではありません（Q22）。デッキでは、この枚を入力の2枚目（動画のあった枚）の上に作るので、動画の自動再生の設定がそのまま残ります。
-- ばらつきが小さくなった理由：遅いrankがrunごとに違う場所に出るのは、固定が外れていたときの症状です（#36）。固定だけを戻したhierarchicalでSDは1.1%、固定したscotchで0.13〜0.3%（6、7枚目）、ノードの木に写したBasicで0.07%になりました。
+- ばらつきが小さくなった理由：遅いrankがrunごとに違う場所に出るのは、固定が外れていたときの症状です（#36）。固定だけを戻したhierarchicalでSDは1.1%（6枚目）、固定したscotchで0.13〜0.3%（8枚目、補足30枚目）、ノードの木に写したBasicで0.07%になりました。
 - Basicで採用したのは、固定、scotch、ノードの木への対応付けの3つだけです（5〜8枚目）。自分たちのビルド（GCC `-O3`、AOCL-LibM）、UCX、ノードのローカルディスクへのケースの配置は、Baselineからすでに同じです。
 - 出典：Baselineは#62（10/12）、Basicは10/15〜16の5本（#63）。
 
@@ -651,7 +639,7 @@ scotchCoeffs
 
 ### 13. Measuring the memory limit（0:55）
 
-スライド：3つの配置を縦に並べます（Figure 10）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが緑）。箱とチャネルは2つずつNUMA領域にまとめ、領域の間に隙間、CPUの間にもっと広い隙間を空けます（ユーザー、11/02の3回目）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を赤）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」「Half the channels / 2.2 times the time」。どちらも黒の矢印で、原因を赤、2.2倍を紺）。色はユーザーの手直し（11/02の5回目に取り込み）：CPUは紺、メモリは基板っぽい緑。矢印は11/03に2本とも黒にした。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
+スライド：3つの配置を縦に並べます（Figure 9）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが緑）。箱とチャネルは2つずつNUMA領域にまとめ、領域の間に隙間、CPUの間にもっと広い隙間を空けます（ユーザー、11/02の3回目）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を赤）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」「Half the channels / 2.2 times the time」。どちらも黒の矢印で、原因を赤、2.2倍を紺）。色はユーザーの手直し（11/02の5回目に取り込み）：CPUは紺、メモリは基板っぽい緑。矢印は11/03に2本とも黒にした。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
 
 原稿（約55秒）：So we tested the memory by moving the ranks. Each row is one node, with its CPU blocks of eight cores above its sixteen memory channels, grouped by NUMA domain, the cores in use in blue and the channels in use in green. With half the cores on all sixteen channels, a step took the same time, so the cores do not set the speed, which is also why no compiler setting helped in Basic. With the same 64 ranks on eight channels, it took 2.2 times as long, and STREAM, the standard memory bandwidth benchmark, fell by the same factor on the same nodes. So about 97 percent of a step follows the memory bandwidth.
 
@@ -674,7 +662,7 @@ scotchCoeffs
 
 ### 14. multiLevel decomposition（0:40）
 
-スライド：左上にBasicとBonusの`decomposeParDict`を左右に並べ（ユーザー、11/02の2回目：multiLevel 4 2 4 16やscotchのdomainsはOpenFOAMの文法で示す）、左下に表、右にBasic（domains (2 4 16)のscotch、見出しは「scotch (2 4 16)」）とmultiLevelの分割の絵（Figure 11、NUMAごとの色）と、その下に色の凡例。ユーザー、11/02：Bonusの分割で1枚使う。Basicでは使えない分割方法を試したかった、NUMAに結び付ける、scotchのdomainsとmultiLevelの違いと利点、NUMAごとの絵。11/02の4回目：左の絵を、玄界で描いたBasicの絵に替えた（scotchの絵を更新して載せる）。
+スライド：左上にBasicとBonusの`decomposeParDict`を左右に並べ（ユーザー、11/02の2回目：multiLevel 4 2 4 16やscotchのdomainsはOpenFOAMの文法で示す）、左下に表、右にBasic（domains (2 4 16)のscotch、見出しは「scotch (2 4 16)」）とmultiLevelの分割の絵（Figure 10、NUMAごとの色）と、その下に色の凡例。ユーザー、11/02：Bonusの分割で1枚使う。Basicでは使えない分割方法を試したかった、NUMAに結び付ける、scotchのdomainsとmultiLevelの違いと利点、NUMAごとの絵。11/02の4回目：左の絵を、玄界で描いたBasicの絵に替えた（scotchの絵を更新して載せる）。
 
 左上のコード（見出し「Basic, one scotch run」と「Bonus, scotch per level」）：
 
@@ -704,45 +692,46 @@ scotchCoeffs                   multiLevelCoeffs
 補足：33（Decompositions we tried）
 
 メモ：
-- なぜ分割を変えたか（ユーザー、11/02）：分割はOpenFOAMで典型的な高速化の手で（Task Rulesにも「Decomposition (try this first)」）、hierarchicalとscotch以外の方法はBonusです（F2）。Basicで使えない方法のうち、機械の形（ノード → ソケット → NUMA領域 → コア）に沿うmultiLevelを選びました。5枚目のNUMAの話と8枚目のノードの木の続きで、隣どうしのサブ領域ができるだけ同じNUMA領域、同じソケット、同じノードに入れば、遠いメモリや遅い接続を通る交換が減ります。
-- Basicの対応付けとの違い：どちらも分割に機械の階層を教えますが、対応付け（Basic）は、scotchの1回の分割の中で、ノードの木を目標にして面を多く共有する塊を近くに置きます（`scotchCoeffs`の`domains (2 4 16)`）。multiLevel（Bonus）は、まずメッシュを4つのノードに分け、各部分を2つのソケットに、さらに4つのNUMA領域に、16のコアにと、段ごとにscotchを別々に回します（`multiLevelCoeffs`、4ノードで`domains (4 2 4 16)`、2ノードで`(2 2 4 16)`、1ノードで`(2 4 16)`。`run/prepare.pbs`が書く。スライドのコードは4ノードのもの。Basicのコードの`// and its weights`は、8枚目の`domainWeights`と`strategy`を省いた印）。段ごとに切るぶん、各段をまたぐ面はより減りますが、セル数の偏りは大きくなります（最大のサブ領域が平均の1.0107倍（plain scotch）に対して1.0186倍）。
+- なぜ分割を変えたか（ユーザー、11/02）：分割はOpenFOAMで典型的な高速化の手で（Task Rulesにも「Decomposition (try this first)」）、hierarchicalとscotch以外の方法はBonusです（F2）。Basicで使えない方法のうち、機械の形（ノード → ソケット → NUMA領域 → コア）に沿うmultiLevelを選びました。5枚目のNUMAの話と7枚目のノードの木の続きで、隣どうしのサブ領域ができるだけ同じNUMA領域、同じソケット、同じノードに入れば、遠いメモリや遅い接続を通る交換が減ります。
+- Basicの対応付けとの違い：どちらも分割に機械の階層を教えますが、対応付け（Basic）は、scotchの1回の分割の中で、ノードの木を目標にして面を多く共有する塊を近くに置きます（`scotchCoeffs`の`domains (2 4 16)`）。multiLevel（Bonus）は、まずメッシュを4つのノードに分け、各部分を2つのソケットに、さらに4つのNUMA領域に、16のコアにと、段ごとにscotchを別々に回します（`multiLevelCoeffs`、4ノードで`domains (4 2 4 16)`、2ノードで`(2 2 4 16)`、1ノードで`(2 4 16)`。`run/prepare.pbs`が書く。スライドのコードは4ノードのもの。Basicのコードの`// and its weights`は、7枚目の`domainWeights`と`strategy`を省いた印）。段ごとに切るぶん、各段をまたぐ面はより減りますが、セル数の偏りは大きくなります（最大のサブ領域が平均の1.0107倍（plain scotch）に対して1.0186倍）。
 - 表の数値：multiLevelはplain scotchに対して、ノード間の面337,324 → 208,092、ソケット間492,282 → 327,131、NUMA領域間1,047,405 → 778,614（#42のコメント、`decomposePar.log`から）、全体の面は2.93 M → 2.81 M（−3.9%）。時間は2.918 → 2.873 s/step（4対4、#42、10/04）。Basicの対応付けはREPORT §6.3と#63（5対5）。
 - 効いた仕組みは切り分けていません。ノード間の面を92%減らしたrankの並べ替えは効かなかった（10枚目）ので、ノード間の通信量だけでは説明できません。だから「運ぶデータを減らす」はソースの変更にだけ言います。
 - multiLevelとBasicを同じ時期に直接比べたことはありません。時期をまたぐと、Basic 2.8976（5本、10/15〜16）に対して、#61のmultiLevel 2.8688（2本、10/10、128 rank/ノード）で−1.0%です。
 - 絵：Boxの`decomposition-numa-scotch-domains-vs-multilevel.png`の2つの列です。左はBasic（scotchのdomains (2 4 16)、面3.02 M、最大のサブ領域+1.00%）、右はmultiLevel（最終Bonusと同じ分割、面2.81 M、+1.86%）。どちらも11/02に玄界で作った分割（計測runと全部一致）を、玄界にビルドしたParaView 6.0.1で同じ画角と色で描いたもので、multiLevelの絵は10/09の絵とバイト単位で同じです（`decomposition/README.md`）。色はノードを色相、NUMA領域を濃淡で分けています（絵の下の凡例、7枚目のメモ）。11/02の4回目に、左の絵をplain scotchからBasicに替えました（ユーザー：scotchの絵を更新して載せる）。表の比較の相手（plain scotch）の絵は7枚目にあります。
 - 試した分割の全部（(4 128)、(4 2 8 8)、重み、METISなど）は補足の33枚目です（ユーザー、11/02：ほかの分割方法も検討したか）。
 
-### 15. Source changes by intent (1/2)（0:30）
+### 15. Source changes by intent (1/2)（0:20）
 
 スライド：表（Table 11。7つの変更、意図の行「Fewer passes over the data」、各変更の番号、何を減らしたか、4ノードの1 stepの変化）と、その下に1文：None of the 14 changes alters the iterations, the convergence tests or the discretisation. 一緒に測った変更は、1つの値を並んだ行にまとめて、withを前に、%を右端にそろえて書きます（0006と0009は「with 0008, 0010  −2.0%」、0013と0015は「with 0014  −2.5%」。ユーザー、11/03：%を縦に比べやすく）。
 
-原稿（約30秒）：The larger part of the Bonus was the source code. Since memory bandwidth limits the solver, our 14 changes make each step move less data, and we grouped them by intent. Seven remove passes over the data. For example, the turbulence model now passes over the cells 13 times instead of 80. None of them alters the iterations, the convergence tests or the discretisation.
+原稿（約20秒）：Most of the Bonus is 14 source changes, each making a step move less data. Seven remove passes over the data. The turbulence model, for example, now passes over the cells 13 times instead of 80. None alters the iterations, the convergence tests or the discretisation.
 
-訳：Bonusの大きい部分は、ソースコードの変更です。メモリ帯域が律速なので、14の変更で1 stepに運ぶデータを減らしました。それを意図ごとにまとめています。7つは、データをなめる回数を減らすものです。例えば乱流モデルは、セルを80回ではなく13回なめるようになりました。どの変更も、反復回数、収束判定、離散化を変えません。
+訳：Bonusの大部分は14のソースの変更で、どれも1 stepに運ぶデータを減らします。7つは、データをなめる回数を減らすものです。例えば乱流モデルは、セルを80回ではなく13回なめるようになりました。どの変更も、反復回数、収束判定、離散化を変えません。
 
 想定質問：Q32、Q33、Q7
 補足：36（Source changes in detail (1/2)）、37（Source changes in detail (2/2)）、38（Effect of each Bonus change）
 
 メモ：
+- 原稿を軽くしました（ユーザー、11/03の8回目：patchのところの原稿はもっと軽くしてパパっと進んでもいい）。外したのは「メモリ帯域が律速なので」（13枚目で言った）と「意図ごとにまとめた」（見出しで分かる）です。
 - 一覧を2枚に分け、意図別にしました（ユーザー、11/02：patchの一覧は見せる、2枚くらい、意図別）。意図と番号：fewer passes（0002、0004、0006、0009、0013、0015、0016）、no copies or zero fills（0001、0011、0014）、no values that nobody reads（0003、0008、0010）、fewer global sums（0012）。0005（#68）と0007はBonusに入っていません。
 - 4ノードの変化は、直前の構成と比べた値です（`data/changes_ab.csv`、`submission/openfoam/bonus/README.md`）。0006、0008〜0010は一緒に測って−1.99%、0013〜0015も一緒に−2.48%（対照の数日後に測った）、0016は−3.80%（同じく数日後）。最初の4つは1つずつ（3〜4対3〜4）。
 - 丸めが変わり得るのは0011、0012、0016の3つ（足す順序が変わる）なので、「same arithmetic」ではなく、変えないものを並べて言います。Cdの確認は18枚目。
 - 見つけ方：最初の4つは最も重いループ、後の10個は最初の4つの版（fa4f5b0）のCrayPATのstack sample（#53）を関数別・呼び出し経路別に集計し直して（補足の34、35枚目）、v2512のソースを読んで候補を順位付けしました（#69、実装はCodex）。
 - 「why the result is the same」は補足の36、37枚目（Source changes in detail）にあります。R3の「何を変えたか」「なぜ同じ計算か」はこの2枚と補足です。
 
-### 16. Source changes by intent (2/2)（0:20）
+### 16. Source changes by intent (2/2)（0:15）
 
 スライド：表（Table 12。意図の行「No copies or zero fills」「No values that nobody reads」「Fewer global sums」と、各変更。一緒に測った変更は15枚目と同じく「with 0013, 0015  −2.5%」の形）。
 
-原稿（約20秒）：The other seven remove copies and zero fills, values that nobody reads, and global sums. For example, six callers built boundary values, exchanged them with their neighbours and threw them away. On four nodes each change took 0.3 to 3.8 percent off a step.
+原稿（約15秒）：The other seven remove copies and zero fills, values that nobody reads, and global sums. On four nodes each change took 0.3 to 3.8 percent off a step.
 
-訳：残りの7つは、コピーとゼロ埋め、誰も読まない値、大域和を減らすものです。例えば6か所の呼び出し元は、境界の値を作って隣と交換し、それを捨てていました。4ノードで、それぞれの変更は1 stepを0.3〜3.8%短くしました。
+訳：残りの7つは、コピーとゼロ埋め、誰も読まない値、大域和を減らすものです。4ノードで、それぞれの変更は1 stepを0.3〜3.8%短くしました。
 
 想定質問：Q32、Q33
 補足：36（Source changes in detail (1/2)）、37（Source changes in detail (2/2)）
 
 メモ：
-- 「six callers」は0003です：ラプラシアンの非直交補正、bounded対流項の`fvm::Sp`、補正付き対流項、連続の式の誤差、`pEqn`の右辺、kOmegaSSTの`divU`（Q32）。
+- 11/03の8回目に原稿から外した例（聞かれたら）：「six callers built boundary values, exchanged them with their neighbours and threw them away」。0003です：ラプラシアンの非直交補正、bounded対流項の`fvm::Sp`、補正付き対流項、連続の式の誤差、`pEqn`の右辺、kOmegaSSTの`divU`（Q32）。
 - 0.3〜3.8%：一緒に測った束も含めた、4ノードでの1つずつの比較の範囲（0012の−0.30%から0016の−3.80%）。
 - 0012（CGの1反復で大域和1回）は−0.3%と小さいですが、3本とも一貫して速く、2枚目の決まりを通りました。
 
@@ -765,7 +754,7 @@ scotchCoeffs                   multiLevelCoeffs
 
 ### 18. Bonus results（0:35）
 
-スライド：左に表（Table 13）と1行、右に図（Figure 14。公式の結果2本、Baseline、Basic、Bonusの各ジョブ、原点0から波線で省略、BasicからBonusへの矢印と%（−18.6%、図形））。ユーザー、11/02：OfficialとBaselineも載せる。L1など細かい話は外す。全部入れたときの時間と、Basicからmultilevelに変えたときの比較。カウンタの図は補足の39枚目へ。
+スライド：左に表（Table 13）と1行、右に図（Figure 13。公式の結果2本、Baseline、Basic、Bonusの各ジョブ、原点0から波線で省略、BasicからBonusへの矢印と%（−18.6%、図形））。ユーザー、11/02：OfficialとBaselineも載せる。L1など細かい話は外す。全部入れたときの時間と、Basicからmultilevelに変えたときの比較。カウンタの図は補足の39枚目へ。
 
 表の注釈（表の上）：Table 13. Each Bonus step against its control on 4 nodes.
 
@@ -794,7 +783,7 @@ scotchCoeffs                   multiLevelCoeffs
 
 ### 19. Scaling from 1 to 4 nodes（0:35）
 
-スライド：図だけ（Figure 15、`p17_scaling`。1、2、4ノードごとに公式の結果とBaseline、Basic、Bonusの各ジョブ、原点0からの1つの軸、点線は1ノードからの理想）。図をスライドの高さまで大きくし、表をやめました。2ノードと4ノードの私たちの各段のラベルの上に、1ノードの何倍速いか（1.96×、2.10×、2.05×、3.99×、4.61×、4.34×）を段の色で、4ノードの群の上の空いたところに1文「Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache.」を、スライドの図形として重ねます（ユーザー、11/03：ごちゃついている。図だけにして、pptの矢印や文字を上から重ねて何倍かを示せば、表がいらなくなり図も見やすい。図形なので手で動かせる）。倍率の数字と置き場所は`deck_plots.py`が`p17_scaling.json`に書き、`build_deck.py`の`overlay()`が重ねます。1文の位置は、ユーザーが11/03 2:24に手で動かした位置です。公式の結果の倍率はメモだけにしました。ユーザー、11/02：グラフはかなり良い。並列効率の1.xxではなく、1ノードの何倍速くなったかで示す。L3に載りやすくなった分速くなった、という考察。
+スライド：図だけ（Figure 14、`p17_scaling`。1、2、4ノードごとに公式の結果とBaseline、Basic、Bonusの各ジョブ、原点0からの1つの軸、点線は1ノードからの理想）。図をスライドの高さまで大きくし、表をやめました。2ノードと4ノードの私たちの各段のラベルの上に、1ノードの何倍速いか（1.96×、2.10×、2.05×、3.99×、4.61×、4.34×）を段の色で、4ノードの群の上の空いたところに1文「Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache.」を、スライドの図形として重ねます（ユーザー、11/03：ごちゃついている。図だけにして、pptの矢印や文字を上から重ねて何倍かを示せば、表がいらなくなり図も見やすい。図形なので手で動かせる）。倍率の数字と置き場所は`deck_plots.py`が`p17_scaling.json`に書き、`build_deck.py`の`overlay()`が重ねます。1文の位置は、ユーザーが11/03 2:24に手で動かした位置です。公式の結果の倍率はメモだけにしました。ユーザー、11/02：グラフはかなり良い。並列効率の1.xxではなく、1ノードの何倍速くなったかで示す。L3に載りやすくなった分速くなった、という考察。
 
 原稿（約35秒）：This is strong scaling on one, two and four nodes with the official runs, and the dashes mark ideal scaling from one node. The numbers above our jobs give how many times faster each is than on one node. On four nodes Basic was 4.61 times faster and the Bonus 4.34 times, more than four. There each rank's arrays shrink to about 1 megabyte and fit in the L3 cache, so fewer bytes come from memory.
 
@@ -812,9 +801,9 @@ scotchCoeffs                   multiLevelCoeffs
 - strong scalingです。同じメッシュ（65,334,765セル）を1/2/4ノード（128/256/512 rank）で解きます。ケースは1/2/4ノードで40/80/150 stepですが、指標は1 stepの時間なので比べられます。
 - 図の描き方：対数軸をやめ（11/01の5回目）、1つの線形の軸にまとめ（7回目）、ノード数ごとに公式の結果と3つの段を並べました（8回目）。第8版では一度、表を入れるために図の高さを縮めましたが、6回目（11/03）に表をやめ、図をスライドの高さまで大きくして倍率を図形で重ねました。
 
-### 20. What did not help in the Bonus（0:45）
+### 20. What did not help in the Bonus（0:55）
 
-スライド：表と2行（10枚目と同じ書き方。紺の行は、直感に反したもの、ふつうは効くはずのもの）。発表の最後の枚で、原稿の最後の1文で最終結果に戻ります（#68とまとめの枚を消したため、11/02の2回目）。
+スライド：表と2行（10枚目と同じ書き方。紺の行は、直感に反したもの、ふつうは効くはずのもの）。発表の最後の枚で、原稿の最後の1文で最終結果に戻ります（#68とまとめの枚を消したため、11/02の2回目）。最後の行のrenumberMeshは、原理から流さなかった行です（ユーザー、11/03の8回目：ほかの並べ方の原理を検討して効果がないと判断した、と表に載せてよいか。ほかのクラスタの結果は発表ではあまり使いたくない。理論的に否定できればそれで十分）。
 
 表の注釈（表の上）：Table 14. Each Bonus idea we tried and did not keep, with its time per step against its control on 4 nodes.
 
@@ -826,14 +815,15 @@ scotchCoeffs                   multiLevelCoeffs
 | The same on one rank per node or per NUMA domain | 1.0% slower or 0.3% faster |
 | UCX over RC between nodes | 0.2% faster, within the spread |
 | Gauss–Seidel overlapped with its halo exchange | 8.3% slower and Cd 1.2% lower |
-| bound() averaging only the bounded cells | not run, it needs another global sum |
+| bound() averaging only the bounded cells | not run, one more global sum |
+| Other cell orders in renumberMesh | not run, neighbours already in cache |
 
 - Balancing the faces unbalanced the cells, and fewer ranks in the global sums did not shorten the wait.
 - Now a step is limited by memory traffic and by the ranks that read the most from DRAM.
 
-原稿（約45秒）：These are the Bonus ideas that did not help, the unexpected ones in blue. Cell weights and METIS balanced the faces but unbalanced the cells. Gathering the coarsest level of the pressure solver removed most global sums, but the ranks still waited for the slowest one. Overlapping a sweep with its halo exchange was slower and moved Cd too far. So what limits a step now is memory traffic, and the slowest ranks read the most from DRAM. Our final result is 2.360 seconds per step on four nodes, 35.3 percent less than our Baseline. This ends the HPC part.
+原稿（約55秒）：These are the Bonus ideas that did not help, the unexpected ones in blue. Cell weights and METIS balanced the faces but unbalanced the cells. Gathering the coarsest level of the pressure solver removed most global sums, but the ranks still waited for the slowest one. Overlapping a sweep with its halo exchange was slower and moved Cd too far. We did not run the other cell orders in renumberMesh, since with the default order each cell's neighbours are already in cache. So what limits a step now is memory traffic, and the slowest ranks read the most from DRAM. Our final result is 2.360 seconds per step on four nodes, 35.3 percent less than our Baseline. This ends the HPC part.
 
-訳：Bonusで効かなかった手です。予想外のものを紺にしました。セルの重みとMETISは、面をそろえた代わりにセル数をそろえられなくしました。圧力のソルバの最も粗い段を集めると大域和の大半はなくなりましたが、rankは相変わらず最も遅いrankを待ちました。sweepと境界の交換を重ねると遅くなり、Cdも動きすぎました。だから今1 stepを決めているのはメモリの読み書きの量で、最も遅いrankは、DRAMから最も多く読むrankです。私たちの最終結果は、4ノードで1 step 2.360秒、Baselineより35.3%短くなりました。以上でHPC側の発表を終わります。
+訳：Bonusで効かなかった手です。予想外のものを紺にしました。セルの重みとMETISは、面をそろえた代わりにセル数をそろえられなくしました。圧力のソルバの最も粗い段を集めると大域和の大半はなくなりましたが、rankは相変わらず最も遅いrankを待ちました。sweepと境界の交換を重ねると遅くなり、Cdも動きすぎました。renumberMeshのほかのセルの並べ方は流しませんでした。既定の並べ方で、各セルの隣はすでにキャッシュにあるからです。だから今1 stepを決めているのはメモリの読み書きの量で、最も遅いrankは、DRAMから最も多く読むrankです。私たちの最終結果は、4ノードで1 step 2.360秒、Baselineより35.3%短くなりました。以上でHPC側の発表を終わります。
 
 想定質問：Q20、Q34、Q39、Q4、Q5、Q21
 補足：33（Decompositions we tried）、34（Where a Bonus step goes）、35（Call stacks of a Bonus step）、43（Other renumberings on Genkai）
@@ -846,9 +836,12 @@ scotchCoeffs                   multiLevelCoeffs
   - UCX over RC：0001〜0004のBonusで−0.16%（4対4、範囲が重なる）。Basicでは−0.01%（10枚目）。
   - Gauss–Seidelの内部のセルを、境界の値が届く間にsweepする（0018）：+8.32%（3本）、Cd −1.20%でF3を満たしません。512 rankで、セルが隣の新しい値を見る順序が変わるためです（#69）。
   - bound()の平均を対象のセルだけで（0017）：大域和が1回増えて、節約より高くつくので流していません（#69）。
+  - renumberMeshのほかの並べ方（原理から判断、11/03の8回目）：renumberMeshは、隣り合うセルに近い番号を振り、ループがセルの隣の値をキャッシュの中で見つけられるようにするものです。既定のCuthill–McKeeで、それはすでにできています。面のループが一度に触るセルは約2,500個（1セルあたりのprofile、Basicの4ノードのログ）でL2に収まり、rankの1つの場は約1 MBでL3の分に収まります（Q39の2つ目の項目）。DRAMから来るのは各配列をループごとに1回読む分で、これはどの並べ方でも変わりません。だから、どの並べ方でも残りは小さいと判断しました。並べ方ごとには：逆順（RCM）は番号を逆にしただけなので、隣どうしの距離は全く同じです（変わるのはGauss–Seidelのsweepの向きで、Cdが動く）。並べ替えなし（snappyHexMeshの順）、乱数、springは隣を遠くに置きます（帯幅が既定の6〜13倍）。structuredは層を重ねたメッシュ用で、このメッシュには使えません。SloanとZoltanは別のライブラリ（BoostとZoltan）が要ります。玄界の私たちのビルドには入っていませんが、ASPIRE-2Aのビルドに入っていたかは確かめられていません（11/03、ASPIRE-2Aに接続できず、Actionsのログにも出ていない）。なので「入っていない」とは言わず、上のキャッシュの理由で答えます。どの並べ方もセルの順序を変えるので、Cdも変わり、F3の照合をやり直すことになります。
+  - 表のセルと原稿の言い方：「neighbours already in cache」は、並べ方ごとの比較（RCMは同じ距離、ほかは遠い）ではなく、どの並べ方にも当てはまる理由にしました。Sloanのように別の量（profile）を小さくする方法も、この理由なら含められるためです。
+  - 玄界での確認（11/03、補足43枚目、Q39）：課題のケースを4ノード448 rankで、既定に対してRCM −0.2%（ばらつきの中）、なし+0.7%、spring +3.3%、乱数+10.6%で、原理のとおりでした。ほかのクラスタの結果なので、聞かれたときだけ見せます（ユーザー、11/03：ほかのクラスタの結果は発表ではあまり使いたくない）。
 - 強調した行（紺）：予想外だったもの（ユーザー、11/02の4回目の言い方）。重みとMETIS（面をそろえれば速くなりそうなのに遅くなった）、GAMGの最粗段を集めるもの（大域和の大半を消したのに効かなかった）、重ね合わせ（通信を隠す定番の手なのに遅く、Cdも動いた）。
 - ほかに：境界の交換と計算を重ねる余地は1%未満と見積もり（#49）、代わりに使われない交換を省いた（0003）。計測区間のファイルI/Oは1 stepの約0.01%で、律速ではありません（#46）。
-- 今の律速と次の手（Q20、Q34）：U・k・ωの組み立てを項をまたいで融合すれば、運ぶバイトをさらに減らせます。rank間の差（最も遅いrankの計算は中央値の1.07倍）は、セル数ではなくDRAMからの読み込み量に沿います（r = +0.69、#66）。renumberMeshのほかの並べ方は、玄界で既定より速くなりませんでした（11/03、Q39、補足43枚目）。見込みは合わせて数%です。英語の答え：「Move fewer bytes still. Fusing the assembly of U, k and omega across terms removes a few more passes over the face arrays. We expect a few per cent from it.」
+- 今の律速と次の手（Q20、Q34）：U・k・ωの組み立てを項をまたいで融合すれば、運ぶバイトをさらに減らせます。rank間の差（最も遅いrankの計算は中央値の1.07倍）は、セル数ではなくDRAMからの読み込み量に沿います（r = +0.69、#66）。renumberMeshのほかの並べ方は、既定ですでに隣がキャッシュにあるので残りが小さく、玄界でも速くなりませんでした（11/03、Q39、補足43枚目）。見込みは合わせて数%です。英語の答え：「Move fewer bytes still. Fusing the assembly of U, k and omega across terms removes a few more passes over the face arrays. We expect a few per cent from it.」
 - 最後の2文（11/02の2回目と4回目）：#68のおまけとまとめの枚を消したので、この枚で最終結果に戻り（1枚目の流れと同じ数字）、「This ends the HPC part.」（以上でHPC側の発表を終わります、ユーザー）で終えます。AIパートへ渡す一言を足すかはチームで決めます。
 
 ## 入れなかったもの
@@ -866,12 +859,12 @@ scotchCoeffs                   multiLevelCoeffs
 
 ## 時間が足りないとき（削る順）
 
-第8版は約12分半です。AIパートとの配分で短くするときは、この順に削ります。
+第8版は約12分20秒です。AIパートとの配分で短くするときは、この順に削ります。
 
 1. 17枚目（変更を図にした例）を飛ばし、16枚目の最後に「the solvers now write each residual in place instead of copying it」と1文足す（−25秒）。
 2. 11枚目（Basicの後のMPI）を飛ばし、12枚目の最初に「For the Bonus we profiled Basic again, and MPI fell from 46 to 19 percent of the time」と1文足す（−25秒）。
-3. 16枚目を15枚目の最後の1文（the other seven remove copies, unused values and global sums）にまとめる（−15秒）。
-4. 8枚目（ノードの木）を飛ばし、7枚目の最後に「Mapping the subdomains onto the node saved another 0.7 percent」と1文足す（−35秒）。
+3. 16枚目を15枚目の最後の1文（the other seven remove copies, unused values and global sums）にまとめる（−10秒）。
+4. 8枚目（分割の結果）を飛ばし、7枚目の最後に「scotch took 10.5 percent off a step against hierarchical, and the node tree another 0.7 percent」と1文足す（−30秒）。
 
 2枚目（採用の基準）、3枚目（律速の候補のプロファイル）、4枚目（MPI）、5、6枚目（固定）、7枚目（分割）、13枚目（読めない量の測り方）は削りません。
 
@@ -882,14 +875,14 @@ scotchCoeffs                   multiLevelCoeffs
 
 ## 第7版の本編との対応
 
-| 第7版の本編 | 第8版（11/03の7回目の番号） |
+| 第7版の本編 | 第8版（11/03の8回目の番号） |
 |---|---|
 | 1 OpenFOAM on ASPIRE-2A | 1（原稿に律速を入れた） |
 | 2 Criteria for keeping a change | 2（図の軸を0から） |
 | 3 Profiling the Baseline | 3（Outside MPI、MPIから見た理由） |
 | 4 MPI calls on 4 nodes | 4（表を2つに。合計とrankあたり。最速・最遅） |
-| 5 CPU and memory pinning | 5（なぜ固定するか、ノードの図）、6（hierarchicalでの固定とscotchでの4通りを1つの図に）、補足30（固定と分割の掛け合わせ） |
-| 6 Decomposition | 7（固定した上での分割、`decomposeParDict`、NUMAごとの絵）、8（ノードの木、新規） |
+| 5 CPU and memory pinning | 5（なぜ固定するか、ノードの図）、6（Baselineの分割hierarchicalでの固定）、補足30（scotchでの4通りと、固定と分割の掛け合わせ） |
+| 6 Decomposition | 7（3つの分割の`decomposeParDict`、NUMAごとの絵、面の数）、8（段ごとの面の表と、固定した上での分割の各ジョブ） |
 | 7 Basic results | 9（段ごとの表、公式の結果、矢印）、11（Basicの後のMPI、Bonusの始まり） |
 | 8 Profiling Basic | 12（Outside MPI、コアは忙しくない） |
 | 9 Measuring the memory limit | 13（CPUとメモリの帯の図、コンパイラが効かない理由） |
@@ -906,15 +899,15 @@ scotchCoeffs                   multiLevelCoeffs
 | まとまり | デッキの補足（枚目） |
 |---|---|
 | Setup and measurement | ASPIRE-2A and why we chose it（24、Q1）、Build, MPI and run settings（25）、Run-to-run variation over 92 jobs（26）、The organisers' reference（27）、Reproducing our results（28） |
-| Basic | Is the network the bottleneck?（29）、Pinning and decomposition（30、固定と分割の掛け合わせと遅いrankの比、11/03）、Hierarchical against scotch（31、1/2/4ノード）、The placement experiment in full（32） |
+| Basic | Is the network the bottleneck?（29）、Pinning in detail（30、scotchでの4通り、固定と分割の掛け合わせ、遅いrankの比、11/03）、Hierarchical against scotch（31、1/2/4ノード）、The placement experiment in full（32） |
 | Bonus | Decompositions we tried（33、新規）、Where a Bonus step goes（34、段階ごとのcall stack）、Call stacks of a Bonus step（35、flame graph）、Source changes in detail (1/2)（36）、(2/2)（37）、Effect of each Bonus change（38）、Hardware counters（39） |
 | Results | Drag coefficient over the iterations（40）、Drag coefficient checks（41）、Why the speedup exceeds 4（42）、Other renumberings on Genkai（43、11/03） |
 
-外したもの：Not adopted: the full list（第8版で本編の10枚目と20枚目に移した）、Pinning only the CPU or the memory（11/02の2回目に本編へ戻した。今は6枚目）、Pinning with hierarchical（11/03に本編6枚目の図へ入れ、この枠は固定と分割の掛け合わせにした）。第7版までに外したもの（Optimization strategy、Bottlenecks we measured、Experiment automationなど）の中身は、第6版のslides.md（git `a1f18a3`）と想定問答に残っています。
+外したもの：Not adopted: the full list（第8版で本編の10枚目と20枚目に移した）、Pinning only the CPU or the memory（11/02の2回目に本編へ戻し、11/03の8回目に補足30枚目の図に戻した）、Pinning with hierarchical（11/03に本編6枚目の図へ入れ、この枠はPinning in detailにした）。第7版までに外したもの（Optimization strategy、Bottlenecks we measured、Experiment automationなど）の中身は、第6版のslides.md（git `a1f18a3`）と想定問答に残っています。
 
 第8版で新しく作った補足：
 
-- Pinning and decomposition（11/03）：hierarchicalとscotchを、それぞれ固定なしと固定ありで比べた表（#36、4ノード）と、最も遅いrankの計算の中央値に対する比（1.46 → 1.16 → 1.06）の表です。固定と分割が互いの効果を大きくしたこと、つまり固定を先にした理由を見せます（Q41）。11/02から11/03までは「Pinning with hierarchical」（Baselineと、hierarchicalの固定なし・ありを交互に流した比較の図と表）でしたが、その比較は11/03に本編6枚目の図に入りました。
+- Pinning in detail（11/03）：左にscotchでの4通りの固定（固定なし、CPUだけ、メモリだけ、両方。#36 A3）の各ジョブの図、右にhierarchicalとscotchを、それぞれ固定なしと固定ありで比べた表（#36、4ノード）と、最も遅いrankの計算の中央値に対する比（1.46 → 1.16 → 1.06）です。片方だけの固定では速くならないこと（Q40）と、固定と分割が互いの効果を大きくしたこと、つまり固定を先にした理由（Q41）を見せます。4通りの図は、7回目には本編6枚目にありましたが、8回目に本編の固定をhierarchicalだけにしたので、ここへ移しました（ユーザー：固定を直すのが最初なのにscotchを使っているのは妙に見える）。11/02から11/03までは「Pinning with hierarchical」（Baselineと、hierarchicalの固定なし・ありを交互に流した比較の図と表）でしたが、その比較は本編6枚目の図に入りました。
 - Decompositions we tried：計測した分割の全部を、それぞれの対照に対する結果で並べた表です（ユーザー、11/02：ほかの分割方法も検討したか）。出典はノート（`deck/notes.py`の`s_decompositions`）。
 - Other renumberings on Genkai（11/03）：renumberMeshのほかの並べ方を、玄界で課題のケースを使って既定と比べた表です（Q39）。表と文は`data/renumber_genkai.csv`から作ります（`build_deck.py`の`s_renumber()`）。
 
@@ -994,7 +987,7 @@ scotchCoeffs                   multiLevelCoeffs
 - （メモ）関数によっては最後の桁がglibcと違い得ます。Basicの範囲かを聞かれたら、ビルド設定（F1）の範囲と考えていると答えます。
 
 **Q10. Is multiLevel used in Basic?**（BasicでmultiLevelを使っていますか）
-見せる枚：9（Scotch on the node tree）、15（multiLevel decomposition）
+見せる枚：8（Decomposition）、15（multiLevel decomposition）
 - No. Basic uses `scotch`, mapped onto the node's sockets and NUMA domains through the method's own settings (`scotchCoeffs`), which F1 leaves free in Basic. `multiLevel` is a different decomposition method, so it is part of the Bonus.
 
 訳：
@@ -1028,7 +1021,7 @@ scotchCoeffs                   multiLevelCoeffs
 訳：
 - はい。これはジョブスクリプトでの配置です。各rankが始まる前に`numactl`がメモリポリシーを設定し、`taskset`が外からCPUアフィニティを設定します。F1は、ジョブスクリプト、rankの配置、アフィニティをBasicとして挙げています。Basicのrunでは`LD_PRELOAD`を使っていません。使えばBonusの作業になります。使ったのは最初の固定の実験だけで、Basicのやり方も同じ速さです。
 
-- （メモ、11/03）Pinning resultsの図のhierarchicalの固定ありと、Decompositionの図の比較（#36、10/02）は、numactl＋見張りに置き換える前の、LD_PRELOADでMPI_Initの直後に固定し直す方法で測った実験です。scotchで2つの速さは同じでした（LD_PRELOADの2.919とnumactl＋見張りの2.917、`data/pinning.csv`）。Basicの記録（Basic resultsの5本）はnumactl＋見張りです。
+- （メモ、11/03）Pinning resultsの図のhierarchicalの固定ありと、Decomposition resultsの図の左の枠の比較（#36、10/02）は、numactl＋見張りに置き換える前の、LD_PRELOADでMPI_Initの直後に固定し直す方法で測った実験です。scotchで2つの速さは同じでした（LD_PRELOADの2.919とnumactl＋見張りの2.917、`data/pinning.csv`）。Basicの記録（Basic resultsの5本）はnumactl＋見張りです。
 
 **Q18. Can the organisers reproduce your Basic number?**（主催者はBasicの数値を再現できますか）
 見せる枚：28（Reproducing our results）
@@ -1038,7 +1031,7 @@ scotchCoeffs                   multiLevelCoeffs
 - はい。`build/build.pbs`は公式の公開ソースからビルドし、`run/submit.sh 1|2|4`は普通の`qsub`でAllrunの一連の処理をすべて流します。私たち自身でも流し直しました（最終のBasicは2026-10-16、最終のBonusは2026-10-26）。どのノード数でも`coefficient.dat`は記録したrunとバイト単位で一致し、時間も記録した平均から0.4%以内でした（4ノードのBasic：2.9046に対して2.8976 s/step、4ノードのBonus：2.3651に対して2.3600）。
 
 **Q19. Why did you not tune the hierarchical coefficients instead?**（なぜ代わりにhierarchicalの係数を調整しなかったのですか）
-見せる枚：8（Decomposition）、31（Hierarchical against scotch）
+見せる枚：8（Decomposition）、9（Decomposition results）、31（Hierarchical against scotch）
 - We kept the case default `(16 8 4)` as the control. scotch was 10.5% faster on 4 nodes in alternated runs, so we spent the remaining effort on scotch and on placement. We have not searched other `nHierarchical` factorisations.
 
 訳：
@@ -1047,12 +1040,12 @@ scotchCoeffs                   multiLevelCoeffs
 **Q20. What would you do next?**（次に取り組むなら何をしますか）
 見せる枚：21（What did not help in the Bonus）、35（Call stacks of a Bonus step）
 - Moving fewer bytes still: fuse the assembly of U, k and omega across terms, which removes a few more passes over the face arrays. (The GAMG residual with its restriction and the Laplacian coefficients with the diagonal, which we listed here before, are now done: `0015` and `0006`.)
-- The remaining imbalance between ranks (Q21): the slower ranks are the ones that read more from DRAM. Weights and more even cell counts did not help, and on Genkai none of renumberMesh's other cell orders beat the default (Q39). Making the global sums cheaper (the GAMG coarsest level on fewer ranks) or the network faster (UCX over RC) did not help either (Q2).
+- The remaining imbalance between ranks (Q21): the slower ranks are the ones that read more from DRAM. Weights and more even cell counts did not help, and with renumberMesh's default each cell's neighbours are already in cache (Q39). Making the global sums cheaper (the GAMG coarsest level on fewer ranks) or the network faster (UCX over RC) did not help either (Q2).
 - We expect a few per cent from these (Q34).
 
 訳：
 - 運ぶバイトをさらに減らすことです。U、k、omegaの組み立てを項をまたいで融合すれば、面の配列をなめる処理がさらにいくつか減ります。（以前ここに挙げていた、GAMGの残差とその制限、ラプラシアンの係数と対角は、今は`0015`と`0006`で実施済みです。）
-- rankの間に残っている不均衡です（Q21）。遅いrankはDRAMから多く読むrankです。重みやセル数をもっと均等にすることは効かず、玄界ではrenumberMeshのほかの並べ方も既定より速くなりませんでした（Q39）。大域和を軽くすること（GAMGの最粗段を少ないrankで）や、ネットワークを速くすること（UCX over RC）も効きませんでした（Q2）。
+- rankの間に残っている不均衡です（Q21）。遅いrankはDRAMから多く読むrankです。重みやセル数をもっと均等にすることは効かず、renumberMeshの既定の並べ方で、各セルの隣はすでにキャッシュにあります（Q39）。大域和を軽くすること（GAMGの最粗段を少ないrankで）や、ネットワークを速くすること（UCX over RC）も効きませんでした（Q2）。
 - これらで数%の改善を見込んでいます（Q34）。
 
 **Q21. Do you know where the imbalance between ranks comes from?**（rankの間の不均衡がどこから来るのか分かっていますか）
@@ -1097,7 +1090,7 @@ scotchCoeffs                   multiLevelCoeffs
 - MPIの時間の大部分は最も遅いrankを待つ時間で、そのrankの計算は帯域律速なので、待ちもその計算に合わせて伸び縮みします。メモリチャネルを半分にしたときは、1 step全体が帯域に合わせて遅くなりました。帯域に比例しないのは、1 stepあたり約0.1 sだけです。
 
 **Q27. Why was your Baseline slower than the organisers' hierarchical run (3.65 against 3.415 s/step)?**（なぜBaselineは主催者のhierarchicalのrunより遅かったのですか（3.65に対して3.415 s/step））
-見せる枚：2（OpenFOAM on ASPIRE-2A）、30（Pinning and decomposition）、27（The organisers' reference）
+見せる枚：2（OpenFOAM on ASPIRE-2A）、7（Pinning results）、27（The organisers' reference）
 - Our Baseline asked the launcher to pin each rank, but the binding was removed during `MPI_Init`, and each rank's pages ended up spread over all eight NUMA domains (9% on its own). The organisers' runs ask for no binding. We think that is why ours was slower, but we have not isolated it, because the build and the MPI transport also differ.
 
 訳：
@@ -1121,10 +1114,10 @@ scotchCoeffs                   multiLevelCoeffs
 
 **Q30. Why does the Basic gain grow with the node count?**（なぜBasicの改善はノード数とともに大きくなるのですか）
 見せる枚：20（Scaling from 1 to 4 nodes）、31（Hierarchical against scotch）
-- Mostly through the decomposition: scotch gains 1.3%, 2.5% and 10.5% on 1, 2 and 4 nodes, and mapping it onto the node gains only on 4 nodes (0.7%). We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
+- Mostly through the decomposition: scotch gains 1.3%, 2.5% and 10.5% on 1, 2 and 4 nodes, and the node tree gains only on 4 nodes (0.7%). We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
 訳：
-- 主に分割によるものです。scotchによる改善は1、2、4ノードで1.3%、2.5%、10.5%で、それをノードに対応付けて改善したのは4ノードだけでした（0.7%）。サブ領域が小さいと、hierarchicalの軸に沿った切り方がより不均一になるのだと考えていますが、確かめてはいません。
+- 主に分割によるものです。scotchによる改善は1、2、4ノードで1.3%、2.5%、10.5%で、ノードの木で改善したのは4ノードだけでした（0.7%）。サブ領域が小さいと、hierarchicalの軸に沿った切り方がより不均一になるのだと考えていますが、確かめてはいません。
 
 **Q31. Did you profile the network?**（ネットワークのプロファイリングはしましたか）
 見せる枚：4（Profiling the Baseline）、29（Is the network the bottleneck?）
@@ -1198,21 +1191,26 @@ scotchCoeffs                   multiLevelCoeffs
 - （メモ）本編3枚目の表と、「数値の決まり」の「律速の寄与」の表です。約42%はWaitallとAllreduceの70.72 sを、rankのプロセスの時間169.57 sで割った値です（11/02の4回目に、46% × 90%から数えた約41%を直した）。約97%は、配置の実験の時間とSTREAMの帯域からの当てはめです（本編13枚目のメモ）。
 
 **Q39. Why didn't you change renumberMesh?**（なぜrenumberMeshを変えなかったのですか）
-見せる枚：43（Other renumberings on Genkai）、11（What did not help in Basic）
-- In Basic the rules fix it, and all our jobs ran the default, Cuthill–McKee. For the Bonus we measured the other orders on Genkai, with the official case on four nodes, each order once in each of four rounds. No renumbering was 0.7 percent slower, spring 3 percent and a random order 11 percent, and reverse Cuthill–McKee was within the spread, faster in three rounds and slower in one. So no order beat the default, and every order also changed Cd, since this benchmark's Gauss–Seidel sweeps the cells in their order.
-- If asked why the default leaves so little: the locality that renumbering buys is already there. The decomposition gives each rank a compact piece of 128,000 cells, about 1 MB per field, within its share of the L3 cache. Pinning keeps that cache and the rank's memory with its own core. And Cuthill–McKee keeps each face loop within about 2,500 cells, inside the L2. We measured this cache fit from 1 to 4 nodes, 30% fewer refills from DRAM per cell, and it is why Basic scaled 4.61 times. What still comes from DRAM is each array once per pass, which no order changes, so our Bonus removed passes instead.
+見せる枚：21（What did not help in the Bonus）、43（Other renumberings on Genkai）
+- In Basic the rules fix it, and all our jobs ran the default, Cuthill–McKee. For the Bonus we judged the other orders by what renumbering does. It gives neighbouring cells nearby numbers, so that a loop finds a cell's neighbours in cache, and with Cuthill–McKee they already are. What still comes from DRAM is each array once per pass, and no order changes that. Of the others, reverse Cuthill–McKee only reverses the numbers, so every neighbour stays exactly as far away, and no renumbering, spring and a random order put neighbours farther apart. Every order would also change Cd, since this benchmark's Gauss–Seidel sweeps the cells in their order.
+- If asked why the neighbours are already in cache: The decomposition gives each rank a compact piece of 128,000 cells, about 1 MB per field, within its share of the L3 cache. Pinning keeps that cache and the rank's memory with its own core. And Cuthill–McKee keeps each face loop within about 2,500 cells, inside the L2. We measured this cache fit from 1 to 4 nodes, 30% fewer refills from DRAM per cell, and it is why Basic scaled 4.61 times. So our Bonus removed passes instead.
+- If asked about structured, Sloan or Zoltan: structured needs a mesh built in layers, and Sloan and Zoltan need extra libraries, Boost and Zoltan. With the neighbours already in cache, they too could save only a little.
+- If asked whether we measured them: not on ASPIRE-2A, but on another machine, Genkai, with the official case on four nodes, each order once in each of four rounds. As their principles say, none beat the default. Reverse Cuthill–McKee was within the spread, no renumbering 0.7 percent slower, spring 3 percent and a random order 11 percent.
 
 訳：
-- Basicではルールで決まっていて、私たちのジョブはすべて既定のCuthill–McKeeで流しています。Bonusに向けては、ほかの並べ方を玄界で測りました。課題のケースそのものを4ノードで、各並べ方を4巡の各巡で1回ずつです。並べ替えなしは0.7%、springは3%、乱数の順は11%遅く、逆順のCuthill–McKeeはばらつきの中で、3巡で速く1巡で遅くなりました。どの並べ方も既定より速くはならず、さらにどの並べ方もCdを変えました。この課題のGauss–Seidelは、セルを番号の順に掃くからです。
-- 既定でなぜ残りが小さいのかと聞かれたら：並べ替えで得られる局所性は、すでにあります。分割で、各rankは12万8千セルのまとまった塊を受け持ち、1つの場は約1 MBで、そのrankが使えるL3の分に収まります。固定で、そのキャッシュとrankのメモリは、自分のコアのそばに留まります。そしてCuthill–McKeeが、面のループが一度に触るセルを約2,500個に収め、L2に載せます。このキャッシュへの収まりは、1ノードから4ノードでセルあたりのDRAMからのrefillが30%減ったことで測っていて、Basicが4.61倍速くなった理由でもあります。それでもDRAMから来るのは、各配列をループごとに1回読む分で、これはどんな並べ方でも変わりません。だからBonusでは、ループの回数を減らしました。
+- Basicではルールで決まっていて、私たちのジョブはすべて既定のCuthill–McKeeで流しています。Bonusに向けては、ほかの並べ方を、番号の振り直しが何をするものかから判断しました。振り直しは、隣り合うセルに近い番号を振って、ループがセルの隣をキャッシュの中で見つけられるようにするもので、Cuthill–McKeeで、すでにそうなっています。DRAMから来るのは各配列をループごとに1回読む分で、これはどの並べ方でも変わりません。ほかの並べ方のうち、逆順のCuthill–McKeeは番号を逆にするだけなので、どの隣も全く同じ距離のままで、並べ替えなし、spring、乱数の順は隣を遠くに置きます。さらにどの並べ方もCdを変えます。この課題のGauss–Seidelは、セルを番号の順に掃くからです。
+- なぜ隣がすでにキャッシュにあるのかと聞かれたら：分割で、各rankは12万8千セルのまとまった塊を受け持ち、1つの場は約1 MBで、そのrankが使えるL3の分に収まります。固定で、そのキャッシュとrankのメモリは、自分のコアのそばに留まります。そしてCuthill–McKeeが、面のループが一度に触るセルを約2,500個に収め、L2に載せます。このキャッシュへの収まりは、1ノードから4ノードでセルあたりのDRAMからのrefillが30%減ったことで測っていて、Basicが4.61倍速くなった理由でもあります。だからBonusでは、ループの回数を減らしました。
+- structured、Sloan、Zoltanについて聞かれたら：structuredは層を重ねて作ったメッシュ用で、SloanとZoltanは別のライブラリ（BoostとZoltan）が要ります。隣がすでにキャッシュにあるので、これらでも節約できるのはわずかです。
+- 測ったかと聞かれたら：ASPIRE-2Aでは測っていませんが、別の機械の玄界で、課題のケースそのものを4ノードで、各並べ方を4巡の各巡で1回ずつ流しました。原理のとおり、既定より速いものはありませんでした。逆順のCuthill–McKeeはばらつきの中、並べ替えなしは0.7%、springは3%、乱数の順は11%遅くなりました。
 
-- （メモ、11/03）玄界の比較（ユーザー：ほかの方法では速くならないと否定できればよい。玄界でのテストはしてよい）：`renumber/README.md`、`data/renumber_genkai.csv`、補足43枚目。4ノード×112 rank、plain scotchの448分割、40反復、5つの並べ方（既定、RCM、none、spring、random）を1巡に1回ずつ、巡ごとに順番をずらして4巡。既定1.958 s/stepに対して、RCM −0.19%（−0.38、−0.49、−0.21、+0.31%）、none +0.70%、spring +3.26%、random +10.6%。Cdは並べ方ごとに4巡とも同じで、40反復目で既定に対してRCM −1.32%、none −1.21%、spring −0.65%、random +0.09%。玄界はコアあたりL2 2 MB（ASPIRE-2Aは0.5 MB）なので、ASPIRE-2Aの時間ではなく傾向として言います（「on Genkai」）。11/02までの弱いところ（ほかの並べ方を測っていない）は、これで「測った」と言えるようになりました。ASPIRE-2Aで測るなら、同じ比較を4ノードで流します。
+- （メモ、11/03の8回目）ユーザー：ほかのクラスタの結果は発表ではあまり使いたくない。原理から否定できれば、それで十分。そこで答えを原理から始め、玄界の結果は「測ったか」と聞かれたときだけにしました（補足43枚目）。本編20枚目（デッキ21枚目）の表の最後の行と原稿の1文も、原理で言います。理由は、並べ方ごとの比較ではなく、どの並べ方にも当てはまる「既定ですでに隣がキャッシュにあり、DRAMから来るのは各配列をループごとに1回読む分だけ」にしました。SloanとZoltanがASPIRE-2Aの私たちのビルドに入っていたかは確かめられていない（玄界のビルドには入っていない。ASPIRE-2Aには11/03に接続できなかった）ので、「入っていない」とは言いません。帯幅（隣どうしの番号の差の最大、renumberMeshのログ）は、既定とRCMが11,347、springが68,712、なしが146,078、乱数が147,291です（玄界の448分割のrun。帯幅はメッシュと分割で決まり、機械にはよりません）。
+- （メモ、11/03）玄界の比較（ユーザー：ほかの方法では速くならないと否定できればよい。玄界でのテストはしてよい）：`renumber/README.md`、`data/renumber_genkai.csv`、補足43枚目。4ノード×112 rank、plain scotchの448分割、40反復、5つの並べ方（既定、RCM、none、spring、random）を1巡に1回ずつ、巡ごとに順番をずらして4巡。既定1.958 s/stepに対して、RCM −0.19%（−0.38、−0.49、−0.21、+0.31%）、none +0.70%、spring +3.26%、random +10.6%。Cdは並べ方ごとに4巡とも同じで、40反復目で既定に対してRCM −1.32%、none −1.21%、spring −0.65%、random +0.09%。玄界はコアあたりL2 2 MB（ASPIRE-2Aは0.5 MB）なので、ASPIRE-2Aの時間ではなく傾向として言います（「on Genkai」）。11/02までの弱いところ（ほかの並べ方を測っていない）は、聞かれれば「別の機械で測った」と言えます。ASPIRE-2Aで測るなら、同じ比較を4ノードで流します。
 - （メモ、11/03）2つ目の項目は、ユーザーの案「CPUとメモリを固定し、領域ごとにメッシュを分けているので、番号の振り直しはあまり問題にならない」を正確にした答えです。固定だけでは理由になりません（固定はキャッシュの中身を保つだけで、何が載るかは並びが決める）。分割（塊が小さくまとまる）、固定（キャッシュとメモリが自分のコアのそば）、Cuthill–McKee（塊の中の並び）の3つがそろって、局所性はすでに取れている、と言います。30%は#66のuProf（Basic、1/2/4ノード）で、1セル・1 stepあたりのDRAMからのL1 refillが4ノードで1ノードの0.70倍（19枚目のメモ、補足42枚目）。
 - （メモ、11/02深夜）L2に収まる話、Cdが変わる話、v2512で選べる並べ方は、本編10枚目のメモにあります（Basicの4ノードのrenumberMeshのログ、v2512のソース、`fvSolution.fixedIter`、重ね合わせのCd −1.20%）。各サブ領域の並べ直しが最も遅いrank（DRAMから最も多く読む）に効く見込みは、玄界の結果からも小さいと考えます。
 - （メモ、11/02の4回目に足した）ユーザー：変えなかったことを聞かれそう。やっていないのはマイナスの印象なので、根拠と次の手を言えるように。規則の出典はTask Rulesの補遺F1（l.204）、FAQ（l.262）、F2のBonusの例です。玄界の旧課題はcavity3D-64M、v2606、448 rank、2026-08-13の1本ずつで、なしに対してCuthill–McKee +0.91%、ブロック局所 +0.94%（FVOPS、`research/runtime-optimization-experiments.md`のPhase 5）。プロファイルは#40、#41、最も遅いrankとDRAMは#66（r = +0.69）。本編10枚目のメモも見てください。
 
 **Q40. Outside MPI was the larger share in your Baseline. Why did you start with MPI?**（Baselineでは、MPIの外の方が大きかったのに、なぜMPIから始めたのですか）
-見せる枚：4（Profiling the Baseline）、5（MPI calls on 4 nodes）、30（Pinning and decomposition）
+見せる枚：4（Profiling the Baseline）、5（MPI calls on 4 nodes）、7（Pinning results）
 - Because most of the MPI time was not MPI work. 42 of the 46 percent was ranks waiting, doing nothing, because the slowest rank was still computing, and with equal cells the slowest rank computed 2.1 times as long as the fastest. What makes a rank slow, where it runs and how the mesh is cut, is what Basic lets us change, while making the computing itself faster needs source changes, which is the Bonus.
 - And /proc showed a known flaw: no rank stayed on its core and only 9 percent of its memory was local. Pinning a memory-bound code also speeds up its computing, since its memory becomes local. So Basic took 20.6 percent off a step, and the wait in Waitall fell by 76 percent.
 
@@ -1223,7 +1221,7 @@ scotchCoeffs                   multiLevelCoeffs
 - （メモ）ユーザーの問い（11/03）「BasicでMPIの方が割合小さく見えるのに、何でこっちを優先したのって聞かれてもおかしくない」への答えです。Profiling the Baselineの原稿の最後の2文が短い形です。
 
 **Q41. Why did you pin before trying another decomposition?**（なぜ分割より先に固定したのですか）
-見せる枚：7（Pinning results）、30（Pinning and decomposition）
+見せる枚：7（Pinning results）、30（Pinning in detail）
 - An unpinned rank moves between cores and leaves its memory spread over the node, so the slowest rank is wherever the placement went wrong, and the jobs vary a lot, by 4.1 percent for our Baseline. That hides what a better decomposition gains. Pinning first made every later comparison sharper: the jobs varied by 1.1 percent with hierarchical and 0.13 percent with scotch.
 - The two fixes also helped each other. Without pinning, scotch saved 7.5 percent, and with pinning 10.5. Pinning saved 11.2 percent with hierarchical and 14.1 with scotch. The slowest rank computed 1.46 times as long as the median rank without pinning, 1.16 times once pinned, and 1.06 times with scotch as well.
 
@@ -1270,7 +1268,7 @@ scotchCoeffs                   multiLevelCoeffs
 
 - デッキは`deck/build.sh`で作ります（入力はBoxの10/31版のデッキのコピー、出力は`~/apac26/Tokyo Rapids with RIKEN Presentation HPC (8th edition).pptx`、3つ目の引数はBoxの`presentation/openfoam/decomposition/`の写し、作り方と確かめ方は`deck/README.md`）。並びは、表紙1、本編2〜21、補足の扉22、Q&A目次23、補足24〜43で、HPCだけのデッキです。スライドショーで映るのは1〜21枚目です。
 - 本編のノートは、この文書の各スライドの節（原稿、訳、想定質問、補足）と想定問答の節から作ります。原稿や答えを直したら、この文書を直してビルドし直せば、ノートに入ります。メモはノートに入りません（11/03から）。
-- 本編の図はFigure 1〜15、表はTable 1〜14です（各枚の節に番号を書いています）。図と表の注釈の文は`deck/build_deck.py`にあります。ノードのアイコンの図（5枚目）、CPUとメモリの帯の図（13枚目）、変更の図（17枚目）は、PowerPointの図形で描いています（`build_deck.py`の`node()`、`usage_bar()`、`u_diagram()`、`residual_diagram()`）。図の矢印と%、scalingの倍率も図形です（`overlay()`）。`decomposeParDict`の行（7、8、14枚目）は`code()`で、等幅の字（Consolas）で書きます。分割の絵の下の色の凡例（7、14枚目）は`numa_key()`です。
+- 本編の図はFigure 1〜14、表はTable 1〜14です（各枚の節に番号を書いています）。図と表の注釈の文は`deck/build_deck.py`にあります。ノードのアイコンの図（5枚目）、CPUとメモリの帯の図（13枚目）、変更の図（17枚目）は、PowerPointの図形で描いています（`build_deck.py`の`node()`、`usage_bar()`、`u_diagram()`、`residual_diagram()`）。図の矢印と%、scalingの倍率も図形で、選択ウィンドウでは「Arrow k」「Number …」という名前です（`overlay()`）。`decomposeParDict`の行（7、14枚目）は`code()`で、等幅の字（Consolas）で書きます。分割の絵の下の色の凡例（7、14枚目）は`numa_key()`です。
 - 本編20枚を、タイマーで通して練習します（目安12分）。数字は読むのに時間がかかるので、語数から見積もった時間より長くなりがちです。各枚で「何を言わないか」も決めておきます。
 - 数値は提出物の`README.md`と同じものを、有効数字4桁で使います（2.898／2.360、公式の結果（Official）の3.415／3.576、Baselineは3.650）。%は小数1桁です（−18.6%）。
 
@@ -1287,6 +1285,6 @@ scotchCoeffs                   multiLevelCoeffs
 - 固定が`MPI_Init`の中で外れることの診断：`TASK_2a.md`（PBS 24911705〜24944881。直前と直後の固定を記録した）。直し方はREPORT §6.1と`submission/openfoam/run/keep-rank-affinity.sh`。
 - 実験の記録：issue #36〜#38（Basic）、#42、#44、#50、#51（Bonus）、#41、#53（profile）、#46（I/O、OSノイズ）、#47（ばらつき）、#48、#49（通信）、#54（提出スクリプトの再現）、#55（カウンタ）、#56、#60（OFIとUCX）、#57（OpenFOAM組み込みのprofiling）、#58（UCXのRC、GAMGの最も粗い段）、#59（PGO）、#61（コアとメモリのどちらが律速かを、配置だけを変えて確かめた実験）、#62（Baselineの1/2/4ノードとプロファイル）、#63（Basicのscotchの対応付け）、#66（ノード数ごとのカウンタ、rank間の不均衡）、#67（10/15の精査と取り組みの一覧）、#68（固定反復で使われない残差）、#69（Bonusの後の10個、最終計測、提出スクリプトでの再実行）。11/01の時点で、10/26の最終計測より新しい結果はありません（mainにもブランチにも、issueにもなし）。
 - 各runの公式の結果（`result.txt`）と`coefficient.dat`：成果物の保管庫（Actionsのrun IDごとのフォルダ）。
-- 採否の決め方のデータ：`data/changes_ab.csv`（変更ごとの対照と候補の各ジョブ）、`data/decomposition_basic.csv`（scotchとhierarchical、固定ありのhierarchical）、`data/compiler_options.csv`（2枚目の図のAOCC）、`data/start_unpinned.csv`（固定なしのhierarchical、本編6枚目と補足30枚目）と`data/pinning.csv`（scotchでの4通りの固定、本編6枚目。Neitherは補足30枚目の固定なしのscotchでもある）。
+- 採否の決め方のデータ：`data/changes_ab.csv`（変更ごとの対照と候補の各ジョブ）、`data/decomposition_basic.csv`（scotchとhierarchical、固定ありのhierarchical）、`data/compiler_options.csv`（2枚目の図のAOCC）、`data/start_unpinned.csv`（固定なしのhierarchical、本編6枚目と補足30枚目）と`data/pinning.csv`（scotchでの4通りの固定、補足30枚目）。
 - 実験の順番（11/02の2回目に調べ直した）：ASPIRE-2Aでは最初からscotchで流した（`TASK_2a.md`の9月の項目。GNUの1ノードのbaselineもScotch 128分割）。9/20〜21に、2ノードのrunの配置の記録で固定が外れていると分かり、LD_PRELOADのinterposerで直した（`f0763e9`、`1f60daf`、`450def6`）。ケース既定のhierarchicalの4ノードは#34（9/24）。#36（10/02〜03）で、固定ありのhierarchical対scotch（交互）、固定なしのhierarchical、scotchでの4通りの固定を測り、numactl＋見張りに置き換えた（`5abefc1`、`8d54c41`）。scotchのdomainsは#38（10/05、−0.82%）で試し、#63（10/15〜16）で採用した。
 - 提出物：Boxの`Tokyo_Rapids_with_RIKEN_Submission/openfoam/`（台本と説明はリポジトリの`submission/openfoam/`と同じ）。技術レポート（`REPORT.md`）と図（`figures/`）は、11/01に提出物から外しました。スライドの補足に分析と証拠がそろっていて、図はBoxの`presentation/`にあるからです（ユーザーの判断）。メモの「REPORT §n」は、gitの`c562b50`の`submission/openfoam/REPORT.md`の節です。
