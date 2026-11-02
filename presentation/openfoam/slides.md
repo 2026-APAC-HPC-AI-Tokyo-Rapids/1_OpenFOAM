@@ -60,6 +60,11 @@ AIパートのチームメイトから、デッキについて指摘がありま
   - 13枚目：配置の実験の図を、CPUとメモリの帯の簡単な図にした（ユーザー：今のはリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように。矢印はよい）。
   - 9枚目（Basic results）はそのまま（ユーザー：良くなっている）。
   - ユーザーの質問への答え：分割の絵はdomains (2 4 16)の後か（5枚目のメモ：前のplain scotch）、分割は最も一般的な手か（5枚目のメモ）、実験の順番（6枚目のメモ）、renumberMeshで速くする方法はなかったか（11枚目のメモ）。
+- 第8版の3回目（11/02夜、ユーザーが2回目の版を見て）：
+  - 1枚目：公式の記録を「hierarchical 3.415 s/step」「scotch 3.576 s/step」と、分割の名前を付けて書く。
+  - s/stepをsと略さない。表の見出しにs/stepがあれば値は数字だけ（10枚目など、本編と補足の全部の表）。図の平均も「s/step」と書く。
+  - 13枚目：CPUの箱とメモリのチャネルを、NUMA領域ごとにまとめて隙間を空けた。1つの箱が8コア（L3の組）であることをメモに書いた（ユーザーの質問「4コアをフル、8コアを半分で合ってる？」）。
+  - domainsを入れたscotchの分割の絵：ASPIRE-2Aに入れないので、玄界で同じ設定の分割を作る（`decomposition/decomposition-genkai.pjm`、ユーザー：玄界で動かしてscpすればよい）。
 
 ## 外せないもの
 
@@ -112,7 +117,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 - 標語や対句（「Benchmarks decide, profiles explain」など）、「What we changed」「How we worked」のような見出し、中黒（·）でのつなぎは使いません。
 - 色は今のデッキの色合い（`deck/palette.py`）のままにします。黒い文字は完全な黒（#000000）です。箱（カード）や飾りの図形は使わず、区切りは余白と細い線にします。表は横の罫線だけにします。
 - スライドの文字は、できるだけ太字にします。強調はテーマ色の青（紺）で示し、太さでは示しません。Baseline、Basic、Bonusの語は段の色です。
-- 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、2.898 s/step、290 M calls）。
+- 数値には、よほど場所が足りないとき以外、単位を付けます（2.898 s/step、290 M calls、43.1 s）。1 stepの時間の単位はs/stepで、sと略しません。表の見出しや行の名前にs/stepと書いたときは、値には単位を付けません（ユーザー、11/02の2回目）。図の平均の数字には「2.898 s/step」と書き、群が近い図では単位を次の行に置きます。
 - 図は今のもの（`deck/deck_plots.py`の各ジョブの点の図など）を流用し、時間は縦軸にします。プロットには、点の近くに必ず平均（単位付き）と標準偏差（SD）、ジョブの本数を書きます。図の中の見出しも、コロンを使わない文にします。
 - 時間の軸は原点0から描きます。ばらつきを見るために範囲を狭めるときは、0から範囲の下までを細い帯に縮め、軸に波線を入れて省略を示します（ユーザー、11/02、`deck_plots.py`の`zoomed()`）。段どうしの変化は、図に矢印と%で書きます。
 - 文字の大きさは、本文18 pt以上、表16 pt以上です。余白が多い枚は、図を大きくするか、文字を大きくするか、行間を広げて、ものが平均的に置かれた状態にします。
@@ -197,7 +202,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 ### 1. OpenFOAM on ASPIRE-2A（0:35）
 
-スライド：上半分は4ノードの1 stepの時間の流れ。Our Baseline 3.650 s/step（case defaults。その下に小さく「Official 3.415 s and 3.576 s」）→ −20.6% → Basic 2.898 s/step（rank balance and binding）→ −18.6% → Bonus 2.360 s/step（less data moved per step）。下半分はFigure 1、メッシュの細かさの絵（「Refinement level of the 65.3 million cells, finest near the car.」）。
+スライド：上半分は4ノードの1 stepの時間の流れ。Our Baseline 3.650 s/step（case defaults。その下に小さく「Official」「hierarchical 3.415 s/step」「scotch 3.576 s/step」。ユーザー、11/02：公式の記録のhierarchicalとscotchを明記する）→ −20.6% → Basic 2.898 s/step（rank balance and binding）→ −18.6% → Bonus 2.360 s/step（less data moved per step）。下半分はFigure 1、メッシュの細かさの絵（「Refinement level of the 65.3 million cells, finest near the car.」）。
 
 原稿（約35秒）：We optimised OpenFOAM on ASPIRE-2A by measuring each bottleneck and then fixing it. On four nodes our starting point took 3.650 seconds per step. Basic brought it down to 2.898 seconds and the Bonus to 2.360 seconds. In Basic the ranks waited for each other, so we fixed the imbalance between ranks and the lost CPU and memory binding. In the Bonus memory bandwidth limited the solver, so we reduced the data each step moves.
 
@@ -318,7 +323,7 @@ AIパートのチームメイトから、デッキについて指摘がありま
 |---|---:|---:|
 | Faces between subdomains | 4.31 M | 2.93 M |
 | Largest subdomain above the average | 0.00% | 1.07% |
-| Time per step | 3.650 s | 3.395 s |
+| s/step | 3.650 | 3.395 |
 | Jobs | 3 | 2 |
 
 原稿（約45秒）：The most common first step in tuning OpenFOAM is the decomposition, so we tried it first. Our Baseline used the case default, hierarchical, which cuts the mesh into 16 by 8 by 4 slabs of equal cells. The pictures colour each subdomain by node and NUMA domain. The ranks whose slabs held much of the car's surface computed more. scotch cuts compact blocks instead. As the table shows, it kept the cells within about 1 percent of equal with 32 percent fewer faces between subdomains, and without pinning it took 7 percent off a step.
@@ -373,10 +378,10 @@ AIパートのチームメイトから、デッキについて指摘がありま
 
 | Pinned | s/step | Jobs | SD |
 |---|---:|---:|---:|
-| Neither | 3.395 s | 2 | 0.78% |
-| CPU only | 3.474 s | 3 | 2.0% |
-| Memory only | 4.380 s | 1 | |
-| CPU and memory | 2.917 s | 3 | 0.13% |
+| Neither | 3.395 | 2 | 0.78% |
+| CPU only | 3.474 | 3 | 2.0% |
+| Memory only | 4.380 | 1 | |
+| CPU and memory | 2.917 | 3 | 0.13% |
 
 - Only pinning both took 14.1% off a step.
 - Pinned jobs varied less, so smaller gains could be seen.
@@ -443,12 +448,12 @@ scotchCoeffs
 
 表の注釈（表の上）：Table 7. Time per step on 4 nodes.
 
-| Run | s/step | Jobs and SD |
-|---|---:|---:|
-| Official, hierarchical | 3.415 s | 1 job |
-| Official, scotch | 3.576 s | 1 job |
-| Our Baseline | 3.650 s | 3 jobs, SD 4.1% |
-| Basic | 2.898 s | 5 jobs, SD 0.07% |
+| Run | s/step | Jobs | SD |
+|---|---:|---:|---:|
+| Official, hierarchical | 3.415 | 1 job | |
+| Official, scotch | 3.576 | 1 job | |
+| Our Baseline | 3.650 | 3 jobs | 4.1% |
+| Basic | 2.898 | 5 jobs | 0.07% |
 
 図：公式の結果2本（hierarchicalは白抜き、scotchは灰色）、Baselineの3本、Basicの5本。原点0から波線で省略した軸。BaselineからBasicへの矢印（−20.6%）。
 
@@ -563,14 +568,15 @@ scotchCoeffs
 
 ### 13. Measuring the memory limit（0:45）
 
-スライド：3つの配置を縦に並べます（Figure 10）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが紺）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を紺）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」「Half the channels / 2.2 times the time」）。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
+スライド：3つの配置を縦に並べます（Figure 10）。各段が1つのノードで、上の帯が「CPU」（16の箱、1つの箱がL3を共有する8コア、rankが動くコアの割合だけ下から紺）、下の帯が「Memory」（16本のチャネル、使うものが紺）。箱とチャネルは2つずつNUMA領域にまとめ、領域の間に隙間、CPUの間にもっと広い隙間を空けます（ユーザー、11/02の3回目）。帯の右に「128 ranks / 16 channels」「64 ranks / 16 channels」「64 ranks / 8 channels」（半分になった数を紺）、その右に1 stepの時間とSTREAMの帯域、その右に段の間の矢印（「Half the cores / the same time」「Half the channels / 2.2 times the time」）。下に1文：A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth. ユーザー、11/02の2回目：第8版の最初の版のチップの絵はリアルだが分かりにくい。CPU、memoryと書いて、半分になったのが分かるように簡単に。矢印はよい。
 
-原稿（約40秒）：So we tested the memory by moving the ranks. Each row is one node, with its CPU blocks of eight cores above its sixteen memory channels, in blue where in use. With half the cores on all sixteen channels, a step took the same time, so the cores do not set the speed. With the same 64 ranks on eight channels, it took 2.2 times as long, and STREAM, the standard memory bandwidth benchmark, fell by the same factor on the same nodes. So about 97 percent of a step follows the memory bandwidth.
+原稿（約40秒）：So we tested the memory by moving the ranks. Each row is one node, with its CPU blocks of eight cores above its sixteen memory channels, grouped by NUMA domain and in blue where in use. With half the cores on all sixteen channels, a step took the same time, so the cores do not set the speed. With the same 64 ranks on eight channels, it took 2.2 times as long, and STREAM, the standard memory bandwidth benchmark, fell by the same factor on the same nodes. So about 97 percent of a step follows the memory bandwidth.
 
-訳：そこで、rankを動かしてメモリを確かめました。各段が1つのノードで、8コアずつのCPUの箱の下に16本のメモリチャネルを並べ、使っているところを紺で示しています。16本のチャネルを全部使ったままコアを半分にすると、1 stepの時間は同じだったので、速さを決めているのはコアではありません。同じ64 rankを8本のチャネルに詰めると2.2倍かかり、メモリ帯域の標準的なベンチマークであるSTREAMも、同じノードで同じ比だけ落ちました。だから1 stepの約97%は、メモリ帯域に沿っています。
+訳：そこで、rankを動かしてメモリを確かめました。各段が1つのノードで、8コアずつのCPUの箱の下に16本のメモリチャネルを並べ、NUMA領域ごとにまとめて、使っているところを紺で示しています。16本のチャネルを全部使ったままコアを半分にすると、1 stepの時間は同じだったので、速さを決めているのはコアではありません。同じ64 rankを8本のチャネルに詰めると2.2倍かかり、メモリ帯域の標準的なベンチマークであるSTREAMも、同じノードで同じ比だけ落ちました。だから1 stepの約97%は、メモリ帯域に沿っています。
 
 メモ：
-- 図の配置（#61の`platforms/aspire2a/rank-cpus.txt`のとおり）：full128は全コア。spread64は各L3（8コア）に4 rankずつ（図では16の箱がどれも半分まで紺）、8つのNUMA領域すべてで、16本のチャネルを全部使います。packed64は各CPUの最初の2つのNUMA領域（各16コア）に詰め、残りの2つの領域を空けるので、使うチャネルは8本です（local rank lのCPUは(l / 32) × 64 + l % 32。片方のソケットに詰めないのは、ソケットごとの電力とブーストの条件をspread64とそろえるため）。spread64とpacked64は同じ256分割、同じrankなので、計算は同じで`coefficient.dat`はビット一致します。
+- 図の読み方（ユーザーの質問、11/02の2回目「4コアをフル、8コアを半分で合ってる？」）：1つの箱は1コアではなく、L3を共有する8コアの組です（1 CPUに8つ、1ノードに16）。spread64はCPUごとに8つの箱がどれも半分（各L3の8コアのうち4コア）、packed64はCPUごとに4つの箱が満杯（最初の2つのNUMA領域の32コア）で4つが空です。どちらも1 CPUに32 rank、1ノードに64 rankです。箱は2つずつNUMA領域にまとめ、領域の間に隙間を、CPUの間にもっと広い隙間を空けました（ユーザー、11/02：NUMA別に空白）。チャネルも同じく、1つのNUMA領域に2本です。
+- 図の配置（#61の`platforms/aspire2a/rank-cpus.txt`のとおり。spread64はcommit `9922d4b`でコア0〜3、8〜11、16〜19、…、120〜123、packed64は`8758705`でコア0〜31と64〜95）：full128は全コア。spread64は各L3（8コア）に4 rankずつ（図では16の箱がどれも半分まで紺）、8つのNUMA領域すべてで、16本のチャネルを全部使います。packed64は各CPUの最初の2つのNUMA領域（各16コア）に詰め、残りの2つの領域を空けるので、使うチャネルは8本です（local rank lのCPUは(l / 32) × 64 + l % 32。片方のソケットに詰めないのは、ソケットごとの電力とブーストの条件をspread64とそろえるため）。spread64とpacked64は同じ256分割、同じrankなので、計算は同じで`coefficient.dat`はビット一致します。
 - 数値：Basic（対応付けの前）、4ノード、150 step。128 rank/ノード 2.920（1本）、64 rank（16チャネル）2.887（2本）、64 rank（8チャネル）6.347（2本）s/step（`data/memory_placement.csv`）。STREAMのtriad（c = a + 3b）を同じジョブの中でソルバの後に、同じノード、同じ配置で流し、274、279、125 GB/s/ノード（`data/triad_placement.csv`）。帯域の比は2.23倍、1 stepの比は2.20倍です。
 - 約97%の出し方：1 stepを「帯域に比例する部分b × （全チャネルの帯域 ÷ その配置の帯域）＋ 比例しない部分a」と置き、spread64とpacked64に当てはめると、b ≈ 2.81 s、a ≈ 0.08 sで、2.81 / 2.887 ≈ 97%です。MPIの待ちも、最も遅いrankのメモリ律速の計算を待っているので、この「比例する部分」に入ります（Q26）。
 - やさしい説明（11/01）：STREAMはJohn McCalpinが作った、持続的に出せるメモリ帯域を測る標準のベンチマークで、OpenFOAMとは別のソフトです。だから、STREAMの値だけで「OpenFOAMはメモリ律速」とは言えません。根拠は、置き場所だけを変えたときに、OpenFOAMの時間がSTREAMの帯域の変化と同じ比で変わったことです。STREAMの値は、そのノードで素直な読み書きなら実際に出る帯域です（理論409.6 GB/sの約68%）。OpenFOAMが実際に使っている帯域は分からない（カウンタが読めず、読み方が飛び飛び）ので、絶対値は議論せず、配置ごとの帯域の比だけをSTREAMから借ります。このとき、OpenFOAMが使える帯域もSTREAMと同じ比で増減すると仮定しています（同じチャネルを使うので自然な仮定ですが、仮定ではあります）。
@@ -668,10 +674,10 @@ scotchCoeffs                   multiLevelCoeffs
 
 | Step | s/step | Change |
 |---|---:|---:|
-| multiLevel instead of plain scotch | 2.918 → 2.873 s | −1.5% |
-| First four source changes | 2.873 → 2.599 s | −9.5% |
-| Ten more source changes | 2.603 → 2.360 s | −9.3% |
-| Bonus against Basic | 2.898 → 2.360 s | −18.6% |
+| multiLevel instead of plain scotch | 2.918 → 2.873 | −1.5% |
+| First four source changes | 2.873 → 2.599 | −9.5% |
+| Ten more source changes | 2.603 → 2.360 | −9.3% |
+| Bonus against Basic | 2.898 → 2.360 | −18.6% |
 
 - Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes.
 

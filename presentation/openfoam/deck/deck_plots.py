@@ -82,9 +82,10 @@ def sd_text(values):
     return f"SD {sd:.2f}%" if sd < 1 else f"SD {sd:.1f}%"
 
 
-def stats(values):
-    """Two lines for a group of jobs: the mean in four significant figures with its unit, then the SD."""
-    return f"{four(statistics.fmean(values))} s\n{sd_text(values)}"
+def stats(values, stacked=False):
+    """The mean of a group of jobs in four significant figures with its unit, s/step written out (the user, 11/02: never
+    shortened to s), then the SD; stacked puts the unit on a line of its own where the groups stand close together."""
+    return f"{four(statistics.fmean(values))}{chr(10) if stacked else ' '}s/step\n{sd_text(values)}"
 
 
 def jobs(axis, x, values, color, width=0.3, hollow=False):
@@ -99,10 +100,10 @@ def jobs(axis, x, values, color, width=0.3, hollow=False):
     return mean
 
 
-def label_above(axis, x, values, color=INK, size=12, text=None, top=None):
+def label_above(axis, x, values, color=INK, size=12, text=None, top=None, stacked=False):
     """The mean and SD of the jobs at x (or text), above the highest job, or above top when a mark drawn there is higher."""
     y = max(values) if top is None else max(max(values), top)
-    axis.annotate(text or stats(values), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
+    axis.annotate(text or stats(values, stacked), (x, y), textcoords="offset points", xytext=(0, 9), ha="center", va="bottom", fontsize=size, color=color, linespacing=1.05)
 
 
 def jobs_label(n):
@@ -159,7 +160,7 @@ def rule():
     for axis, (title, control, candidate, color) in zip(axes, examples):
         for x, values, dot in ((0, control, FAINT), (1, candidate, color)):
             jobs(axis, x, values, dot, width=0.36)
-            label_above(axis, x, values, size=11.5)
+            label_above(axis, x, values, size=11.5, stacked=True)
         if max(candidate) < min(control):
             axis.axhspan(max(candidate), min(control), color=GRID, zorder=0)
         axis.set_title(title, color=color)
@@ -173,17 +174,17 @@ def rule():
     save(figure, "p07_rule")
 
 
-def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12):
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD, or '1 job', above it. Each (i, j) in arrows joins the means of groups i and j
     with an arrow and writes the change between them to its left."""
     figure, axis = plt.subplots(figsize=size, layout="constrained")
     for x, (_, values, color, hollow) in enumerate(groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
-        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size)
+        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
     for i, j in arrows:
         before, after = groups[i][1], groups[j][1]
-        start, end = (i + 0.4, statistics.fmean(before)), (j - 0.4, statistics.fmean(after))  # clear of the labels of j
+        start, end = (i + 0.4, statistics.fmean(before)), (j - 0.5, statistics.fmean(after))  # clear of the labels of j
         axis.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "-|>", "color": NAVY, "linewidth": 2, "mutation_scale": 18, "shrinkA": 0, "shrinkB": 0})
         axis.text(start[0] - 0.06, (start[1] + end[1]) / 2, percent(after, before), ha="right", va="center", fontsize=15, color=NAVY, zorder=4)
     axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups])
@@ -252,14 +253,14 @@ def scotch():
 def basic_4node():
     """Main slides 9 and 10: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
     groups = [official("hierarchical"), official("scotch"), ("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False)]
-    tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.1, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)])
+    tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.15, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)], stacked=True)
 
 
 def bonus_4node():
     """Main slide 18: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement;
     the user asked for the official runs and the Baseline here, 11/02)."""
     groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False), ("Bonus\n3 jobs", FINAL[("Bonus", 4)], BONUS, False)]
-    tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.1, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11)
+    tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.25, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11, stacked=True)
 
 
 def scaling():
@@ -281,20 +282,20 @@ def scaling():
             else:
                 axis.scatter([x0 + offset], OFFICIAL[(method, n)], s=50, color=FAINT, edgecolor="black", linewidth=0.5, zorder=3)
         lines = sorted(((OFFICIAL[(method, n)][0], method) for method, _, _ in official), reverse=True)  # as the jobs stand
-        axis.annotate("\n".join(f"{method} {four(value)} s" for value, method in lines), (x0, lines[-1][0]), textcoords="offset points", xytext=(0, -9), ha="center", va="top", fontsize=10, color=INK, linespacing=1.05)
+        axis.annotate("\n".join(f"{method} {four(value)} s/step" for value, method in lines), (x0, lines[-1][0]), textcoords="offset points", xytext=(0, -9), ha="center", va="top", fontsize=10, color=INK, linespacing=1.05)
         for k, (_, data, color) in enumerate(tiers, 1):
             x = x0 + k
             ideal = statistics.fmean(data[1]) / n if n > 1 else None
             if ideal:
                 axis.hlines(ideal, x - 0.42, x + 0.42, color=color, linestyle="--", linewidth=1.3, zorder=1)
             jobs(axis, x, data[n], color, width=0.48)
-            label_above(axis, x, data[n], color=color, size=10, top=ideal)
+            label_above(axis, x, data[n], color=color, size=10, top=ideal, stacked=True)
     axis.set_xticks([pitch * g + k for g in range(len(NODES)) for k in range(4)], [name for _ in NODES for name in ("Official", "Baseline", "Basic", "Bonus")], minor=True)
     axis.set_xticks([pitch * g + 1.5 for g in range(len(NODES))], [f"{n} node{'s' if n > 1 else ''}" for n in NODES])
     axis.tick_params(axis="x", which="minor", labelsize=10.5)
     axis.tick_params(axis="x", which="major", labelsize=13, length=0, pad=19)
     colour_ticks(axis.get_xticklabels(minor=True), [color for _ in NODES for color in (INK, BASE, BASIC, BONUS)])
-    axis.set_xlim(-1.15, pitch * (len(NODES) - 1) + 3.6)
+    axis.set_xlim(-1.45, pitch * (len(NODES) - 1) + 3.6)
     axis.set_ylim(0, 18.5)
     axis.set_yticks([0, 4, 8, 12, 16])
     finish(axis, "s/step, each job")
@@ -312,7 +313,7 @@ def reference():
             values = values_of(n)
             everything += values
             jobs(axis, x, values, color, hollow=hollow)
-            label_above(axis, x, values, color=color if color not in (MUTED, FAINT) else INK, size=9)
+            label_above(axis, x, values, color=color if color not in (MUTED, FAINT) else INK, size=9, stacked=True)
             if x >= 2:
                 axis.annotate(percent(values, ORGANISERS[("scotch", n)]), (x, min(values)), textcoords="offset points", xytext=(0, -9), ha="center", va="top", fontsize=11, color=NAVY)
         axis.set_xticks(range(len(groups)), [label for label, _, _, _ in groups], fontsize=9.5)

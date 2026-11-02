@@ -233,9 +233,9 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
         add_text(s, x, y + 0.45, w, 0.95, [[(value, {"size": big}), (f" {unit}", {"size": small, "color": INK})]], color=color, align="c", anchor="m")
         paras = [{"runs": [what], "align": "c"}]
         if common and k == 0:
-            # two lines of their own: in one paragraph the box wraps it with the last time alone on the second line
-            paras += [{"runs": ["Official"], "align": "c", "size": 14, "space_before": 4}, {"runs": ["3.415 s and 3.576 s"], "align": "c", "size": 14}]
-        add_text(s, x, y + 1.45, w, 0.9, paras, size=16)
+            # each official run on a line of its own, named by its decomposition (the user, 11/02)
+            paras += [{"runs": ["Official"], "align": "c", "size": 14, "space_before": 4}] + [{"runs": [f"{method} {value} s/step"], "align": "c", "size": 14} for method, value in (("hierarchical", "3.415"), ("scotch", "3.576"))]
+        add_text(s, x, y + 1.45, w, 1.1, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
             arrow_line(s, x1, y + 0.92, x2, y + 0.92, color=FAINT, width=1.75)
@@ -346,7 +346,7 @@ def m_decomposition():
     heading(s, X0, bottom + 0.15, w, "The first change we tried", size=16)
     bottom = code(s, X0, bottom + 0.57, w, ["method  scotch;"])
     top = table_caption(s, X0, bottom + 0.25, w, "The two decompositions on 4 nodes, without pinning.", h=0.7)
-    rows = [["", "hierarchical", "scotch"], ["Faces between subdomains", "4.31 M", "2.93 M"], ["Largest subdomain above the average", "0.00%", "1.07%"], ["Time per step", "3.650 s", "3.395 s"], ["Jobs", "3", "2"]]
+    rows = [["", "hierarchical", "scotch"], ["Faces between subdomains", "4.31 M", "2.93 M"], ["Largest subdomain above the average", "0.00%", "1.07%"], ["s/step", "3.650", "3.395"], ["Jobs", "3", "2"]]
     table(s, X0, top + 0.05, [2.6, 1.85, 1.3], rows, row_heights=[0.45, 0.72, 0.72, 0.45, 0.45], size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], None, [INK, INK, NAVY], None])
     pw, xr = 2.875, 6.73
     for i, (which, label) in enumerate((("hier", "hierarchical"), ("scotch", "scotch"))):
@@ -367,7 +367,7 @@ def m_pinning_results():
     set_title(s, "PINNING RESULTS")
     w = 5.75
     top = table_caption(s, X0, 1.3, w, "Time per step on 4 nodes with scotch under four placements.", h=0.7)
-    rows = [["Pinned", "s/step", "Jobs", "SD"], ["Neither", "3.395 s", "2", "0.78%"], ["CPU only", "3.474 s", "3", "2.0%"], ["Memory only", "4.380 s", "1", ""], ["CPU and memory", "2.917 s", "3", "0.13%"]]
+    rows = [["Pinned", "s/step", "Jobs", "SD"], ["Neither", "3.395", "2", "0.78%"], ["CPU only", "3.474", "3", "2.0%"], ["Memory only", "4.380", "1", ""], ["CPU and memory", "2.917", "3", "0.13%"]]
     table(s, X0, top + 0.05, [2.5, 1.3, 0.85, 1.1], rows, row_h=0.5, size=18, aligns=["l", "r", "r", "r"], colors=[None, None, None, None, [NAVY] * 4])
     bullets(s, X0, top + 2.8, w, 6.95 - top - 2.8, ["Only pinning both took 14.1% off a step.", "Pinned jobs varied less, so smaller gains could be seen.", "Pinned, scotch was 10.5% faster than hierarchical in alternated jobs."], size=18, space_after=12)
     figure(s, "p10_pinning", 6.73, 1.3, 5.9, "Each job under four placements of the ranks on 4 nodes with scotch.")
@@ -397,7 +397,7 @@ def m_mapping():
 def basic_table(s, x, y, w):
     """The official runs, our Baseline and Basic on 4 nodes, with the jobs and SD of each; returns the bottom."""
     top = table_caption(s, x, y, w, "Time per step on 4 nodes.")
-    rows = [["Run", "s/step", "Jobs", "SD"], ["Official, hierarchical", "3.415 s", "1 job", ""], ["Official, scotch", "3.576 s", "1 job", ""], ["Our Baseline", "3.650 s", "3 jobs", "4.1%"], ["Basic", "2.898 s", "5 jobs", "0.07%"]]
+    rows = [["Run", "s/step", "Jobs", "SD"], ["Official, hierarchical", "3.415", "1 job", ""], ["Official, scotch", "3.576", "1 job", ""], ["Our Baseline", "3.650", "3 jobs", "4.1%"], ["Basic", "2.898", "5 jobs", "0.07%"]]
     table(s, x, top + 0.05, [w - 3.35, 1.3, 1.0, 1.05], rows, row_h=0.47, size=17, aligns=["l", "r", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, INK, NAVY]])
     return top + 0.05 + 5 * 0.47
 
@@ -467,12 +467,14 @@ PLACEMENT_ROWS = [(("128 ranks", "16 channels"), [1.0] * 16, [1.0] * 16, "2.920 
 
 
 def usage_bar(s, x, y, w, h, label, fill):
-    """A label and a row of 16 blocks, 8 per CPU, each navy from the bottom up to fill[k] (0 to 1) and grey above it."""
+    """A label and a row of 16 blocks, 8 per CPU in its 4 NUMA domains of 2, with a gap between NUMA domains and a wider one
+    between the CPUs (the user, 11/02); each block is navy from the bottom up to fill[k] (0 to 1) and grey above it."""
     add_text(s, x, y, 1.15, h, [label], size=17, anchor="m")
-    x0, gap, middle = x + 1.2, 0.04, 0.16
-    cell = (w - 1.2 - 14 * gap - middle) / 16
+    x0, gap, numa_gap, cpu_gap = x + 1.2, 0.035, 0.12, 0.28
+    cell = (w - 1.2 - 8 * gap - 6 * numa_gap - cpu_gap) / 16
     for k, f in enumerate(fill):
-        cx = x0 + k * (cell + gap) + (middle if k >= 8 else 0)
+        numa, cpu = k // 2, k // 8
+        cx = x0 + k * cell + (k + 1) // 2 * gap + (numa - cpu) * numa_gap + cpu * cpu_gap
         box(s, cx, y, cell, h, fill=OFF, radius=0.12)
         if f:
             box(s, cx, y + h * (1 - f), cell, h * f, fill=NAVY, radius=0.12)
@@ -637,7 +639,7 @@ def m_bonus_results():
     s = reuse(11)
     set_title(s, "BONUS RESULTS")
     top = table_caption(s, X0, 1.3, 5.75, "Each Bonus step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["multiLevel instead of plain scotch", "2.918 → 2.873 s", "−1.5%"], ["First four source changes", "2.873 → 2.599 s", "−9.5%"], ["Ten more source changes", "2.603 → 2.360 s", "−9.3%"], ["Bonus against Basic", "2.898 → 2.360 s", "−18.6%"]]
+    rows = [["Step", "s/step", "Change"], ["multiLevel instead of plain scotch", "2.918 → 2.873", "−1.5%"], ["First four source changes", "2.873 → 2.599", "−9.5%"], ["Ten more source changes", "2.603 → 2.360", "−9.3%"], ["Bonus against Basic", "2.898 → 2.360", "−18.6%"]]
     table(s, X0, top + 0.05, [2.35, 2.2, 1.2], rows, row_heights=[0.47, 0.72, 0.72, 0.72, 0.72], size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BONUS, NAVY, NAVY]])
     bullets(s, X0, top + 3.6, 5.75, 6.95 - top - 3.6, ["Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes."], size=18)
     figure(s, "p15_bonus", 6.63, 1.3, 6.0, "Each job of the official runs and our three tiers on 4 nodes, with the mean and SD of each.")
@@ -656,7 +658,7 @@ def m_scaling():
     under it how many times faster than 1 node each is on 2 and 4 nodes, instead of the efficiency (the user, 11/02)."""
     s = reuse(12)
     set_title(s, "SCALING FROM 1 TO 4 NODES")
-    bottom = figure(s, "p17_scaling", X0 - 0.1, 1.25, XW + 0.1, "Each job on 1, 2 and 4 nodes on one axis from 0 s, the dashes being ideal scaling from 1 node.", h=0.4)
+    bottom = figure(s, "p17_scaling", X0 - 0.1, 1.25, XW + 0.1, "Each job on 1, 2 and 4 nodes on one axis from 0, the dashes being ideal scaling from 1 node.", h=0.4)
     top = table_caption(s, X0, bottom + 0.1, 8.4, "Times faster than on 1 node, against 2 and 4 times for ideal scaling.")
     rows = [[""] + SPEEDUPS, ["2 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[2]], ["4 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[4]]]
     table(s, X0, top + 0.03, [1.2, 1.6, 1.4, 1.45, 1.25, 1.25], rows, row_heights=[0.62, 0.42, 0.42], size=16, aligns=["l"] + ["r"] * 5, colors=[None, None, [INK, INK, INK, INK, NAVY, NAVY]])
@@ -730,7 +732,7 @@ def s_reference():
 def s_repro():
     s = supp(20, "REPRODUCING OUR RESULTS", "s_repro")
     table_caption(s, X0, 1.35, XW, "Re-runs with the submitted scripts against our recorded means.")
-    rows = [["Configuration", "Nodes", "s/step", "Recorded mean", "Change", "coefficient.dat"], ["Basic", "1", "13.413150 s", "13.364504 s", "+0.36%", "identical"], ["Basic", "2", "6.390324 s", "6.371748 s", "+0.29%", "identical"], ["Basic", "4", "2.904620 s", "2.897638 s", "+0.24%", "identical"], ["Bonus", "1", "10.201813 s", "10.233606 s", "−0.31%", "identical"], ["Bonus", "2", "4.980185 s", "4.992196 s", "−0.24%", "identical"], ["Bonus", "4", "2.365118 s", "2.359976 s", "+0.22%", "identical"]]
+    rows = [["Configuration", "Nodes", "Re-run, s/step", "Recorded, s/step", "Change", "coefficient.dat"],["Basic", "1", "13.413150", "13.364504", "+0.36%", "identical"], ["Basic", "2", "6.390324", "6.371748", "+0.29%", "identical"], ["Basic", "4", "2.904620", "2.897638", "+0.24%", "identical"], ["Bonus", "1", "10.201813", "10.233606", "−0.31%", "identical"], ["Bonus", "2", "4.980185", "4.992196", "−0.24%", "identical"], ["Bonus", "4", "2.365118", "2.359976", "+0.22%", "identical"]]
     table(s, X0, 1.85, [2.75, 0.95, 2.2, 2.25, 1.5, 2.28], rows, row_h=0.6, size=15, colors=[None] + [[BASIC, INK, INK, INK, INK, INK]] * 3 + [[BONUS, INK, INK, INK, INK, INK]] * 3, aligns=["l", "c", "r", "r", "r", "c"])
     bullets(s, X0, 6.15, XW, 0.85, ["build/build.pbs builds from the official public sources and run/submit.sh 1|2|4 runs the whole Allrun chain with plain qsub.", "Every step ended with End and returned 0, and every solve job reported bound=128/128 on every node."], size=14, space_after=4)
     return s
@@ -751,7 +753,7 @@ def s_pinning_case_default():
     the four placements on scotch in the main part."""
     s = supp(41, "PINNING WITH HIERARCHICAL", "s_pinning_case_default")
     top = table_caption(s, X0, 1.3, 5.75, "Time per step on 4 nodes with the case-default hierarchical decomposition.", h=0.7)
-    rows = [["Run", "s/step", "Jobs", "SD"], ["Our Baseline", "3.650 s", "3", "4.1%"], ["Not pinned", "3.670 s", "3", "2.0%"], ["Pinned", "3.257 s", "3", "1.1%"]]
+    rows = [["Run", "s/step", "Jobs", "SD"], ["Our Baseline", "3.650", "3", "4.1%"], ["Not pinned", "3.670", "3", "2.0%"], ["Pinned", "3.257", "3", "1.1%"]]
     table(s, X0, top + 0.05, [2.6, 1.3, 0.85, 1.0], rows, row_h=0.55, size=18, aligns=["l", "r", "r", "r"], colors=[None, [BASE, INK, INK, INK], None, [NAVY] * 4])
     bullets(s, X0, top + 2.5, 5.75, 6.95 - top - 2.5, ["Not pinned and pinned ran in turns in the same period.", "Pinning took 11.2% off a step and its SD fell from 2.0% to 1.1%.", "Our Baseline ran the unpinned setting later."], size=18, space_after=14)
     figure(s, "ps_pinning", 6.73, 1.3, 5.9, "Each job of our Baseline and of its setting without and with pinning on 4 nodes.")
@@ -778,7 +780,7 @@ def s_scotch():
 def s_cores():
     s = supp(25, "THE PLACEMENT EXPERIMENT IN FULL", "s_cores")
     table_caption(s, X0, 1.35, XW, "Time per step under three placements on 4 nodes, with 2 jobs each.")
-    rows = [["s/step (4 nodes, 2 jobs each)", "full128", "spread64", "packed64", "spread64 / full128", "packed64 / spread64"], ["Basic (before the mapping)", "2.920 s", "2.887 s", "6.347 s", "0.99", "2.20"], ["Bonus without the patches", "2.869 s", "2.874 s", "6.321 s", "1.00", "2.20"], ["Bonus, first four changes", "2.595 s", "2.649 s", "5.598 s", "1.02", "2.11"], ["Triad bandwidth per node", "274 GB/s", "279 GB/s", "125 GB/s", "—", "0.45"]]
+    rows = [["s/step (4 nodes, 2 jobs each)", "full128", "spread64", "packed64", "spread64 / full128", "packed64 / spread64"], ["Basic (before the mapping)", "2.920", "2.887", "6.347", "0.99", "2.20"], ["Bonus without the patches", "2.869", "2.874", "6.321", "1.00", "2.20"], ["Bonus, first four changes", "2.595", "2.649", "5.598", "1.02", "2.11"], ["Triad bandwidth per node", "274 GB/s", "279 GB/s", "125 GB/s", "—", "0.45"]]
     table(s, X0, 1.85, [3.5, 1.45, 1.5, 1.5, 1.95, 2.03], rows, row_h=0.62, size=15, colors=[None] + [[INK, INK, INK, INK, INK, NAVY]] * 4, aligns=["l", "r", "r", "r", "r", "r"])
     heading(s, X0, 5.0, 5.85, "The three placements", size=15)
     bullets(s, X0, 5.4, 5.85, 1.55, ["full128 has 128 ranks per node, as submitted.", "spread64 has 64 ranks per node, 4 per L3, on all 16 L3s and all 16 memory channels.", "packed64 has the same 64 ranks and decomposition, 8 per L3, on 8 L3s and 8 channels."], size=14, space_after=4)
