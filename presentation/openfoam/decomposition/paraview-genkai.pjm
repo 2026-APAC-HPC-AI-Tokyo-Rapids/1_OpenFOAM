@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#PJM -L elapse=00:30:00
+#
+# ParaView for drawing on Genkai without a display (Issue #39, 11/02): Genkai has no ParaView, so this builds the ParaView
+# 6.0.1 source that OpenFOAM's ThirdParty v2512 carries (SOURCE) with GCC 12 (gcc-toolset), the OS's Python 3.11 (which has
+# numpy, needed by render.py's PythonCalculator), no Qt and no MPI. X and EGL are off, so VTK draws with OSMesa, which it
+# loads at run time from the Mesa 20.3.5 module. The build configures itself when BUILD has no CMakeCache.txt yet; a run that
+# reaches the time limit is submitted again and make goes on from where it stopped. 30 minutes, because longer requests
+# waited until the next day on 11/02 (decomposition-genkai.pjm).
+#
+#   pjsub -L rscgrp=a-batch -L node=1 -x SOURCE=<ParaView-v6.0.1>,BUILD=<dir>,PREFIX=<install dir> -o <BUILD>/%j.pjm.log -j paraview-genkai.pjm
+set -euo pipefail
+: "${SOURCE:?ParaView source is required}"
+: "${BUILD:?build directory is required}"
+: "${PREFIX:?install directory is required}"
+
+module purge
+module load gcc-toolset/12
+mkdir -p "${BUILD}"
+cd "${BUILD}"
+if [[ ! -f CMakeCache.txt ]]; then
+  cmake -S "${SOURCE}" -B "${BUILD}" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_C_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++ -DPARAVIEW_USE_QT=OFF -DPARAVIEW_USE_PYTHON=ON -DPARAVIEW_USE_MPI=OFF -DPython3_EXECUTABLE=/usr/bin/python3.11 -DVTK_USE_X=OFF -DVTK_OPENGL_HAS_EGL=OFF -DVTK_DEFAULT_RENDER_WINDOW_OFFSCREEN=ON -DPARAVIEW_BUILD_TESTING=OFF -DPARAVIEW_ENABLE_WEB=OFF -DVTK_SMP_IMPLEMENTATION_TYPE=STDThread > configure.log 2>&1
+fi
+make -j 120 > "make-${PJM_JOBID}.log" 2>&1
+make install > install.log 2>&1
+touch "${BUILD}/install-success"

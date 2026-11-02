@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#PJM -L elapse=00:30:00
+#
+# Draws the panels of a decomposition run with render.py on one Genkai node (Issue #39, 11/02), with the ParaView that
+# paraview-genkai.pjm builds (PARAVIEW, its install directory). VTK draws offscreen with the OSMesa of the Mesa 20.3.5 module
+# (llvmpipe). RUN is the unpacked output of decomposition-genkai.pjm, OUT gets panels/ and stats.json for compose.py, and
+# METHODS names the decompositions of the run in time order (scotchDomains multiLevel).
+#
+#   pjsub -L rscgrp=a-batch -L node=1 -x PARAVIEW=<dir>,SCRIPT=<render.py>,RUN=<dir>,OUT=<dir>,METHODS="scotchDomains multiLevel" -o <OUT>/%j.pjm.log -j render-genkai.pjm
+set -euo pipefail
+: "${PARAVIEW:?ParaView install directory is required}"
+: "${SCRIPT:?render.py is required}"
+: "${RUN:?run directory is required}"
+: "${OUT:?output directory is required}"
+: "${METHODS:?decomposition names are required}"
+
+module purge
+# the Mesa module needs its LLVM loaded first
+module load llvm/7.1.0 mesa/20.3.5
+export VTK_DEFAULT_OPENGL_WINDOW=vtkOSOpenGLRenderWindow
+export GALLIUM_DRIVER=llvmpipe
+export LP_NUM_THREADS=32
+mkdir -p "${OUT}"
+read -r -a methods <<< "${METHODS}"
+"${PARAVIEW}/bin/pvbatch" "${SCRIPT}" "${RUN}" "${OUT}" "${methods[@]}" > "${OUT}/render.log" 2>&1
+ls "${OUT}/panels" | wc -l
+touch "${OUT}/render-success"
