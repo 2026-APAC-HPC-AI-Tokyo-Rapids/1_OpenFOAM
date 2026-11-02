@@ -199,34 +199,33 @@ def official(method):
     return (f"Official\n{method}\n1 job", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
 
 
+# The four ways of placing the ranks on scotch (#36 A3): tick label, configuration in pinning.csv, colour
+PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Memory\nonly", "numactl --membind only", FAINT), ("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC)]
+
+
 def pinning():
-    """Main slide 6: pinning on the case-default decomposition (#36, 2 October): the Baseline's setting without pinning and
-    with it, alternated, next to our Baseline's own jobs (#62, 12 October), which ran the same setting later (the user asked
-    to see the Baseline on this slide, 11/02)."""
+    """Main slide 7: the four ways of placing the ranks on scotch, from Neither through each half alone to both, with an
+    arrow from Neither to both. The user preferred this figure to the one on the Baseline's decomposition (11/02): scotch
+    came first, the lost binding was found while running it and the pinning was measured on it."""
+    data = runs("pinning.csv", "configuration")
+    groups = [(f"{label}\n{jobs_label(len(data[key]))}", data[key], color, False) for label, key, color in PLACEMENTS]
+    tiers("p10_pinning", groups, (5.9, 4.95), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 3)])
+
+
+def pinning_case_default():
+    """Supporting slide: pinning on the case-default decomposition (#36), the Baseline's setting without pinning and with
+    it, alternated, next to our Baseline's own jobs (#62), which ran the same setting later."""
     unpinned = runs("start_unpinned.csv", "nodes")[4]
     pinned = runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")]
-    groups = [("Our Baseline\n12 October", BASELINE[4], BASE, False), ("Not pinned\n2 October", unpinned, FAINT, False), ("Pinned\n2 October", pinned, BASIC, False)]
-    tiers("p10_pinning", groups, (5.9, 4.95), 2.9, 4.05, [3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(1, 2)])
+    groups = [("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Not pinned\n3 jobs", unpinned, FAINT, False), ("Pinned\n3 jobs", pinned, BASIC, False)]
+    tiers("ps_pinning", groups, (5.9, 4.95), 2.9, 4.05, [3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(1, 2)])
 
 
-# The four ways of placing the ranks on scotch (10/07): tick label, configuration in pinning.csv, colour
-PLACEMENTS = [("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)", BASIC), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)", FAINT), ("Neither", "PALS --cpu-bind and --mem-bind only", FAINT), ("Memory\nonly", "numactl --membind only", FAINT)]
-
-
-def pinning_halves():
-    """Supporting slide: which half of the placement fix matters, on the scotch decomposition (3 October), so Neither is not
-    our Baseline, which used the case-default hierarchical decomposition."""
-    data = runs("pinning.csv", "configuration")
-    figure, axis = plt.subplots(figsize=(6.6, 4.95), layout="constrained")
-    for x, (_, key, color) in enumerate(PLACEMENTS):
-        jobs(axis, x, data[key], color, width=0.3)
-        label_above(axis, x, data[key], color=BASIC if color == BASIC else INK)
-    axis.set_xticks(range(len(PLACEMENTS)), [f"{label}\n{jobs_label(len(data[key]))}" for label, key, _ in PLACEMENTS])
-    colour_ticks(axis.get_xticklabels(), [BASIC, INK, INK, INK])
-    axis.set_xlim(-0.6, len(PLACEMENTS) - 0.4)
-    zoomed(axis, 2.6, 4.95, [3.0, 3.5, 4.0, 4.5])
-    finish(axis, "s/step on 4 nodes with scotch, each job")
-    save(figure, "ps_pinning")
+def mapping():
+    """Main slide 8: plain scotch against scotch mapped onto the node (scotchCoeffs domains (2 4 16)), both pinned, 5 jobs
+    each alternated on 4 nodes (#63)."""
+    groups = [("plain scotch\n5 jobs", CHANGES[("mapping", 4, "control")], FAINT, False), ("scotch mapped\nonto the node\n5 jobs", CHANGES[("mapping", 4, "candidate")], BASIC, False)]
+    tiers("p09_mapping", groups, (5.9, 4.95), 2.87, 2.945, [2.88, 2.90, 2.92, 2.94], arrows=[(0, 1)])
 
 
 def scotch():
@@ -251,20 +250,20 @@ def scotch():
 
 
 def basic_4node():
-    """Main slides 8 and 9: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
+    """Main slides 9 and 10: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
     groups = [official("hierarchical"), official("scotch"), ("Our Baseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False)]
     tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.1, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)])
 
 
 def bonus_4node():
-    """Main slide 17: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement,
-    10/26; the user asked for the official runs and the Baseline here, 11/02)."""
+    """Main slide 18: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement;
+    the user asked for the official runs and the Baseline here, 11/02)."""
     groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline\n3 jobs", BASELINE[4], BASE, False), ("Basic\n5 jobs", FINAL[("Basic", 4)], BASIC, False), ("Bonus\n3 jobs", FINAL[("Bonus", 4)], BONUS, False)]
     tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.1, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11)
 
 
 def scaling():
-    """Main slide 18: every job on 1, 2 and 4 nodes on one linear axis from 0, grouped by node count (the user, 11/01): the
+    """Main slide 19: every job on 1, 2 and 4 nodes on one linear axis from 0, grouped by node count (the user, 11/01): the
     official runs, then our Baseline, Basic and Bonus. The official runs are one hierarchical (hollow) and one scotch (grey)
     job, drawn as on the supporting slide of the organisers' runs. The dashed marks are ideal scaling from each tier's
     1-node mean. Our tiers are labelled above their jobs or mark, whichever is higher, and the official runs under theirs,
@@ -454,7 +453,8 @@ def flame(levels=14):
 
 rule()
 pinning()
-pinning_halves()
+pinning_case_default()
+mapping()
 scotch()
 basic_4node()
 bonus_4node()

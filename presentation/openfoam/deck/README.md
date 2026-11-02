@@ -1,6 +1,6 @@
 # チームのデッキのOpenFOAMパートを作るスクリプト
 
-チームのデッキを入力にして、OpenFOAMパートを [`../slides.md`](../slides.md) の第8版（11/02）で作り直し、HPCだけのpptxを出力します。スライドの文、原稿、根拠の正本は `slides.md` で、このフォルダはそれをpptxにする道具です。
+チームのデッキを入力にして、OpenFOAMパートを [`../slides.md`](../slides.md) の第8版（11/02、同じ日の2回目のコメントまで）で作り直し、HPCだけのpptxを出力します。スライドの文、原稿、根拠の正本は `slides.md` で、このフォルダはそれをpptxにする道具です。
 
 ```bash
 presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [PICTURES]
@@ -19,7 +19,7 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [PICTURES]
 
 | ファイル | 中身 |
 |---|---|
-| `build_deck.py` | 各スライドの中身と並び。1つの関数が1枚を作る。入力のOpenFOAMパート46枚の題名が10/29版と違えば止まる。ノードのアイコンの図（`Node`、`node()`）、分け方の図（`chain()`）、変更の図（`u_diagram()`、`residual_diagram()`）もここで図形として描く |
+| `build_deck.py` | 各スライドの中身と並び。1つの関数が1枚を作る。入力のOpenFOAMパート46枚の題名が10/29版と違えば止まる。ノードのアイコンの図（`Node`、`node()`）、CPUとメモリの帯の図（`usage_bar()`）、変更の図（`u_diagram()`、`residual_diagram()`）もここで図形として描く。`decomposeParDict`の行は`code()`で、等幅の字（Consolas）で書く |
 | `notes.py` | 表紙、Q&A目次、補足のノート（質疑で言う英語の答えと、チーム向けの日本語のメモ） |
 | `decklib.py` | テンプレートに合わせた文字、表、グラフの部品。数字と単位を改行で分けない `tidy()` と、Baseline・Basic・Bonusの語に色を付ける `tier_runs()` |
 | `palette.py` | スライドと図の色 |
@@ -44,14 +44,15 @@ presentation/openfoam/deck/build.sh [INPUT.pptx] [OUTPUT.pptx] [PICTURES]
 - タイトルの下の主張の行、TAKEAWAYの札、余白を埋めるカードは置きません。文の塊の上には、短い見出し（紺）を置きます（固定の枚の「Expected」「Found」「Cause」「Fixed」も同じ、`steps()`）。
 - 図には、図の下に「Figure N. 一文の注釈」を付けます（`caption()`、`figure()`）。表には、表の上に「Table N. 一文の注釈」を付けます（`table_caption()`）。番号はスライドの順に数え、本編はFigure 1、Table 1から、補足はFigure S1、Table S1からです。
 - 箇条は1つの完結した文で短く書きます。時間を言うだけの文は表にします（11/02）。本文は18 pt以上、表は16 pt以上です（補足の大きな表は11 ptまで下げています）。表の行は1行に収まる文にします（PowerPointでは、メイリオの太字16 ptは1文字あたり約0.14 inで、8 inの列に約57文字）。
-- 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、290 M calls）。効かなかった手の結果は、+−ではなく「0.8% slower」のように言葉で書きます（11/02）。
+- 数値には、よほど場所が足りないとき以外、単位を付けます（3.650 s、290 M calls）。効かなかった手の結果は、+−ではなく「0.8% slower」のように言葉で書きます（11/02）。図と表には、実験をした日付を書きません（11/02の2回目）。
+- OpenFOAMの設定は、`decomposeParDict`の行をそのまま、等幅の字で左に細い線を引いて示します（`code()`、11/02の2回目）。長い値（scotchの`strategy`）は「…」にします。
 - 表は横の罫線だけです。見出しの行は白地に紺で、下に紺の線を引きます（`decklib.table()` の既定）。まとまりの行（意図別の変更の表）は薄い地に紺で、列をまたいで1つにします。一緒に測った変更の値は、並んだ行のセルを縦に1つにして書きます（`merge_down()`）。
 - 段の名前は、Basic、Bonusと同じく先頭を大文字にして「Baseline」と書きます。主催者の公式の結果（`tasks/5. Common Baselines.md` の共通ベースライン）は、スライドでは「Official」と書きます。ソースを変える前のrun（pre-change baseline）は私たちのBaselineではないので、小文字のままです。
 - 色は `palette.py` にまとめてあります。Baselineは緑、Basicは黄（濃い黄土色）、Bonusは赤で、本文、表、見出しのどこに出ても、その語は自動でその段の色になります（`tier_runs()`）。
 - 時間の図は、時間を縦軸にし、各ジョブの点、平均の棒、各群の上に平均（有効数字4桁、単位付き）と標準偏差（%）を描きます（`deck_plots.py` の `stats()`）。1本しかないときは「1 job」と書きます。時間の軸は原点0から描き、ジョブの差が見える範囲の下は細い帯に縮めて、軸に波線を入れます（`zoomed()`、11/02）。段どうしの変化は矢印と%で描きます（`tiers()`）。scalingは原点0からの1つの線形の軸に、1、2、4ノードごとに公式の結果、Baseline、Basic、Bonusを並べ、理想の時間を点線で描きます。
 - 数値は `s/step` と書き、%の前に空白を入れません（「21%」）。`tidy()` は「21 %」を「21%」に直します。
 - 見出しが1行に収まらないと本文に重なるので、大文字で32文字ほどまでにします。
-- 流れの動画とメッシュの絵は、入力のデッキに入っているものを使います。どちらも入力の2枚目にあり、動画の自動再生はその枚のタイミングの設定にあるので、動画を置く本編8枚目（デッキの9枚目）を入力の2枚目の上に作り、本編1枚目には入力の2枚目からメッシュの画像を写します。分割の絵は、Boxの `decomposition-numa.png`（3列×3段）から列を切り出します（本編7枚目でhierarchicalとscotch、13枚目でplain scotchとmultiLevel）。列の上の見出しの段は切り落とします（`PANEL_TOP`）。
+- 流れの動画とメッシュの絵は、入力のデッキに入っているものを使います。どちらも入力の2枚目にあり、動画の自動再生はその枚のタイミングの設定にあるので、動画を置く本編9枚目（デッキの10枚目）を入力の2枚目の上に作り、本編1枚目には入力の2枚目からメッシュの画像を写します。分割の絵は、Boxの `decomposition-numa.png`（3列×3段）から列を切り出します（本編5枚目でhierarchicalとscotch、14枚目でplain scotchとmultiLevel）。列の上の見出しの段は切り落とします（`PANEL_TOP`）。絵のscotchはdomains (2 4 16)を入れる前のplain scotchで、Basic（domainsあり）の絵はありません。
 
 ## 確かめ方
 

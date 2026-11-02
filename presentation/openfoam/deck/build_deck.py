@@ -35,7 +35,7 @@ from pptx.enum.shapes import MSO_SHAPE
 
 from decklib import add_text, arrow_line, bar_chart, box, bullets, clear_slide, picture, set_notes, set_title, shape_text, table
 from notes import NOTES
-from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MPI, MUTED, NAVY, TINT, WHITE
+from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MPI, MUTED, NAVY, WHITE
 
 SRC, OUT, FIG = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 HERE = Path(__file__).resolve().parent
@@ -49,6 +49,7 @@ X0, XW = 0.70, 11.93  # left edge and width of the content area; the title ends 
 DECOMP_COLUMNS = {"hier": (0.0, 0.667), "scotch": (0.333, 0.334), "multi": (0.667, 0.0)}
 PANEL_TOP, ALL_BOTTOM = 0.113, 0.085
 P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main"
+CODE = "Consolas"  # the font of OpenFOAM dictionaries on the slides
 COUNT = {"prefix": "", "Figure": 0, "Table": 0}  # Figure 1 and Table 1 on in the main part, Figure S1 and Table S1 on in the supporting slides
 # the titles of the input's OpenFOAM part, slides 1-46, in order
 INPUT_TITLES = ["", "OpenFOAM TASK OVERVIEW", "ASPIRE-2A", "BASELINE SETTINGS", "BASELINE RESULTS", "HOW WE MEASURE AND PROFILE", "MPI PROFILE ON 4 NODES", "BASELINE ANALYSIS", "OPTIMIZATION STRATEGY", "BASIC OPTIMIZATION (1/2)", "BASIC OPTIMIZATION (2/2)", "BASIC RESULTS", "MEMORY BANDWIDTH SETS THE SPEED", "HPC ROOFLINE: MEMORY AND COMMUNICATION", "BONUS OPTIMIZATION", "BONUS RESULTS", "BONUS ANALYSIS", "SCALING ANALYSIS", "WHAT DID NOT HELP, AND WHY", "CONCLUSION", "EXTRA: A GAIN WE DID NOT COUNT", "SUPPORTING INFORMATION", "Q&A INDEX", "BOTTLENECKS WE MEASURED", "MEASURING HONESTLY", "EXPERIMENT AUTOMATION", "BUILD, STORAGE AND MPI", "THE ORGANISERS' REFERENCE", "WHERE A STEP GOES AFTER BASIC", "THE PATH ON 4 NODES", "IS THE NETWORK THE BOTTLENECK?", "OFI AGAINST UCX", "THE THREE SPLITS: FACES OR EVEN WORK?", "CORES OR MEMORY?", "THE SOURCE CHANGES (1/2)", "THE SOURCE CHANGES (2/2)", "SOURCE CHANGES IN DETAIL (1/2)", "SOURCE CHANGES IN DETAIL (2/2)", "EFFECT OF EACH BONUS CHANGE", "PROFILES BEFORE AND AFTER", "WHY THE EFFICIENCY EXCEEDS 1", "DRAG COEFFICIENT CHECKS", "REPRODUCING OUR RESULTS", "NOT ADOPTED: THE FULL LIST", "COMPILER AND FLAGS", "Reproducibility: Code, Build, Runtime and Results"]
@@ -144,6 +145,15 @@ def merge_down(frame, column, first, last):
     frame.table.cell(first, column).merge(frame.table.cell(last, column))
 
 
+def code(s, x, y, w, lines, size=15):
+    """Lines of an OpenFOAM dictionary in a monospace font with a thin rule on their left (the user, 11/02: show the
+    decompositions in OpenFOAM's own syntax); returns the bottom."""
+    h = len(lines) * size * 1.25 / 72
+    arrow_line(s, x + 0.02, y, x + 0.02, y + h, color=LINE, width=3, head=False)
+    add_text(s, x + 0.2, y, w - 0.2, h, [{"runs": [line], "font": CODE} for line in lines], size=size)
+    return y + h
+
+
 # The ASPIRE-2A node as icons (the user asked for memory and CPU icons, 11/02): two CPUs, each a chip with pins holding its
 # four NUMA domains of 16 cores, and under each domain its two memory channels drawn as memory modules. A core that runs a
 # rank and a channel in use are navy, the others grey. In a domain the top two rows of cores share one L3, the bottom two
@@ -207,14 +217,13 @@ def node(s, at, cores, channels, frame=()):
 
 # The flow of the first and the last main slide: the unit, each stage with what it dealt with, and the change from one stage
 # to the next.
-HPC_FLOW = ("s/step", [("Our Baseline", "3.650", "case defaults"), ("Basic", "2.898", "binding and balance between ranks"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
+HPC_FLOW = ("s/step", [("Our Baseline", "3.650", "case defaults"), ("Basic", "2.898", "rank balance and binding"), ("Bonus", "2.360", "less data moved per step")], ["−20.6%", "−18.6%"])
 
 
 def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
     """From the Baseline through Basic to the Bonus, with what each stage dealt with: time per step on 4 nodes on the first
-    main slide and in the bottom half of the last (the user liked it as a conclusion, 11/01). common adds the official runs
-    (the organisers' Common Baselines, called Official on the slides since 11/01) under our Baseline; big and small are the
-    sizes of the numbers and their unit."""
+    main slide. common adds the official runs (the organisers' Common Baselines, called Official on the slides since 11/01)
+    under our Baseline; big and small are the sizes of the numbers and their unit."""
     unit, stages, changes = stages
     w = 3.3
     gap = (XW - 3 * w) / 2
@@ -300,7 +309,8 @@ def steps(s, x, y, w, items, size=19, gap=16):
 def m_pinning():
     """Why we pinned, what /proc showed and the fix: the user (11/02) wanted the slide to start from why pinning should help,
     with the NUMA domains, and less text. The node is drawn with one rank (a navy core) whose memory is in its own NUMA
-    domain's two channels, and the way to the memory of a domain on the other CPU."""
+    domain's two channels, and the way to the memory of a domain on the other CPU. What /proc showed is from the scotch jobs
+    without pinning (Neither of the next slide, #36 A3), since scotch came first (the user, 11/02)."""
     s = reuse(5)
     set_title(s, "CPU AND MEMORY PINNING")
     at = Node(X0 + 0.05, 3.0, scale=1.3)
@@ -317,46 +327,70 @@ def m_pinning():
         arrow_line(s, cx, cy, mx + at.module_w / 2, my - 0.02, color=color, width=2.25)
         add_text(s, at.domain_x(d) + at.side / 2 - 1.2, bottom + 0.08, 2.4, 0.4, [label], size=16, color=NAVY if color == NAVY else INK, align="c")
     caption(s, X0, bottom + 0.62, at.w + 0.1, "One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels, and one rank in navy.", h=0.7)
-    steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 9% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
-    set_notes(s, PLAN_NOTES[4])
-    return s
-
-
-def m_pinning_results():
-    """Pinning on the case-default decomposition, alternated with the same setting unpinned (#36, 2 October), next to our
-    Baseline's jobs (#62, 12 October): the user asked why Neither of the old figure was not the Baseline (it ran on scotch)
-    and wanted the Baseline here, the times in a table and the smaller SD discussed (11/02). The four-way figure on scotch
-    moved to the supporting slides."""
-    s = main_slide(13)
-    set_title(s, "PINNING RESULTS")
-    top = table_caption(s, X0, 1.3, 5.75, "Time per step on 4 nodes with the case-default decomposition, 3 jobs each.", h=0.7)
-    rows = [["Run", "s/step", "SD"], ["Our Baseline, 12 October", "3.650 s", "4.1%"], ["Not pinned, 2 October", "3.670 s", "2.0%"], ["Pinned, 2 October", "3.257 s", "1.1%"]]
-    table(s, X0, top + 0.05, [3.55, 1.25, 0.95], rows, row_h=0.55, size=18, aligns=["l", "r", "r"], colors=[None, [BASE, INK, INK], None, [NAVY] * 3])
-    bullets(s, X0, top + 2.5, 5.75, 6.95 - top - 2.5, ["Pinning took 11.2% off a step in the same period.", "Pinned jobs varied less, so smaller gains could be seen.", "Not pinned is the setting of our Baseline."], size=19, space_after=14)
-    figure(s, "p10_pinning", 6.73, 1.3, 5.9, "Each job of our Baseline and of its setting without and with pinning, alternated on 2 October.")
+    steps(s, 7.45, 1.45, 5.18, [("Expected", "A rank that stays on one core keeps its data in the memory of its own NUMA domain, the closest."), ("Found", "During the solve no rank stayed on its own core and only 7% of its memory was local."), ("Cause", "The launcher had bound each rank but MPI_Init removed the binding."), ("Fixed", "numactl binds the memory before each rank starts and a watcher re-pins the rank with taskset.")])
     set_notes(s, PLAN_NOTES[5])
     return s
 
 
 def m_decomposition():
-    """hierarchical against scotch, both pinned, coloured by node and NUMA domain as the user asked (11/02: NUMA matters in this
-    talk), with the comparison in a table. The scotch of the picture is plain scotch; no picture of Basic's mapped scotch
-    exists. The slowest rank is compared with the median rank because CrayPAT's (process − MPI) maximum and median are all
-    that is left of these runs (#38)."""
+    """The decomposition first (the user, 11/02: the most common way to speed up OpenFOAM, and the Task Rules say "try this
+    first"): the case default and scotch in decomposeParDict's own words, the pictures coloured by node and NUMA domain,
+    and a table of the faces, the largest subdomain and the time per step. The times are of jobs without pinning, our
+    Baseline (#62) and Neither of the pinning experiment on scotch (#36 A3), which did not run in turns; the pinned,
+    alternated comparison is on the pinning results slide. The scotch of the pictures is plain scotch, as in these jobs."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
-    pw = 2.95
+    w = 5.75
+    heading(s, X0, 1.3, w, "The case default, as in our Baseline", size=16)
+    bottom = code(s, X0, 1.72, w, ["method  hierarchical;", "hierarchicalCoeffs { n (16 8 4); }"])
+    heading(s, X0, bottom + 0.15, w, "The first change we tried", size=16)
+    bottom = code(s, X0, bottom + 0.57, w, ["method  scotch;"])
+    top = table_caption(s, X0, bottom + 0.25, w, "The two decompositions on 4 nodes, without pinning.", h=0.7)
+    rows = [["", "hierarchical", "scotch"], ["Faces between subdomains", "4.31 M", "2.93 M"], ["Largest subdomain above the average", "0.00%", "1.07%"], ["Time per step", "3.650 s", "3.395 s"], ["Jobs", "3", "2"]]
+    table(s, X0, top + 0.05, [2.6, 1.85, 1.3], rows, row_heights=[0.45, 0.72, 0.72, 0.45, 0.45], size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], None, [INK, INK, NAVY], None])
+    pw, xr = 2.875, 6.73
     for i, (which, label) in enumerate((("hier", "hierarchical"), ("scotch", "scotch"))):
-        x = X0 + i * (pw + 0.15)
+        x = xr + i * (pw + 0.15)
         add_text(s, x, 1.3, pw, 0.4, [label], size=18, color=NAVY, align="c")
         panel = decomp_panel(s, which, x, 1.72, w=pw)
-    caption(s, X0, 1.72 + panel.height / EMU + 0.08, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
-    xr, w = 7.05, 5.58
-    top = table_caption(s, xr, 1.3, w, "The two decompositions on 4 nodes, both pinned.")
-    rows = [["", "hierarchical", "scotch"], ["Slowest rank against the median", "1.16×", "1.06×"], ["Faces between subdomains", "4.31 M", "2.93 M"], ["Time per step", "3.257 s", "2.915 s"]]
-    table(s, xr, top + 0.05, [2.65, 1.65, 1.28], rows, row_heights=[0.5, 0.75, 0.75, 0.6], size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], [INK, INK, NAVY], [INK, INK, NAVY]])
-    bullets(s, xr, top + 2.85, w, 6.95 - top - 2.85, ["hierarchical cuts slabs and the ranks with much of the car's surface computed more.", "scotch keeps the cells equal with fewer faces between subdomains.", "Basic also maps the subdomains onto the sockets and NUMA domains, which saved another 0.7%."], size=17, space_after=10)
+    caption(s, xr, 1.72 + panel.height / EMU + 0.08, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
+    set_notes(s, PLAN_NOTES[4])
+    return s
+
+
+def m_pinning_results():
+    """The four placements on scotch (#36 A3, data/pinning.csv), the figure the user preferred (11/02: scotch came first and
+    the pinning was measured on it), with the times in a table and the alternated comparison of the two decompositions once
+    both were pinned (#36, data/decomposition_basic.csv). The figure on the Baseline's own decomposition is a supporting
+    slide."""
+    s = main_slide(13)
+    set_title(s, "PINNING RESULTS")
+    w = 5.75
+    top = table_caption(s, X0, 1.3, w, "Time per step on 4 nodes with scotch under four placements.", h=0.7)
+    rows = [["Pinned", "s/step", "Jobs", "SD"], ["Neither", "3.395 s", "2", "0.78%"], ["CPU only", "3.474 s", "3", "2.0%"], ["Memory only", "4.380 s", "1", ""], ["CPU and memory", "2.917 s", "3", "0.13%"]]
+    table(s, X0, top + 0.05, [2.5, 1.3, 0.85, 1.1], rows, row_h=0.5, size=18, aligns=["l", "r", "r", "r"], colors=[None, None, None, None, [NAVY] * 4])
+    bullets(s, X0, top + 2.8, w, 6.95 - top - 2.8, ["Only pinning both took 14.1% off a step.", "Pinned jobs varied less, so smaller gains could be seen.", "Pinned, scotch was 10.5% faster than hierarchical in alternated jobs."], size=18, space_after=12)
+    figure(s, "p10_pinning", 6.73, 1.3, 5.9, "Each job under four placements of the ranks on 4 nodes with scotch.")
     set_notes(s, PLAN_NOTES[6])
+    return s
+
+
+def m_mapping():
+    """Basic's last change, scotch mapped onto the node tree, in decomposeParDict's own words (the user, 11/02). The
+    dictionary is the one run/prepare.pbs writes but for the strategy string, Scotch 6.1's default mapping strategy with an
+    exact final balance of 1% (#38, #63). In Scotch the weights become the costs 64, 8, 4 and 1 of a link between nodes,
+    sockets, NUMA domains and cores (#38). Faces against plain scotch from the decomposePar logs (REPORT §6.3); jobs of #63,
+    5 v 5 alternated."""
+    s = reuse(15)
+    set_title(s, "SCOTCH ON THE NODE TREE")
+    w = 5.75
+    heading(s, X0, 1.3, w, "decomposeParDict of Basic", size=16)
+    bottom = code(s, X0, 1.72, w, ["method  scotch;", "scotchCoeffs", "{", "    domains        (2 4 16);", "    domainWeights  (0.125 0.0625 0.015625);", "    strategy       \"…\";", "}"])
+    top = table_caption(s, X0, bottom + 0.25, w, "The tree that domains describes, with its faces against plain scotch.", h=0.7)
+    rows = [["Between two", "Cost", "Faces"], ["nodes", "64", "−22.7%"], ["sockets", "8", "−21.3%"], ["NUMA domains", "4", "−10.4%"], ["cores", "1", "+3.3%"]]
+    table(s, X0, top + 0.05, [2.85, 1.2, 1.7], rows, row_h=0.44, size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], [INK, INK, NAVY], [INK, INK, NAVY], None])
+    figure(s, "p09_mapping", 6.73, 1.3, 5.9, "Each job of plain scotch and of scotch mapped onto the node, both pinned, alternated on 4 nodes.")
+    set_notes(s, PLAN_NOTES[7])
     return s
 
 
@@ -379,7 +413,7 @@ def m_basic_results():
     place(s, "flow-iterations", X0, bottom + 0.3, vh * 5.33 / 3.0, vh)  # the video's own 16:9 frame
     caption(s, X0, bottom + 0.3 + vh + 0.06, 5.5, "Flow around the car over the 150 iterations, drawn with ParaView.")
     figure(s, "p12_basic", 6.43, 1.3, 6.2, "Each job of the official runs, our Baseline and Basic on 4 nodes, with the mean and SD of each.")
-    set_notes(s, PLAN_NOTES[7])
+    set_notes(s, PLAN_NOTES[8])
     return s
 
 
@@ -395,7 +429,7 @@ def m_basic_mpi():
     table(s, X0, top + 0.05, [2.6, 1.45, 1.45], rows, row_h=0.47, size=17, aligns=["l", "r", "r"], colors=[None, [INK, INK, NAVY], None, None, [INK, INK, NAVY], [INK, INK, NAVY]])
     bullets(s, X0, top + 3.1, 5.5, 6.95 - top - 3.1, ["The most frequent calls stayed the same three.", "The wait in Waitall fell by 76% because the ranks now finish their computation together."], size=18, space_after=12)
     figure(s, "p12_basic", 6.43, 1.3, 6.2, "Each job of the official runs, our Baseline and Basic on 4 nodes, with the mean and SD of each.")
-    set_notes(s, PLAN_NOTES[8])
+    set_notes(s, PLAN_NOTES[9])
     return s
 
 
@@ -410,7 +444,7 @@ def m_not_helped_basic():
     striking = {1, 2, 3, 4, 5}
     table(s, X0, top + 0.05, [7.3, 4.63], rows, row_h=0.42, size=16, colors=[None] + [[NAVY, NAVY] if i in striking else None for i in range(1, len(rows))])
     bullets(s, X0, top + 0.05 + 0.42 * len(rows) + 0.15, XW, 1.0, ["Compilers cannot speed up loops that wait for memory.", "Network changes cannot shorten the wait for the slowest rank."], size=18, space_after=4)
-    set_notes(s, PLAN_NOTES[9])
+    set_notes(s, PLAN_NOTES[10])
     return s
 
 
@@ -420,77 +454,80 @@ def m_profile_basic():
     rows = [["Possible bottleneck", "How we measured it", "What we found after Basic"], ["MPI", "CrayPAT", "Fell from 46% to 19% of the time"], ["Outside MPI", "CrayPAT and AMD uProf", "81% of the time with about 0.1 flop per byte in the hottest loops"], ["Core speed", "Core counters and five compiler settings", "0.4 to 0.7 instructions per cycle and no compiler setting helped"], ["Memory bandwidth", "Memory controller counters", "Not readable by users on ASPIRE-2A"]]
     top = table_caption(s, X0, 1.35, XW, "Each possible bottleneck after Basic, how we measured it and what we found.")
     table(s, X0, top + 0.05, [2.9, 3.9, 5.13], rows, row_heights=[0.58, 0.98, 1.25, 1.25, 0.98], size=18, colors=[None, None, None, None, [INK, INK, NAVY]])
-    set_notes(s, PLAN_NOTES[10])
-    return s
-
-
-# The placement experiment of #61 on 4 nodes: the cores of each NUMA domain that run a rank (a domain's top two rows of cores
-# share one L3, the bottom two the other) and its channels in use. spread64 puts 4 ranks on each L3 of every domain; packed64
-# fills the first two domains of each CPU and leaves the other two idle (TASK #61: local rank l on CPU (l / 32) × 64 + l % 32).
-PLACEMENT_ROWS = [(("128 ranks", "16 channels"), [list(range(16))] * 8, [2] * 8, "2.920 s/step", "STREAM 274 GB/s", None), (("64 ranks", "16 channels"), [[0, 1, 2, 3, 8, 9, 10, 11]] * 8, [2] * 8, "2.887 s/step", "STREAM 279 GB/s", 0), (("64 ranks", "8 channels"), [list(range(16)) if d % 4 < 2 else [] for d in range(8)], [2 if d % 4 < 2 else 0 for d in range(8)], "6.347 s/step", "STREAM 125 GB/s", 1)]
-
-
-def m_memory_limit():
-    """No memory-controller counters on ASPIRE-2A, so the placement experiment of #61 stands in: Basic before the mapping,
-    4 nodes, every rank pinned, STREAM triad on the same nodes after the solver. Each placement is drawn as a node of CPU
-    and memory icons, so that the halved resource can be seen (the user, 11/02); on its left the ranks and channels per
-    node, the halved one in navy, on its right the time and the bandwidth."""
-    s = reuse(9)
-    set_title(s, "MEASURING THE MEMORY LIMIT")
-    pitch, top, xn, xr, xa = 1.48, 1.45, 2.6, 7.75, 10.3
-    for k, (label, cores, channels, time, bandwidth, halved) in enumerate(PLACEMENT_ROWS):
-        y = top + k * pitch
-        add_text(s, X0, y + 0.12, xn - X0 - 0.1, 0.9, [{"runs": [line], "color": NAVY if i == halved else INK} for i, line in enumerate(label)], size=18, anchor="m")
-        node(s, Node(xn, y), cores, channels)
-        add_text(s, xr, y + 0.02, xa - xr - 0.2, 0.55, [time], size=23, color=NAVY if k == 2 else INK, anchor="m")
-        add_text(s, xr, y + 0.6, xa - xr - 0.2, 0.42, [bandwidth], size=16, color=NAVY if k == 2 else INK, anchor="m")
-    for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
-        y1, y2 = top + k * pitch + 0.55, top + (k + 1) * pitch + 0.55
-        arrow_line(s, xa, y1, xa, y2 - 0.05, color=NAVY if k else FAINT, width=2.25)
-        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [cause, effect], size=16, color=NAVY if k else INK, anchor="m")
-    bottom = top + 3 * pitch - 0.2
-    caption(s, X0, bottom, XW, "One node under each placement on 4 nodes, with the cores that run a rank and the memory channels in use in navy.", h=0.4)
-    add_text(s, X0, bottom + 0.55, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
     set_notes(s, PLAN_NOTES[11])
     return s
 
 
-def chain(s, x, y, w, label, boxes, fill, cells=4, gap=0.3, h=0.72, size=15):
-    """A label over boxes joined by arrows; boxes are (text, cells spanned) on a grid of cells across w, so that two chains
-    with the same grid line up."""
-    add_text(s, x, y, w, 0.36, [label], size=16)
-    unit = (w - gap * (cells - 1)) / cells
-    bx = x
-    for k, (text, span) in enumerate(boxes):
-        bw = span * unit + (span - 1) * gap
-        if k:
-            arrow_line(s, bx - gap + 0.04, y + 0.42 + h / 2, bx - 0.04, y + 0.42 + h / 2, color=FAINT)
-        shape_text(box(s, bx, y + 0.42, bw, h, fill=fill, line=LINE, radius=0.12), text, size=size, color=INK)
-        bx += bw + gap
-    return y + 0.42 + h
+# The placement experiment of #61 on 4 nodes, drawn plainly (the user, 11/02: CPU and memory named, the halves easy to see):
+# per node 16 CPU blocks, each the 8 cores that share an L3, filled as far as their cores run ranks, and 16 memory channels,
+# navy where in use, 8 of each per CPU. spread64 runs 4 ranks on every L3; packed64 fills the first two NUMA domains of each
+# CPU (L3s 0-3 and 8-11; TASK #61: local rank l on CPU (l / 32) × 64 + l % 32) and so uses only their 8 channels.
+FIRST_HALVES = [1.0 if k % 8 < 4 else 0.0 for k in range(16)]
+PLACEMENT_ROWS = [(("128 ranks", "16 channels"), [1.0] * 16, [1.0] * 16, "2.920 s/step", "STREAM 274 GB/s", None), (("64 ranks", "16 channels"), [0.5] * 16, [1.0] * 16, "2.887 s/step", "STREAM 279 GB/s", 0), (("64 ranks", "8 channels"), FIRST_HALVES, FIRST_HALVES, "6.347 s/step", "STREAM 125 GB/s", 1)]
+
+
+def usage_bar(s, x, y, w, h, label, fill):
+    """A label and a row of 16 blocks, 8 per CPU, each navy from the bottom up to fill[k] (0 to 1) and grey above it."""
+    add_text(s, x, y, 1.15, h, [label], size=17, anchor="m")
+    x0, gap, middle = x + 1.2, 0.04, 0.16
+    cell = (w - 1.2 - 14 * gap - middle) / 16
+    for k, f in enumerate(fill):
+        cx = x0 + k * (cell + gap) + (middle if k >= 8 else 0)
+        box(s, cx, y, cell, h, fill=OFF, radius=0.12)
+        if f:
+            box(s, cx, y + h * (1 - f), cell, h * f, fill=NAVY, radius=0.12)
+
+
+def m_memory_limit():
+    """No memory-controller counters on ASPIRE-2A, so the placement experiment of #61 stands in: Basic before the mapping,
+    4 nodes, every rank pinned, STREAM triad on the same nodes after the solver. Each placement is one node as a row of CPU
+    blocks over a row of memory channels, so that the halved resource can be seen (the user, 11/02: simpler than the chips
+    of the 8th edition's first build); then the ranks and channels per node, the halved one in navy, the time and the
+    bandwidth, and arrows between the rows."""
+    s = reuse(9)
+    set_title(s, "MEASURING THE MEMORY LIMIT")
+    pitch, top, bar_w, xc, xr, xa = 1.5, 1.45, 4.95, 5.8, 7.65, 10.45
+    for k, (label, cpu, memory, time, bandwidth, halved) in enumerate(PLACEMENT_ROWS):
+        y = top + k * pitch
+        usage_bar(s, X0, y, bar_w, 0.4, "CPU", cpu)
+        usage_bar(s, X0, y + 0.52, bar_w, 0.4, "Memory", memory)
+        for i, (line, yy) in enumerate(zip(label, (y, y + 0.52))):
+            add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=NAVY if i == halved else INK, anchor="m")
+        add_text(s, xr, y - 0.02, xa - xr - 0.15, 0.5, [time], size=23, color=NAVY if k == 2 else INK, anchor="m")
+        add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=NAVY if k == 2 else INK, anchor="m")
+    for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
+        y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
+        arrow_line(s, xa, y1, xa, y2 - 0.05, color=NAVY if k else FAINT, width=2.25)
+        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [cause, effect], size=15, color=NAVY if k else INK, anchor="m")
+    bottom = top + 3 * pitch - 0.35
+    caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks and the channels in use in navy.", h=0.4)
+    add_text(s, X0, bottom + 0.6, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
+    set_notes(s, PLAN_NOTES[12])
+    return s
 
 
 def m_bonus_decomposition():
-    """The multiLevel decomposition on a slide of its own (the user, 11/02): why (the Bonus allows other methods, and the
-    machine is a tree of nodes, sockets and NUMA domains), how it differs from Basic's mapping, what it gains, and the
-    pictures coloured by node and NUMA domain. Faces from the decomposePar logs (#42 for multiLevel against plain scotch,
-    REPORT §6.3 for the mapping); times against plain scotch in alternated runs (#42, 4 v 4; #63, 5 v 5)."""
+    """The multiLevel decomposition on a slide of its own (the user, 11/02): Basic's mapping and multiLevel side by side in
+    decomposeParDict's own words (the user's second round, 11/02), what each gains against plain scotch, and the pictures
+    coloured by node and NUMA domain. multiLevel's domains are (2 4 16) on 1 node and (2 2 4 16) on 2. Faces from the
+    decomposePar logs (#42 for multiLevel against plain scotch, REPORT §6.3 for the mapping); times against plain scotch in
+    alternated runs (#42, 4 v 4; #63, 5 v 5)."""
     s = reuse(10)
     set_title(s, "MULTILEVEL DECOMPOSITION")
-    w = 6.2
-    chain(s, X0, 1.3, w, "Basic, one scotch run", [("scotch places the 512 subdomains on nodes, sockets, NUMA domains and cores", 4)], TINT, h=0.66)
-    bottom = chain(s, X0, 2.5, w, "Bonus, multiLevel", [("4 nodes", 1), ("2 sockets each", 1), ("4 NUMA domains each", 1), ("16 cores each", 1)], BONUS_TINT, h=0.66)
-    caption(s, X0, bottom + 0.08, w, "Basic decomposes once for the whole node, and multiLevel runs scotch level by level.")
-    top = table_caption(s, X0, bottom + 0.7, w, "Each against plain scotch on 4 nodes.")
+    w, cw = 6.2, 3.0
+    for x, title, lines in ((X0, "Basic, one scotch run", ["method  scotch;", "scotchCoeffs", "{", "    domains  (2 4 16);", "    // and its weights", "}"]), (X0 + cw + 0.2, "Bonus, scotch per level", ["method  multiLevel;", "multiLevelCoeffs", "{", "    method   scotch;", "    domains  (4 2 4 16);", "}"])):
+        heading(s, x, 1.3, cw, title, size=16)
+        bottom = code(s, x, 1.72, cw, lines)
+    top = table_caption(s, X0, bottom + 0.3, w, "Each against plain scotch on 4 nodes.")
     rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"]]
-    table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_h=0.42, size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [INK, INK, NAVY]])
+    table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_heights=[0.45, 0.47, 0.47, 0.72, 0.47], size=17, aligns=["l", "r", "r"], colors=[None, None, None, None, [INK, INK, NAVY]])
     pw, xr = 2.62, 12.63 - 2 * 2.62 - 0.15
     for i, (which, label) in enumerate((("scotch", "plain scotch"), ("multi", "multiLevel"))):
         x = xr + i * (pw + 0.15)
         add_text(s, x, 1.3, pw, 0.4, [label], size=18, color=NAVY, align="c")
         panel = decomp_panel(s, which, x, 1.72, w=pw)
     caption(s, xr, 1.72 + panel.height / EMU + 0.08, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
-    set_notes(s, PLAN_NOTES[12])
+    set_notes(s, PLAN_NOTES[13])
     return s
 
 
@@ -537,7 +574,7 @@ def m_changes(part):
     bottom = changes_table(s, top + 0.05, groups, row_h=0.5 if part == 0 else 0.44)
     if part == 0:
         add_text(s, X0, bottom + 0.3, XW, 0.5, ["No change alters the iterations, the convergence tests or the discretisation."], size=19)
-    set_notes(s, PLAN_NOTES[13 + part])
+    set_notes(s, PLAN_NOTES[14 + part])
     return s
 
 
@@ -590,7 +627,7 @@ def m_examples():
         add_text(s, x, 1.7, 5.6, 0.36, [gain], size=16)
         bottom = draw(s, x, 2.15)
         caption(s, x, bottom + 0.08, 5.6, text, h=0.5)
-    set_notes(s, PLAN_NOTES[15])
+    set_notes(s, PLAN_NOTES[16])
     return s
 
 
@@ -604,7 +641,7 @@ def m_bonus_results():
     table(s, X0, top + 0.05, [2.35, 2.2, 1.2], rows, row_heights=[0.47, 0.72, 0.72, 0.72, 0.72], size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BONUS, NAVY, NAVY]])
     bullets(s, X0, top + 3.6, 5.75, 6.95 - top - 3.6, ["Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes."], size=18)
     figure(s, "p15_bonus", 6.63, 1.3, 6.0, "Each job of the official runs and our three tiers on 4 nodes, with the mean and SD of each.")
-    set_notes(s, PLAN_NOTES[16])
+    set_notes(s, PLAN_NOTES[17])
     return s
 
 
@@ -624,7 +661,7 @@ def m_scaling():
     rows = [[""] + SPEEDUPS, ["2 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[2]], ["4 nodes"] + [f"{v:.2f}×" for v in SPEEDUP[4]]]
     table(s, X0, top + 0.03, [1.2, 1.6, 1.4, 1.45, 1.25, 1.25], rows, row_heights=[0.62, 0.42, 0.42], size=16, aligns=["l"] + ["r"] * 5, colors=[None, None, [INK, INK, INK, INK, NAVY, NAVY]])
     add_text(s, 9.45, bottom + 0.15, 12.63 - 9.45, 1.4, ["Over 4 times on 4 nodes because each rank's arrays fit in the L3 cache."], size=18, line=1.05, anchor="m")
-    set_notes(s, PLAN_NOTES[17])
+    set_notes(s, PLAN_NOTES[18])
     return s
 
 
@@ -638,19 +675,6 @@ def m_not_helped_bonus():
     striking = {1, 2, 3, 6}
     table(s, X0, top + 0.05, [7.2, 4.73], rows, row_h=0.45, size=16, colors=[None] + [[NAVY, NAVY] if i in striking else None for i in range(1, len(rows))])
     bullets(s, X0, top + 0.05 + 0.45 * len(rows) + 0.15, XW, 1.3, ["Balancing the faces unbalanced the cells, and fewer ranks in the global sums did not shorten the wait.", [("Now a step is limited by memory traffic and by the ranks that read the most from DRAM.", {"color": NAVY})]], size=18, space_after=6)
-    set_notes(s, PLAN_NOTES[18])
-    return s
-
-
-def m_final():
-    """Top half: the gain we did not count (#68, whose legality the user has asked the organisers about, 11/02: if it is not
-    allowed, this half and the slide go); bottom half: the flow of slide 1, and the final result."""
-    s = reuse(15)
-    set_title(s, "AN UNCOUNTED GAIN AND OUR RESULT")
-    bullets(s, X0, 1.35, XW, 2.4, ["Many solvers still computed a residual and a global sum at every iteration for a test that fixed iterations never use.", "Doing it once after the last iteration took the Bonus to 2.166 s per step with a byte-identical coefficient.dat.", "We did not count it because only the benchmark's fixed iterations allow it."], size=18, space_after=10)
-    arrow_line(s, X0, 3.78, X0 + XW, 3.78, color=LINE, width=1.25, head=False)
-    flow(s, 3.98)
-    add_text(s, X0, 6.32, XW, 0.5, ["The Bonus takes 35.3% less time per step than our Baseline with the same computation."], size=19, color=NAVY, align="c")
     set_notes(s, PLAN_NOTES[19])
     return s
 
@@ -706,7 +730,7 @@ def s_reference():
 def s_repro():
     s = supp(20, "REPRODUCING OUR RESULTS", "s_repro")
     table_caption(s, X0, 1.35, XW, "Re-runs with the submitted scripts against our recorded means.")
-    rows = [["Configuration", "Nodes", "s/step", "Recorded mean", "Change", "coefficient.dat"], ["Basic (2026-10-16)", "1", "13.413150 s", "13.364504 s", "+0.36%", "identical"], ["Basic (2026-10-16)", "2", "6.390324 s", "6.371748 s", "+0.29%", "identical"], ["Basic (2026-10-16)", "4", "2.904620 s", "2.897638 s", "+0.24%", "identical"], ["Bonus (2026-10-26)", "1", "10.201813 s", "10.233606 s", "−0.31%", "identical"], ["Bonus (2026-10-26)", "2", "4.980185 s", "4.992196 s", "−0.24%", "identical"], ["Bonus (2026-10-26)", "4", "2.365118 s", "2.359976 s", "+0.22%", "identical"]]
+    rows = [["Configuration", "Nodes", "s/step", "Recorded mean", "Change", "coefficient.dat"], ["Basic", "1", "13.413150 s", "13.364504 s", "+0.36%", "identical"], ["Basic", "2", "6.390324 s", "6.371748 s", "+0.29%", "identical"], ["Basic", "4", "2.904620 s", "2.897638 s", "+0.24%", "identical"], ["Bonus", "1", "10.201813 s", "10.233606 s", "−0.31%", "identical"], ["Bonus", "2", "4.980185 s", "4.992196 s", "−0.24%", "identical"], ["Bonus", "4", "2.365118 s", "2.359976 s", "+0.22%", "identical"]]
     table(s, X0, 1.85, [2.75, 0.95, 2.2, 2.25, 1.5, 2.28], rows, row_h=0.6, size=15, colors=[None] + [[BASIC, INK, INK, INK, INK, INK]] * 3 + [[BONUS, INK, INK, INK, INK, INK]] * 3, aligns=["l", "c", "r", "r", "r", "c"])
     bullets(s, X0, 6.15, XW, 0.85, ["build/build.pbs builds from the official public sources and run/submit.sh 1|2|4 runs the whole Allrun chain with plain qsub.", "Every step ended with End and returned 0, and every solve job reported bound=128/128 on every node."], size=14, space_after=4)
     return s
@@ -721,12 +745,16 @@ def s_network():
     return s
 
 
-def s_pinning_halves():
-    """The four ways of placing the ranks on scotch (3 October), the figure of the 7th edition's pinning slide: moved here
-    when the main slide got the Baseline's own decomposition, since its Neither is not our Baseline (the user, 11/02)."""
-    s = supp(41, "PINNING ONLY THE CPU OR THE MEMORY", "s_pinning_halves")
-    figure(s, "ps_pinning", X0 - 0.05, 1.3, 6.6, "Each job with four ways of placing the ranks, on 4 nodes with scotch on 3 October.")
-    bullets(s, 7.6, 1.5, 5.03, 5.4, ["These runs used scotch, so Neither is not our Baseline, which used hierarchical.", "CPU only re-pins each rank 12 to 16 s after it starts, when its memory is already placed.", "Memory only binds the memory but lets the rank move away from it.", "Only the two together made a step faster."], size=18, space_after=18, anchor="m")
+def s_pinning_case_default():
+    """Pinning on the Baseline's own decomposition, alternated with the same setting unpinned (#36), next to our Baseline's
+    jobs (#62): the main pinning slide of the 8th edition's first build, which the user asked for (11/02) before preferring
+    the four placements on scotch in the main part."""
+    s = supp(41, "PINNING WITH HIERARCHICAL", "s_pinning_case_default")
+    top = table_caption(s, X0, 1.3, 5.75, "Time per step on 4 nodes with the case-default hierarchical decomposition.", h=0.7)
+    rows = [["Run", "s/step", "Jobs", "SD"], ["Our Baseline", "3.650 s", "3", "4.1%"], ["Not pinned", "3.670 s", "3", "2.0%"], ["Pinned", "3.257 s", "3", "1.1%"]]
+    table(s, X0, top + 0.05, [2.6, 1.3, 0.85, 1.0], rows, row_h=0.55, size=18, aligns=["l", "r", "r", "r"], colors=[None, [BASE, INK, INK, INK], None, [NAVY] * 4])
+    bullets(s, X0, top + 2.5, 5.75, 6.95 - top - 2.5, ["Not pinned and pinned ran in turns in the same period.", "Pinning took 11.2% off a step and its SD fell from 2.0% to 1.1%.", "Our Baseline ran the unpinned setting later."], size=18, space_after=14)
+    figure(s, "ps_pinning", 6.73, 1.3, 5.9, "Each job of our Baseline and of its setting without and with pinning on 4 nodes.")
     return s
 
 
@@ -886,11 +914,11 @@ def fix_sections():
 # ====================================================================== assemble
 cover = S[0]
 set_notes(cover, NOTES["cover"])
-main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_pinning(), m_pinning_results(), m_decomposition(), m_basic_results(), m_basic_mpi(), m_not_helped_basic(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus(), m_final()]
+main = [m_summary(), m_criteria(), m_profile_baseline(), m_mpi(), m_decomposition(), m_pinning(), m_pinning_results(), m_mapping(), m_basic_results(), m_basic_mpi(), m_not_helped_basic(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
 COUNT.update(prefix="S", Figure=0, Table=0)
 divider = S[21]
 index_slide = reuse(22)
-groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning only the CPU or the memory", s_pinning_halves()), ("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency())])]
+groups = [("Setup and measurement", [("ASPIRE-2A and why we chose it", s_aspire()), ("Build, MPI and run settings", s_settings()), ("Run-to-run variation over 92 jobs", s_noise()), ("The organisers' reference", s_reference()), ("Reproducing our results", s_repro())]), ("Basic", [("Is the network the bottleneck?", s_network()), ("Pinning with hierarchical", s_pinning_case_default()),("hierarchical and scotch on 1, 2 and 4 nodes", s_scotch()), ("The placement experiment in full", s_cores())]), ("Bonus", [("Decompositions we tried", s_decompositions()), ("Where a Bonus step goes, by phase", s_callstack()), ("Call stacks of a Bonus step: flame graph", s_flame()), ("Source changes in detail (1/2)", s_changes()), ("Source changes in detail (2/2)", s_changes2()), ("Effect of each Bonus change", s_each()), ("Hardware counters of the first four changes", s_counters())]), ("Results", [("Drag coefficient over the iterations", s_cd_iterations()), ("Drag coefficient checks", s_cd()), ("Why the speedup exceeds 4 on 4 nodes", s_efficiency())])]
 order = [cover] + main + [divider, index_slide] + [sl for _, items in groups for _, sl in items]
 
 sldIdLst = prs.slides._sldIdLst

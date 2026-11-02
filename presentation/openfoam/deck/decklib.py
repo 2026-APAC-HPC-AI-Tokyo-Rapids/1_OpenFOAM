@@ -131,7 +131,7 @@ def set_bullet(p, char="●", color=NAVY, size_pct=60, indent=0.24, font=FONT, n
 def fill_paragraph(p, para, size=16, color=INK, bold=False, align="l", line=None, space_after=0, space_before=0, bullet=None):
     """A paragraph is a str, a (text, options) run, a list of runs, or a dict with "runs" plus paragraph options.
 
-    Run options: b, i, color, size. A run whose text is "\\n" is a line break.
+    Run options: b, i, color, size, font. A run whose text is "\\n" is a line break.
     """
     options = {}
     if isinstance(para, dict):
@@ -156,7 +156,7 @@ def fill_paragraph(p, para, size=16, color=INK, bold=False, align="l", line=None
         for piece, piece_color in tier_runs(tidy(text), run_options.get("color", options.get("color", color))):
             r = p.add_run()
             r.text = piece
-            style_run(r, size=run_options.get("size", options.get("size", size)), bold=run_options.get("b", options.get("bold", bold)), italic=run_options.get("i"), color=piece_color)
+            style_run(r, size=run_options.get("size", options.get("size", size)), bold=run_options.get("b", options.get("bold", bold)), italic=run_options.get("i"), color=piece_color, font=run_options.get("font", options.get("font", FONT)))
     b = options.get("bullet", bullet)
     if b:
         set_bullet(p, **(b if isinstance(b, dict) else {}))

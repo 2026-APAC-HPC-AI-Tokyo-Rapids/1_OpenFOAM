@@ -14,7 +14,7 @@ JP: 名乗るだけで、すぐ次の枚（要約）へ進む。結果の数字�
 """
 
 NOTES["index"] = """
-JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は19枚です（第8版で、試して残さなかったことの一覧を本編11枚目と20枚目へ移し、固定の4通りの比較と、試した分割の一覧を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目、数えなかった高速化（#68）は本編21枚目の上半分にあるので、ここには載せていません。
+JP: 質疑用の補足スライドの目次です。各行をクリックすると、そのスライドへ飛びます（スライドショー中）。スライド番号を打ってEnterでも飛べます。補足は19枚です（第8版で、試して残さなかったことの一覧を本編12枚目と21枚目へ移し、ケース既定の分割での固定の比較と、試した分割の一覧を足した。外したものは slides.md の「補足」の節）。補足はスライドショーでは非表示なので、本編の後に流れて映ることはありません。MPIの上位3つは本編5枚目、採否の決まりは本編3枚目にあるので、ここには載せていません。数えなかった高速化（#68）は、運営の答え（11/02、どの段でも数えない）を受けてデッキから外しました（聞かれたときの答えは slides.md の想定問答）。
 """
 
 NOTES["s_aspire"] = """
@@ -65,20 +65,19 @@ EN (Q31, did you profile the network?): Yes, at three levels: IMB after every be
 JP: rankごとのMPI_Isendの回数は、分割から数えた隣のrankの数と相関+1.000（1つの隣に1 stepあたり約1,324通）。メッセージの数は分割で決まり、待ちは計算の不均衡で決まる（#48）。16の最も遅いrankのうち13はノード外の隣を持たない。
 """
 
-NOTES["s_pinning_halves"] = """
-EN (if asked whether pinning only the CPU or only the memory is enough): No. In these runs on scotch, re-pinning only the CPU came 12 to 16 seconds after each rank started, when its memory had already been placed, and binding only the memory let the rank run away from it, 50 percent slower. Only both together gave the fast and stable result.
+NOTES["s_pinning_case_default"] = """
+EN (if asked whether pinning also helps on the Baseline's own decomposition): Yes. On the case-default hierarchical decomposition we ran the setting without and with pinning in turns in the same period. Pinning took 11.2 percent off a step, and the spread between jobs fell from 2.0 to 1.1 percent. Our Baseline ran the unpinned setting later, at 3.650 seconds per step.
 
 JP:
-- data/pinning.csv。4ノード、scotch（ケース既定のhierarchicalではない）。全ジョブが2026-10-03（Actionsの実行時刻で13:40〜16:44 UTC）。第7版のメモの「10/07」は誤りだった（11/02に調べ直した）。
-- CPU and memory 2.917 s（SD 0.13%、3本）、CPU only 3.474 s（2.0%、3本）、Neither 3.395 s（0.78%、2本）、Memory only 4.380 s（1本）。同じファイルにLD_PRELOADの固定 2.919 s（2本）、PALSのmem-bind＋見張り 3.469 s（2本）もある。
-- NeitherがBaseline（3.650 s）より速いのは分割がscotchだから（Baselineはhierarchical）。ユーザーの質問（11/02）への答え。隠れた最適化はない。
-- 第7版まではこの図が本編の固定の枚にあった。第8版で、本編はBaselineと同じhierarchicalでの比較（本編7枚目）にした。
+- データ：固定なしは data/start_unpinned.csv（#36 A、commit 0d50e13）の3.6983、3.5850、3.7270（3.670 ± 2.05%）。固定ありは data/decomposition_basic.csv のhierarchical 4ノードの3.2912、3.2593、3.2217（3.257 ± 1.07%）。範囲は重ならない。Baselineは data/baseline_runs.csv（#62）の3.6003、3.5313、3.8170（3.650 ± 4.08%）。固定なしとBaselineの6本を合わせると3.660 ± 2.9%。
+- 日付（図と表には書かない、ユーザー、11/02）：固定なしと固定ありは10/02、Baselineは10/12。このときの固定は、LD_PRELOADでMPI_Initの直後に固定し直す方法（9/21〜10/03に使った）で、Basicのnumactl＋tasksetと同じ速さ（scotchで2.919と2.917）。
+- 第8版の最初の版（11/02朝）では、この図が本編の固定の枚だった（ユーザーが固定の枚にBaselineを載せたいと言ったため）。同じ日の2回目に、ユーザーが第7版の図（scotchでの4通り）の方が各実験の結果を示せると言ったので、本編はscotchの4通り（本編8枚目）に戻し、この図を補足にした。
 """
 
 NOTES["s_scotch"] = """
 EN (Q30, why does the Basic gain grow with the node count?): Mostly through the decomposition. scotch gains 1.3, 2.5 and 10.5 percent on 1, 2 and 4 nodes, and mapping it onto the node gains only on 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
-JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編8枚目の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
+JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は本編8枚目（固定の結果）の3つ目の文の値。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
 """
 
 NOTES["s_cores"] = """
@@ -129,8 +128,8 @@ JP: #69。実装はCodex（GPT-6.1 Sol）、各パッチと説明は提出物の
 - 0010（wallShearStressを壁だけで計算）は、本番ケースでは値を書き出さずログにも出ないので、ローカルの逐次の試験（151,600セル、40 step。0010を外した版と、coefficient.dat、最終時刻のU・p・k・ω・nut・cp・wallShearStressがビット一致）を証拠にした。
 - 0012はDIC前処理のPCGだけをChronopoulos/Gear型にする（Ghysels & Vanroose 2014）。どの許容誤差でも収束判定と反復の意味は同じ（minIter/maxIter、特異性の判定、報告する残差も）。35反復で大域和が105回から36回に。単独では−0.30%と小さいが、3本とも一貫して速く、Cdの差も極小なので束に残した。
 - 0014の運動量予測子は、圧力勾配をsourceに足してから解き、元に戻す（対角はビット単位で戻るので、A()・H()・H1()は元の行列を見る）。
-- 実装しなかったもの：P1（勾配の使い回し）はfvSolutionのcacheと同じ効果をソースで有効にする形になり、F2の線引きで裏口と読まれ得るので、チームの判断で見送った。0017（bound()の平均を対象セルだけで）は大域和が1回増えるので実施せず。0018は不採用（本編20枚目の表）。0005（#68）はBonusに数えない（本編21枚目の上半分）。
-- 意図別の一覧は本編15、16枚目、図にした例（0002と0001）は本編17枚目。
+- 実装しなかったもの：P1（勾配の使い回し）はfvSolutionのcacheと同じ効果をソースで有効にする形になり、F2の線引きで裏口と読まれ得るので、チームの判断で見送った。0017（bound()の平均を対象セルだけで）は大域和が1回増えるので実施せず。0018は不採用（本編21枚目の表）。0005（#68）は、運営の答え（11/02）でどの段でも数えないと決まり、デッキから外した。
+- 意図別の一覧は本編16、17枚目、図にした例（0002と0001）は本編18枚目。
 """
 
 NOTES["s_each"] = """
@@ -145,7 +144,7 @@ EN (if asked why most demand refills come from L2, isn't the data in cache?): De
 JP:
 - カウンタ（#55）：1ノード、128 rank、40 step、multiLevel、uProfのdata_accessをNUMA領域ごとに1 rank、最初の4つの版と変更なしの版を各2本。計算部分だけ（MPI、UCX、Pstreamを除く）の7 rankの平均。同じ側の2本は、どのカウンタも約4%以内で一致した。
 - 右の表：チャネルの比較は#61（4ノード、64 rank/ノード、各2本）。ノード数の比較は#69の最終計測（1/2/4ノードで交互に3本ずつ）。
-- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではない（uncoreのカウンタは読めない）。後の10個はカウンタで測っていない。考察は slides.md の17枚目（Bonus results）のメモ。第7版では本編のBonus resultsにこのカウンタの図があったが、細かいので第8版で補足だけにした（ユーザー、11/02）。
+- 言い過ぎない点：数えているのはL1のdemand refillで、DRAMの転送バイト数ではない（uncoreのカウンタは読めない）。後の10個はカウンタで測っていない。考察は slides.md の18枚目（Bonus results）のメモ。第7版では本編のBonus resultsにこのカウンタの図があったが、細かいので第8版で補足だけにした（ユーザー、11/02）。
 """
 
 NOTES["s_cd_iterations"] = """
@@ -166,5 +165,5 @@ JP: 主催者の値は tasks/4.3 の表と「What Cd tells you」（2ノード80
 NOTES["s_efficiency"] = """
 EN (Q6, super-linear scaling): We measured counters at 1, 2 and 4 nodes: per cell and step, the L1 refills from DRAM fall by 30% from 1 to 4 nodes, almost all in the sparse-matrix kernels, whose scattered cell arrays shrink to 1 MB per rank and fit in L3.
 
-JP: #66、Basic（対応付けの前）、uProf data_access、NUMA領域ごとに1 rank、rank数・step数・rankあたりのセル数で正規化。1セルあたりの時間は4ノードで0.873倍（1ノードに対して4.58倍速い。並列効率で言えば1.145）。本編19枚目は第8版から、効率ではなく「1ノードの何倍速いか」で示す（ユーザー、11/02）。
+JP: #66、Basic（対応付けの前）、uProf data_access、NUMA領域ごとに1 rank、rank数・step数・rankあたりのセル数で正規化。1セルあたりの時間は4ノードで0.873倍（1ノードに対して4.58倍速い。並列効率で言えば1.145）。本編20枚目は第8版から、効率ではなく「1ノードの何倍速いか」で示す（ユーザー、11/02）。
 """
