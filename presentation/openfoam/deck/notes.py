@@ -64,12 +64,12 @@ JP: rankごとのMPI_Isendの回数は、分割から数えた隣のrankの数�
 """
 
 NOTES["s_pinning_decomposition"] = """
-EN (Q41, without pinning scotch did not run in turns with hierarchical; how sure is the 6.6 percent?): They ran on consecutive days in the same experiment, three hierarchical jobs on one day and six scotch jobs the next, all with the launcher's binding removed in MPI_Init. All six scotch jobs were faster than all three hierarchical jobs, by 6.6 percent on average. We kept scotch on the comparison in turns once every rank was pinned, three jobs each, 10.5 percent less. The two fixes also helped each other: the slowest rank computed 1.46 times as long as the median rank without pinning, 1.16 times once pinned and 1.06 times with scotch as well.
+EN (Q41, without pinning scotch did not run in turns with hierarchical; how sure is the 6.1 percent?): Our Baseline ran nine days after the six unpinned scotch jobs, and its jobs spread over 8 percent, but five of the six scotch jobs were faster than all three Baseline jobs, by 6.1 percent on average. The same setting ran again in the pinning experiment, three jobs at 3.670 seconds, and all six scotch jobs were faster than those. We kept scotch on the comparison in turns once every rank was pinned, three jobs each, 10.5 percent less. The two fixes also helped each other: the slowest rank computed 1.46 times as long as the median rank without pinning, 1.16 times once pinned and 1.06 times with scotch as well.
 
 JP:
-- 11/03の10回目と11回目（ユーザー：分割 → 固定 → ノードの木の順に。固定なしのscotchのジョブは、対照と比べていなくても実験条件は同じなので全部プロットする）：本編5枚目（デッキ6枚目）で固定なしのhierarchicalとscotchを比べるので、この枚は、その比較が交互でないことと、固定した後の交互の比較（−10.5%）を見せる枚になった。色は付けない（Baseline、Basic、Bonus以外の結果に色を付けない）。
-- データ（#36、4ノード）：hierarchicalの固定なしは data/start_unpinned.csv の3.6983、3.5850、3.7270（3.670、SD 2.05%）、固定ありは data/decomposition_basic.csv の3.2912、3.2593、3.2217（3.257、SD 1.07%）。scotchの固定ありは同じファイルの2.9154、2.9227、2.9054（2.915）。hierarchicalの2つとscotchの固定ありは10/02に交互に流した。固定ありはLD_PRELOADでMPI_Initの直後に固定し直す方法で、Basicのnumactl＋見張りと同じ速さ（scotchで2.919と2.917）。
-- 固定なしのscotchは、10/03の#36 A3の固定なしの6本すべて（data/pinning.csv のNeither）：PALSの`--cpu-bind`と`--mem-bind`を頼んだ2本（`d890a4d`、3.3763、3.4137）と、BaselineのようにPALSの`--cpu-bind depth`だけを頼み、前処理を別のPBSジョブに分けた4本（`04a89cf`と`b8bd859`、3.5561、3.3593、3.4248、3.4368）。どれもMPI_Initで固定が外れた（d890a4dは実行中の/procで0/128、4本目の37125347729はノード0の128 rankすべてが`Cpus_allowed_list 0-255`、issue #36）。6本で3.428（SD 2.0%）、hierarchicalより6.6%短く、6本とも3本のhierarchicalより速い。10回目までは、ほかの配置と同じ土台（`1854ea6`）の2本だけ（3.395）だった。
+- 11/03の10回目と11回目（ユーザー：分割 → 固定 → ノードの木の順に。固定なしのscotchのジョブは、対照と比べていなくても実験条件は同じなので全部プロットする）：本編5枚目（デッキ6枚目）で固定なしのhierarchicalとscotchを比べるので、この枚は、その比較が交互でないことと、固定した後の交互の比較（−10.5%）を見せる枚になった。12回目に、固定なしのhierarchicalを私たちのBaselineの3.650にした（ユーザー：3.670と3.650の2つの値があるのはよくない。Baselineに合わせる）。
+- データ（4ノード）：hierarchicalの固定なしは私たちのBaseline（#62、10/12、data/baseline_runs.csv の3.6003、3.5313、3.8170。3.650、SD 4.1%）、固定ありは #36（10/02）の data/decomposition_basic.csv の3.2912、3.2593、3.2217（3.257、SD 1.07%）で、−10.7%。固定の実験で交互に流した固定なしのhierarchical（#36、data/start_unpinned.csv の3.6983、3.5850、3.7270。3.670、SD 2.05%）に対してなら−11.2%で、スライドでは使わず、Q41で「同じ設定をもう一度測った値」として言うだけ。scotchの固定ありは同じファイルの2.9154、2.9227、2.9054（2.915）。hierarchicalの2つとscotchの固定ありは10/02に交互に流した。固定ありはLD_PRELOADでMPI_Initの直後に固定し直す方法で、Basicのnumactl＋見張りと同じ速さ（scotchで2.919と2.917）。
+- 固定なしのscotchは、10/03の#36 A3の固定なしの6本すべて（data/pinning.csv のNeither）：PALSの`--cpu-bind`と`--mem-bind`を頼んだ2本（`d890a4d`、3.3763、3.4137）と、BaselineのようにPALSの`--cpu-bind depth`だけを頼み、前処理を別のPBSジョブに分けた4本（`04a89cf`と`b8bd859`、3.5561、3.3593、3.4248、3.4368）。どれもMPI_Initで固定が外れた（d890a4dは実行中の/procで0/128、4本目の37125347729はノード0の128 rankすべてが`Cpus_allowed_list 0-255`、issue #36）。6本で3.428（SD 2.0%）、Baselineより6.1%短い。6本のうち5本はBaselineの3本のどれより速く（Baselineの最も速い3.5313より遅いのは3.5561の1本）、固定の実験の固定なしのhierarchical（3.670）の3本には6本とも速い。10回目までは、ほかの配置と同じ土台（`1854ea6`）の2本だけ（3.395）だった。
 - scotchの固定の効果は、この表では10/02に交互に流した固定（LD_PRELOAD、2.915）に対して−15.0%、本編8枚目の図では同じ日の両方の固定（numactl＋見張り、2.917）に対して−14.9%。比べた固定のジョブが違うだけで、どちらも正しい。
 - 遅いrankの比：hierarchical・固定なしは私たちのBaseline（OpenFOAM profiling、38219862855、rankごとの計算115.02 / 78.56 s）、hierarchical・固定ありはCrayPATの（プロセス − MPI）（#38、37181991433）、scotch・固定ありはBasicの対応付けの前（OpenFOAM profiling、37714968610、104.17 / 97.95 s）。道具が2つ混ざっているので、比の傾向として見せる。
 """
@@ -88,7 +88,7 @@ JP:
 NOTES["s_scotch"] = """
 EN (Q30, why does the Basic gain grow with the node count?): Mostly through the decomposition. scotch gains 1.3, 2.5 and 10.5 percent on 1, 2 and 4 nodes, and the node tree gains only on 4 nodes. We think the axis-aligned cuts of hierarchical become more uneven when the subdomains are small, but we have not verified it.
 
-JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は補足30枚目の表とQ41の値（本編5枚目、デッキ6枚目の−6.6%は固定なし）。どちらも色を付けない（Baseline、Basic、Bonus以外の結果に色を付けない、ユーザー、11/03）。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
+JP: data/decomposition_basic.csv（同じ配置、交互に3本ずつ、どちらも固定あり）。4ノードの−10.5%は補足30枚目の表とQ41の値（本編5枚目、デッキ6枚目の−6.1%は固定なしで、私たちのBaselineに対して）。どちらも色を付けない（Baseline、Basic、Bonus以外の結果に色を付けない、ユーザー、11/03）。ISC26の課題（Task 5、分割方法を変えた効果）にも当たる。hierarchicalの偏りは壁の面（車の表面）の数と相関した（#38）。
 """
 
 NOTES["s_cores"] = """

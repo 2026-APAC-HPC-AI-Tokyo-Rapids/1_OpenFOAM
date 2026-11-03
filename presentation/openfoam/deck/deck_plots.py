@@ -206,20 +206,24 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
     colour, hollow), with its mean and SD (none for a single job) above it, at x 0, 1, ... or at positions, the first left
     of the axis's start. A group in navy is emphasised (the user, 11/03), not a tier, so its tick label stays black.
     clusters name groups that belong together, (label, x) under their tick labels. Each (i, j) in arrows joins the means of
-    groups i and j with a black arrow (the user, 11/03: arrows are black), with the change between them in navy to its
-    left, at the height along the arrow from its end (0) to its start (1), lower where a job of group i stands at the
-    middle; both are slide shapes (layout())."""
+    groups i and j with an arrow, red like the change between them (the user's hand edit, 11/03 19:19), which stands to
+    the arrow's left at the height along it from its end (0) to its start (1); an (i, j, "below") arrow, a long one, has
+    the change under its middle instead, where the user put it by hand. Both are slide shapes (layout())."""
     positions = list(range(len(groups))) if positions is None else positions
     figure, axis = plt.subplots(figsize=size, layout="constrained")
     for x, (_, values, color, hollow) in zip(positions, groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
         label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
     marks, changes = [], []
-    for i, j in arrows:
+    for i, j, *where in arrows:
         before, after = groups[i][1], groups[j][1]
         start, end = (positions[i] + 0.4, statistics.fmean(before)), (positions[j] - 0.5, statistics.fmean(after))  # clear of the labels of j
         marks.append((axis, start, end))
-        changes.append((axis, (start[0] - 0.06, end[1] + along * (start[1] - end[1])), percent(after, before), {"align": "r", "anchor": "m", "size": 16, "color": palette.NAVY}))
+        if where == ["below"]:
+            point, options = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2 - 0.035 * (high - low)), {"align": "r", "anchor": "t"}
+        else:
+            point, options = (start[0] - 0.06, end[1] + along * (start[1] - end[1])), {"align": "r", "anchor": "m"}
+        changes.append((axis, point, percent(after, before), {**options, "size": 16, "color": palette.RED}))
     labels = [label for label, _, _, _ in groups]
     colors = [INK if color in (MUTED, FAINT, NAVY) else color for _, _, color, _ in groups]
     if clusters:
@@ -250,23 +254,24 @@ PLACEMENTS = [("Neither", ("PALS --cpu-bind and --mem-bind only", "PALS --cpu-bi
 
 def pinning():
     """Main slide 7: the pinning experiment, after scotch was tried and the ranks were found unpinned (the user's 10th round,
-    11/03: decomposition, pinning, then the node tree). On hierarchical neither half pinned and both, in turns on 4 nodes
-    (#36, data/start_unpinned.csv and the hierarchical jobs of data/decomposition_basic.csv, pinned right after MPI_Init);
-    beside it the four placements on scotch a day later (#36 A3, data/pinning.csv), which showed that both halves are
-    needed. An arrow from neither to both in each. hierarchical without pinning is our Baseline's setting, so its jobs take
-    the Baseline's colour, and the jobs that pinning both halves sped up are navy, dots, mean and time; the other groups
-    take no colour (the user, 11/03: a result of the Baseline or Basic has its tier's colour wherever it appears, emphasis
-    in blue)."""
-    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], BASE, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], NAVY, False)]
+    11/03: decomposition, pinning, then the node tree). On hierarchical, our Baseline's jobs (#62) and the same
+    decomposition with both halves pinned (#36, the hierarchical jobs of data/decomposition_basic.csv, pinned right after
+    MPI_Init): the Baseline has one value everywhere (the user, 11/03: 3.650, not the 3.670 of the pinning experiment's
+    own unpinned jobs in data/start_unpinned.csv). Beside it the four placements on scotch (#36 A3, data/pinning.csv),
+    which showed that both halves are needed. An arrow from neither to both in each, the short one's change at its head's
+    height and the long one's under its middle, where the user put them by hand. The Baseline's jobs take its colour, and
+    the jobs that pinning both halves sped up are navy, dots, mean and time; the other groups take no colour (the user,
+    11/03: a result of the Baseline or Basic has its tier's colour wherever it appears, emphasis in blue)."""
+    hierarchical = [("Neither", BASELINE[4], BASE, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], NAVY, False)]
     data = runs("pinning.csv", "configuration")
     scotch = [(label, [value for key in keys for value in data[key]], NAVY if label == "CPU and\nmemory" else FAINT, False) for label, keys in PLACEMENTS]
     # the change of the first, short arrow stands left of it, so the axis starts further left
-    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05)
+    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5, "below")], label_size=11.5, stacked=True, along=0.0, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05)
 
 
 def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size=11.5):
     """Panels side by side, each a control and a candidate (tick label, values, colour) on its own axis from 0 (zoomed()),
-    with an arrow from one to the other and the change, both as slide shapes (layout())."""
+    with an arrow from one to the other and the change in red, both as slide shapes (layout())."""
     figure, axes = plt.subplots(1, len(panels), figsize=size, layout="constrained")
     marks, changes = [], []
     for k, (axis, groups) in enumerate(zip(axes, panels)):
@@ -286,7 +291,7 @@ def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size
         finish(axis, ylabel if k == 0 else "")
         start, end = (0.4, statistics.fmean(before)), (0.5, statistics.fmean(after))
         marks.append((axis, start, end))
-        changes.append((axis, (0.34, (start[1] + end[1]) / 2), percent(after, before), {"align": "r", "anchor": "m", "size": 15, "color": palette.NAVY}))
+        changes.append((axis, (0.34, (start[1] + end[1]) / 2), percent(after, before), {"align": "r", "anchor": "m", "size": 15, "color": palette.RED}))
     layout(figure, name, marks, changes)
     save(figure, name)
 

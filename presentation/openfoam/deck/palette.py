@@ -25,6 +25,8 @@ MPI = "C7A3C2"  # MPI in the call-stack figures
 # the node figures (the user's hand edit of the memory-limit slide, 11/02): the cores that run ranks are NAVY and the memory
 # channels in use green like a circuit board, the theme's green darker by 25% as the user chose it
 MEMORY = "548235"
-# pure red, as the user chose it by hand: what was halved on the memory-limit slide (11/02) and the gain of each source
-# change drawn in pictures (11/03)
+# pure red, as the user chose it by hand: what was halved on the memory-limit slide (11/02), the gain of each source
+# change drawn in pictures (11/03), and the arrows over the per-job plots with their changes (11/03 19:19)
 RED = "FF0000"
+# the headings over the decomposition pictures, the blue the user gave them by hand (11/03 19:19)
+PICTURE = "003894"

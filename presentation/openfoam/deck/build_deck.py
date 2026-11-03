@@ -38,7 +38,7 @@ from pptx.enum.shapes import MSO_SHAPE
 
 from decklib import add_text, arrow_line, bar_chart, box, bullets, clear_slide, picture, set_notes, set_title, shape_text, table
 from notes import NOTES
-from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MEMORY, MPI, MUTED, NAVY, RED, WHITE
+from palette import BASE, BASIC, BONUS, BONUS_LINE, BONUS_TINT, COMPUTATION, FAINT, INK, LIGHT, LINE, MEMORY, MPI, MUTED, NAVY, PICTURE, RED, WHITE
 
 SRC, OUT, FIG = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 HERE = Path(__file__).resolve().parent
@@ -168,9 +168,9 @@ def figure(s, name, x, y, w, text, gap=0.08, h=0.55):
 
 
 def overlay(s, marks, x, y, w, h):
-    """The arrows (black, the user, 11/03) and the changes and speedups of a plot as slide shapes over its picture at x, y,
-    w x h, so that the user can move them by hand (11/03); their points come in figure fractions from the bottom left, and
-    their sizes in pt at the plot's own size."""
+    """The arrows (red and 6 pt, the user's hand edit, 11/03 19:19) and the changes and speedups of a plot as slide shapes
+    over its picture at x, y, w x h, so that the user can move them by hand (11/03); their points come in figure fractions
+    from the bottom left, and their sizes in pt at the plot's own size."""
     scale = w / marks["size"][0]
 
     def on_slide(point):
@@ -178,7 +178,7 @@ def overlay(s, marks, x, y, w, h):
 
     # named so that the Selection Pane shows which arrow and which number is which
     for k, arrow in enumerate(marks["arrows"], 1):
-        arrow_line(s, *on_slide(arrow["from"]), *on_slide(arrow["to"]), color=INK, width=2.25).name = f"Arrow {k}"
+        arrow_line(s, *on_slide(arrow["from"]), *on_slide(arrow["to"]), color=RED, width=6).name = f"Arrow {k}"
     for text in marks["texts"]:
         lines = text["text"].split("\n")
         size = round(text["size"] * scale, 1)
@@ -327,7 +327,7 @@ def flow(s, y, stages=HPC_FLOW, common=False, big=46, small=18):
         add_text(s, x, y + 1.45, w, 1.1, paras, size=16)
         if k:
             x1, x2 = x - gap + 0.1, x - 0.1
-            arrow_line(s, x1, y + 0.92, x2, y + 0.92, color=INK, width=3)  # black and 3 pt, as the user drew them (11/02)
+            arrow_line(s, x1, y + 0.92, x2, y + 0.92, color=INK, width=6)  # black, as the user drew them (11/02), 6 pt since 11/03
             add_text(s, x1 - 0.25, y + 0.42, x2 - x1 + 0.5, 0.42, [changes[k - 1]], size=17, color=color, align="c")
 
 
@@ -449,7 +449,8 @@ def decomposition_pair(s, blocks, text, rows, widths, colors, columns):
     """Two decompositions laid out like the multiLevel slide (the user's 10th round, 11/03): on the left each in
     decomposeParDict's own words, blocks of (heading, lines, width), and under them a table of their faces and time per
     step; on the right their pictures with all three views, columns of (picture column, heading), over the key to the
-    colours. The names are black, as only the tiers have colours."""
+    colours. The decompositions' names are black over the code and blue over the pictures (the user's hand edit, 11/03
+    19:19)."""
     x, bottom = X0, 0
     for title, lines, cw in blocks:
         heading(s, x, 1.3, cw, title, size=16, color=INK)
@@ -461,7 +462,7 @@ def decomposition_pair(s, blocks, text, rows, widths, colors, columns):
     xr = X0 + XW - 2 * pw - 0.15
     for k, (which, label) in enumerate(columns):
         x = xr + k * (pw + 0.15)
-        add_text(s, x - 0.15, 1.3, pw + 0.3, 0.42, [label], size=18, align="c")
+        add_text(s, x - 0.15, 1.3, pw + 0.3, 0.42, [label], size=18, color=PICTURE, align="c")
         panel_bottom = decomp_panel(s, which, x, 1.72, pw)
     key = numa_key(s, xr, panel_bottom + 0.1, 2 * pw + 0.15)
     caption(s, xr, key + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
@@ -470,13 +471,14 @@ def decomposition_pair(s, blocks, text, rows, widths, colors, columns):
 def m_decomposition():
     """Basic's first step, as the work went (the user's 10th round, 11/03: decomposition, then pinning once we found the
     ranks unpinned, then the node tree): the case default hierarchical against scotch, laid out like the multiLevel slide,
-    with their faces and times per step on 4 nodes before the ranks were pinned. hierarchical without pinning (#36, 10/02,
-    3 jobs, data/start_unpinned.csv) is our Baseline's setting, so its time takes the Baseline's colour; scotch without
-    pinning is Neither of the placement experiment, every unpinned job of 10/03 (#36 A3, 6 jobs, data/pinning.csv). The two
-    did not run in turns; Q41 says so, with the comparison in turns once pinned (supporting slide 30)."""
+    with their faces and times per step on 4 nodes before the ranks were pinned. hierarchical without pinning is our
+    Baseline, whose time (#62, 3.650) takes its colour, one value everywhere (the user, 11/03); scotch without pinning is
+    Neither of the placement experiment, every unpinned job of 10/03 (#36 A3, 6 jobs, data/pinning.csv). The two did not
+    run in turns; Q41 says so, with the comparison in turns once pinned (supporting slide 30). "Hierarchical" and
+    "Time (s/step)" are the user's hand edit (11/03 19:19)."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
-    rows = [["", "hierarchical", "scotch", "Change"]] + face_rows("hier", "scotch") + [["Time, s/step", "3.670", "3.428", "−6.6%"]]
+    rows = [["", "Hierarchical", "scotch", "Change"]] + face_rows("hier", "scotch") + [["Time (s/step)", "3.650", "3.428", "−6.1%"]]
     blocks = [("hierarchical", ["method  hierarchical;", "hierarchicalCoeffs", "{ n  (16 8 4); }"], 3.24), ("scotch", ["method  scotch;"], 3.24)]
     decomposition_pair(s, blocks, "Faces between subdomains in millions and time per step on 4 nodes, without pinning.", rows, [2.98, 1.6, 0.95, 1.15], [None] * 5 + [[INK, BASE, INK, NAVY]], (("hier", "hierarchical"), ("scotch", "scotch")))
     set_notes(s, PLAN_NOTES[4])
@@ -490,7 +492,7 @@ def m_pinning_results():
     comes after the decomposition, as the work went, so the bullets lead with scotch; the times are the plot's labels."""
     s = main_slide(13)
     set_title(s, "PINNING RESULTS")
-    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 14.9% off a step with scotch and 11.2% with hierarchical.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
+    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 14.9% off a step with scotch and 10.7% with hierarchical.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
     figure(s, "p10_pinning", 5.1, 1.3, 7.53, "Each job under each placement of the ranks on 4 nodes, with hierarchical and with scotch.")
     set_notes(s, PLAN_NOTES[6])
     return s
@@ -500,23 +502,31 @@ def m_node_tree():
     """Basic's last step (the user's 10th round, 11/03): with every rank pinned, scotch mapped onto the node tree against
     plain scotch, laid out like the multiLevel slide, with their faces and times per step on 4 nodes in turns (#63, 5 v 5).
     The node tree is Basic, so its time takes Basic's colour. The weights stand as (…); the script gives their meaning (in
-    Scotch they become the costs 64, 8, 4 and 1 of a link between nodes, sockets, NUMA domains and cores, #38)."""
+    Scotch they become the costs 64, 8, 4 and 1 of a link between nodes, sockets, NUMA domains and cores, #38). The
+    picture's heading "scotch (2 4 16)", as on the multiLevel slide, and "Time (s/step)" are the user's hand edit (11/03
+    19:19)."""
     s = reuse(15)
     set_title(s, "SCOTCH ON THE NODE TREE")
-    rows = [["", "scotch", "node tree", "Change"]] + face_rows("scotch", "basic") + [["Time, s/step", "2.918", "2.898", "−0.7%"]]
+    rows = [["", "scotch", "node tree", "Change"]] + face_rows("scotch", "basic") + [["Time (s/step)", "2.918", "2.898", "−0.7%"]]
     blocks = [("scotch", ["method  scotch;"], 2.5), ("scotch on the node tree", ["method  scotch;", "scotchCoeffs", "{ domains  (2 4 16);", "  domainWeights  (…); }"], 3.98)]
-    decomposition_pair(s, blocks, "Faces between subdomains in millions and time per step on 4 nodes, with pinning.", rows, [2.98, 0.95, 1.6, 1.15], [None] * 5 + [[INK, INK, BASIC, NAVY]], (("scotch", "scotch"), ("basic", "node tree")))
+    decomposition_pair(s, blocks, "Faces between subdomains in millions and time per step on 4 nodes, with pinning.", rows, [2.98, 0.95, 1.6, 1.15], [None] * 5 + [[INK, INK, BASIC, NAVY]], (("scotch", "scotch"), ("basic", "scotch (2 4 16)")))
     set_notes(s, PLAN_NOTES[7])
     return s
 
 
+def chain(before, after, first=None, last=None):
+    """A table cell "before → after" in s/step, a time that is a tier's in that tier's colour (the user's hand edit of the
+    Basic results, 11/03 19:19); the arrow keeps the cell's colour."""
+    return [[(before, {"color": first} if first else {}), (" → ", {}), (after, {"color": last} if last else {})]]
+
+
 def basic_table(s, x, y, w):
     """Each Basic step against its own control on 4 nodes, as the Bonus results give theirs, in the order of the work (the
-    user's 10th round, 11/03): scotch against hierarchical without pinning (#36, 10/02 and 10/03, not in turns), pinning on
+    user's 10th round, 11/03): scotch against our Baseline, both without pinning (10/12 and 10/03, not in turns), pinning on
     scotch (#36 A3, every unpinned job of the day), the node mapping in turns (#63), and Basic against our Baseline, two
-    periods apart; returns the bottom."""
+    periods apart; the steps multiply to Basic's time. Returns the bottom."""
     top = table_caption(s, x, y, w, "Each Basic step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["scotch instead of hierarchical", "3.670 → 3.428", "−6.6%"], ["CPU and memory pinning", "3.428 → 2.917", "−14.9%"], ["scotch on the node tree", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
+    rows = [["Step", "s/step", "Change"], ["scotch instead of hierarchical", chain("3.650", "3.428", first=BASE), "−6.1%"], ["CPU and memory pinning", "3.428 → 2.917", "−14.9%"], ["scotch on the node tree", chain("2.918", "2.898", last=BASIC), "−0.7%"], ["Basic against our Baseline", chain("3.650", "2.898", BASE, BASIC), "−20.6%"]]
     heights = [0.47, 0.62, 0.62, 0.62, 0.62]
     table(s, x, top + 0.05, [2.3, 1.95, 1.25], rows, row_heights=heights, size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, NAVY]])
     return top + 0.05 + sum(heights)
@@ -633,7 +643,7 @@ def m_memory_limit():
         add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=cost, anchor="m")
     for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
         y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
-        arrow_line(s, xa, y1, xa, y2 - 0.05, color=INK, width=2.25)
+        arrow_line(s, xa, y1, xa, y2 - 0.05, color=INK, width=6)  # 6 pt, as the user drew them (11/03 19:19)
         add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": RED}, {"runs": [effect]}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
     caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
@@ -657,14 +667,14 @@ def m_bonus_decomposition():
         heading(s, x, 1.3, cw, title, size=16)
         bottom = code(s, x, 1.72, cw, lines)
     top = table_caption(s, X0, bottom + 0.3, w, "Each against plain scotch at 2.918 s/step on 4 nodes.")
-    rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"], ["Time, s/step", "2.898", "2.873"]]
+    rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"], ["Time (s/step)", "2.898", "2.873"]]
     table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_heights=[0.45, 0.47, 0.47, 0.72, 0.47, 0.47], size=17, aligns=["l", "r", "r"], colors=[None] * 4 + [[INK, NAVY, NAVY], [INK, BASIC, INK]])
     pw, xr = 2.62, 12.63 - 2 * 2.62 - 0.15
     # the domains in the heading and its wider box are the user's hand edit (11/02), with multiLevel spelt as OpenFOAM does;
-    # the names are black, as only the tiers have colours (the user, 11/03)
+    # the names are blue as over the decomposition slides' pictures (the user's hand edit, 11/03 19:19)
     for i, (which, label) in enumerate((("basic", "scotch (2 4 16)"), ("multi", "multiLevel (4 2 4 16)"))):
         x = xr + i * (pw + 0.15)
-        add_text(s, x - 0.15, 1.3, pw + 0.18, 0.42, [label], size=18, align="c")
+        add_text(s, x - 0.15, 1.3, pw + 0.18, 0.42, [label], size=18, color=PICTURE, align="c")
         panel_bottom = decomp_panel(s, which, x, 1.72, pw)
     bottom = numa_key(s, xr, panel_bottom + 0.1, 2 * pw + 0.15)
     caption(s, xr, bottom + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
@@ -726,12 +736,12 @@ def u_diagram(s, x, y, w=5.6):
     add_text(s, x, y, w, 0.36, ["Before, one pass per component"], size=16)
     for k, component in enumerate(("Ux", "Uy", "Uz")):
         yy = y + 0.42 + k * 0.52
-        shape_text(box(s, x, yy, bw, 0.42, fill=LIGHT, line=LINE, radius=0.12), "matrix of U", size=15, color=NAVY)
+        shape_text(box(s, x, yy, bw, 0.42, fill=LIGHT, line=LINE, radius=0.12), "matrix of U", size=15, color=INK)
         arrow_line(s, x + bw + 0.06, yy + 0.21, x + bw + 0.54, yy + 0.21, color=INK)
         shape_text(box(s, x + bw + 0.6, yy, bw, 0.42, fill=BONUS_TINT, line=BONUS_LINE, radius=0.12), f"sweep {component}", size=15, color=INK)
     add_text(s, x, y + 1.98, w, 0.36, ["the matrix is read 3 times"], size=16, align="c")
     add_text(s, x, y + 2.5, w, 0.36, ["After, one pass for all three"], size=16)
-    shape_text(box(s, x, y + 2.92, bw, 1.0, fill=LIGHT, line=LINE, radius=0.08), "matrix of U", size=15, color=NAVY)
+    shape_text(box(s, x, y + 2.92, bw, 1.0, fill=LIGHT, line=LINE, radius=0.08), "matrix of U", size=15, color=INK)
     arrow_line(s, x + bw + 0.06, y + 3.42, x + bw + 0.54, y + 3.42, color=INK)
     shape_text(box(s, x + bw + 0.6, y + 2.92, bw, 1.0, fill=BONUS_TINT, line=BONUS_LINE, radius=0.08), ["sweep Ux", "sweep Uy", "sweep Uz"], size=15, color=INK)
     add_text(s, x, y + 3.98, w, 0.36, ["the matrix is read once"], size=16, color=NAVY, align="c")
@@ -744,7 +754,7 @@ def residual_diagram(s, x, y, w=5.6):
     add_text(s, x, y, w, 0.36, ["Before, a new field and a copy"], size=16)
     for k, (text, fill, line) in enumerate((("matrix, ψ and b", LIGHT, LINE), ("new field", BONUS_TINT, BONUS_LINE), ("residual r", BONUS_TINT, BONUS_LINE))):
         bx = x + k * (bw + 0.5)
-        shape_text(box(s, bx, y + 0.5, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=NAVY if k == 0 else INK)
+        shape_text(box(s, bx, y + 0.5, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=INK)
         if k:
             arrow_line(s, bx - 0.44, y + 0.95, bx - 0.06, y + 0.95, color=INK)
             add_text(s, bx - 0.75, y + 1.45, 1.0, 0.3, [("b − Aψ", "copy")[k - 1]], size=13, align="c")
@@ -752,7 +762,7 @@ def residual_diagram(s, x, y, w=5.6):
     add_text(s, x, y + 2.5, w, 0.36, ["After, in place"], size=16)
     for k, (text, fill, line) in enumerate((("matrix, ψ and b", LIGHT, LINE), ("residual r", BONUS_TINT, BONUS_LINE))):
         bx = x + k * 2 * (bw + 0.5)
-        shape_text(box(s, bx, y + 2.97, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=NAVY if k == 0 else INK)
+        shape_text(box(s, bx, y + 2.97, bw, 0.9, fill=fill, line=line, radius=0.1), text, size=15, color=INK)
     arrow_line(s, x + bw + 0.06, y + 3.42, x + 2 * (bw + 0.5) - 0.06, y + 3.42, color=INK)
     add_text(s, x + bw, y + 3.47, bw + 1.0, 0.3, ["b − Aψ"], size=13, align="c")
     add_text(s, x, y + 3.98, w, 0.36, ["the residual is written once"], size=16, color=NAVY, align="c")
@@ -777,11 +787,12 @@ def m_examples():
 
 def m_bonus_results():
     """The Bonus against the official runs, our Baseline and Basic (the user, 11/02), and each Bonus step against its own
-    control in a table instead of the counters, which went to the supporting slides."""
+    control in a table instead of the counters, which went to the supporting slides; Basic's and the Bonus's times in
+    their colours, as the user coloured the Basic results (11/03 19:19)."""
     s = reuse(11)
     set_title(s, "BONUS RESULTS")
     top = table_caption(s, X0, 1.3, 5.75, "Each Bonus step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["multiLevel instead of plain scotch", "2.918 → 2.873", "−1.5%"], ["First four source changes", "2.873 → 2.599", "−9.5%"], ["Ten more source changes", "2.603 → 2.360", "−9.3%"], ["Bonus against Basic", "2.898 → 2.360", "−18.6%"]]
+    rows = [["Step", "s/step", "Change"], ["multiLevel instead of plain scotch", "2.918 → 2.873", "−1.5%"], ["First four source changes", "2.873 → 2.599", "−9.5%"], ["Ten more source changes", chain("2.603", "2.360", last=BONUS), "−9.3%"], ["Bonus against Basic", chain("2.898", "2.360", BASIC, BONUS), "−18.6%"]]
     table(s, X0, top + 0.05, [2.35, 2.2, 1.2], rows, row_heights=[0.47, 0.72, 0.72, 0.72, 0.72], size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BONUS, NAVY, NAVY]])
     bullets(s, X0, top + 3.6, 5.75, 6.95 - top - 3.6, ["Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes."], size=18)
     figure(s, "p15_bonus", 6.63, 1.3, 6.0, "Each job of the official runs and our three tiers on 4 nodes, with the mean and SD of each.")
@@ -889,14 +900,15 @@ def s_network():
 
 def s_pinning_decomposition():
     """How sure the decomposition's gain is and how the two fixes helped each other (Q41): the two decompositions without and
-    with pinning, all on 4 nodes in #36 (data/start_unpinned.csv, decomposition_basic.csv, pinning.csv), scotch against
-    hierarchical in turns once pinned, each fix gaining more once the other was in place, and the
+    with pinning on 4 nodes, hierarchical without pinning being our Baseline (#62, one value everywhere, the user, 11/03)
+    and the rest #36 (data/decomposition_basic.csv, pinning.csv), scotch against hierarchical in turns once pinned, each
+    fix gaining more once the other was in place, and the
     slowest rank's computation over the median one's (OpenFOAM profiling of the Baseline 38219862855 and of Basic before
     its mapping 37714968610; CrayPAT, process time minus MPI, for pinned hierarchical, #38 37181991433). No row is
     coloured, as only the tiers have colours (the user, 11/03)."""
     s = supp(41, "PINNING AND DECOMPOSITION", "s_pinning_decomposition")
     top = table_caption(s, X0, 1.35, 6.4, "Time per step on 4 nodes, each decomposition without and with pinning.", h=0.7)
-    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.670", "3.257", "−11.2%"], ["scotch", "3.428", "2.915", "−15.0%"], ["scotch against hierarchical", "−6.6%", "−10.5%", ""]]
+    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.650", "3.257", "−10.7%"], ["scotch", "3.428", "2.915", "−15.0%"], ["scotch against hierarchical", "−6.1%", "−10.5%", ""]]
     table(s, X0, top + 0.05, [2.9, 1.25, 1.25, 1.3], rows, row_h=0.62, size=17, aligns=["l", "r", "r", "r"])
     xr = 7.6
     top = table_caption(s, xr, 1.35, 12.63 - xr, "The slowest rank's computation against the median rank's on 4 nodes.", h=0.7)
