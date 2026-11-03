@@ -180,15 +180,15 @@ def nice_ticks(low, high, count=5):
 
 def rule():
     """Main slide 2: the second test on a change that was kept and on one that was not, 4 nodes, each job. The panels do
-    not name the changes (the node mapping and AOCC); the slide is about the test, so no group takes a colour (the user,
-    11/03: only Baseline, Basic and Bonus have colours)."""
+    not name the changes (the node mapping and AOCC). The kept candidate's jobs are Basic's record (#63), so they take
+    Basic's colour, as Basic's and the Baseline's results do wherever they appear (the user, 11/03); the others take none."""
     compilers = runs("compiler_options.csv", "option")
-    examples = [("Kept", CHANGES[("mapping", 4, "control")], CHANGES[("mapping", 4, "candidate")]), ("Not kept", compilers["control (GCC -O3, scotch)"], compilers["AOCC 5.0 / AOCL 5.1"])]
+    examples = [("Kept", CHANGES[("mapping", 4, "control")], CHANGES[("mapping", 4, "candidate")], BASIC), ("Not kept", compilers["control (GCC -O3, scotch)"], compilers["AOCC 5.0 / AOCL 5.1"], FAINT)]
     figure, axes = plt.subplots(1, 2, figsize=(5.58, 4.95), layout="constrained")
-    for axis, (title, control, candidate) in zip(axes, examples):
-        for x, values in ((0, control), (1, candidate)):
-            jobs(axis, x, values, FAINT, width=0.36)
-            label_above(axis, x, values, size=11.5, stacked=True)
+    for axis, (title, control, candidate, color) in zip(axes, examples):
+        for x, values, group in ((0, control, FAINT), (1, candidate, color)):
+            jobs(axis, x, values, group, width=0.36)
+            label_above(axis, x, values, color=INK if group == FAINT else group, size=11.5, stacked=True)
         if max(candidate) < min(control):
             axis.axhspan(max(candidate), min(control), color=GRID, zorder=0)
         axis.set_title(title)
@@ -201,18 +201,18 @@ def rule():
     save(figure, "p07_rule")
 
 
-def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6):
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6, emphasis=()):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD (none for a single job) above it, at x 0, 1, ... or at positions, the first left
-    of the axis's start. clusters name groups that belong together, (label, x) under their tick labels. Each (i, j) in
-    arrows joins the means of groups i and j with a black arrow (the user, 11/03: arrows are black), with the change between
-    them in navy to its left, at the height along the arrow from its end (0) to its start (1), lower where a job of group i
-    stands at the middle; both are slide shapes (layout())."""
+    of the axis's start; the groups whose index is in emphasis have them in navy. clusters name groups that belong
+    together, (label, x) under their tick labels. Each (i, j) in arrows joins the means of groups i and j with a black arrow
+    (the user, 11/03: arrows are black), with the change between them in navy to its left, at the height along the arrow
+    from its end (0) to its start (1), lower where a job of group i stands at the middle; both are slide shapes (layout())."""
     positions = list(range(len(groups))) if positions is None else positions
     figure, axis = plt.subplots(figsize=size, layout="constrained")
-    for x, (_, values, color, hollow) in zip(positions, groups):
+    for k, (x, (_, values, color, hollow)) in enumerate(zip(positions, groups)):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
-        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
+        label_above(axis, x, values, color=NAVY if k in emphasis else INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
     marks, changes = [], []
     for i, j in arrows:
         before, after = groups[i][1], groups[j][1]
@@ -246,20 +246,21 @@ PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only"), ("CPU\nonly", 
 
 
 def pinning():
-    """Main slide 6: pinning before the decomposition (the user, 11/03: the binding was a known flaw, and the experiment is
-    essential enough to show in full even where it ran on scotch). On the Baseline's decomposition, hierarchical, neither
-    half pinned and both, in turns on 4 nodes (#36, data/start_unpinned.csv and the hierarchical jobs of
-    data/decomposition_basic.csv, pinned right after MPI_Init); beside it the four placements on scotch a day later (#36 A3,
-    data/pinning.csv), which showed that both halves are needed. An arrow from neither to both in each. No group takes a
-    colour, as none is a tier's record (the user, 11/03: only Baseline, Basic and Bonus have colours, arrows emphasise)."""
-    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], FAINT, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], FAINT, False)]
+    """Main slide 7: the pinning experiment, after scotch was tried and the ranks were found unpinned (the user's 10th round,
+    11/03: decomposition, pinning, then the node tree). On hierarchical neither half pinned and both, in turns on 4 nodes
+    (#36, data/start_unpinned.csv and the hierarchical jobs of data/decomposition_basic.csv, pinned right after MPI_Init);
+    beside it the four placements on scotch a day later (#36 A3, data/pinning.csv), which showed that both halves are
+    needed. An arrow from neither to both in each. hierarchical without pinning is our Baseline's setting, so its jobs take
+    the Baseline's colour, and the times that pinning shortened are navy; the other groups take no colour (the user, 11/03:
+    a result of the Baseline or Basic has its tier's colour wherever it appears, emphasis in blue)."""
+    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], BASE, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], FAINT, False)]
     data = runs("pinning.csv", "configuration")
     scotch = [(label, data[key], FAINT, False) for label, key in PLACEMENTS]
     # the change of the first, short arrow stands left of it, so the axis starts further left
-    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05)
+    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05, emphasis=(1, 5))
 
 
-def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size=11.5, stacked=False):
+def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size=11.5):
     """Panels side by side, each a control and a candidate (tick label, values, colour) on its own axis from 0 (zoomed()),
     with an arrow from one to the other and the change, both as slide shapes (layout())."""
     figure, axes = plt.subplots(1, len(panels), figsize=size, layout="constrained")
@@ -267,7 +268,7 @@ def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size
     for k, (axis, groups) in enumerate(zip(axes, panels)):
         for x, (_, values, color) in enumerate(groups):
             jobs(axis, x, values, color)
-            label_above(axis, x, values, color=INK if color == FAINT else color, size=label_size, stacked=stacked)
+            label_above(axis, x, values, color=INK if color == FAINT else color, size=label_size)
         axis.set_xticks([0, 1], [label for label, _, _ in groups])
         colour_ticks(axis.get_xticklabels(), [INK if color == FAINT else color for _, _, color in groups])
         axis.set_xlim(-0.6, 1.6)
@@ -276,7 +277,7 @@ def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size
         before, after = groups[0][1], groups[1][1]
         both = before + after
         span = max(both) - min(both)
-        bottom, top = min(both) - span * 0.15, max(both) + span * (0.95 if stacked else 0.75)
+        bottom, top = min(both) - span * 0.15, max(both) + span * 0.75
         zoomed(axis, bottom, top, nice_ticks(bottom, top, 4))
         finish(axis, ylabel if k == 0 else "")
         start, end = (0.4, statistics.fmean(before)), (0.5, statistics.fmean(after))
@@ -284,16 +285,6 @@ def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size
         changes.append((axis, (0.34, (start[1] + end[1]) / 2), percent(after, before), {"align": "r", "anchor": "m", "size": 15, "color": palette.NAVY}))
     layout(figure, name, marks, changes)
     save(figure, name)
-
-
-def decomposition():
-    """Main slide 8: Basic's three decompositions, all pinned, each change against its control in turns on 4 nodes:
-    hierarchical against scotch (#36, data/decomposition_basic.csv) and plain scotch against scotch on the node tree (#63).
-    The node tree was measured later against its own scotch control, so the two comparisons take two panels and each
-    change equals the change between its plotted means. Only the node tree's jobs, Basic's record, take a colour."""
-    data = runs("decomposition_basic.csv", "nodes", "method")
-    panels = [[("hierarchical", data[(4, "hierarchical")], FAINT), ("scotch", data[(4, "scotch")], FAINT)], [("scotch", CHANGES[("mapping", 4, "control")], FAINT), ("on the\nnode tree", CHANGES[("mapping", 4, "candidate")], BASIC)]]
-    pairs("p05_decomposition", panels, (6.0, 4.75), titles=["Decomposition", "Node tree"], ylabel="s/step on 4 nodes, each job", stacked=True)
 
 
 def scotch():
@@ -524,7 +515,6 @@ def flame(levels=14):
 
 rule()
 pinning()
-decomposition()
 scotch()
 basic_4node()
 bonus_4node()
