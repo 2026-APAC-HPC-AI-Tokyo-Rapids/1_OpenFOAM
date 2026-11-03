@@ -201,18 +201,19 @@ def rule():
     save(figure, "p07_rule")
 
 
-def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6, emphasis=()):
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD (none for a single job) above it, at x 0, 1, ... or at positions, the first left
-    of the axis's start; the groups whose index is in emphasis have them in navy. clusters name groups that belong
-    together, (label, x) under their tick labels. Each (i, j) in arrows joins the means of groups i and j with a black arrow
-    (the user, 11/03: arrows are black), with the change between them in navy to its left, at the height along the arrow
-    from its end (0) to its start (1), lower where a job of group i stands at the middle; both are slide shapes (layout())."""
+    of the axis's start. A group in navy is emphasised (the user, 11/03), not a tier, so its tick label stays black.
+    clusters name groups that belong together, (label, x) under their tick labels. Each (i, j) in arrows joins the means of
+    groups i and j with a black arrow (the user, 11/03: arrows are black), with the change between them in navy to its
+    left, at the height along the arrow from its end (0) to its start (1), lower where a job of group i stands at the
+    middle; both are slide shapes (layout())."""
     positions = list(range(len(groups))) if positions is None else positions
     figure, axis = plt.subplots(figsize=size, layout="constrained")
-    for k, (x, (_, values, color, hollow)) in enumerate(zip(positions, groups)):
+    for x, (_, values, color, hollow) in zip(positions, groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
-        label_above(axis, x, values, color=NAVY if k in emphasis else INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
+        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
     marks, changes = [], []
     for i, j in arrows:
         before, after = groups[i][1], groups[j][1]
@@ -220,7 +221,7 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
         marks.append((axis, start, end))
         changes.append((axis, (start[0] - 0.06, end[1] + along * (start[1] - end[1])), percent(after, before), {"align": "r", "anchor": "m", "size": 16, "color": palette.NAVY}))
     labels = [label for label, _, _, _ in groups]
-    colors = [INK if color in (MUTED, FAINT) else color for _, _, color, _ in groups]
+    colors = [INK if color in (MUTED, FAINT, NAVY) else color for _, _, color, _ in groups]
     if clusters:
         axis.set_xticks(positions, labels, minor=True)
         axis.set_xticks([x for _, x in clusters], [label for label, _ in clusters])
@@ -241,8 +242,10 @@ def official(method):
     return (f"Official\n{method}", OFFICIAL[(method, 4)], MUTED if method == "hierarchical" else FAINT, method == "hierarchical")
 
 
-# The four ways of placing the ranks on scotch (#36 A3): tick label and configuration in pinning.csv
-PLACEMENTS = [("Neither", "PALS --cpu-bind and --mem-bind only"), ("CPU\nonly", "taskset keeper only (re-pins 12-16 s after start)"), ("Memory\nonly", "numactl --membind only"), ("CPU and\nmemory", "numactl --membind + taskset keeper (adopted for Basic)")]
+# The four ways of placing the ranks on scotch (#36 A3): tick label and configurations in pinning.csv. Neither takes every
+# unpinned job of that day, as the condition is the same (the user, 11/03): the binding the launcher set, of the CPU or of
+# the CPU and the memory, was removed in MPI_Init.
+PLACEMENTS = [("Neither", ("PALS --cpu-bind and --mem-bind only", "PALS --cpu-bind only, case prepared in its own job")), ("CPU\nonly", ("taskset keeper only (re-pins 12-16 s after start)",)), ("Memory\nonly", ("numactl --membind only",)), ("CPU and\nmemory", ("numactl --membind + taskset keeper (adopted for Basic)",))]
 
 
 def pinning():
@@ -251,13 +254,14 @@ def pinning():
     (#36, data/start_unpinned.csv and the hierarchical jobs of data/decomposition_basic.csv, pinned right after MPI_Init);
     beside it the four placements on scotch a day later (#36 A3, data/pinning.csv), which showed that both halves are
     needed. An arrow from neither to both in each. hierarchical without pinning is our Baseline's setting, so its jobs take
-    the Baseline's colour, and the times that pinning shortened are navy; the other groups take no colour (the user, 11/03:
-    a result of the Baseline or Basic has its tier's colour wherever it appears, emphasis in blue)."""
-    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], BASE, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], FAINT, False)]
+    the Baseline's colour, and the jobs that pinning both halves sped up are navy, dots, mean and time; the other groups
+    take no colour (the user, 11/03: a result of the Baseline or Basic has its tier's colour wherever it appears, emphasis
+    in blue)."""
+    hierarchical = [("Neither", runs("start_unpinned.csv", "nodes")[4], BASE, False), ("CPU and\nmemory", runs("decomposition_basic.csv", "nodes", "method")[(4, "hierarchical")], NAVY, False)]
     data = runs("pinning.csv", "configuration")
-    scotch = [(label, data[key], FAINT, False) for label, key in PLACEMENTS]
+    scotch = [(label, [value for key in keys for value in data[key]], NAVY if label == "CPU and\nmemory" else FAINT, False) for label, keys in PLACEMENTS]
     # the change of the first, short arrow stands left of it, so the axis starts further left
-    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05, emphasis=(1, 5))
+    tiers("p10_pinning", hierarchical + scotch, (7.53, 5.1), 2.6, 4.8, [3.0, 3.5, 4.0, 4.5], arrows=[(0, 1), (2, 5)], label_size=11.5, stacked=True, positions=[0, 1, 2.7, 3.7, 4.7, 5.7], clusters=[("hierarchical", 0.5), ("scotch", 4.2)], left=1.05)
 
 
 def pairs(name, panels, size, titles=None, ylabel="s/step, each job", label_size=11.5):

@@ -472,11 +472,11 @@ def m_decomposition():
     ranks unpinned, then the node tree): the case default hierarchical against scotch, laid out like the multiLevel slide,
     with their faces and times per step on 4 nodes before the ranks were pinned. hierarchical without pinning (#36, 10/02,
     3 jobs, data/start_unpinned.csv) is our Baseline's setting, so its time takes the Baseline's colour; scotch without
-    pinning is Neither of the placement experiment (#36 A3, 10/03, 2 jobs, data/pinning.csv). The two did not run in turns;
-    Q41 says so, with the comparison in turns once pinned (supporting slide 30)."""
+    pinning is Neither of the placement experiment, every unpinned job of 10/03 (#36 A3, 6 jobs, data/pinning.csv). The two
+    did not run in turns; Q41 says so, with the comparison in turns once pinned (supporting slide 30)."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
-    rows = [["", "hierarchical", "scotch", "Change"]] + face_rows("hier", "scotch") + [["Time, s/step", "3.670", "3.395", "−7.5%"]]
+    rows = [["", "hierarchical", "scotch", "Change"]] + face_rows("hier", "scotch") + [["Time, s/step", "3.670", "3.428", "−6.6%"]]
     blocks = [("hierarchical", ["method  hierarchical;", "hierarchicalCoeffs", "{ n  (16 8 4); }"], 3.24), ("scotch", ["method  scotch;"], 3.24)]
     decomposition_pair(s, blocks, "Faces between subdomains in millions and time per step on 4 nodes, without pinning.", rows, [2.98, 1.6, 0.95, 1.15], [None] * 5 + [[INK, BASE, INK, NAVY]], (("hier", "hierarchical"), ("scotch", "scotch")))
     set_notes(s, PLAN_NOTES[4])
@@ -490,7 +490,7 @@ def m_pinning_results():
     comes after the decomposition, as the work went, so the bullets lead with scotch; the times are the plot's labels."""
     s = main_slide(13)
     set_title(s, "PINNING RESULTS")
-    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 14.1% off a step with scotch and 11.2% with hierarchical.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
+    bullets(s, X0, 1.5, 4.25, 5.4, ["Pinning both took 14.9% off a step with scotch and 11.2% with hierarchical.", "Pinning only the CPU or only the memory did not help.", "Pinned jobs varied less, so smaller gains could be seen."], size=19, space_after=24)
     figure(s, "p10_pinning", 5.1, 1.3, 7.53, "Each job under each placement of the ranks on 4 nodes, with hierarchical and with scotch.")
     set_notes(s, PLAN_NOTES[6])
     return s
@@ -513,10 +513,10 @@ def m_node_tree():
 def basic_table(s, x, y, w):
     """Each Basic step against its own control on 4 nodes, as the Bonus results give theirs, in the order of the work (the
     user's 10th round, 11/03): scotch against hierarchical without pinning (#36, 10/02 and 10/03, not in turns), pinning on
-    scotch (#36 A3), the node mapping in turns (#63), and Basic against our Baseline, two periods apart; returns the
-    bottom."""
+    scotch (#36 A3, every unpinned job of the day), the node mapping in turns (#63), and Basic against our Baseline, two
+    periods apart; returns the bottom."""
     top = table_caption(s, x, y, w, "Each Basic step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["scotch instead of hierarchical", "3.670 → 3.395", "−7.5%"], ["CPU and memory pinning", "3.395 → 2.917", "−14.1%"], ["scotch on the node tree", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
+    rows = [["Step", "s/step", "Change"], ["scotch instead of hierarchical", "3.670 → 3.428", "−6.6%"], ["CPU and memory pinning", "3.428 → 2.917", "−14.9%"], ["scotch on the node tree", "2.918 → 2.898", "−0.7%"], ["Basic against our Baseline", "3.650 → 2.898", "−20.6%"]]
     heights = [0.47, 0.62, 0.62, 0.62, 0.62]
     table(s, x, top + 0.05, [2.3, 1.95, 1.25], rows, row_heights=heights, size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BASIC, NAVY, NAVY]])
     return top + 0.05 + sum(heights)
@@ -616,9 +616,9 @@ def m_memory_limit():
     4 nodes, every rank pinned, STREAM triad on the same nodes after the solver. Each placement is one node as a row of CPU
     blocks over a row of memory channels, so that the halved resource can be seen (the user, 11/02: simpler than the chips
     of the 8th edition's first build); then the ranks and channels per node, the time and the bandwidth, and arrows between
-    the rows. The colours are the user's hand edit (11/02): the cores in navy and the channels in green, what was halved in
-    red; both arrows are black and the times too, as only the tiers' results have colours, the change beside the arrow
-    staying navy (the user, 11/03)."""
+    the rows. The colours are the user's hand edits: the cores in navy and the channels in green, what was halved in red
+    (11/02), and since 11/03 18:29 also the time and the bandwidth that halving the channels cost, with "2.2 times the
+    time" black like the arrows."""
     s = reuse(9)
     set_title(s, "MEASURING THE MEMORY LIMIT")
     pitch, top, bar_w, xc, xr, xa = 1.5, 1.45, 4.95, 5.8, 7.65, 10.45
@@ -628,12 +628,13 @@ def m_memory_limit():
         usage_bar(s, X0, y + 0.52, bar_w, 0.4, "Memory", memory, MEMORY)
         for i, (line, yy) in enumerate(zip(label, (y, y + 0.52))):
             add_text(s, xc, yy, xr - xc - 0.1, 0.4, [line], size=17, color=RED if i == halved else INK, anchor="m")
-        add_text(s, xr, y - 0.02, xa - xr - 0.15, 0.5, [time], size=23, anchor="m")
-        add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, anchor="m")
+        cost = RED if halved == 1 else INK  # the half-channel row: the time and bandwidth it lost
+        add_text(s, xr, y - 0.02, xa - xr - 0.15, 0.5, [time], size=23, color=cost, anchor="m")
+        add_text(s, xr, y + 0.5, xa - xr - 0.15, 0.42, [bandwidth], size=16, color=cost, anchor="m")
     for k, (cause, effect) in enumerate((("Half the cores", "the same time"), ("Half the channels", "2.2 times the time"))):
         y1, y2 = top + k * pitch + 0.46, top + (k + 1) * pitch + 0.46
         arrow_line(s, xa, y1, xa, y2 - 0.05, color=INK, width=2.25)
-        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": RED}, {"runs": [effect], "color": NAVY if k else INK}], size=15, anchor="m")
+        add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": RED}, {"runs": [effect]}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
     caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
     add_text(s, X0, bottom + 0.6, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
@@ -647,16 +648,17 @@ def m_bonus_decomposition():
     the two coloured by node and NUMA domain, Basic's drawn on Genkai (the user, 11/02: put it on the slide) over the key to
     their colours. multiLevel's domains are (2 4 16) on 1 node and (2 2 4 16) on 2. Faces from the decomposePar logs (#42 for
     multiLevel against plain scotch, REPORT §6.3 for the mapping); times against plain scotch in alternated runs (#42,
-    4 v 4; #63, 5 v 5)."""
+    4 v 4; #63, 5 v 5), whose controls both took 2.918 s/step. The times themselves stand under their changes (the user,
+    11/03: not only the %), Basic's in Basic's colour; the code is as compact as on the decomposition slides to make room."""
     s = reuse(10)
     set_title(s, "MULTILEVEL DECOMPOSITION")
     w, cw = 6.2, 3.0
-    for x, title, lines in ((X0, "Basic, one scotch run", ["method  scotch;", "scotchCoeffs", "{", "    domains  (2 4 16);", "    // and its weights", "}"]), (X0 + cw + 0.2, "Bonus, scotch per level", ["method  multiLevel;", "multiLevelCoeffs", "{", "    method   scotch;", "    domains  (4 2 4 16);", "}"])):
+    for x, title, lines in ((X0, "Basic, one scotch run", ["method  scotch;", "scotchCoeffs", "{ domains  (2 4 16);", "  domainWeights  (…); }"]), (X0 + cw + 0.2, "Bonus, scotch per level", ["method  multiLevel;", "multiLevelCoeffs", "{ method  scotch;", "  domains  (4 2 4 16); }"])):
         heading(s, x, 1.3, cw, title, size=16)
         bottom = code(s, x, 1.72, cw, lines)
-    top = table_caption(s, X0, bottom + 0.3, w, "Each against plain scotch on 4 nodes.")
-    rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"]]
-    table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_heights=[0.45, 0.47, 0.47, 0.72, 0.47], size=17, aligns=["l", "r", "r"])
+    top = table_caption(s, X0, bottom + 0.3, w, "Each against plain scotch at 2.918 s/step on 4 nodes.")
+    rows = [["", "Basic", "multiLevel"], ["Faces between nodes", "−22.7%", "−38.3%"], ["Faces between sockets", "−21.3%", "−33.5%"], ["Faces between NUMA domains", "−10.4%", "−25.7%"], ["Time per step", "−0.7%", "−1.5%"], ["Time, s/step", "2.898", "2.873"]]
+    table(s, X0, top + 0.05, [3.15, 1.3, 1.75], rows, row_heights=[0.45, 0.47, 0.47, 0.72, 0.47, 0.47], size=17, aligns=["l", "r", "r"], colors=[None] * 4 + [[INK, NAVY, NAVY], [INK, BASIC, INK]])
     pw, xr = 2.62, 12.63 - 2 * 2.62 - 0.15
     # the domains in the heading and its wider box are the user's hand edit (11/02), with multiLevel spelt as OpenFOAM does;
     # the names are black, as only the tiers have colours (the user, 11/03)
@@ -894,7 +896,7 @@ def s_pinning_decomposition():
     coloured, as only the tiers have colours (the user, 11/03)."""
     s = supp(41, "PINNING AND DECOMPOSITION", "s_pinning_decomposition")
     top = table_caption(s, X0, 1.35, 6.4, "Time per step on 4 nodes, each decomposition without and with pinning.", h=0.7)
-    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.670", "3.257", "−11.2%"], ["scotch", "3.395", "2.915", "−14.1%"], ["scotch against hierarchical", "−7.5%", "−10.5%", ""]]
+    rows = [["s/step", "Not pinned", "Pinned", "Pinning"], ["hierarchical (16 8 4)", "3.670", "3.257", "−11.2%"], ["scotch", "3.428", "2.915", "−15.0%"], ["scotch against hierarchical", "−6.6%", "−10.5%", ""]]
     table(s, X0, top + 0.05, [2.9, 1.25, 1.25, 1.3], rows, row_h=0.62, size=17, aligns=["l", "r", "r", "r"])
     xr = 7.6
     top = table_caption(s, xr, 1.35, 12.63 - xr, "The slowest rank's computation against the median rank's on 4 nodes.", h=0.7)

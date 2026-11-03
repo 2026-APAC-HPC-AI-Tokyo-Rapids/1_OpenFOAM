@@ -11,4 +11,8 @@ taskset keeper only (re-pins 12-16 s after start),128/128,,37127540803,3.4098
 taskset keeper only (re-pins 12-16 s after start),128/128,,37128534595,3.4629
 PALS --cpu-bind and --mem-bind only,0/128,0.07,37131371136,3.3763
 PALS --cpu-bind and --mem-bind only,0/128,,37131937125,3.4137
+"PALS --cpu-bind only, case prepared in its own job",,,37117905768,3.5561
+"PALS --cpu-bind only, case prepared in its own job",,,37123797027,3.3593
+"PALS --cpu-bind only, case prepared in its own job",,,37124558353,3.4248
+"PALS --cpu-bind only, case prepared in its own job",0/128,,37125347729,3.4368
 numactl --membind only,0/128,0.57,37133155192,4.3796
