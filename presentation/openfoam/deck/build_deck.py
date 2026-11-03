@@ -89,10 +89,11 @@ def answers(text):
 
 
 def plan_notes():
-    """The notes of the 24 main slides from slides.md: the time and what has to be said, as bullets (言うこと; the user,
-    11/04: the teammates who present will not read a script), then the English script for reference and its translation,
-    the questions the slide may draw (想定質問, answered from the 想定問答) and its supporting slides (補足), as the user
-    asked (11/03); the memos stay in slides.md."""
+    """The notes of the 24 main slides from slides.md: the time and what has to be said, as short English bullets (言うこと;
+    the user, 11/04: the presenter is a native speaker who reads no script, so the points follow the user's own outline),
+    then the English script for reference and its translation, the questions the slide may draw (想定質問, answered from
+    the 想定問答) and its supporting slides (補足), as the user asked (11/03); the memos and the 14th round's Japanese
+    points stay in slides.md."""
     text = PLAN.read_text(encoding="utf-8")
     qa = answers(text)
     body = text[text.index("\n## 本編"):text.index("\n## 入れなかったもの")]
@@ -105,7 +106,7 @@ def plan_notes():
         translation = re.search(r"^訳：(.+)$", rest, re.MULTILINE).group(1)
         questions = [int(n) for n in re.findall(r"Q(\d+)", re.search(r"^想定質問：(.+)$", rest, re.MULTILINE).group(1))]
         supporting = re.search(r"^補足：(.+)$", rest, re.MULTILINE).group(1)
-        notes.append(f"[{time}]\n言うこと:\n{points}\n\n参考原稿（EN）: {script}\n\n訳: {translation}\n\n想定質問:\n\n" + "\n\n".join(qa[n] for n in questions) + f"\n\n補足: {supporting}")
+        notes.append(f"[{time}]\nSay:\n{points}\n\nScript (reference): {script}\n\n訳: {translation}\n\nQuestions (想定質問):\n\n" + "\n\n".join(qa[n] for n in questions) + f"\n\nSupporting slides (補足): {supporting}")
     if len(notes) != 24:
         raise SystemExit(f"slides.md has {len(notes)} main slides instead of 24; see README.md")
     return notes
