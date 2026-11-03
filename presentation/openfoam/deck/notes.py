@@ -1,14 +1,19 @@
 """Speaker notes of the cover, the Q&A index and the supporting slides: an English answer for the questions the slide is for,
-then a Japanese memo for the team (sources, caveats). The notes of the 20 main slides come from ../slides.md (build_deck.py
-plan_notes), where the script, its translation and the memo are written."""
+then a Japanese memo for the team (sources, caveats); the cover's like the main slides', what to say first. The notes of
+the 24 main slides come from ../slides.md (build_deck.py plan_notes), where what to say, the script, its translation and
+the memo are written."""
 
 NOTES = {}
 
 NOTES["cover"] = """
 [0:05]
-EN: We are Tokyo Rapids with RIKEN. We start with the HPC task, OpenFOAM.
+言うこと:
+- チーム名（Tokyo Rapids with RIKEN）を言う
+- HPCの課題、OpenFOAMの発表から始める
 
-訳（参考）: Tokyo Rapids with RIKENです。HPCの課題、OpenFOAMから始めます。
+参考原稿（EN）: We are Tokyo Rapids with RIKEN. We start with the HPC task, OpenFOAM.
+
+訳: Tokyo Rapids with RIKENです。HPCの課題、OpenFOAMから始めます。
 """
 
 NOTES["index"] = """

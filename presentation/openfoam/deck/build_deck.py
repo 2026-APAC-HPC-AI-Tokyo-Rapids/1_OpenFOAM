@@ -89,9 +89,10 @@ def answers(text):
 
 
 def plan_notes():
-    """The notes of the 24 main slides from slides.md: the time, the English script and its translation, then the
-    questions the slide may draw (想定質問, answered from the 想定問答) and its supporting slides (補足), as the user asked
-    (11/03); the memos stay in slides.md."""
+    """The notes of the 24 main slides from slides.md: the time and what has to be said, as bullets (言うこと; the user,
+    11/04: the teammates who present will not read a script), then the English script for reference and its translation,
+    the questions the slide may draw (想定質問, answered from the 想定問答) and its supporting slides (補足), as the user
+    asked (11/03); the memos stay in slides.md."""
     text = PLAN.read_text(encoding="utf-8")
     qa = answers(text)
     body = text[text.index("\n## 本編"):text.index("\n## 入れなかったもの")]
@@ -99,11 +100,12 @@ def plan_notes():
     for section in body.split("\n### ")[1:]:
         head, rest = section.split("\n", 1)
         time = re.search(r"（(\d+:\d\d)）$", head).group(1)
+        points = re.search(r"^言うこと：\n((?:- .+\n)+)", rest, re.MULTILINE).group(1).rstrip("\n")
         script = re.search(r"^原稿（[^）]*）：(.+)$", rest, re.MULTILINE).group(1)
         translation = re.search(r"^訳：(.+)$", rest, re.MULTILINE).group(1)
         questions = [int(n) for n in re.findall(r"Q(\d+)", re.search(r"^想定質問：(.+)$", rest, re.MULTILINE).group(1))]
         supporting = re.search(r"^補足：(.+)$", rest, re.MULTILINE).group(1)
-        notes.append(f"[{time}]\nEN: {script}\n\n訳（参考）: {translation}\n\n想定質問:\n\n" + "\n\n".join(qa[n] for n in questions) + f"\n\n補足: {supporting}")
+        notes.append(f"[{time}]\n言うこと:\n{points}\n\n参考原稿（EN）: {script}\n\n訳: {translation}\n\n想定質問:\n\n" + "\n\n".join(qa[n] for n in questions) + f"\n\n補足: {supporting}")
     if len(notes) != 24:
         raise SystemExit(f"slides.md has {len(notes)} main slides instead of 24; see README.md")
     return notes
@@ -183,7 +185,9 @@ def overlay(s, marks, x, y, w, h):
     for text in marks["texts"]:
         lines = text["text"].split("\n")
         size = round(text["size"] * scale, 1)
-        tw, th = (1.2 if text["align"] == "c" else 1.6), len(lines) * size * 1.6 / 72  # a line of Meiryo, to grab by hand
+        # a box wide enough for its longest line of Meiryo bold, and at least wide enough to grab by hand
+        tw = max(1.2 if text["align"] == "c" else 1.6, max(map(len, lines)) * size * 0.62 / 72 + 0.15)
+        th = len(lines) * size * 1.6 / 72
         px, py = on_slide(text["at"])
         left = {"l": px, "c": px - tw / 2, "r": px - tw}[text["align"]]
         top = {"t": py, "m": py - th / 2, "b": py - th}[text["anchor"]]
@@ -376,13 +380,16 @@ def m_baseline():
     s = reuse(1, keep=("flow-iterations",))
     set_title(s, "OUR BASELINE")
     w = 6.3
-    top = table_caption(s, X0, 1.3, w, "How we built and ran our Baseline.")
-    rows = [["Code", "OpenFOAM v2512, unmodified"], ["Compiler", "GCC 11.2 -O3, AMD AOCL-LibM"], ["MPI", "Cray MPICH 8.1.15 over UCX"], ["Decomposition", "hierarchical (16 8 4)"], ["Ranks", "128 per node, bound at launch"]]
+    # the captions' words, "Unmodified OpenFOAM v2512", the video centred under the table and its caption centred in
+    # 12 pt are the user's hand edit (11/04 00:23)
+    top = table_caption(s, X0, 1.3, w, "Our Baseline composition.")
+    rows = [["Code", "Unmodified OpenFOAM v2512"], ["Compiler", "GCC 11.2 -O3, AMD AOCL-LibM"], ["MPI", "Cray MPICH 8.1.15 over UCX"], ["Decomposition", "hierarchical (16 8 4)"], ["Ranks", "128 per node, bound at launch"]]
     row_h = 0.44
     label_value_table(s, X0, top + 0.05, [2.15, w - 2.15], rows, row_h=row_h, size=17)
-    vy, vh = top + 0.05 + row_h * len(rows) + 0.25, 2.05
-    place(s, "flow-iterations", X0, vy, vh * 5.33 / 3.0, vh)  # the video's own 16:9 frame
-    caption(s, X0, vy + vh + 0.06, w, "Flow around the car over the 150 iterations, drawn with ParaView.")
+    vy, vh = top + 0.05 + row_h * len(rows) + 0.45, 2.05
+    vw = vh * 5.33 / 3.0  # the video's own 16:9 frame
+    place(s, "flow-iterations", X0 + (w - vw) / 2, vy, vw, vh)
+    caption(s, X0, vy + vh + 0.09, w, "Visualization of the flow around a car using ParaView.", size=12, align="c")
     figure(s, "p_baseline", 7.15, 1.3, 5.48, "Each job of the official runs and our Baseline on 4 nodes, with the mean and SD of each.")
     return s
 
@@ -461,31 +468,41 @@ def m_pinning():
 # multiLevel from the Genkai decomposition of 11/02 (~/apac26/decomposition-genkai-20261102/run/logFiles/), which matches
 # the measured runs subdomain by subdomain and gives #42's counts.
 FACES = {"hier": (2331023, 2467577, 3628785, 4306118), "scotch": (337324, 492282, 1047405, 2927022), "basic": (260748, 387196, 938403, 3022295), "multi": (208092, 327131, 778614, 2811816)}
+# The cells of the largest of the 512 subdomains, from the same logs ("Max number of cells"); 127,607 on average in all:
+# hierarchical cuts equal cells, the scotch decompositions keep them within 1% or 2% (the user, 11/04: the cell counts
+# matter for hierarchical, so show them beside the faces).
+LARGEST = {"hier": 127609, "scotch": 128975, "basic": 128883, "multi": 129985}
 # The two decompositions of each decomposition slide and of the results slide after it: blocks of (heading over the code,
 # decomposeParDict lines, width) and columns of (picture column, heading over the picture), for decomposition_pair().
 DECOMPOSITION = ([("hierarchical", ["method  hierarchical;", "hierarchicalCoeffs", "{ n  (16 8 4); }"], 3.24), ("scotch", ["method  scotch;"], 3.24)], (("hier", "hierarchical"), ("scotch", "scotch")))
 NODE_TREE = ([("scotch", ["method  scotch;"], 2.5), ("scotch on the node tree", ["method  scotch;", "scotchCoeffs", "{ domains  (2 4 16);", "  domainWeights  (…); }"], 3.98)], (("scotch", "scotch"), ("basic", "scotch (2 4 16)")))
 MULTILEVEL = ([("Basic, one scotch run", ["method  scotch;", "scotchCoeffs", "{ domains  (2 4 16);", "  domainWeights  (…); }"], 3.0), ("Bonus, scotch per level", ["method  multiLevel;", "multiLevelCoeffs", "{ method  scotch;", "  domains  (4 2 4 16); }"], 3.0)], (("basic", "scotch (2 4 16)"), ("multi", "multiLevel (4 2 4 16)")))
-FACES_CAPTION = "Faces between subdomains in millions on 4 nodes."
+FACES_CAPTION = "Cells and faces of the subdomains on 4 nodes."
+
+
+def change(after, before):
+    return f"{(after / before - 1) * 100:+.1f}%".replace("-", "−")
 
 
 def face_rows(before, after):
-    """Rows of a table: the faces between nodes, sockets and NUMA domains and in all (FACES) of two decompositions, in
-    millions, and the change from the first to the second."""
-    rows = []
+    """Rows of a table: the cells of the largest subdomain (LARGEST) and the faces between nodes, sockets and NUMA domains
+    and in all (FACES) of two decompositions, the faces in millions written with their M (the user, 11/04), and the
+    change from the first to the second."""
+    rows = [["Cells in the largest subdomain", f"{LARGEST[before]:,}", f"{LARGEST[after]:,}", change(LARGEST[after], LARGEST[before])]]
     for k, label in enumerate(("Faces between nodes", "Faces between sockets", "Faces between NUMA domains", "Faces in all")):
         a, b = FACES[before][k], FACES[after][k]
-        rows.append([label, f"{a / 1e6:.2f}", f"{b / 1e6:.2f}", f"{(b / a - 1) * 100:+.1f}%".replace("-", "−")])
+        rows.append([label, f"{a / 1e6:.2f} M", f"{b / 1e6:.2f} M", change(b, a)])
     return rows
 
 
-def decomposition_pair(s, pair, faces=None, plot=None, pw=2.4):
+def decomposition_pair(s, pair, faces=None, plot=None, pw=2.25):
     """Two decompositions laid out like the multiLevel slide (the user's 10th round, 11/03): on the left each in
-    decomposeParDict's own words, the blocks of pair, and under them either the faces between their subdomains, faces =
-    (header, widths, rows), or each job's time, plot = (name, caption), since the faces and the time are told on two slides
-    in this layout (the user's 13th round, 11/03: one thing per slide); on the right their pictures with all three views,
-    pw wide, the columns of pair, over the key to the colours. The decompositions' names are blue over the code and over
-    the pictures (the user's hand edits, 11/03 19:19 and 22:36)."""
+    decomposeParDict's own words, the blocks of pair, and under them either the cells and faces of their subdomains, faces
+    = (header, widths, rows), or each job's time, plot = (name, caption), since the faces and the time are told on two
+    slides in this layout (the user's 13th round, 11/03: one thing per slide); on the right their pictures with all three
+    views, pw wide, the columns of pair, over the key to the colours. The decompositions' names are blue over the code and
+    over the pictures (the user's hand edits, 11/03 19:19 and 22:36), 16 pt in both places, so that "multiLevel (4 2 4
+    16)" fits over its picture; the pictures are 2.25 in wide so that the tables' full cell counts fit beside them."""
     blocks, columns = pair
     x, bottom = X0, 0
     for title, lines, cw in blocks:
@@ -496,13 +513,13 @@ def decomposition_pair(s, pair, faces=None, plot=None, pw=2.4):
     if faces:
         header, widths, rows = faces
         top = table_caption(s, X0, bottom + 0.3, sum(widths), FACES_CAPTION)
-        table(s, X0, top + 0.05, widths, [header] + rows, row_heights=[0.5, 0.56, 0.56, 0.86, 0.56], size=16, aligns=["l", "r", "r", "r"])
+        table(s, X0, top + 0.05, widths, [header] + rows, row_heights=[0.45, 0.72, 0.5, 0.5, 0.72, 0.5], size=16, aligns=["l", "r", "r", "r"])
     else:
         name, text = plot
         figure(s, name, X0, bottom + 0.3, xr - X0 - 0.3, text)
     for k, (which, label) in enumerate(columns):
         x = xr + k * (pw + 0.15)
-        add_text(s, x - 0.15, 1.3, pw + 0.3, 0.42, [label], size=18, color=PICTURE, align="c")
+        add_text(s, x - 0.35, 1.3, pw + 0.7, 0.42, [label], size=16, color=PICTURE, align="c")
         panel_bottom = decomp_panel(s, which, x, 1.72, pw)
     key = numa_key(s, xr, panel_bottom + 0.1, 2 * pw + 0.15)
     caption(s, xr, key + 0.12, 2 * pw + 0.15, "The subdomains on the car, the centre plane and a cross-section, one hue per node and one shade per NUMA domain.", h=0.8)
@@ -515,7 +532,7 @@ def m_decomposition():
     stays in lower case over the table (the user's hand edit, 11/03 22:36), as in the code and over the pictures."""
     s = reuse(6)
     set_title(s, "DECOMPOSITION")
-    decomposition_pair(s, DECOMPOSITION, faces=(["", "hierarchical", "scotch", "Change"], [2.98, 1.6, 0.95, 1.15], face_rows("hier", "scotch")))
+    decomposition_pair(s, DECOMPOSITION, faces=(["", "hierarchical", "scotch", "Change"], [2.92, 1.72, 1.22, 1.17], face_rows("hier", "scotch")))
     return s
 
 
@@ -551,7 +568,7 @@ def m_node_tree():
     (2 4 16)", as on the multiLevel slide, is the user's hand edit (11/03 19:19)."""
     s = reuse(15)
     set_title(s, "SCOTCH ON THE NODE TREE")
-    decomposition_pair(s, NODE_TREE, faces=(["", "scotch", "node tree", "Change"], [2.98, 0.95, 1.6, 1.15], face_rows("scotch", "basic")))
+    decomposition_pair(s, NODE_TREE, faces=(["", "scotch", "node tree", "Change"], [2.92, 1.25, 1.58, 1.28], face_rows("scotch", "basic")))
     return s
 
 
@@ -564,27 +581,21 @@ def m_node_tree_results():
     return s
 
 
-def chain(before, after, first=None, last=None):
-    """A table cell "before → after" in s/step, a time that is a tier's in that tier's colour (the user's hand edit of the
-    Basic results, 11/03 19:19); the arrow keeps the cell's colour."""
-    return [[(before, {"color": first} if first else {}), (" → ", {}), (after, {"color": last} if last else {})]]
-
-
 def m_basic_results():
-    """Basic against our Baseline in two plots (the user's 13th round, 11/03: the table of steps as a plot, the video moved to
-    our Baseline's slide): on the left each step's jobs in the order of the work, scotch against our Baseline (not in
-    turns), pinning on scotch (#36 A3, every unpinned job of the day) and the node tree (#63), each with its change; on the
-    right the official runs, our Baseline and Basic, with Basic's change (the user, 11/02)."""
+    """Basic in one plot across the slide (the user's 14th round, 11/04: the steps and the comparison with the official runs
+    in one graph; the video went to our Baseline's slide in the 13th): the official runs, then each step's jobs in the
+    order of the work, scotch against our Baseline (not in turns), pinning on scotch (#36 A3, every unpinned job of the day)
+    and the node tree (#63), each with its change, and Basic's change from our Baseline over its jobs."""
     s = main_slide(43)
     set_title(s, "BASIC RESULTS")
-    figure(s, "p_steps", X0, 1.3, 5.55, "Each job of each Basic step on 4 nodes, with the mean and SD of each.")
-    figure(s, "p12_basic", 6.43, 1.3, 6.2, "Each job of the official runs, our Baseline and Basic on 4 nodes, with the mean and SD of each.")
+    figure(s, "p_basic", X0, 1.3, XW, "Each job of the official runs, our Baseline and each Basic step on 4 nodes, with the mean and SD of each.", h=0.42)
     return s
 
 
 def m_basic_mpi():
     """The MPI profile of the MPI calls slide again after Basic, the calls by count and by time, per rank, against our Baseline
-    (the user, 11/02: the calls too, and no copy of the plot of the Basic results). CrayPAT, whole runs of 40 steps:
+    (the user, 11/02: the calls too, and no copy of the plot of the Basic results), right after the Basic results since the
+    14th round (the user, 11/04: MPI is no longer the subject once the Bonus starts). CrayPAT, whole runs of 40 steps:
     Baseline 38219766511 (#62), Basic before its mapping onto the node 37176272426 (#36, plain scotch, pinned); no profile of
     the mapped Basic exists, and the mapping changed a step by 0.7%. Basic's default report leaves out the calls that take
     little time, MPI_Test among them, so the third row by count is every MPI call but the six it lists (Isend, Irecv,
@@ -623,12 +634,13 @@ def m_not_helped_basic():
 
 
 def m_profile_basic():
-    """The bottlenecks after Basic in the rows of the Baseline's table. Outside MPI is told apart into what the cores did
-    (the user, 11/03: say that the computing itself was short, that the cores were not busy): the core counters give the
-    instructions per cycle; CPU utilisation cannot, since a core that waits for memory counts as busy (Q42)."""
+    """The bottlenecks after Basic in the rows of the Baseline's table, opening the Bonus. Outside MPI is told apart into
+    what the cores did (the user, 11/03: say that the computing itself was short, that the cores were not busy): the core
+    counters give the instructions per cycle; CPU utilisation cannot, since a core that waits for memory counts as busy
+    (Q42). MPI's share is given now first and then before (the user, 11/04)."""
     s = reuse(8)
     set_title(s, "PROFILING BASIC")
-    rows = [["Possible bottleneck", "How we measured it", "What we found after Basic"], ["MPI", "CrayPAT", "Fell from 46% to 19% of the time"], ["Outside MPI", "CrayPAT", "The other 81%, computing and waiting for memory"], ["Computing", "AMD uProf core counters", "Only 0.4 to 0.7 instructions per cycle and about 0.1 flop per byte, so the cores were mostly waiting"], ["Memory bandwidth", "Memory controller counters", "Not readable by users on ASPIRE-2A"]]
+    rows = [["Possible bottleneck", "How we measured it", "What we found after Basic"], ["MPI", "CrayPAT", "19% of the time, down from 46%"], ["Outside MPI", "CrayPAT", "The other 81%, computing and waiting for memory"], ["Computing", "AMD uProf core counters", "Only 0.4 to 0.7 instructions per cycle and about 0.1 flop per byte, so the cores were mostly waiting"], ["Memory bandwidth", "Memory controller counters", "Not readable by users on ASPIRE-2A"]]
     top = table_caption(s, X0, 1.35, XW, "Each possible bottleneck after Basic, how we measured it and what we found.")
     table(s, X0, top + 0.05, [2.9, 3.9, 5.13], rows, row_heights=[0.58, 0.98, 0.98, 1.6, 0.98], size=18, colors=[None, None, None, [INK, INK, NAVY], [INK, INK, NAVY]])
     return s
@@ -682,7 +694,8 @@ def m_memory_limit():
         add_text(s, xa + 0.15, (y1 + y2) / 2 - 0.4, 12.63 - xa - 0.15, 0.8, [{"runs": [cause], "color": RED}, {"runs": [effect]}], size=15, anchor="m")
     bottom = top + 3 * pitch - 0.35
     caption(s, X0, bottom, XW, "One node under each placement, with the cores that run ranks in navy and the channels in use in green.", h=0.4)
-    add_text(s, X0, bottom + 0.6, XW, 0.8, ["A step slowed as much as the bandwidth fell, so about 97% of it follows the memory bandwidth."], size=19)
+    # the ratio itself, not the 97% fitted from it, which the user found hard to read (11/04; the fit is in slides.md)
+    add_text(s, X0, bottom + 0.6, XW, 0.8, ["With half the channels a step took 2.2 times as long and the bandwidth was 2.2 times lower, so memory bandwidth sets the speed."], size=19)
     return s
 
 
@@ -693,11 +706,10 @@ def m_bonus_decomposition():
     their colours, laid out like the decomposition slides. multiLevel's domains are (2 4 16) on 1 node and (2 2 4 16) on
     2. The faces are those of the two in millions with the change from Basic, as on the other decomposition slides (the
     user's 13th round, 11/03: the changes of each against plain scotch, −22.7% and −38.3% between nodes, were unclear);
-    the times are on the next slide. The pictures are a little wider than there, so that "multiLevel (4 2 4 16)", the
-    user's heading of 11/02, stays on one line."""
+    the times are on the next slide."""
     s = reuse(10)
     set_title(s, "MULTILEVEL DECOMPOSITION")
-    decomposition_pair(s, MULTILEVEL, faces=(["", "Basic", "multiLevel", "Change"], [2.9, 0.85, 1.45, 1.28], face_rows("basic", "multi")), pw=2.5)
+    decomposition_pair(s, MULTILEVEL, faces=(["", "Basic", "multiLevel", "Change"], [2.92, 1.25, 1.62, 1.24], face_rows("basic", "multi")))
     return s
 
 
@@ -708,7 +720,7 @@ def m_multilevel_results():
     (11/03 22:36)."""
     s = new_slide()
     set_title(s, "MULTILEVEL RESULTS")
-    decomposition_pair(s, MULTILEVEL, plot=("p_multilevel", "Each job of Basic and multiLevel on 4 nodes, with the mean and SD of each."), pw=2.5)
+    decomposition_pair(s, MULTILEVEL, plot=("p_multilevel", "Each job of Basic and multiLevel on 4 nodes, with the mean and SD of each."))
     return s
 
 
@@ -814,18 +826,15 @@ def m_examples():
 
 
 def m_bonus_results():
-    """The Bonus against the official runs, our Baseline and Basic (the user, 11/02), and each Bonus step against its own
-    control in a table instead of the counters, which went to the supporting slides; Basic's and the Bonus's times in
-    their colours, as the user coloured the Basic results (11/03 19:19). multiLevel's step starts from Basic, as the user
-    wrote by hand (11/03 22:36): Basic's jobs against multiLevel's, each run in turns with plain scotch at 2.918 s/step
-    (the multiLevel results slide, Q45); against plain scotch itself multiLevel was −1.5%."""
+    """The Bonus in one plot across the slide, like the Basic results (the user's 14th round, 11/04: a trajectory with
+    multiLevel and the source changes, shown large, instead of the table of steps): the official runs and our Baseline
+    (the user, 11/02), then Basic, multiLevel, the first four source changes and the Bonus, each step with its change and
+    the Bonus's change from Basic over its jobs; multiLevel's step starts from Basic, as the user wrote by hand (11/03
+    22:36; Q45), and the first four are the jobs that ran in turns with the final Bonus. Cd under the plot (R3)."""
     s = reuse(11)
     set_title(s, "BONUS RESULTS")
-    top = table_caption(s, X0, 1.3, 5.75, "Each Bonus step against its control on 4 nodes.")
-    rows = [["Step", "s/step", "Change"], ["multiLevel instead of the node tree", chain("2.898", "2.873", first=BASIC), "−0.8%"], ["First four source changes", "2.873 → 2.599", "−9.5%"], ["Ten more source changes", chain("2.603", "2.360", last=BONUS), "−9.3%"], ["Bonus against Basic", chain("2.898", "2.360", BASIC, BONUS), "−18.6%"]]
-    table(s, X0, top + 0.05, [2.35, 2.2, 1.2], rows, row_heights=[0.47, 0.72, 0.72, 0.72, 0.72], size=16, aligns=["l", "r", "r"], colors=[None, None, None, None, [BONUS, NAVY, NAVY]])
-    bullets(s, X0, top + 3.6, 5.75, 6.95 - top - 3.6, ["Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes."], size=18)
-    figure(s, "p15_bonus", 6.63, 1.3, 6.0, "Each job of the official runs and our three tiers on 4 nodes, with the mean and SD of each.")
+    bottom = figure(s, "p_bonus", X0, 1.3, XW, "Each job of the official runs, our Baseline and each step from Basic to the Bonus on 4 nodes, with the mean and SD of each.", h=0.75)
+    bullets(s, X0, bottom + 0.05, XW, 0.45, ["Cd stayed within 0.0005% of the unmodified code at 1, 2 and 4 nodes."], size=18)
     return s
 
 
@@ -1141,7 +1150,7 @@ def fix_sections():
 # ====================================================================== assemble
 cover = S[0]
 set_notes(cover, NOTES["cover"])
-main = [m_summary(), m_criteria(), m_baseline(), m_profile_baseline(), m_mpi(), m_decomposition(), m_decomposition_results(), m_pinning(), m_pinning_results(), m_node_tree(), m_node_tree_results(), m_basic_results(), m_not_helped_basic(), m_basic_mpi(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_multilevel_results(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
+main = [m_summary(), m_criteria(), m_baseline(), m_profile_baseline(), m_mpi(), m_decomposition(), m_decomposition_results(), m_pinning(), m_pinning_results(), m_node_tree(), m_node_tree_results(), m_basic_results(), m_basic_mpi(), m_not_helped_basic(), m_profile_basic(), m_memory_limit(), m_bonus_decomposition(), m_multilevel_results(), m_changes(0), m_changes(1), m_examples(), m_bonus_results(), m_scaling(), m_not_helped_bonus()]
 for s, notes in zip(main, PLAN_NOTES, strict=True):
     set_notes(s, notes)
 COUNT.update(prefix="S", Figure=0, Table=0)

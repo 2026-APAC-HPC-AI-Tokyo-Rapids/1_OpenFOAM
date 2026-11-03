@@ -201,7 +201,7 @@ def rule():
     save(figure, "p07_rule")
 
 
-def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6):
+def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 nodes, each job", label_size=12, stacked=False, along=0.5, positions=None, clusters=(), left=0.6, total=None):
     """Groups of jobs side by side on one axis from 0, squeezed under low (zoomed()): each group is (tick label, values,
     colour, hollow), with its mean and SD (none for a single job) above it, at x 0, 1, ... or at positions, the first left
     of the axis's start. A group in navy is emphasised (the user, 11/03), not a tier, so its tick label stays black.
@@ -209,13 +209,15 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
     groups i and j with an arrow, red like the change between them (the user's hand edit, 11/03 19:19), which stands to
     the arrow's left at the height along it from its end (0) to its start (1); an (i, j, "below") arrow, a long one, has
     the change under its middle instead, where the user put it by hand, and an (i, j, "flat") arrow, between neighbours
-    whose means are too close for a steep one, runs from bar to bar with its change under it. All are slide shapes
-    (layout())."""
+    whose means are too close for a steep one, runs from bar to bar with its change under it. total = (i, j, words) puts
+    the change from group i to group j, with words naming i, in red over the label of j, for a path of steps whose long
+    arrow would cross the groups between. All are slide shapes (layout())."""
     positions = list(range(len(groups))) if positions is None else positions
     figure, axis = plt.subplots(figsize=size, layout="constrained")
+    means = []
     for x, (_, values, color, hollow) in zip(positions, groups):
         jobs(axis, x, values, color, width=0.34, hollow=hollow)
-        label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked)
+        means.append(label_above(axis, x, values, color=INK if color in (MUTED, FAINT) else color, size=label_size, stacked=stacked))
     marks, changes = [], []
     for i, j, *where in arrows:
         before, after = groups[i][1], groups[j][1]
@@ -240,6 +242,11 @@ def tiers(name, groups, size, low, high, ticks, arrows=(), ylabel="s/step on 4 n
     axis.set_xlim(positions[0] - left, positions[-1] + 0.6)
     zoomed(axis, low, high, ticks)
     finish(axis, ylabel)
+    if total:
+        i, j, words = total
+        figure.canvas.draw()  # lays the figure out, so that the label of j stands where it is saved
+        box = means[j].get_window_extent().transformed(figure.transFigure.inverted())
+        changes.append((None, ((box.x0 + box.x1) / 2, box.y1 + 0.01), f"{percent(groups[j][1], groups[i][1])}\n{words}", {"align": "c", "anchor": "b", "size": 16, "color": palette.RED}))
     layout(figure, name, marks, changes)
     save(figure, name)
 
@@ -273,24 +280,35 @@ def decomposition():
     11/03: the time on a slide of its own in the same layout): our Baseline's jobs, hierarchical without pinning (#62),
     against every unpinned scotch job of the placement experiment (#36 A3), which did not run in turns with them (Q41)."""
     groups = [("hierarchical", BASELINE[4], BASE, False), ("scotch", placement(0), FAINT, False)]
-    tiers("p_decomposition", groups, (6.68, 3.4), 3.1, 4.1, [3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(0, 1)], along=0.0)
+    tiers("p_decomposition", groups, (6.98, 3.4), 3.1, 4.1, [3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(0, 1)], along=0.0)
 
 
 def node_tree():
     """Main slide 11, laid out like slide 7: plain scotch against scotch on the node tree, both pinned, in turns (#63, 5 v 5);
     the node tree is Basic, so its jobs take Basic's colour."""
     groups = [("scotch", CHANGES[("mapping", 4, "control")], FAINT, False), ("node tree", CHANGES[("mapping", 4, "candidate")], BASIC, False)]
-    tiers("p_node_tree", groups, (6.68, 3.2), 2.86, 2.955, [2.88, 2.90, 2.92, 2.94], arrows=[(0, 1)], along=0.0)
+    tiers("p_node_tree", groups, (6.98, 3.2), 2.86, 2.955, [2.88, 2.90, 2.92, 2.94], arrows=[(0, 1)], along=0.0)
 
 
-def basic_steps():
-    """Main slide 12, left: Basic's steps in the order of the work (the user's 13th round, 11/03: the table of the Basic
-    results as a plot), our Baseline (#62), every unpinned scotch job of the placement experiment, its jobs with both halves
-    pinned (#36 A3) and Basic (#63). The node tree's −0.7% ran against its own pinned scotch in #63 (2.918 s/step); against
-    the pinned scotch plotted here it is −0.7% too. The last step is too small for a steep arrow, so it runs flat from bar
-    to bar with its change under it."""
-    groups = [("Our\nBaseline", BASELINE[4], BASE, False), ("scotch", placement(0), FAINT, False), ("scotch\npinned", placement(3), FAINT, False), ("Basic", FINAL[("Basic", 4)], BASIC, False)]
-    tiers("p_steps", groups, (5.55, 5.0), 2.7, 4.15, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(0, 1), (1, 2), (2, 3, "flat")], stacked=True, along=0.0)
+def basic_results():
+    """Main slide 12: the official runs, then Basic's steps in the order of the work in one plot across the slide (the
+    user's 14th round, 11/04: the steps and the comparison with the official runs in one graph): our Baseline (#62), every
+    unpinned scotch job of the placement experiment, its jobs with both halves pinned (#36 A3) and Basic (#63). The node
+    tree's −0.7% ran against its own pinned scotch in #63 (2.918 s/step); against the pinned scotch plotted here it is
+    −0.7% too. The last step is too small for a steep arrow, so it runs flat; the change from our Baseline stands over
+    Basic, as an arrow to it would cross the scotch jobs."""
+    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline", BASELINE[4], BASE, False), ("scotch", placement(0), FAINT, False), ("scotch\npinned", placement(3), FAINT, False), ("Basic", FINAL[("Basic", 4)], BASIC, False)]
+    tiers("p_basic", groups, (11.93, 5.2), 2.7, 4.2, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3), (3, 4), (4, 5, "flat")], stacked=True, along=0.0, total=(2, 5, "from our Baseline"))
+
+
+def bonus_results():
+    """Main slide 22: the official runs, our Baseline, then the steps from Basic to the Bonus in one plot across the slide
+    (the user's 14th round, 11/04: a trajectory with multiLevel and the patches, like the Basic results): Basic (#63),
+    multiLevel (#42), the first four source changes (fa4f5b0) and the Bonus. The first four are the jobs of fa4f5b0 that ran
+    in turns with the final Bonus (#69, 10/26), so the last step is the alternated −9.3%; fa4f5b0's own measurement of 10/07
+    took 2.599 s/step, 0.15% less."""
+    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline", BASELINE[4], BASE, False), ("Basic", FINAL[("Basic", 4)], BASIC, False), ("multiLevel", CHANGES[("multiLevel", 4, "candidate")], FAINT, False), ("First four\nchanges", CHANGES[("0006-0016", 4, "control")], FAINT, False), ("Bonus", FINAL[("Bonus", 4)], BONUS, False)]
+    tiers("p_bonus", groups, (11.93, 4.5), 2.15, 4.2, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4, "flat"), (4, 5), (5, 6)], stacked=True, along=0.0, total=(3, 6, "from Basic"))
 
 
 def multilevel():
@@ -298,7 +316,7 @@ def multilevel():
     scotch, whose jobs took 2.918 s/step both times, so the two compare directly, though not in turns (Q45); the Bonus
     results start from Basic, as the user wrote by hand (11/03 22:36)."""
     groups = [("Basic", FINAL[("Basic", 4)], BASIC, False), ("multiLevel", CHANGES[("multiLevel", 4, "candidate")], FAINT, False)]
-    tiers("p_multilevel", groups, (6.48, 3.2), 2.84, 2.92, [2.86, 2.88, 2.90], arrows=[(0, 1)], along=0.0)
+    tiers("p_multilevel", groups, (6.98, 3.2), 2.84, 2.92, [2.86, 2.88, 2.90], arrows=[(0, 1)], along=0.0)
 
 
 def pinning():
@@ -349,19 +367,6 @@ def scotch():
     neither in a colour as neither is a tier's record."""
     data = runs("decomposition_basic.csv", "nodes", "method")
     pairs("p11_scotch", [[("hierarchical", data[(n, "hierarchical")], FAINT), ("scotch", data[(n, "scotch")], FAINT)] for n in NODES], (11.9, 4.2), titles=[f"{n} node{'s' if n > 1 else ''}" for n in NODES])
-
-
-def basic_4node():
-    """Main slide 12, right: the official runs, our Baseline and Basic on 4 nodes, each job (the user, 11/02)."""
-    groups = [official("hierarchical"), official("scotch"), ("Our Baseline", BASELINE[4], BASE, False), ("Basic", FINAL[("Basic", 4)], BASIC, False)]
-    tiers("p12_basic", groups, (6.2, 5.0), 2.7, 4.15, [2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0], arrows=[(2, 3)], stacked=True)
-
-
-def bonus_4node():
-    """Main slide 22: the official runs and our three tiers on 4 nodes, each job (the Bonus jobs of the final measurement;
-    the user asked for the official runs and the Baseline here, 11/02)."""
-    groups = [official("hierarchical"), official("scotch"), ("Our\nBaseline", BASELINE[4], BASE, False), ("Basic", FINAL[("Basic", 4)], BASIC, False), ("Bonus", FINAL[("Bonus", 4)], BONUS, False)]
-    tiers("p15_bonus", groups, (6.0, 5.0), 2.15, 4.25, [2.4, 2.8, 3.2, 3.6, 4.0], arrows=[(3, 4)], label_size=11, stacked=True)
 
 
 def scaling():
@@ -575,11 +580,10 @@ baseline()
 decomposition()
 pinning()
 node_tree()
-basic_steps()
+basic_results()
 multilevel()
+bonus_results()
 scotch()
-basic_4node()
-bonus_4node()
 scaling()
 reference()
 each_change()
