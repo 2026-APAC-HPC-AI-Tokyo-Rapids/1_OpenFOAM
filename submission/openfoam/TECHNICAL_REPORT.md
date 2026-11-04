@@ -12,7 +12,7 @@ that the slides have no room for. [`README.md`](README.md) is the short version,
 | Task and rules | https://github.com/hpcac/2026-APAC-HPC-AI: [2. OpenFOAM HPC Task Rules](https://github.com/hpcac/2026-APAC-HPC-AI/blob/main/2.%20OpenFOAM%20HPC%20Task%20Rules.md) with its addendum F0 – F5, the [README addendum](https://github.com/hpcac/2026-APAC-HPC-AI/blob/main/README.md#addendum-2026-09-25) (R1 – R5) and [5. Common Baselines](https://github.com/hpcac/2026-APAC-HPC-AI/blob/main/5.%20Common%20Baselines.md) |
 | Our repository | https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM (private): the scripts, every experiment as a commit, and the reasons in the commit messages |
 | Raw record of every run | https://mizuha-dev.com/files/openfoam-artifacts/, one folder per GitHub Actions run ID. `<run ID>/aspire2a/openfoam-aspire2a-occdrivaer-65m-result-<run ID>-1/` holds the parsed result (`result.txt`) and the run's `coefficient.dat`; the folder beside it holds the full run record (`run-artifacts.tar.zst` with its manifest) |
-| This folder | logs, dictionaries, scripts, MPI profiles, patches and the F3 evidence (Appendix B) |
+| This folder | logs, dictionaries, scripts, MPI profiles, patches, the F3 evidence and the figures of this report (Appendix B) |
 
 Every time in this report is the official metric, `Average wall-clock time per time step` at the end of `simpleFoam.log`
 (steps 2 to N), from benchmark runs without any profiler, unless it is marked as measured under a profiler. A mean is over
@@ -20,11 +20,15 @@ the repeated jobs of one configuration, and SD is
 the standard deviation between those jobs as a percentage of the mean. Times per step have four significant figures and
 changes one decimal. Appendix A lists every job with its run ID.
 
+The figures are in `figures/`. In the per-job plots (Figures 2, 3, 5, 7, 8, 10, 11, 15, 18 and 20), a dot is one job and a
+bar the mean of its group, written above it with the SD. The time axis starts at 0; where the part below the jobs is
+squeezed, a wavy break marks it. A red arrow and percentage give a change.
+
 Where each slide of the OpenFOAM part is explained:
 
 | Slides | Section |
 |---|---|
-| OpenFOAM on ASPIRE-2A | 1 |
+| Results at a glance (HPC), OpenFOAM on ASPIRE-2A | 1 |
 | Criteria for keeping a change | 3 |
 | Our Baseline | 4 |
 | Profiling Baseline, MPI calls on 4 nodes | 5 |
@@ -199,11 +203,21 @@ exceptions). This cost little, because the jobs of each kept candidate became th
 Pinned ranks made the jobs far steadier: 29 pinned `scotch` jobs on 4 nodes in early October had an SD of 0.19%, and the
 five Basic jobs have 0.07%.
 
+![Each of the 92 jobs against the median of its configuration](figures/fig01_run_to_run_variation.png)
+
+Figure 1. Each of the 92 jobs in 29 repeated configurations, 21 September to 5 October, against the median of its
+configuration; the lower panel zooms in, and its band is ±0.4%.
+
 ### 3.3 Criteria for keeping a change
 
 1. Candidate and control ran in turns in the same period, with at least 3 jobs each on 4 nodes.
 2. We kept a change only if every candidate job was faster than every control job.
 3. A source change had to keep the computation the same, as the rules require (F3, section 7.5).
+
+![A change that was kept and one that was not, each job against its control](figures/fig02_criteria_example.png)
+
+Figure 2. Each job of a change we kept (the node mapping, section 6.5) and of one we did not (AOCC, section 6.8), against
+its control on 4 nodes.
 
 If a change has no effect, the chance that every candidate job beats every control job is 1 in C(n + m, n): 1 in 20 for 3
 jobs against 3, 1 in 70 for 4 against 4, and 1 in 252 for 5 against 5. With an SD of 0.19% and normal noise, a simulation
@@ -235,6 +249,10 @@ Table 5. Our Baseline and the official results at 1, 2 and 4 nodes.
 | 1 (128, 40) | 14.57 | 2.0% | 6 | 14.67 | 14.05 |
 | 2 (256, 80) | 7.427 | 2.0% | 3 | 7.118 | 7.196 |
 | 4 (512, 150) | 3.650 | 4.1% | 3 | 3.415 | 3.576 |
+
+![Each job of the official runs and of our Baseline on 4 nodes](figures/fig03_baseline_and_official.png)
+
+Figure 3. Each job of the official runs and of our Baseline on 4 nodes, with the mean and SD of each.
 
 - The three 4-node jobs of our Baseline took 3.600, 3.531 and 3.817 s/step.
 - The official results are one job per method. The organisers' five 4-node `scotch` jobs with the case defaults (the full
@@ -349,7 +367,16 @@ domain r/16).
 The mean subdomain has 127,607 cells. `hierarchical` has many faces between nodes because its four layers along z fall onto
 the four nodes.
 
+![The subdomains of hierarchical and scotch on 4 nodes](figures/fig04_decomposition_hierarchical_scotch.jpg)
+
+Figure 4. The 512 subdomains of `hierarchical` (16 8 4) and `scotch` on 4 nodes, on the car, the centre plane and a
+cross-section at the middle of the wheelbase, one hue per node and one shade per NUMA domain.
+
 Result without pinning: our Baseline took 3.650 s/step and `scotch` 3.428 s/step (SD 2.0%, 6 jobs), 6.1% less.
+
+![Each job of the two decompositions on 4 nodes without pinning](figures/fig05_decomposition_results.png)
+
+Figure 5. Each job of the two decompositions on 4 nodes without pinning.
 
 These two were not run in turns: our Baseline ran nine days after the six `scotch` jobs. Five of the six were faster than
 all three Baseline jobs, and all six were faster than the same `hierarchical` setting measured again in the pinning
@@ -361,6 +388,11 @@ both CPU and memory binding, and four for the CPU binding only, as our Baseline 
 In all of them `MPI_Init` removed the binding.
 
 ### 6.2 CPU and memory pinning
+
+![One node with its CPUs, NUMA domains and memory channels](figures/fig06_node_and_pinning.png)
+
+Figure 6. One node of 2 CPUs with 4 NUMA domains each, a domain having 16 cores and 2 memory channels: one rank (navy), its
+local memory (green) and the way to remote memory (grey).
 
 - **Expected.** A node has two CPUs with four NUMA domains each, and each domain has 16 cores and two memory channels.
   Linux places a memory page on the NUMA domain of the core that first writes it and does not move it later. A rank that
@@ -400,6 +432,11 @@ Table 10. Each placement of the ranks on 4 nodes. Changes are against the unpinn
 | `scotch` | CPU and memory, as in Basic | 128 of 128, 58% local | 2.917 | 0.13% | 3 | **−14.9%** |
 | `hierarchical` (16 8 4) | neither (our Baseline) | 0 of 512, 8.7% local | 3.650 | 4.1% | 3 | |
 | `hierarchical` (16 8 4) | CPU and memory | | 3.257 | 1.1% | 3 | **−10.7%** |
+
+![Each job under each placement of the ranks on 4 nodes](figures/fig07_pinning_results.png)
+
+Figure 7. Each job under each placement of the ranks on 4 nodes, with `hierarchical` and with `scotch`; the navy groups
+are those that pinning both halves made faster.
 
 - Pinning only the CPU did not help. Without `numactl`, a rank's memory follows wherever the rank first touches it, and
   the watcher's last re-pin came 12 to 16 s after the start. We think the pages that a rank first touched before it was
@@ -449,6 +486,10 @@ Table 13. `hierarchical` against `scotch` at 1, 2 and 4 nodes, both pinned, in t
 | 2 | 6.528 | 6.368 | −2.5% |
 | 4 | 3.257 | 2.915 | −10.5% |
 
+![Each job of hierarchical and scotch on 1, 2 and 4 nodes](figures/fig08_hierarchical_scotch_1_2_4_nodes.png)
+
+Figure 8. Each job of `hierarchical` and `scotch`, both pinned and run in turns, on 1, 2 and 4 nodes.
+
 `scotch` was faster at every node count and gained more on more nodes. We think the straight cuts of `hierarchical` become
 more uneven as the subdomains get smaller, but we have not checked.
 
@@ -489,9 +530,18 @@ Table 14. Cells and faces of the subdomains on 4 nodes.
 | Faces between subdomains in all | 2.93 M | 3.02 M | +3.3% |
 | Neighbours of a subdomain, at most | 66 | 40 | |
 
+![The subdomains of plain scotch and of scotch on the node tree](figures/fig09_decomposition_scotch_node_tree.jpg)
+
+Figure 9. The subdomains of plain `scotch` and of `scotch` on the node tree, `domains (2 4 16)`, on 4 nodes, drawn as
+in Figure 4.
+
 Result, 5 jobs each in turns: plain `scotch` took 2.918 s/step (SD 0.22%, 2.912 to 2.926) and the node tree 2.898 s/step
 (SD 0.07%, 2.894 to 2.900), 0.7% less. Every node-tree job was faster than every plain `scotch` job, and the node-tree jobs
-varied less. This is our Basic. On 1 and 2 nodes the mapping changed a step by less than 0.3%. A first test gave −0.66%
+varied less. This is our Basic.
+
+![Each job of plain scotch and of the node tree on 4 nodes](figures/fig10_node_tree_results.png)
+
+Figure 10. Each job of plain `scotch` and of `scotch` on the node tree on 4 nodes, both pinned and run in turns. On 1 and 2 nodes the mapping changed a step by less than 0.3%. A first test gave −0.66%
 without `strategy` and −0.82% with it, below the 1% we then required, so we measured it again with 5 jobs each before we
 adopted it.
 
@@ -508,6 +558,11 @@ Table 15. Each step to Basic on 4 nodes, in the order of the work.
 | `scotch`, CPU and memory pinned | 2.917 | 0.13% | 3 | −14.9% |
 | `scotch` on the node tree: **Basic** | **2.898** | 0.07% | 5 | −0.7% |
 | Basic against our Baseline | | | | **−20.6%** |
+
+![Each job of the official runs, our Baseline and each Basic step on 4 nodes](figures/fig11_basic_results.png)
+
+Figure 11. Each job of the official runs, our Baseline and each Basic step on 4 nodes, with the change of each step and the
+total from our Baseline.
 
 - The node tree's −0.7% is against its own control in the same period (2.918 s/step). Against the pinned `scotch` row
   above it is −0.66%.
@@ -614,6 +669,11 @@ placement except one for full128 of Basic and of the first four changes):
 
 STREAM triad (c = a + 3b) ran in the same jobs after the solver, on the same nodes and with the same placement.
 
+![One node under each placement, with the time per step and the STREAM bandwidth](figures/fig12_memory_limit_placements.png)
+
+Figure 12. One node under each placement, with the cores that run ranks in navy and the memory channels in use in green,
+and the time per step and STREAM bandwidth of Basic before the node mapping.
+
 Table 20. Time per step under the three placements on 4 nodes.
 
 | s/step | full128 | spread64 | packed64 | spread64 / full128 | packed64 / spread64 |
@@ -622,6 +682,12 @@ Table 20. Time per step under the three placements on 4 nodes.
 | `multiLevel` without the source changes | 2.869 | 2.874 | 6.321 | 1.00 | 2.20 |
 | `multiLevel` with the first four changes | 2.595 | 2.649 | 5.598 | 1.02 | 2.11 |
 | STREAM triad per node, same nodes | 274 GB/s | 279 GB/s | 125 GB/s | | 2.2 times lower |
+
+![The step time after each halving against before, measured and predicted](figures/fig13_cores_or_memory.png)
+
+Figure 13. The step time after each halving against before, measured for the three configurations of Table 20 ("Bonus
+without the patches" is `multiLevel` without the source changes), beside what it would be if the cores (circle) or the
+memory bandwidth (square, STREAM on the same nodes) set the speed.
 
 - If the computation, or the latency of each core's memory requests, set the speed, half the cores would have taken twice
   as long. They took 0.99 to 1.02 times as long.
@@ -671,11 +737,20 @@ Table 21. Cells and faces of the subdomains on 4 nodes.
 | Faces between NUMA domains | 0.94 M | 0.78 M | −17.0% |
 | Faces between subdomains in all | 3.02 M | 2.81 M | −7.0% |
 
+![The subdomains of Basic and of multiLevel on 4 nodes](figures/fig14_decomposition_node_tree_multilevel.jpg)
+
+Figure 14. The subdomains of Basic, `scotch` on the node tree, and of `multiLevel` (4 2 4 16) on 4 nodes, drawn as
+in Figure 4.
+
 Result: `multiLevel` took 2.873 s/step (SD 0.16%, 4 jobs, 2.868 to 2.879) against Basic's 2.898 s/step (2.894 to 2.900),
 0.8% less. Every `multiLevel` job was faster than every Basic job. The two did not run in turns. Each was compared with
 plain `scotch` in its own period, and plain `scotch` took 2.918 s/step both times: Basic ran in turns with it and was 0.7%
 faster (5 jobs each), and `multiLevel` ran on the same day as its 4 control jobs, but before and after them rather than in
 turns, and was 1.5% faster.
+
+![Each job of Basic and of multiLevel on 4 nodes](figures/fig15_multilevel_results.png)
+
+Figure 15. Each job of Basic and of `multiLevel` on 4 nodes.
 
 - We have not separated how much each part of the decomposition contributes. Rank reordering cut the faces between nodes by
   92% and did not help (section 6.8), so fewer faces between nodes alone do not explain the gain.
@@ -702,6 +777,11 @@ Table 22. Where a step of the Bonus with the first four changes went: 2,396 call
 | `U` assembly | 11.8% | 12% |
 | `p` assembly | 6.6% | 29% |
 | Other (function objects, corrections, continuity errors) | 2.5% | |
+
+![The call-stack samples as a flame graph](figures/fig16_call_stacks_flame_graph.png)
+
+Figure 16. The same 2,396 samples as a flame graph: each box is a function as wide as its share of the samples, with the
+functions it calls on top of it, and MPI in purple.
 
 - The k-ω SST correction was mostly field algebra over the cells, which led to `0013`. The coarsest GAMG level took 6.6% of
   the samples, nearly all of them inside MPI and mostly in global sums, which led to `0012`. The Gauss–Seidel sweeps and
@@ -737,6 +817,11 @@ The two changes drawn on our slides:
 - `0001`: `smoothSolver` uses the existing in-place `lduMatrix::residual` instead of the overload that returns a new field
   which is then copied, and GAMG forms its finest-level residual with one `subtract(r, source, Apsi)`. The same function
   computes the same residual; only an allocation and a copy go away. It gained 2.2%, 2.9% and 3.4% on 1, 2 and 4 nodes.
+
+![The two source changes drawn on our slides](figures/fig17_two_source_changes.png)
+
+Figure 17. `0002` reads the matrix of `U` once for all three components, and `0001` writes the residual straight into its
+field instead of into a new field that is then copied.
 
 Why the result is the same. Eleven of the changes keep every arithmetic expression and its order, so they cannot change a
 result. Three change the order of some floating-point operations and are judged by F3 (next section): `0011` adds the
@@ -798,6 +883,11 @@ Table 25. Each step from Basic to the Bonus on 4 nodes.
 | + the ten other changes: **Bonus** | **2.360** | 0.16% | 3 | −9.3% |
 | Bonus against Basic | | | | **−18.6%** |
 
+![Each job of the official runs, our Baseline and each step from Basic to the Bonus on 4 nodes](figures/fig18_bonus_results.png)
+
+Figure 18. Each job of the official runs, our Baseline and each step from Basic to the Bonus on 4 nodes, with the change of
+each step and the total from Basic.
+
 - `multiLevel` and Basic did not run in turns (section 7.3).
 - The `fa4f5b0` row is the three jobs that ran in turns with the Bonus in the final measurement (26 October). The first
   four changes had been measured one by one, each against the configuration before it: −3.4%, −2.3%, −1.3% and −2.8%. The
@@ -833,6 +923,11 @@ not be added up. On 1 and 2 nodes most values are single jobs.
 | All of `0006` – `0016` (the Bonus) | `fa4f5b0`, in turns (final measurement) | −12.2% | −11.4% | −9.3% |
 
 \* Measured a few days after the configuration it is compared with, not in turns with it.
+
+![Each job of each Bonus change against the mean of its control on 4 nodes](figures/fig19_effect_of_each_change.png)
+
+Figure 19. Each job of each Bonus change against the mean of its control on 4 nodes, the 4-node column of Table 27 before
+the final measurement; * marks the two measured a few days after their control.
 
 ### 7.7 Why the changes help
 
@@ -949,6 +1044,11 @@ Table 32. Time per step, and how many times faster than on 1 node.
 
 As parallel efficiencies on 4 nodes, these are 1.07, 0.98, 1.00, 1.15 and 1.08.
 
+![Each job on 1, 2 and 4 nodes on one axis from 0](figures/fig20_scaling.png)
+
+Figure 20. Each job on 1, 2 and 4 nodes on one axis from 0, with dashes at ideal scaling from each tier's 1-node mean and
+the times faster than on 1 node.
+
 Basic and the Bonus run more than 4 times faster on 4 nodes. We profiled Basic before its node mapping at 1, 2 and 4 nodes
 with uProf `data_access` on one rank per NUMA domain (8, 16 and 32 ranks), and divided each count by the number of ranks, the
 steps and the cells per rank.
@@ -1028,6 +1128,11 @@ Table 36. Cd over the iterations on 4 nodes, from `coefficient.dat`.
 
 The decompositions give different curves from the first iterations on and end a few per cent apart at 150 iterations, while
 the Bonus and its pre-change baseline lie on top of each other.
+
+![Cd at every iteration of the 4-node runs](figures/fig21_cd_iterations.png)
+
+Figure 21. Cd at every iteration of the 4-node runs, all 150 iterations and the last 50, where every job of a configuration
+gives the same Cd.
 
 ## 10. Reproducibility
 
@@ -1258,6 +1363,7 @@ These are the jobs of `scaling/scaling.txt`; `*` marks the job whose logs are in
 | MPI profiles | `analysis/pat-report-*.txt`, `analysis/README.md` |
 | Hardware counters | `analysis/README.md` |
 | Bonus changes and the proof | `bonus/patches/`, `bonus/dicts/`, `bonus/results/<n>node/`, `bonus/f3-baseline/<n>node/`, `bonus/README.md` |
+| Figures of this report | `figures/`: the per-job plots, the Cd history and the flame graph drawn from our data with the deck's plotting code, the decomposition pictures from ParaView, and three diagrams cut from our slides |
 | Slides | the OpenFOAM part of the deck in `../presentation/` |
 | Raw records of every run | https://mizuha-dev.com/files/openfoam-artifacts/ |
 
