@@ -36,6 +36,7 @@ runs in more than our optimisations.
 ```
 README.md            this file: results, how to run, what to expect
 TECHNICAL_REPORT.md  the technical report: the bottlenecks, every change and its measurements, the F3 proof
+figures/             the figures of TECHNICAL_REPORT.md
 build/build.pbs      builds OpenFOAM v2512 from the official sources (the Bonus build adds bonus/patches)
 run/                 the Allrun chain as two PBS jobs, for 1 / 2 / 4 nodes, Basic and Bonus
 dicts/               caseDefinition, controlDict and decomposeParDict of the 4-node Basic run
@@ -49,12 +50,16 @@ bonus/               the Bonus patches, dictionaries, results and the F3 evidenc
 
 On an ASPIRE-2A login node, in this folder. The scripts need nothing else from us.
 
-1. Get the sources:
+1. Get the sources, the official case at the commit we used and the 65M mesh (3.2 GB):
 
    ```bash
    mkdir -p sources
    curl -L -o sources/OpenFOAM-v2512.tgz https://dl.openfoam.com/source/v2512/OpenFOAM-v2512.tgz
    curl -L -o sources/thirdparty-common-v2512.tar.gz https://gitlab.com/openfoam/core/thirdparty-common/-/archive/v2512/thirdparty-common-v2512.tar.gz
+   git clone https://develop.openfoam.com/committees/hpc.git sources/hpc
+   git -C sources/hpc checkout 84c262431117f5c921db8335e368a12d0e9fa3f0
+   curl -L -o sources/polyMesh_65M.tar.gz https://zenodo.org/api/records/15012221/files/polyMesh_65M.tar.gz/content
+   sha256sum sources/polyMesh_65M.tar.gz    # ef30fa8405dbaab77185ace2521b1bedc5650f245e40d7451259a5ac773a5376
    ```
 
 2. Build. Each build is one 16-core job of 1 – 2 hours; `OPENFOAM_DIR` is a new directory on `/scratch`:
@@ -66,10 +71,11 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
 
 3. Set `PROJECT`, `OPENFOAM_DIR`, `CASE_SOURCE`, `MESH_ARCHIVE` and `WORK_ROOT` at the top of `run/submit.sh`, or in the
    environment:
-   - `CASE_SOURCE`: the official case, `incompressible/simpleFoam/occDrivAerStaticMesh` of
-     https://develop.openfoam.com/committees/hpc (commit `84c26243`);
-   - `MESH_ARCHIVE`: `polyMesh_65M.tar.gz` from https://zenodo.org/records/15012221;
-   - `OPENFOAM_DIR`: by default `<dir>/build-basic` or `<dir>/build-bonus`, chosen by the second argument of `submit.sh`.
+   - `PROJECT`: your PBS project;
+   - `OPENFOAM_DIR`: by default `<dir>/build-basic` or `<dir>/build-bonus`, chosen by the second argument of `submit.sh`;
+   - `CASE_SOURCE`: the official case from step 1, `$PWD/sources/hpc/incompressible/simpleFoam/occDrivAerStaticMesh`;
+   - `MESH_ARCHIVE`: the mesh from step 1, `$PWD/sources/polyMesh_65M.tar.gz`;
+   - `WORK_ROOT`: a directory on `/scratch` where every run gets a new case directory.
 4. Submit:
 
    ```bash
