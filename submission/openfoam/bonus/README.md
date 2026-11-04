@@ -27,8 +27,8 @@ The patches remove memory traffic: temporary fields, copies, extra passes over t
 result is thrown away. None of them changes the iteration counts, the convergence tests, the number of time steps or the
 discretisation. Eleven keep every arithmetic expression and its order, so they cannot change a result; three (`0011`, `0012`,
 `0016`) change the order of some floating-point operations and are judged by F3 with the drag coefficient (next section).
-The numbers `0005` and `0007` are not in the Bonus. `0005` computed the residual norms that the fixed iterations never read
-only after the last iteration; we do not count it (our slide "An uncounted gain and our result").
+The numbers `0005` and `0007` are not in the Bonus (our slides "Source changes by intent" list the fourteen that are). `0005`
+computed the residual norms that the fixed iterations never read only after the last iteration; we do not count it.
 
 | Patch | What it changes | Why the result is the same |
 |---|---|---|
@@ -132,8 +132,9 @@ by 17% while the instructions fall by 4% (`../analysis/README.md`, "Hardware cou
 
 ## Tried and not adopted
 
-Each candidate was compared with the configuration it would have changed, on 4 nodes. We adopt a change only if it is at
-least 1% faster than its control.
+Each candidate was compared with the configuration it would have changed, on 4 nodes. We kept a change only if every job
+with it was faster than every job of its control (our slide "Criteria for keeping a change"). Our slide "What did not help in
+the Bonus" shows these results.
 
 | Candidate | Result | What we learned |
 |---|---|---|
@@ -141,7 +142,7 @@ least 1% faster than its control.
 | METIS with two constraints (cells and faces) | +1.46% | Better face balance, but 18% more processor faces. |
 | GAMG coarsest level gathered on one master for all 512 ranks (`processorAgglomerator masterCoarsest`) | +4.95% (40 steps) | Gathering to one rank and solving there costs more than the global sums it saves. |
 | The same with one master per node (`nProcessorsPerMaster 128`) or per NUMA domain (`16`) | +1.02%, −0.25% (single runs; Cd within 0.002% of the control) | The coarsest level issues 81% of the `MPI_Allreduce` calls, but moving it changes little: the MPI time is mostly waiting for slower ranks. |
-| UCX over RC between nodes instead of UD | −0.16% (4 runs each, ranges overlapping) | Below our threshold; the same check on Basic gave −0.01%. |
+| UCX over RC between nodes instead of UD | −0.16% (4 runs each, ranges overlapping) | The ranges overlap, so it does not pass our criterion; the same check on Basic gave −0.01%. |
 | Gauss–Seidel sweep of the interior cells while the interface values are in flight | +8.32% (3 runs), Cd −1.20% | Fails F3: on 512 ranks, changing the order in which cells see their neighbours' new values moves Cd far beyond rounding. It was also slower. |
 | `bound()` averaging only over the cells it bounds | not run | It needs an extra global reduction per call, which costs more than the averaging it saves. |
 

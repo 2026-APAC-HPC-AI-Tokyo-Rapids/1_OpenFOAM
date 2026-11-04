@@ -98,7 +98,7 @@ On an ASPIRE-2A login node, in this folder. The scripts need nothing else from u
   `coefficient.dat` was byte-identical to `bonus/results/<n>node/coefficient.dat` at every node count, at 10.2018, 4.9802 and
   2.3651 s/step (−0.31%, −0.24% and +0.22% against our means).
 - The PBS output of the second job prints `bound=128/128` for every node when every rank sits on its own core. If it does not,
-  the placement has failed and a step will be 16 – 19% slower (our slide "CPU and memory pinning").
+  the placement has failed, and a step can be 17 – 50% slower (our slide "Pinning results").
 - At these step counts the flow has not converged, and Cd depends on the decomposition. Another decomposition gives a Cd a few
   per cent different (our supporting slides "Drag coefficient over the iterations" and "Drag coefficient checks").
 

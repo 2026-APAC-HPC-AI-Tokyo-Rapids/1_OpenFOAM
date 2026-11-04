@@ -850,7 +850,7 @@ rank per NUMA domain except rank 0, which also writes the output; 2 jobs each; c
 | L1 demand refills from L3 | 0.116 G | 0.114 G | −1.7% |
 | L1 demand refills from DRAM | 0.493 G | 0.408 G | −17.2% |
 | L2 accesses from L1 misses, including prefetches | 6.35 G | 5.74 G | −9.6% |
-| Instructions per cycle | 0.360 | 0.387 | +7.5% |
+| Instructions per cycle | 0.360 | 0.388 | +7.5% |
 
 - The changes remove little arithmetic (4% of the instructions) and much data movement (17% of the demand refills from
   DRAM). That is what the same math with less data moved predicts.
@@ -929,8 +929,8 @@ subdomains), unmodified v2512, 40 iterations, every order once per round in a ro
 | Random | 2.166 | 10.6% slower | 0.43805 (+0.1%) | 147,291 |
 
 As the principle says, no order beat the default, and every order changed Cd. Genkai has 2 MB of L2 per core against
-ASPIRE-2A's 512 KB, so this shows a trend, not an ASPIRE-2A time. The scripts and raw results are in
-`presentation/openfoam/renumber/` of our repository.
+ASPIRE-2A's 512 KB, so this shows a trend, not an ASPIRE-2A time. The scripts and raw results are in our repository
+(private), in `presentation/openfoam/renumber/`.
 
 ## 8. Scaling from 1 to 4 nodes
 

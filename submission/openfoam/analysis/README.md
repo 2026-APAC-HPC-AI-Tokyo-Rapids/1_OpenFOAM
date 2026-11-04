@@ -140,7 +140,7 @@ the mesh read and solver set-up.
   - The MPI time per rank ranges from about 15 – 20 s up to 32 – 37 s. Ranks that finish their local work early wait for the
     slowest one at the next exchange or reduction.
   - Tuning the MPI library cannot remove that part of the wait. Only better balance, or less work on the slowest ranks, can.
-  - The OpenFOAM communication switches we tried gave no gain (our supporting slide "Not adopted: the full list").
+  - The OpenFOAM communication switches we tried gave no gain (our slide "What did not help in Basic").
 - **Patches 0002 – 0004 shorten the computation and leave MPI as it was.** From "before 0002 – 0004" to the Bonus with
   0001 – 0004, the computation drops by 8.9% (104.25 s to 94.93 s). The MPI time stays at about 23.5 s. That is what the
   patches aim at: they remove passes over large arrays, copies and discarded boundary exchanges. They do not change the
