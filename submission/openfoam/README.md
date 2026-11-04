@@ -3,7 +3,8 @@
 We made the official `occDrivAerStaticMesh` 65M case (`simpleFoam`, OpenFOAM v2512) faster on NSCC ASPIRE-2A without
 changing what it computes. This file says what is in the folder, how to run it again, and what you should get. Our
 interview slides (the OpenFOAM part of the deck in `../presentation/`, with its supporting slides) explain how we got there
-and why it works.
+and why it works, and [`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md) gives the full account: what limited the speed, every
+change with its measurements, and the evidence.
 
 ## Results
 
@@ -34,6 +35,7 @@ runs in more than our optimisations.
 
 ```
 README.md            this file: results, how to run, what to expect
+TECHNICAL_REPORT.md  the technical report: the bottlenecks, every change and its measurements, the F3 proof
 build/build.pbs      builds OpenFOAM v2512 from the official sources (the Bonus build adds bonus/patches)
 run/                 the Allrun chain as two PBS jobs, for 1 / 2 / 4 nodes, Basic and Bonus
 dicts/               caseDefinition, controlDict and decomposeParDict of the 4-node Basic run
