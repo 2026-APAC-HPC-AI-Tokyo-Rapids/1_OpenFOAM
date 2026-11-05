@@ -40,5 +40,3 @@ Highlights (OpenFOAM)
 - Ten more source patches, Cd within 0.0005% (F3): 2.360 s/step (−9.3%), −18.6% from Basic. Slides 23–26.
 - Memory bandwidth limit, found by moving the ranks since the counters are not readable: half the cores, the same time; half the memory channels, 2.2 times the time, as STREAM. Slide 20.
 - Super-linear strong scaling from 1 to 4 nodes: 4.61 times for Basic, 4.34 times for the Bonus, because each rank's arrays fit in L3. Slides 27 and 95. openfoam/scaling/scaling.txt.
-
-Every job: openfoam/TECHNICAL_REPORT.md, Appendix A.
