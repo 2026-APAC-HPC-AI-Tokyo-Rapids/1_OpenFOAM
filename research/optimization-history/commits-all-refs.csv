@@ -1,0 +1,650 @@
+sha,date,subject,in_default_branch_index
+8106588f5475a5b4b6f517335ae477dc3278ce8e,2026-10-08T12:23:21+09:00,[cluster:aspire2a] [nodes:4] Agglomerate the coarsest GAMG level onto one master per node (Issue #58),False
+98d996d8c2721346a872df06e575c1a467eda109,2026-10-08T12:23:21+09:00,[cluster:aspire2a] [nodes:4] Agglomerate the coarsest GAMG level onto one master per NUMA domain (Issue #58),False
+3b8499cb23ea8c6a4aa4d6cede75108eeeb37716,2026-10-08T12:23:21+09:00,[cluster:aspire2a] [nodes:4] Send inter-node MPI traffic over UCX RC instead of UD (Issue #58),False
+f775c82bb9af8cf77a8a764712bd4d1d5771afd1,2026-10-08T11:40:59+09:00,[skip ci] Remove the temporary OpenFOAM profiling diagnostic (Issue #57),True
+f25fed7128b02632c1d8e33d78fc3a959de8ddca,2026-10-08T11:40:59+09:00,"[skip ci] Show where a step goes and what the rank imbalance is not, from OpenFOAM's own profiling (Issues #57, #52)",True
+916b20654b93f615b63a44f7a24839be09bcc327,2026-10-08T10:51:02+09:00,"[skip ci] Collect the profiling file under its real name, and the processor boundaries, in the profiling diagnostic (Issue #57)",True
+1bef51d80feaad494766c89eb31a9066df9a50eb,2026-10-08T10:21:10+09:00,[skip ci] Add a temporary diagnostic that runs OpenFOAM's built-in profiling on 4 nodes (Issue #57),True
+79e27876efdd09a94d682fcf482013dcd6fc8fe4,2026-10-08T09:06:46+09:00,[skip ci] Answer why we chose ASPIRE-2A in the slides' Q&A (Issue #52),True
+a6e53c0aecfe2f4f449e5fb9cb72654513b4d537,2026-10-08T04:01:12+09:00,[skip ci] Record that OFI with FI_OFI_RXM_USE_SRX=0 is 0.77 % slower than UCX under our Basic setup (Issue #56),True
+c9125a40e571de71114d375dd5e7266fbe55b729,2026-10-08T01:13:29+09:00,"[skip ci] Put the re-run of the submitted scripts into the slides (Issues #54, #52)",True
+92b4549c5965b7927d698372b789c5a852666a22,2026-10-08T01:12:13+09:00,[skip ci] Remove the temporary workflow that checked the submission scripts (Issue #54),True
+13c5c6d7d430dfc53431081e7e6cae445e6ed07c,2026-10-08T01:12:04+09:00,"[skip ci] Add the submission READMEs for the standalone scripts, with the re-run that reproduced every result (Issue #54)",True
+bed141aa5bab927e007af97b9800a4fc63eb5732,2026-10-07T20:36:16+09:00,"[skip ci] Show in the slides that the Bonus patches cut DRAM refills by 17 % with 4 % fewer instructions (Issues #55, #52)",True
+384feb03ad1ce3809f43b43580c0283cc2ff8c16,2026-10-07T19:03:32+09:00,[skip ci] Restructure the OpenFOAM slides around the judging criteria and add the 4-node path figure (Issue #52),True
+29279b0b7c6bb337c1b9ae08db663b901b63569d,2026-10-07T16:00:44+09:00,"[skip ci] Add standalone build and run scripts for the submission, and a temporary workflow that checks them (Issue #54)",True
+62ce6e6be34cbd9956aa64b32916fae6cd05ad0c,2026-10-07T13:39:21+09:00,"[skip ci] Explain the build, storage, MPI choice and profiling methods in the slides (Issue #52)",True
+3d3db12c6f57421ff5ca8dfe96cf8809d3dfa3ea,2026-10-07T13:34:49+09:00,[skip ci] Compare the final results with the organisers' ASPIRE-2A reference runs in the slides (Issue #52),True
+d2d3b18ae5a8858f07804db14cc1cc310a909a45,2026-10-07T13:32:31+09:00,[skip ci] Request 40 minutes instead of an hour for the ASPIRE-2A run job,True
+3e56d974fa56bcd9536f314e5a4805910dc34486,2026-10-07T13:18:37+09:00,"[skip ci] Follow the official tasks repository to fb0378f, which adds the Gadi and ASPIRE-2A application notes",True
+3f7134abdf1229f0ef09c3f2e607bd547b56967c,2026-10-07T11:41:12+09:00,[skip ci] Replace the old 60/40 scoring with the 2026-09-25 addendum R4 (Issue #52),True
+7a08d9681e02f116ee19f8640eb39060803b5919,2026-10-07T11:41:12+09:00,[skip ci] Add the OpenFOAM slide outline and the figure script with its source data (Issue #52),True
+8b8acab4b2535a4d1e2e7103d37d18f6375e66e4,2026-10-07T07:58:55+09:00,[skip ci] Remove the temporary packaging workflow after recovering the Issue #50 1-node run,True
+7c132e0d6aa5141947bf1f7b0716eb4246e2c30a,2026-10-07T07:56:02+09:00,[skip ci] Add a temporary workflow that packs and archives an unpacked ASPIRE-2A run directory,True
+fa2d902508680ada36ca084a080f40e08aafd78d,2026-10-07T07:42:27+09:00,[skip ci] Remove the temporary run-directory archive workflow after its two recoveries,True
+a85612dcf46ffabcd51bd84944a6dd9aabdfc20e,2026-10-07T07:40:30+09:00,[skip ci] Add a temporary workflow that archives an already packed ASPIRE-2A run directory,True
+1fb32ca61fc00f5bfc1ee968ff74a39ee8fe04ea,2026-10-07T06:30:32+09:00,"[skip ci] Record the adopted Bonus patches 0003 and 0004 (Issues #50, #51), the best Bonus fa4f5b0 and its profile (Issue #53) in the task notes",True
+07155ed9e14d8211d7fcda656d95d62f494a517c,2026-10-06T23:49:14+09:00,[skip ci] Schedule one Basic recovery check at 03:50 JST,True
+610257df5b4b371d417bbc8dca46ba0e1fd21586,2026-10-06T21:38:46+09:00,[skip ci] Resume the retained Basic mesh archive through rsync,True
+7a6bb9dc1c60d738cffab62fe8bc1d569bf9842c,2026-10-06T21:34:22+09:00,[skip ci] Check the existing ASPIRE route for resumable transfer,True
+c5c5ad2dd491f459219b6f6c3b4d4960c1a8e129,2026-10-06T19:03:02+09:00,[skip ci] Record Bonus mesh recovery and remove completed diagnosis,True
+3e77d958cdfdc040a8b8924d49f9939c1c7c70f2,2026-10-06T18:59:25+09:00,[skip ci] Read SSH connection state without unavailable ss,True
+1ac4724fd633bae2766d812d05cce6ea86b9fa34,2026-10-06T18:58:25+09:00,[skip ci] Add temporary read-only ASPIRE transfer diagnosis,True
+fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892,2026-10-06T18:45:03+09:00,"[cluster:aspire2a] [nodes:4] Declare the patch field of surfaceIntegrateInternal(a, b) through template types (Issue #51)",False
+80b5da59e06939f77b0021eb741d02f0f8ad12f8,2026-10-06T17:51:49+09:00,[cluster:aspire2a] [nodes:4] Form the Gauss-gradient face value and the integrated product inside the face loop (Issue #51),False
+fc65b39143d201a398734a19e03957e12d526ac5,2026-10-06T14:45:16+09:00,[skip ci] Add one-time ASPIRE-2A mesh archive recovery for visualization,True
+20d285b460f193a97b6cb277d64c0a04d4131489,2026-10-06T10:37:41+09:00,[cluster:aspire2a] [nodes:4] Skip boundary updates whose values are discarded and build the Gauss convection coefficients in one pass (Issue #50),False
+50003684eeeff06800ede51d29cf9fcf3e2f3e9c,2026-10-06T04:20:27+09:00,"[skip ci] Record the U-component smoothing patch as the new best Bonus and the closed Issues #45, #48 and #49 in the task notes",True
+aa19f962afe818dbdba4be2fd005b55faf9280ff,2026-10-06T02:05:00+09:00,[skip ci] Record the SMT 1024-rank trial (Issue #43) and the I/O measurement of the timed steps (Issue #46) in the task notes,True
+57b6567bd83e9c9b5605b2fdf00f4a13f8e525ff,2026-10-06T02:00:06+09:00,[skip ci] Let the run job wait up to 24 hours for PBS on this branch (cherry-pick of main 77c4473),False
+77c4473ce84e278e9f0419955b5d9ccb4747e7dd,2026-10-05T23:50:19+09:00,[skip ci] Let the cluster run jobs wait up to 24 hours for the scheduler instead of the implicit 6,True
+13ab94a8345041e96bcf1566953e0d74bcb9d1a2,2026-10-05T21:24:52+09:00,[skip ci] Record the host-variability survey and the face-count cost model in the task notes,True
+81fb7e5cd02c33192510e062825e6b907fc9ee10,2026-10-05T19:27:08+09:00,[cluster:aspire2a] [nodes:4] Smooth the three U components together with one pass over the shared matrix arrays (Issue #44),False
+ba1c405313374d9809e8a2b0bb953aeb50cf2195,2026-10-05T18:32:19+09:00,[skip ci] Record the Issue #41 stack diagnostic and the Issue #42 1/2-node A/B series in the task notes,True
+0b02ab003a0daf49d51af71e40ae305a6c44a0a4,2026-10-05T13:06:09+09:00,[skip ci] Document the declared multiLevel domains accepted by the scaling export,True
+46fc59e6b814c64de8c939c4ca4a0cac45bb0a85,2026-10-05T11:27:56+09:00,[skip ci] Let the scaling tool accept the declared ASPIRE-2A multiLevel domains per node count (Issue #42 P0),True
+255166873fce7d7f27ce13c84f61278547060681,2026-10-05T07:40:14+09:00,"[skip ci] Start the OpenFOAM workflow only for branch pushes, not tag pushes",True
+5a216c39c7d1604562e413a34ab12f3b35adc2e5,2026-10-05T07:34:27+09:00,[skip ci] Mark ASPIRE-2A 4-node runs as the scored entry of the scaling table,True
+1abee26cc70e79bbf35f2491d20352f9f5c83fbe,2026-10-05T02:23:46+09:00,[skip ci] Record the combined multiLevel + copy-patch Bonus and the point-weighted decomposition in the task notes,True
+886849f0777e3a81fb0c0b38320865f7da917418,2026-10-04T23:19:53+09:00,[skip ci] Record the scotch tree-leaf screening and the bit-identical solver-copy patch in the task notes,True
+e2730db003e75e8b45c8e36c3cfc768397e28877,2026-10-04T23:00:35+09:00,[cluster:aspire2a] [nodes:4] Combine the multiLevel decomposition with the solver-copy patch (Issue #37),False
+d36810454347a4de895e87c5c5055e5ef4b3b8b9,2026-10-04T21:03:40+09:00,[cluster:aspire2a] [nodes:4] Build v2512 without two redundant solver copies via a tracked patch (Issue #37 F5),False
+6396eeb619048e90f48ae79ff12f6bdd79defe02,2026-10-04T18:46:44+09:00,[skip ci] Use scotch as the Basic decomposition at 1 and 2 nodes on ASPIRE-2A (Issue #38),True
+3e42bc2a4900cacdc5ecea077e200bfab066ba6f,2026-10-04T15:20:02+09:00,[skip ci] Let the ASPIRE-2A case-cache test follow the 1-node decomposition file,True
+ce1d4b73ed3157401557c44182fbd424b6a0a32e,2026-10-04T14:39:03+09:00,[skip ci] Let the 1- and 2-node ASPIRE-2A presets follow their decomposition files,True
+e867953d9d38656402db535b7880890a58f50b17,2026-10-04T13:54:44+09:00,[skip ci] Record the adopted rank placement and the bound MPI profile in the task notes,True
+8d54c41256113a10c6ed27689fc7e58a988fcb70,2026-10-04T13:53:18+09:00,[skip ci] Merge the LD_PRELOAD-free rank placement for ASPIRE-2A Basic runs (Issue #36 A3),True
+5abefc1c0ae77d03654689aacd41a8d6c7a50430,2026-10-04T12:54:38+09:00,[cluster:aspire2a] [nodes:4] Replace the LD_PRELOAD rank interposer with numactl --membind and external CPU re-pinning (Issue #36 A3),True
+582c83398075785d3d04ff9b0a94e62af7d0a9fe,2026-10-04T01:52:15+09:00,[skip ci] Record the Issue #36 Basic remeasurements and the cause of the binding loss,True
+3441fc1ef3123d32b3fba8bb568b00c062b7a1f2,2026-10-04T01:52:15+09:00,[skip ci] Use the OpenFOAM Amd compiler rules for the ASPIRE-2A AOCC toolchain,True
+1854ea6ee46d3b170499fd669c710b54bb9b275f,2026-10-02T22:10:47+09:00,[skip ci] Adopt scotch as the 4-node Basic decomposition on ASPIRE-2A (Issue #36 A1),True
+28f72dfc9d6c9b1f465f6675cd6f0c1168ecd59d,2026-10-02T14:36:05+09:00,[skip ci] Restore the official 150-step target for 4-node ASPIRE-2A runs,True
+2798902a655693d425fa2d904fbc6ba19c1b96d3,2026-09-29T16:57:13+09:00,[cluster:aspire2a] [nodes:4] Record the Bonus GAMG case identity,False
+cc72e444165f6127589916d337d38cd45b1cef43,2026-09-29T16:53:47+09:00,[cluster:aspire2a] [nodes:4] Enable masterCoarsest GAMG processor agglomeration,False
+fd6f618cec835dca191fb9fccfc1c6533d196e61,2026-09-29T16:49:27+09:00,[skip ci] Restore the hierarchical 4-node selection after screening,True
+f0ae3d4bce2068bccfeddcdaa498478819f470d4,2026-09-29T16:22:41+09:00,[cluster:aspire2a] [nodes:4] Screen the ptscotch Bonus decomposition,True
+74010ee67ca81c15d1aeb419d15ef6ffcc6678a1,2026-09-29T16:22:39+09:00,[cluster:aspire2a] [nodes:4] Screen the metis Bonus decomposition,True
+805943ee3e0d1d2206353748f3938e29628d20c0,2026-09-29T16:22:34+09:00,[cluster:aspire2a] [nodes:4] Screen the kahip Bonus decomposition,True
+402dcb7c5f815501c7ca31dbb17190f966feebf0,2026-09-29T16:22:27+09:00,Support kahip/metis/ptscotch Bonus decomposition and re-apply 40-step screening,True
+f9163115ccc8146c878aa1691abc5c520ee876d4,2026-09-29T16:11:01+09:00,[skip ci] Record the Basic 1/2/4-node five-run campaign,True
+877cf21c6fe1cfc56d793ab12b682c9c24219156,2026-09-28T14:55:06+09:00,Enable hierarchical 1/2-node runs and restore 150-step official targets,True
+a924cc05ee9499c874478ff726d3b719d9b5edfd,2026-09-28T14:36:18+09:00,[skip ci] Summarize the exhausted Basic runtime screening,True
+1285a667cedddc2a4e33d5b3439318994c890678,2026-09-28T14:33:52+09:00,[skip ci] Record the unified boundary storage screening result,True
+1819fb5daead0cdbe927a00e66801902d9e39b26,2026-09-28T14:01:57+09:00,[skip ci] Record the multiLevel hierarchy screening result,True
+bc190558b34915460ae7ec2bd9a5000b44feb056,2026-09-28T13:22:17+09:00,[skip ci] Record the negative exchange-scheduling probes,True
+14592ef96838b0f5d07eff3d1de4d5aff824756e,2026-09-28T12:53:46+09:00,[skip ci] Record the hierarchical 40-step screening baseline,True
+b717b7db402a17e0b61a3ffd08a08b319db241a8,2026-09-28T12:25:32+09:00,[cluster:aspire2a] [nodes:4] Establish the hierarchical 40-step baseline,True
+33200a1c11c8ac77959430e46570b1f1efcc9f57,2026-09-28T11:37:19+09:00,[skip ci] Screen optimization candidates at 40 iterations,True
+9eb697d46042cfda3e0e170c205d1c89123b24ae,2026-09-28T11:13:21+09:00,[cluster:aspire2a] [nodes:4] Basic topoControl hierarchical Allreduce probe,True
+70212d8cf1062c5a5e728b00f7a9b73114dbb894,2026-09-27T20:19:49+09:00,[skip ci] Reject scheduled communication and restore the default,True
+1b33a2e65a3d75c2eac064b2b5d82c86c82d66f2,2026-09-27T19:42:03+09:00,[cluster:aspire2a] [nodes:4] Retry scheduled communication on simpleFoam only,True
+dae66b0f65eaf6fa76990e200b4c39269d5c46c9,2026-09-27T18:57:43+09:00,[cluster:aspire2a] [nodes:4] Basic 512-rank commsType scheduled benchmark,True
+3ce4fefb0e557d8e95c939767b53da50dc45e291,2026-09-27T12:28:55+09:00,[skip ci] Keep TASK_2a.md at the main version on this branch,True
+66ce7ae5195aa101d3722d0d279086fce9440484,2026-09-27T12:28:15+09:00,[cluster:aspire2a] [nodes:4] SMT ON / 16 ranks per L3 counter-evidence run,True
+1d0b2e671905693d1e3c179b6b987aa59ebe1fbd,2026-09-27T12:06:49+09:00,[skip ci] Record the ASPIRE-2A per-L3 placement results in the plan,True
+e56ac8d16af5ef8f41e2144d2d951660d61e69bd,2026-09-27T11:36:32+09:00,[cluster:aspire2a] [nodes:4] Basic hierarchical 448 ranks control with 8 per L3,True
+11d925b1ebc1728adfdc9c1c702aadeea03579ba,2026-09-27T10:50:49+09:00,[cluster:aspire2a] [nodes:4] Basic hierarchical 448 ranks with 7 ranks per L3,True
+d86e56e34096244a524eebf47f54039102d2cdba,2026-09-27T10:48:26+09:00,[skip ci] Add L3-aware rank placement for ASPIRE-2A,True
+dbcc43bf41a65d70029d3a897b5c1c3984ca4ebb,2026-09-27T10:45:23+09:00,[skip ci] Revert experimental Basic harness to the main baseline,True
+67396f248f78cbc78e4e5c89cf838ce0e8bf9f7d,2026-09-27T03:00:55+09:00,[skip ci] Record Basic decomposition results and restore branch defaults,True
+969cabcb356c21be3c52de3a9dfb7c9557c0ecfa,2026-09-27T02:23:19+09:00,"[cluster:aspire2a] [nodes:4] Basic hierarchical (4 8 16) order zyx, four nodes",True
+d51de425c0fa76ac95609f40134bb819b8087ba5,2026-09-27T02:23:09+09:00,[skip ci] Parameterize hierarchical n and order for the ASPIRE-2A 4-node path,True
+9c1f954a18ef9d26c8d6698070421130ae68376e,2026-09-27T01:27:09+09:00,[cluster:aspire2a] [nodes:4] Run Basic scotch four-node official benchmark,True
+2f52e6ba2df1c4d61b9f1898e6bbda49d578ad06,2026-09-27T01:27:04+09:00,[skip ci] Wire scotch Basic decomposition into the ASPIRE-2A 4-node path,True
+d2cc912cd9144798db111d285d06fc23c5c163e5,2026-09-27T01:27:04+09:00,[skip ci] Add optimization plan and integrated rule reference,True
+11c0e9d83c207fa1fdd7ef28a02da0231568454b,2026-09-26T11:52:22+09:00,[skip ci] Update official task rules submodule to 2026-09-25 addendum,True
+3922bdcfa253354119f14bbe78cadd33e6cd65af,2026-09-26T01:56:34+09:00,[cluster:aspire2a] [nodes:4] Place temporary partition weights in constant time,False
+028481e58294267c3a1512b164ee448e6759e77c,2026-09-26T01:38:06+09:00,[cluster:aspire2a] [nodes:4] Read binary owner values immediately after opening delimiter,False
+af50f25cb72e385307b1115478fa95b66f2ea1b8,2026-09-26T01:19:32+09:00,[cluster:aspire2a] [nodes:4] Weight wheel and underbody cells in multiLevel partition,False
+cc2cd662ffd8ad3f71021664ae01f4ce508bebf7,2026-09-26T00:39:56+09:00,[skip ci] Restore adopted ASPIRE four-node decomposition after hierarchical comparison,True
+5584e022c0bb15ae76d4c39edeeb4211aa02678a,2026-09-25T22:58:34+09:00,[require-build] [cluster:aspire2a] [nodes:4] Test Milan-targeted C++ build against four-node baseline,False
+85aa45dca575377f8036cacceeb8f57773de0c9f,2026-09-25T22:31:12+09:00,[skip ci] Skip inactive ASPIRE profiler postprocessing,False
+a311605cfdb85ca207920903e816a64856ba5966,2026-09-25T22:31:12+09:00,[skip ci] Skip inactive ASPIRE profiler postprocessing,True
+338eca35695a52df38780731da7b4876adeb088a,2026-09-25T21:18:15+09:00,[skip ci] Select reusable builds from cluster-local sidecars,False
+ac62bc494cf0e77e366d7d9f209b461118bdff6d,2026-09-25T21:18:15+09:00,[skip ci] Select reusable builds from cluster-local sidecars,True
+3573a29eda48769aad1f7fbe53b696e7425ebdcb,2026-09-25T20:44:12+09:00,[cluster:aspire2a] [nodes:4] [profile] Retry omega operator split after validation fix,False
+a19a9fd39ddf3b25f065c2f2bc1fd747beb5050f,2026-09-25T20:43:53+09:00,[skip ci] Align ASPIRE execution boundary check with short SSH polling,True
+b33c1cc0d11a322e7e50d92988541a9293d32a8e,2026-09-25T20:41:37+09:00,[cluster:aspire2a] [nodes:4] [profile] Split omega field operators from coefficient copies,False
+82bb4c66df1d5f9810d16ea79aa3567692bf246b,2026-09-25T20:40:48+09:00,[skip ci] Poll ASPIRE PBS through short SSH sessions,False
+ba35b0cdfde2285537be6f0307429ded2156262f,2026-09-25T20:40:48+09:00,[skip ci] Poll ASPIRE PBS through short SSH sessions,True
+051b47885cb510c836c83a4028d97d43e8c2c96d,2026-09-25T13:16:40+09:00,[cluster:aspire2a] [nodes:4] [profile] Separate omega coefficient allocation from expressions,False
+759c20d01d63cd21dc06b405a156e94ca34503c2,2026-09-25T12:17:28+09:00,[cluster:aspire2a] [nodes:4] Retry case-default hierarchical baseline,True
+03c6e0bbcb2ac7f95e8b3135dc9d9baea16bdcc9,2026-09-25T08:42:03+09:00,[skip ci] Retire temporary Issue #33 PMU sampling,True
+a403124148e49b031d3cd5ca092a5b1e2003f4a9,2026-09-25T08:02:51+09:00,[cluster:aspire2a] [nodes:4] [profile] Alternate three-counter refill groups,True
+92c931cffb262eee8c35c725c739c41355c44a5f,2026-09-25T07:25:10+09:00,[cluster:aspire2a] [nodes:4] [profile] Split omega cache refills by source,True
+0f37c9c3ffaca3fd2d50c3c294fe69d257666e4b,2026-09-25T06:16:44+09:00,[cluster:aspire2a] [nodes:4] [profile] Measure omega assembly with core PMU snapshots,True
+ee948200f8ae013e83028940d07856764f6f4e08,2026-09-25T01:04:50+09:00,[cluster:aspire2a] [nodes:4] [profile] Trace omega convection assembly by patch,True
+0f70dd0082f2c4b288842eed8b5ad165451fad6c,2026-09-24T22:38:15+09:00,[cluster:aspire2a] [nodes:4] [profile] Preserve uProf raw archive after transfer failure,True
+0de4d90302b212821392724cc05fe3413b5d0293,2026-09-24T18:14:30+09:00,[cluster:aspire2a] [nodes:4] [profile] Capture data_access PMC on current multilevel decomposition,True
+3fa453020f6003779dbde4699bca0ff964f83b55,2026-09-24T18:14:12+09:00,[cluster:aspire2a] [nodes:4] [profile] Capture assess PMC on current multilevel decomposition,True
+646f60f13da00e089aa67d88bfb8586ca1fc3fab,2026-09-24T17:54:07+09:00,[skip ci] Remove one-time Issue 33 ASPIRE-2A recovery workflow,True
+216817d772c66b8ddc5b9151f493303e89f2ce7a,2026-09-24T17:14:27+09:00,[skip ci] Add one-time Issue 33 ASPIRE-2A artifact recovery,True
+7641cd3b7af382635d7b64a2fc0f42d84147a515,2026-09-24T15:55:15+09:00,[skip ci] Restore NUMA-aware ASPIRE four-node default after baseline connection failure,True
+2164bfe4392e6077f029bfcee52b590cd121aa17,2026-09-24T15:53:21+09:00,[cluster:aspire2a] [nodes:4] Establish official-case hierarchical baseline,True
+d9f5184233d816070f3dfb58ce0c3d403e30c02a,2026-09-24T11:34:07+09:00,[cluster:aspire2a] [nodes:4] [profile] Trace omega matrix operand evaluation,True
+6be0a200968ad68922acd3f3ecfdf7eacef08090,2026-09-24T10:54:11+09:00,[skip ci] Record Issue 33 kOmegaSST pre-omega phase attribution,True
+9b1ba10c76d512aac9ab2cc94606162c7a511eeb,2026-09-24T09:21:25+09:00,[cluster:aspire2a] [nodes:4] [profile] Measure kOmegaSST pre-omega arrival spread,True
+e80de596879ba1444afb21cc26ffb834348f4b62,2026-09-24T07:11:08+09:00,[skip ci] Record second Issue 33 pressure-tail timing result,True
+918d3beffa8fcbcb604fe7d4f7492f48dc187675,2026-09-24T05:52:48+09:00,Prepare second ten-iteration pressure-tail diagnostic,True
+4cb7b6149d8465ec66493bbf3317a95e51d0d603,2026-09-24T03:32:53+09:00,Accept ten-iteration Cd output in diagnostic profiles,True
+a4a412645de1e60fa3e84598d0fed7ba31342391,2026-09-24T00:09:40+09:00,Prepare ten-iteration ASPIRE-2A phase timing diagnostic,True
+6606c9edd8698d93c2c9e3ffbfc6113b1788552c,2026-09-23T22:47:17+09:00,Document full ASPIRE uProf counter reanalysis,True
+e127656acf0773e964bd2c4068bddbae0b32c42c,2026-09-23T20:14:29+09:00,[cluster:aspire2a] [nodes:4] [profile] Attribute long MPI waits to callers and requests,True
+01b54b6f027926075db3330e5720e09d7ce2fb3b,2026-09-23T19:01:54+09:00,[cluster:aspire2a] [nodes:4] [profile] Capture per-rank MPI timing in short OpenFOAM diagnostic,True
+0718669741de1c6e8d950dcda029acfba83c5ad3,2026-09-23T17:52:56+09:00,[skip ci] Adopt NUMA-aware four-node OpenFOAM decomposition,True
+5b2cb52ff0975544a2e3fd81177132a1303994a6,2026-09-23T17:16:23+09:00,[cluster:aspire2a] [nodes:4] Repeat NUMA hierarchy after contemporaneous baseline,True
+9f8b15eba49d1d8fa1a67f88ef2f6057d15ab2b8,2026-09-23T15:12:13+09:00,[cluster:aspire2a] [nodes:4] Remeasure node-aware baseline against NUMA candidate,True
+941a70981286c8c6cbca7b6464f668bf472449e6,2026-09-23T14:01:05+09:00,[skip ci] Update task rules submodule,True
+6827e2d0b362d49419081dade0050322c0ed3f51,2026-09-23T14:08:56+09:00,[cluster:aspire2a] [nodes:4] Benchmark NUMA-aware partition at official length,True
+ef94b4213d7b68e1fe3c883b715342222b9cb606,2026-09-23T12:45:40+09:00,[cluster:aspire2a] [nodes:4] [profile] Test NUMA-aware multiLevel hierarchy,True
+8ce07d40b3c0308311d94203d080a7bc29584dbb,2026-09-23T11:52:39+09:00,[cluster:aspire2a] [nodes:4] [profile] Test socket-aware multiLevel partition,True
+8c258a2049e875d75c37491fcbfd80d06358fef9,2026-09-23T11:28:46+09:00,[cluster:aspire2a] [nodes:4] [profile] Capture 40-step node-aware baseline,True
+d27d66fe637b0eddc5b23c07689f40955c3930b2,2026-09-23T11:27:40+09:00,[skip ci] Add isolated 40-step diagnostic profile path on ASPIRE-2A,True
+3a47eee04b741ba16e1f96e3630de77f4191e5b5,2026-09-23T10:56:14+09:00,[skip ci] Restore default profile condition after CrayPAT investigation,True
+cd80dee8f4d72db6fd11ce44dc1f492f294d7c8d,2026-09-23T10:20:41+09:00,[cluster:aspire2a] [nodes:4] [profile] Restore CrayPAT executable for login-node report,True
+2f00c51e4744d255799b07e973ce21bfcb3068ca,2026-09-23T09:40:26+09:00,[cluster:aspire2a] [nodes:4] [profile] Restore case preparation stage helper,True
+bf2a6cecbfb9e9890569595f926523df10b03e52,2026-09-23T09:26:02+09:00,[cluster:aspire2a] [nodes:4] [profile] Keep OpenFOAM case cwd under CrayPAT,True
+265dee4962bbea96b10c29c6165e39b663106751,2026-09-22T23:32:36+09:00,[skip ci] Select CrayPAT MPI profile,True
+c09c5894c25efef1c085375287574dd8da0462ec,2026-09-22T23:16:28+09:00,[skip ci] Select AMD uProf data access profile,True
+b3a9237944e33c4290f6296f74a024ea4380b73e,2026-09-22T23:15:46+09:00,[skip ci] Add isolated CrayPAT MPI profile path,True
+8b519dd83b72b969464beb7dc5d7590a1c2240ab,2026-09-22T22:51:37+09:00,[skip ci] Add AMD uProf assess profiling on ASPIRE-2A,True
+d4ab8245ab0cae284fef16d3d32dfe8d18def396,2026-09-22T20:40:06+09:00,Reconnect while waiting for Genkai jobs,True
+1fbda3de36c1edac250b35000b270ed1b41f5cdb,2026-09-22T20:17:08+09:00,[skip ci] Keep detailed task progress local,True
+009ffe7614f75a236d9e150828f088fa874af4e8,2026-09-22T19:36:11+09:00,[skip ci] Record initial topology broadcast result,True
+85b8d08dca57f5a9694bae68f256c9f8a1833f48,2026-09-22T19:30:48+09:00,[skip ci] Record polling rejection,True
+59d49966998d92c0db30968b041543dab5773ead,2026-09-22T19:05:48+09:00,[skip ci] Record runtime optimization evidence,True
+d3b035e4edcf205307667c3e86baa9cda15bb95d,2026-09-22T18:04:29+09:00,[skip ci] Correct the optimization rule boundary,True
+5aae6fe89df29325b9833eabf8ac6890f869d8ff,2026-09-22T17:23:30+09:00,[skip ci] Adopt node-aware multiLevel decomposition on ASPIRE-2A,True
+63a8142f2a2aa357bef70575c7bf8d7feb5f2195,2026-09-22T17:23:09+09:00,[skip ci] Record adoption of node-aware multiLevel,True
+17d84a99ffe0bdd0748a501193d7d4c90551f759,2026-09-22T16:53:35+09:00,[cluster:aspire2a] [nodes:4] Repeat scoring-scale multiLevel comparison,True
+579a978f260827d52ade4b7ff540322fc4add3a5,2026-09-22T15:59:23+09:00,[cluster:aspire2a] [nodes:4] Run scoring-scale multiLevel comparison,True
+8039112f45a07baa3db9438c4492f4f0fe014dd3,2026-09-22T15:56:43+09:00,[cluster:aspire2a] [nodes:4] Compare node-aware multiLevel at scoring scale,True
+32915eceb4d27a5d36707d5047d8bb25fa4c146b,2026-09-22T15:24:36+09:00,[cluster:aspire2a] [nodes:2] Repeat node-aware multiLevel benchmark,True
+fa89527f2ef4ace3cc4903d1448db4039ab31682,2026-09-22T14:52:59+09:00,[cluster:aspire2a] [nodes:2] Limit large-output validation to VTune,True
+2fce18ff95d88d13cdc5693e2d71217e358f49d0,2026-09-22T14:16:52+09:00,[cluster:aspire2a] [nodes:2] Test node-aware multiLevel decomposition,True
+827e7ace15a27f3f5fbb580403788bdfc29d5397,2026-09-22T13:57:10+09:00,[skip ci] Stop generating ParaView archives during profiles,True
+be5f471aba54eea79a16812d047e2fa823e5c8ea,2026-09-22T13:21:21+09:00,Remove unused ASPIRE ParaView archive,True
+22a8729953361de12bdb386d64d0e1bf489a5d53,2026-09-22T12:52:38+09:00,[cluster:aspire2a] [nodes:4] [profile] Validate bounded uProf at four nodes,True
+e8177a0c7c80febcdc31b02bafcd34019c4014a7,2026-09-22T10:34:53+09:00,[cluster:aspire2a] [nodes:2] [profile] Bound uProf collection and reporting,True
+b5930bcdd4a58569815deb4a367d280ea1c10aca,2026-09-22T09:56:51+09:00,[cluster:aspire2a] [nodes:2] [profile] Release compute nodes before uProf reporting,True
+5ec53e39de654cfa174eaf20143c82c952f9a752,2026-09-22T09:21:24+09:00,[cluster:aspire2a] [nodes:2] [profile] Parallelize independent uProf reports,True
+19644a955940d35d8616001b904b8a41da54067b,2026-09-22T08:42:28+09:00,[cluster:aspire2a] [nodes:2] [profile] Isolate uProf sessions by rank,True
+36060222093b052708bdfb6a86d6538ce5429229,2026-09-22T07:44:38+09:00,[cluster:aspire2a] [nodes:2] [profile] Split uProf sessions by host,True
+1e69c544b56f8a8b61e6e928977397a70d27ca70,2026-09-22T07:03:39+09:00,[cluster:aspire2a] [nodes:2] [profile] Use a native uProf target launcher,True
+d2926758b35e361d70cd3c6d5d0b543c2eebccaf,2026-09-22T06:24:46+09:00,[cluster:aspire2a] [nodes:2] [profile] Preserve uProf target argv,True
+1bdfc27d983ea4c7aceb51102fe901e78fe83037,2026-09-22T06:06:05+09:00,[cluster:aspire2a] [nodes:2] [profile] Scope uProf libraries to CLI validation,True
+c6def5a4ce777b355a483d3df4171091b4a34469,2026-09-22T05:51:11+09:00,[cluster:aspire2a] [nodes:2] [profile] Keep uProf executable on shared storage,True
+646811b4da88db2ef7119a76d30b1850d2bbb03d,2026-09-22T05:34:27+09:00,[cluster:aspire2a] [nodes:2] [profile] Preserve uProf distributed arguments,True
+f56346294b4e8496038016effa63368f4b35e882,2026-09-22T01:23:48+09:00,[require-build] [cluster:aspire2a] [nodes:1] Adopt validated UCX transport,True
+664cbf22ba92fdeb001cefd46e2bd233c23b1c88,2026-09-22T00:48:21+09:00,[skip ci] Make source tree identity path-independent,True
+65e4b72fa6905b6289a6d2d84879661ce3e919b1,2026-09-22T00:27:46+09:00,[require-build] [cluster:aspire2a] [nodes:1] Measure warm ASPIRE ccache,True
+a47e8513619a8fe6988022339f0a94dbd13a16a1,2026-09-22T00:25:18+09:00,[skip ci] Make uProf CLI analysis authoritative,True
+f5bf16176e5fc81c7196632f79d185f977966ceb,2026-09-21T23:32:12+09:00,[skip ci] Keep concurrency assertions cluster-local,True
+f565dcb4a8f61b618f2ed0540d76165b40406719,2026-09-21T23:30:44+09:00,[skip ci] Scope workflow concurrency to shared outputs,True
+d62297b582a885e8ec87a5c39cb6d396f489b5d9,2026-09-21T23:07:48+09:00,[require-build] [cluster:aspire2a] [nodes:1] Enable isolated ASPIRE ccache,True
+450def62b8415e804b4612b7c93ada15c3e44627,2026-09-21T21:51:41+09:00,[skip ci] Align ASPIRE affinity with PALS guidance,True
+1f60daf4fd3d004428566496e03165ea8bc7b606,2026-09-21T20:57:52+09:00,[skip ci] Bind ASPIRE ranks before and after MPI init,True
+f0763e903b98a3a84452dfa9095b2a7d85001f7a,2026-09-21T20:24:47+09:00,[skip ci] Stabilize ASPIRE MPI rank affinity,True
+c9b57821db00f2884eb8a692491737fe89155b7d,2026-09-21T19:37:28+09:00,[skip ci] Preserve accepted IMB launcher decisions,True
+2cda477c4369f9b1cd6ff42049a722c5c4d37f5e,2026-09-21T18:18:35+09:00,[skip ci] Use deterministic ASPIRE rank binding,True
+7fb6ebadf0b5fc08e078d8ac6042427ea6be2371,2026-09-21T17:31:13+09:00,[skip ci] Pin ASPIRE PALS rank binding,True
+21e66653b759360b4c11d07f7e925824981d0858,2026-09-21T16:31:48+09:00,[skip ci] Document Connected Sheets comparison contract,True
+77f7cdddd67e09eb69967af880f9dd3d7e2d1201,2026-09-21T15:47:06+09:00,[cluster:aspire2a] [nodes:1] Repeat GNU AOCL baseline,True
+811d2cabd629a5f8724216374f687ac80e7b184a,2026-09-21T14:24:41+09:00,Bound ASPIRE performance claims to hardware limits,True
+7850e1097a41d527e169d025fe481401263e35d5,2026-09-21T14:17:48+09:00,Document ASPIRE uProf hotspot balance,True
+7624dcf360f2ba62737652f7557bc7deb277a525,2026-09-21T14:07:37+09:00,Document ASPIRE baseline and MPI transport evidence,True
+0bb548173a774024cf06c8d86c6413956897173f,2026-09-21T13:22:53+09:00,[require-build] [cluster:aspire2a] [nodes:1] Preserve OpenFOAM registration libraries,True
+3bfcd3f2e9e42625af8cff9fa7543080cc80dde7,2026-09-21T12:56:49+09:00,[cluster:aspire2a] [nodes:1] Preserve case preparation failure logs,True
+78d8782d2202746daee2cf75742b4915a02e9ae7,2026-09-21T11:41:36+09:00,[require-build] [cluster:aspire2a] [nodes:1] Enable AOCL LibM and LibMem,True
+10d0b90f2d6a904f5e5b8eac1ed72c276b515edb,2026-09-21T09:22:35+09:00,[require-build] [cluster:aspire2a] [nodes:1] [profile] Bind IMB to Cray MPICH,True
+d678d7493583031e3008df1038b26d5a0c8abb02,2026-09-21T09:07:43+09:00,[skip ci] Track ASPIRE libfabric in build identity,True
+7f5e5a9deccccd00e2e6d451c4224ec2ae008818,2026-09-21T08:30:24+09:00,[skip ci] Fix ASPIRE profile result finalization,True
+77887725515f9077853ccacdcbe2987f865b2d40,2026-09-21T08:12:36+09:00,[skip ci] Keep task checklists local,True
+1c5e9ef932c74bc3f9eaa7b797652ae323dae25b,2026-09-21T08:01:10+09:00,[skip ci] Expand ASPIRE 2A execution checklist,True
+aeb69b7c6af1d4f281c262426515aa0caa95a205,2026-09-21T07:43:54+09:00,Keep BigQuery credentials on login runners,True
+81f142a3df917a0613049531ca3e9874990a36dd,2026-09-21T07:35:59+09:00,Retire completed ASPIRE diagnostic probes,True
+1a055804679ea41d9805a26f6c0e012e584b6656,2026-09-21T06:55:52+09:00,[cluster:aspire2a] [nodes:1] Preserve deployed Python under MPI,True
+65547a053dcb5b0224c85bc1361a02fc03551d42,2026-09-21T06:40:09+09:00,[cluster:aspire2a] [nodes:1] Recognize Cray MPICH ABI libraries,True
+0f2bbe140a50ab5bc8bfe57034ff886ac39a615e,2026-09-21T06:28:14+09:00,[cluster:aspire2a] [nodes:1] Preserve ASPIRE stage script paths,True
+6cb0ee310c5dcbd0527597ce66563d6c1be55962,2026-09-21T05:10:35+09:00,[require-build] [cluster:aspire2a] [nodes:1] Preserve compiler launcher names,True
+f7fba709723ac082a64df77d71b02cc5fa63bdc7,2026-09-21T03:04:51+09:00,[require-build] [cluster:aspire2a] [nodes:1] Provide Git on ASPIRE build nodes,True
+7892f66eb95546d7494f70d051db294562e8d974,2026-09-21T02:42:31+09:00,[require-build] [cluster:aspire2a] [nodes:1] Record actual ASPIRE compilers,True
+0b26633cd7fb05dffbcc86b65ea32044b658612f,2026-09-21T02:35:17+09:00,[skip ci] Generalize the profile dispatch label,True
+3022551b544ad39870498d4368b58be265860baf,2026-09-21T02:29:24+09:00,[skip ci] Fix ASPIRE uProf MPI collection,True
+c9d18594dd3682e65524c4b748ed686e1cf38cab,2026-09-21T02:02:28+09:00,[skip ci] Isolate ASPIRE runtime from Intel profiling,True
+f90e690c7e9030528475d4a32d862ec535b0955f,2026-09-21T01:54:10+09:00,[require-build] [cluster:aspire2a] [nodes:1] Establish ASPIRE compute build baseline,True
+ecac8dbf9f889e97913eda9a6e599b7dee3e63db,2026-09-20T23:11:59+09:00,Document experiment notes and reference links,True
+ef799c651ca917664d26effed99e2b2d8999f9f9,2026-09-20T22:54:59+09:00,Use AMD uProf for ASPIRE-2A profiling,True
+156eb75f2713ed0dd83a1e282d3cb6946ad8217b,2026-09-20T22:41:37+09:00,Add ASPIRE-2A automated execution path,True
+e61d0e2c9c876bcf848e528fafa94428656f862b,2026-09-20T19:03:38+09:00,Document verified ASPIRE-2A environment,True
+1dcf3bf238217e0f2bb00aec7d723304ea4fab35,2026-09-20T18:10:45+09:00,[skip ci] Plan ASPIRE-2A experiments and metric collection,True
+18d66997ccd44ceddccab8e6a3a80d26d6ad9fdc,2026-09-13T12:44:27+09:00,[skip ci] Correct final interview presentation evidence,True
+fac63525bb6bc39acca9557ed8b44ee118c24cc2,2026-09-13T11:57:32+09:00,[skip ci] Add combined final interview presentation,True
+a0d71e435f3e81444141dfac034ec9e198f428ca,2026-09-12T17:58:14+09:00,[skip ci] QwenとOpenFOAM資料の語彙を整える,True
+453dd679796c45fa407e2f4ab6f0e4b18e54239c,2026-09-07T04:47:44+09:00,Record verified Genkai results and retire recovery scaffolding,True
+802577b6c02fc55e815d8540c893d5f4136e7ed8,2026-09-07T04:28:46+09:00,[skip ci] Archive the rejected 480-rank Genkai experiment,False
+c1017ca4945f0bdd45980361f65a01f4fb3a5b4c,2026-09-07T04:24:01+09:00,Use runner cluster wrappers to archive collected profiles,True
+c62a364899cb31ba769b25291949c3871c356d36,2026-09-07T04:13:26+09:00,[cluster:genkai] [nodes:2] [profile] Use the deployed interpreter for MPI hardware capture,True
+b9960e59e871450cc2e8bb69da1c19bd9b98aeee,2026-09-07T04:01:40+09:00,[cluster:genkai] [nodes:1] Skip case preparation allocation for a verified cache hit,True
+32ae88c01338e9f80ae0002157ea7aff1c7b1bba,2026-09-07T03:26:12+09:00,[cluster:genkai] [nodes:4] Compare all 480 physical cores with the 448-rank baseline,False
+e944313d62fd56744e7f36b34a0f490c071a07cb,2026-09-07T03:24:01+09:00,Preserve profile warmup output before the timed solver,True
+ad25caf3f16ee186d42497e098913495061453a2,2026-09-07T03:20:31+09:00,[require-build] [cluster:genkai] [nodes:4] Align measurements and artifacts with official OpenFOAM rules,True
+2837522a5897bc18623d386e93eb9c4438c2278b,2026-09-04T01:43:52+09:00,Accept cluster-specific IMB launcher arguments,True
+48398d032ae46f48b22e4be23bb4e4e11203a03c,2026-09-04T01:26:24+09:00,Fix optional artifact collection and remote cleanup,True
+45bd509cb4de6dbcc1cc48ff606f57a5f8d7b515,2026-09-04T00:59:51+09:00,Submit OpenFOAM jobs from persistent run directories,True
+12f0f73a469d3e35739a596ecf2b14e6f21225e1,2026-09-03T23:24:07+09:00,Preserve run outputs and migrate cluster jobs to home-lab,True
+6f2c0b52492f14bdd57d585793f19af892401d19,2026-09-03T15:42:19+09:00,[skip:ci] Simplify practice OpenFOAM scripts,True
+91273475ddd1978b419398593ae4484eb38f949a,2026-09-01T16:56:36+09:00,[skip:ci] copy to submission from main,True
+e728e90a8622983a621668cdad5861ad626bb111,2026-09-01T16:51:39+09:00,[skip:ci] add pbs files (empty),True
+8d2ed37cd8bed9421836cf2bdc6ae0b9e03fafa8,2026-09-01T16:45:25+09:00,[skip:ci] Create submission folder (issue#20),True
+42d1fac52d4271e6ef9ecbb37975bb64e72f3356,2026-08-23T05:32:28+09:00,[skip ci] Record Gadi validation for issues 14 and 16,True
+69221240361e042415c666c5885da5592214b413,2026-08-23T04:34:13+09:00,[skip ci] Use driverless HPC profiling on Gadi,True
+7ef0838f259477fd9e1d8c9dd9c7eb5e075cd9f5,2026-08-23T03:32:05+09:00,[skip ci] Preserve ParaView when VTune cannot collect,True
+3f4ec94311e7d07fe0b2859058de700671bddfd1,2026-08-23T02:33:11+09:00,[skip ci] Archive OpenFOAM results on the home runner,True
+a59ffa89ab92b7c50f10e81dd15b0f5518b63715,2026-08-23T01:09:35+09:00,[cluster:gadi][nodes:4][profile] Preserve the Gadi preparation runtime call,True
+81a15bdb676fe91be2911896f453411b87eb3aba,2026-08-23T01:05:38+09:00,[cluster:gadi][nodes:4][profile] Stage rank tools on Gadi job-local storage,True
+45557e3d692570ed784c12c50041100ad00975df,2026-08-23T00:34:29+09:00,[cluster:gadi][nodes:4][profile] Revalidate Gadi interior-rank hotspots,True
+59ea11a9d382a52cf8891ffae346012fa5fdbe1c,2026-08-22T17:40:23+09:00,[skip ci] Record official-task VTune retake for Issues 14 and 16,True
+03551dcef3165328a308ba13bb41f9be3b6db345,2026-08-22T16:20:05+09:00,Detach VTune duration from solver lifetime,True
+83ee6aad16b07dacf18fff8f0c906dd610bd609e,2026-08-22T15:37:10+09:00,Disable FPE trapping only during profile warmup,True
+fe87b14d90079060bfc03bf8d6f60195349b9d35,2026-08-22T14:58:25+09:00,Compile coded functions without a solver dry run,True
+cf8ed6fe0802d572625bd4c08f46bd5e3dcadc2f,2026-08-22T14:48:49+09:00,Warm coded functions before VTune collection,True
+3bccb78929213a6aee049afa106f8bc751616c25,2026-08-22T14:24:41+09:00,Restore selected-rank memory event profiling,True
+8440805d3171d75cb0fbb5b339139b1a1f295c78,2026-08-22T14:19:45+09:00,Track VTune experiment conditions in commits,True
+bf1c1f36aea17636797542bd88617ef18212bdb9,2026-08-22T12:51:51+09:00,[cluster:genkai][profile] Preserve long-uptime monotonic timestamps,True
+38e1ea353f72670184fac4f099b9a6512c65c544,2026-08-22T12:22:36+09:00,[cluster:genkai][cluster:gadi][profile] Isolate VTune progress from solver output,True
+ef5731a965e66d3a0633ee1c7d861f1e9f1c182d,2026-08-22T11:38:47+09:00,[cluster:genkai] [cluster:gadi] [nodes:1] [profile] Retry VTune archival after build-search fix,True
+ab89e16178123157bc5ed8cbcff7f453630db290,2026-08-22T11:35:40+09:00,Terminate build discovery at the root commit,True
+5d0ba535210f1fca0805ab95147fe612ece1a400,2026-08-22T11:26:41+09:00,[cluster:genkai] [cluster:gadi] [nodes:1] [profile] Trigger direct VTune archive verification,True
+4b1e1e3c9beeea5a8dfa5cd2db296b14ec2139a5,2026-08-22T11:25:21+09:00,[cluster:genkai] [cluster:gadi] [nodes:1] [profile] Verify direct VTune archival,True
+e9204a4be1e552f9d73998fe2334bb2e8316a0eb,2026-08-22T11:24:16+09:00,Archive full VTune results directly from home lab,True
+02fe6428e0215c123606966c1893bffe88decdc1,2026-08-18T15:05:54+09:00,[skip ci] docs: refine technical Japanese expressions and terminology,True
+73db9763e6a9d1cd341535798844e23e50dc447e,2026-08-18T15:04:34+09:00,"[skip ci] docs: add .env.example, keep self-hosted runner terminology",True
+c727330b02a98fe646b38544a640b6d957261f81,2026-08-18T15:01:05+09:00,[skip ci] docs: audit and refine technical Japanese across repository documentation,True
+ad0d46cc4c0a1311d519671c878870affeff811f,2026-08-17T22:41:36+09:00,[skip ci] 人間向け文言を日本語化,True
+3c924c1bc7089866195e2c3b6e8a5c7a7973f0da,2026-08-17T20:07:28+09:00,Simplify Gadi node-local case staging,True
+311b65a62e914fde45b91900743e9628b75b3d05,2026-08-17T19:47:59+09:00,Assign one Gadi I/O rank per compute node,True
+20ef7c9d1b4a8c580c33a0f9df0bce2607518e18,2026-08-17T18:49:57+09:00,Provision Gadi rank-context helpers,True
+7763b1c01c12b1bc43571b8aea3b6dcce71e700a,2026-08-17T18:34:12+09:00,Stage Gadi rank context on each compute node,True
+9e5e92a57fd7bc11e6b052946177c8af30fcbc88,2026-08-17T17:55:40+09:00,Keep single-node Gadi runs non-distributed,True
+4bc3c6feed1294795853ce824c880855e4a9eeaf,2026-08-17T17:35:44+09:00,Quote Gadi host root path for OpenFOAM,True
+eab28b57c928876518d5dcc73f25dc9427005a58,2026-08-17T17:27:56+09:00,Quote Gadi host root matcher for OpenFOAM,True
+c1dee50da9f226d4b61be03ea79b3337a7d3f718,2026-08-17T17:16:00+09:00,Allow node archive extraction after read-only common case,True
+2f7cb174a450a7e1c4cc17bdb5f37c5cc8138fb8,2026-08-17T16:59:37+09:00,Move Gadi runtime and cases to PBS job-local storage,True
+de158fe4f6b3c7b9c7ce356cca8f7d0b1587997c,2026-08-17T16:25:10+09:00,Clean Gadi provisioning after case preparation failures,True
+e287ae35a28f6d070456e8c825fae421449b39b3,2026-08-17T16:13:09+09:00,[require-build] [cluster:genkai] [nodes:1] Use a compute-node-capable Make preprocessor,True
+2d60bdf828a56592bfe93c51e9a5c1dcf5012e9a,2026-08-17T15:51:03+09:00,Share the Gadi runtime without cancelling queued runs,True
+144a3534e8caa9a94c6f832af38f921fe87e9db6,2026-08-17T15:44:46+09:00,Serialize Gadi runs at the observed inode limit,True
+6e3d32035774178183b343f9fc2c5bc925ea799d,2026-08-17T15:28:51+09:00,[cluster:genkai] [nodes:1] Preserve the sanitized PATH on MPI ranks,True
+de6dea3a1d64c1f7139338e194e650d5ac12521a,2026-08-17T15:11:38+09:00,Search each first-parent commit for its available build,True
+17ae87ea7fd7347f92fb20687ab9173d182b8716,2026-08-17T15:08:40+09:00,[cluster:genkai] [nodes:1] Run the official timing function on Genkai,True
+e6f3f739cb160a522b82ee2c5d1453a4709bceef,2026-08-17T14:46:47+09:00,[cluster:genkai] [nodes:1] Source RunFunctions outside nounset mode,True
+3743f53e646a5afb00203d54a35aa8c512951e75,2026-08-17T14:38:31+09:00,[cluster:genkai] [nodes:1] Restore processor fields with the official function,True
+e46aa01943bfc41a7628bda63557e23522fb2cea,2026-08-17T13:04:40+09:00,[require-build] [cluster:gadi] [nodes:1] Limit Gadi OpenFOAM build parallelism after OOM,True
+93b0cd29145246166123c1f73028d8916de37980,2026-08-17T12:46:08+09:00,Limit unconditional build reuse to first-parent history,True
+207185adaba5e20909b845928ea413f17332ddfa,2026-08-17T12:21:53+09:00,Reuse the latest available build unless explicitly required,True
+dfb0f0bc7c1369a0cff23f1277961b5f34c16665,2026-08-17T11:41:26+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] Migrate to the official v2512 DrivAer task,True
+f0528cbffbff5bf4152b459c558a8f331832efd6,2026-08-17T02:56:02+09:00,[skip ci] 検証ジョブからのクラスタ分岐を復元,True
+a57a9bdcf0b4e1ecce19065588f0b29f84940bc6,2026-08-16T23:37:00+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] 実行制御面の不要処理を整理,True
+c560872a1e0a250c96d0975b3c51149589bc33e7,2026-08-16T22:59:35+09:00,[skip ci] Record always-on ccache reshare policy,True
+10afb65a1ab4c03bcfb228e51f795ce5b4dbd15a,2026-08-16T22:55:00+09:00,[skip ci] Record ccache reshare benchmark,True
+8798ea11cee9778a7c10aff3b5b3ab24529370cc,2026-08-16T22:01:48+09:00,[skip ci] Preserve hidden benchmark evidence,True
+c7e19b6898a9f4b9099fccb0cc4a37a52371dbcf,2026-08-16T21:29:57+09:00,[skip ci] Keep benchmark evidence outside checkout,True
+afd62e6e7a6d5866d33ee12a4eb3143e38d2a49d,2026-08-16T21:23:20+09:00,[skip ci] Add temporary ccache reshare comparison,True
+6e9c331eba22303251db1e93489aa5aae7b9f6d2,2026-08-16T21:22:52+09:00,[skip ci] Align reusable workflow dependency order,True
+cf2d20e9c745429d47c743916715b5c587353395,2026-08-16T20:47:42+09:00,[skip ci] Add .env to .gitignore,True
+137bd6ec97150e62e14907499398147003c2579c,2026-08-16T20:14:51+09:00,Make VTune summary cluster-neutral,True
+1118db3a83325623666ee2d5039745ffecb054f6,2026-08-16T19:51:27+09:00,[cluster:genkai] [cluster:gadi] [nodes:1] Add no-build ccache reshare tool,True
+28bcc9437158607230e2235052262dab3a3b7ba4,2026-08-16T18:57:19+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] Align cluster workflows and login-node builds,True
+37a06b9d596cd4857bbe0d8897f0f92fd07697b2,2026-08-16T13:42:13+09:00,[cluster:gadi] [nodes:1] Register PBS logs as run artifacts,True
+69719050dd515b18a9ac0c571f7fb16b4eaa51ca,2026-08-16T13:30:39+09:00,[cluster:gadi] [nodes:1] Stage compute metrics through the login runner,True
+b8371f63bfccc7963e92fcf402ddd0d3aca9eafe,2026-08-16T13:22:17+09:00,[cluster:gadi] [nodes:1] Keep moved metrics credentials live,True
+c9b20164b01906a3687280dc9bcbe0d878d3ec8d,2026-08-16T12:57:54+09:00,[cluster:gadi] [nodes:1] Use the provisioned PBS waiter for case preparation,True
+d76ff86d045a6eb77e1894e23735acbb8e215104,2026-08-16T12:54:07+09:00,[cluster:gadi] [nodes:1] Continue after skipped build alternatives,True
+799108aedf7916db1a6027bf5b4534f3dba76854,2026-08-16T12:41:18+09:00,[cluster:genkai] [cluster:gadi] [nodes:1] Canonicalize metric source inputs,True
+813e793dcd8cdede62db0962c6a78e53eae333e1,2026-08-16T12:28:54+09:00,[require-build] [cluster:gadi] [nodes:1] Prepare Gadi build metadata tools before qsub,True
+b2817987b63751b6898687e6003cc9dfacb7c85e,2026-08-16T12:05:48+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] Make official-result golden test self-contained,True
+4749a4f283c3a2e68d1e8f79026013b11a380f7e,2026-08-16T12:04:21+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] Pass artifact cleanup permission to cluster workflows,True
+ea62e5e1cee451d0b141997683c5387b85e1fb04,2026-08-16T12:02:23+09:00,[require-build] [cluster:genkai] [cluster:gadi] [nodes:1] Add Gadi and simplify multi-cluster execution,True
+0c9ffd4850b61183a7d5f332502f7a9d39e3c4d3,2026-08-14T18:20:16+09:00,[skip ci] Record Issue 16 memory bottleneck findings,True
+901da893212bd9f6be08032e6fb3b27f5a3f0f91,2026-08-14T17:14:34+09:00,[skip ci] Remove the VTune Memory Access raw data cap,True
+beedbc3bcfc7bb2779f9aa023ec482a51a6489f5,2026-08-14T16:48:19+09:00,[skip ci] Add VTune Memory Access profiling for Issue 16,True
+9c3887c2d7f5a96c6c0b6a7ba4ec1173bb015540,2026-08-14T03:26:03+09:00,[skip ci] Record Issue 15 results and restore build serialization,True
+ab23088c0cc5c4a9d5ee5b102c825f1428caf03f,2026-08-14T00:48:34+09:00,[skip ci] Share case caches across compiler builds,True
+e8b3c4db1e5d548e803b60929b5f173169a8cdf4,2026-08-13T23:32:40+09:00,[skip ci] Match case preparation to the selected build platform,True
+fcf40fd83bce867373c7b805fa39b1284761c0e8,2026-08-13T22:41:50+09:00,[require-build] Run minimal compiler baseline condition,True
+dd719fd581be53070d116963ead4a77b432e0a29,2026-08-13T22:41:35+09:00,[require-build] Run minimal OptAVX512 condition,True
+9684f5694c465c565bed4c7ddcebd73bc136094f,2026-08-13T22:41:17+09:00,[require-build] Run minimal AVX512 high-ZMM condition,True
+10fa018a3cf0379242db931ea2e503f84026d268,2026-08-13T22:41:01+09:00,[require-build] Run minimal Sapphire Rapids diagnostic fix,True
+f7b1115c48b4129527b69b2b747d65feebec6aaa,2026-08-13T22:38:59+09:00,[skip ci] Retain ccache for diagnostic builds,True
+fe20f5d87ed8eb2799545232909411036d3aac19,2026-08-13T22:37:33+09:00,[require-build] Run corrected Sapphire Rapids diagnostics,True
+b4987a1a457a7b8f07455e0c915f9d0807389e10,2026-08-13T22:37:15+09:00,[require-build] Run corrected AVX512 high-ZMM diagnostics,True
+516c664a8639a994c5c9d1c36cd9d58ad5dd3a42,2026-08-13T22:36:57+09:00,[require-build] Run corrected OptAVX512 diagnostics,True
+a58d57b2cad4718586534abdfd004bcb1d57545f,2026-08-13T22:36:41+09:00,[require-build] Export diagnostics after OpenFOAM setup,True
+0c7f623d13aa558fb083ce9c70b26c2c8395c2af,2026-08-13T22:35:35+09:00,[require-build] Retry compiler baseline diagnostics,True
+c1c8718b21d0307e78a67338f62f7c41e8ff1236,2026-08-13T22:35:19+09:00,[require-build] Retry OptAVX512 diagnostics,True
+05a68791378b6bb8fca4d17c75402a0bc9703293,2026-08-13T22:34:58+09:00,[require-build] Retry AVX512 high-ZMM diagnostics,True
+b2c9c9374902eef0e36c4d4b1e29bea51fd4b975,2026-08-13T22:34:36+09:00,[require-build] Pass diagnostic flags through OpenFOAM setup,True
+b33f48484584e30639e392f1c4b614aa8ef88265,2026-08-13T22:17:33+09:00,[require-build] Test Sapphire Rapids compiler targeting,True
+ac936ac02b7c8ff98fbd4fb4889afc0e215910bd,2026-08-13T22:17:12+09:00,[require-build] Test AVX512 with high ZMM usage,True
+0d9685c1d61f7cac737118d99e3c07360e3b4dc2,2026-08-13T22:14:35+09:00,[skip ci] Restore the shared OpenFOAM build queue,True
+32c4f19b636f432f80446d3729574f7f1383e41a,2026-08-13T22:13:20+09:00,[require-build] Test OptAVX512 compiler condition,True
+4fb95b55fdef54d9cc12e578d86570083ca6cab0,2026-08-13T22:07:12+09:00,[require-build] Force compiler execution for opt reports,True
+4412aafbe0c8cf863d8322d7a23181aa35f4245e,2026-08-13T21:58:30+09:00,[require-build] Establish commit-tracked compiler baseline,True
+f35975361705d5a02a9441843b98b23bbf230d56,2026-08-13T20:37:38+09:00,コマンド呼び出しの行継続を全廃,True
+4bcb001b19f596e9fd52fbc519316daf42c138ce,2026-08-13T20:29:50+09:00,[require-build] 環境変数の別名中継と引数縦並びを解消,True
+50aa58860d9cade73c7eef8db150f47d455ab2f1,2026-08-13T19:55:04+09:00,[skip ci] Issue #14のmemory bound判定を記録,True
+92f47512373e972b5fb2e6e16ce4f9f852d39fce,2026-08-13T19:34:54+09:00,[skip ci] VTune HPC収集を対象process向けPerfへ切替,True
+826bb985e2f2210848e5bd26c177eda9975a5f9e,2026-08-13T19:22:22+09:00,[skip ci] VTune直下でprofile対象rankを起動,True
+b73b512e1546134d31249f8599f02e4d14912c8c,2026-08-13T19:15:44+09:00,[skip ci] VTune対象終了コードの保存を修正,True
+e31a3455adc30b44afcd0bef2f859969e60342d3,2026-08-13T19:05:14+09:00,[skip ci] VTune hardware samplingを直接起動へ修正,True
+97618851c9c91301b05bf020004fb060ff857dff,2026-08-13T18:52:58+09:00,[skip ci] VTune HPC characterizationをprofile経路へ追加,True
+4e318a43d34ec1f4288f58a63aed44b5641a124f,2026-08-13T18:45:27+09:00,[skip ci] Issue #14の複数rank VTune結果を記録,True
+fb08fc89dc5d4eddb2b63ec1b9081d36e93bae00,2026-08-13T18:09:04+09:00,[require-build] VTuneの対象rankを選択可能にして実験資産を整理,True
+0afc06cfb9ca830586f4f1b00d61d5f781e3b521,2026-08-13T17:55:34+09:00,[skip ci] Issue #14の4ノードVTune結果を記録,True
+7cfbc9455095c39f7bef5174ae18857e28ed7588,2026-08-13T12:34:14+09:00,[skip ci] main統合後の資格確認を記録,True
+a8ae1ce47c5325b276b3dd0c291e4d65f6301832,2026-08-13T12:16:51+09:00,[require-build] DICとPCGの最適化をmainへ統合,True
+d69763528c36c4e87466473aab07e97c2200c930,2026-08-13T12:12:25+09:00,[skip ci] Record combined DIC and PCG qualification,True
+ab16219713bca7c1ec25b6967baf868ef48347e4,2026-08-13T11:47:45+09:00,[require-build] Evaluate combined DIC and PCG source branch,True
+4b37f4f21cfd801220c6691e12654e59310cb275,2026-08-13T11:47:03+09:00,[skip ci] Record PCG loop-fusion advancement,False
+d6ac45b370711d67b1b9a52a423f954fc715c6f7,2026-08-13T11:38:01+09:00,[skip ci] Record DIC cell-gather advancement,False
+263e44b0dfb12a06cb5ce3a2f271836c8bea25d1,2026-08-13T11:37:55+09:00,[skip ci] Record symmetric Amul CSR rejection,False
+a3a3b5b3977e5e5011d7b29aed33dc508f214a74,2026-08-13T11:04:04+09:00,[require-build] Evaluate fused PCG residual loop branch,False
+6c3fe39fbf1bab4cf5b29c0204f03ea55e1d9085,2026-08-13T11:01:29+09:00,[require-build] Resolve DIC experiment as remote-tracking ref,False
+a78ac03a4cf41c6575798d126f5834874241017e,2026-08-13T11:01:29+09:00,[require-build] Resolve Amul experiment as remote-tracking ref,False
+8c00618733ba1e0f683bf0d19fbd58ff8b0373ca,2026-08-13T10:57:45+09:00,[require-build] Evaluate symmetric Amul CSR source branch,False
+02f44e08dcebacfc2225085f8bc83af1e15c066b,2026-08-13T10:57:06+09:00,[require-build] Evaluate cell-gather DIC source branch,False
+594b9e0517f659afcaa8b54ae2443f3051ef9439,2026-08-13T10:47:23+09:00,[skip ci] Translate recent runtime optimization documents,True
+c593b89f8411dc15304d3b770a898c165bc792a4,2026-08-13T08:40:04+09:00,[skip ci] Finalize the runtime optimization study,True
+658ea146ee61def9d10ead11de7b6980b2059b54,2026-08-13T08:17:34+09:00,[skip ci] Close the cell-ordering screen,True
+6775c14e7742b2fe6bf175f9186aa402cdeeabee,2026-08-13T08:08:11+09:00,[skip ci] Record the ordinary Cuthill ordering screen,True
+df8881399e772a7dfa433119b23bdd312fce9dec,2026-08-13T07:57:51+09:00,[skip ci] Record the cell-ordering build qualification,True
+9188e3c52748eb3aac66c1f1c12fca61e5a78d63,2026-08-13T07:39:04+09:00,[require-build] Add reproducible cell-ordering experiments,True
+ef846775e30529bd0c9cd4dc651bcfceb89e08a5,2026-08-13T07:38:37+09:00,[skip ci] Close the MPI tuning screen and define ordering,True
+68fa294b145f4eac019eca9b72bd7c4494bdaba0,2026-08-13T07:30:10+09:00,[skip ci] Record the MPI autotuning generation run,True
+d8ea4ca3669249b39efcb02c8cb613e42ad1b6f2,2026-08-13T07:19:42+09:00,[skip ci] Add exact-topology MPI autotuning experiment,True
+31f4698ca97ceb081eaea8550850f2de016abd8c,2026-08-13T07:17:37+09:00,[skip ci] Record the paired 448-rank partition decision,True
+89965028175ffa075434defe0d90c0c6522819e8,2026-08-13T07:09:17+09:00,Record the combined 448-rank partition result,True
+b9d8edf4a616910609e749f86cfa57ee0c317b76,2026-08-13T06:42:06+09:00,[skip ci] Combine 448 ranks with node-NUMA decomposition,True
+f38e02fb71818c0dabcb7540280a02fb4afd2f05,2026-08-13T06:27:41+09:00,Record geometric E2E completion and qualification runs,True
+ad8e27fe466baa3023c6ab8a8b312fb26bb67ec1,2026-08-13T06:10:46+09:00,[skip ci] Target the busiest inter-node rank for profiling,True
+47838cc58dc016e0b9b2bea32c90a1213679b18d,2026-08-13T06:09:06+09:00,Record geometric partition screening facts,True
+14dbd79dfbefc31d18f54b5963c29268a13cfe98,2026-08-13T05:48:50+09:00,[skip ci] Admit tracked geometric partition metrics,True
+712ac4ed6b8ac065c46c8daa91bae97a062063d7,2026-08-13T05:33:25+09:00,Record repeat and NUMA reserve evidence,True
+3cd616a57c52383aa91172593dfcbfdfdf1b646a,2026-08-13T05:01:16+09:00,[skip ci] Add topology-aware geometric partition screen,True
+2b5e02b89ff1fef40980f214f100f14d3a0a8f05,2026-08-13T04:54:55+09:00,[skip ci] Add balanced 112-rank-per-node experiment,True
+b1a10d8cc80dd5f2eaa371cb2c57024cfcc3afde,2026-08-13T04:52:05+09:00,Record full-core Scotch screening results,True
+ed019a3be866e017c187ea0660ac0b9958d4b698,2026-08-13T03:51:16+09:00,Record full-core baseline infrastructure validation,True
+469431154e8ebb3631fb2542c9f0d6e84c62e3ba,2026-08-13T03:19:41+09:00,Parameterize full-core Scotch experiments,True
+a9541f3077c1184a03d1415e57c6d0f556ded2b0,2026-08-13T02:26:23+09:00,AGENTS.mdのGitHub Actionsに関する指示を更新し、実験・検証ジョブの実行方法を明確化,True
+7d3d0c584611fb034536b1be0fca1d7f41ec4b53,2026-08-13T02:46:04+09:00,Merge PR #12: Unify bench/profile workflow and VTune metrics,True
+f6ab786036e83279a2332dbff42fcb312803907c,2026-08-12T17:07:30+09:00,Preserve repeated VTune hotspot rows,True
+a6df48d3a87b4ddbcf9a330e8ea1f27e18d65f97,2026-08-12T16:56:27+09:00,Parse the emitted VTune 2025 hotspot schema,True
+5fa83b68f05cf40293fe2347db82b1a1bde597f6,2026-08-12T16:44:21+09:00,Unify OpenFOAM profiling on VTune,True
+a03b7630e16543de9c8890cc3d3d190ff833637f,2026-08-12T14:36:02+09:00,[skip ci] Reapply VTune Actions hotspot summary,True
+d238629a32ada1554ed2cc93a805b0330e650175,2026-08-12T14:22:20+09:00,"Revert ""Merge VTune Actions hotspot summary""",True
+0e0280b7f8296a3aedce62063d08703a16b3a245,2026-08-12T14:09:03+09:00,[skip ci] Export Perfetto data inside the VTune job,False
+9a214eea6af7f0a01199effe5dee8e3db9528c24,2026-08-12T13:59:15+09:00,[skip ci] Preserve failed Perfetto export diagnostics,False
+bb78d5e2063d112c3eab1646c0bd71e7053f1ce1,2026-08-12T13:49:26+09:00,[skip ci] Keep Perfetto export usable without VTune timelines,False
+87415bf125ed379b07fdab4b67efeae2bcf9d7ba,2026-08-12T13:37:51+09:00,Resolve suffixed VTune results for Perfetto export,False
+dd2405eed920f4933c5e23b82d957b8d395af0eb,2026-08-12T13:27:26+09:00,[skip ci] Fall back to windowed VTune Perfetto data,False
+e4cc429bc603d3271bb732bc85e14e1c27607938,2026-08-12T13:15:47+09:00,[skip ci] Retain rich Perfetto artifacts on GitHub,False
+fdce690083e367eebfe357fbcccc5f041a18e303,2026-08-12T13:14:27+09:00,Merge remote-tracking branch 'origin/main' into feature/vtune-perfetto-artifact,False
+75e5c35a24e37181f3467e4c8fb8d1949fa9516d,2026-08-12T13:14:15+09:00,Merge VTune Actions hotspot summary,True
+6fd962d6351ea273254d1a70f5c5990b9a7f0465,2026-08-12T12:55:31+09:00,[skip ci] Merge current main into VTune summary branch,True
+05876483dc47bb598f2aba212e7e61aa93771348,2026-08-12T12:43:38+09:00,[skip ci] Use supported VTune software sampling knobs,True
+b57e57da3fd8133493974934c08d5201da9a6464,2026-08-12T12:35:03+09:00,[skip ci] Permit bounded VTune rank attachment,True
+bd11da9c3819408ef9fbfde4df00d9b974380d5d,2026-08-12T12:26:35+09:00,[skip ci] Revert branch-isolated OpenFOAM queues,True
+71894e40b87c8dd42b87c4ef6782fc7c158f0a49,2026-08-12T12:25:45+09:00,[skip ci] Isolate OpenFOAM concurrency queues by branch,True
+fb6c157fb553dea326b103dff66bdfe814f0ad03,2026-08-12T12:22:36+09:00,[skip ci] Attach VTune for a bounded hotspot window,True
+3164a42b38eea36a46dcc8245222c928cef60ebf,2026-08-12T12:20:42+09:00,[skip ci] Parse multi-node Genkai accounting rows,True
+d2801c4be95bf430a25ad62b71cb011af47d33ef,2026-08-12T12:08:02+09:00,[skip ci] Queue all serialized OpenFOAM preparation jobs,True
+56116b6213eb2e1299f0cccaf62c64de58a2544a,2026-08-12T12:05:20+09:00,[skip ci] Keep OpenFOAM mesh metrics lightweight,True
+03dce30c8f7b95da02837eab1be7a00d91344634,2026-08-12T11:42:56+09:00,[skip ci] Restore complete direct OpenFOAM metrics,True
+2f28da0ca5f20c1fb59e28a71ff9a5ca4f0dda40,2026-08-12T11:15:32+09:00,[skip ci] Launch VTune after rank placement,True
+be1111e6f0182b33ef9edc91ab57be614f8d5d47,2026-08-12T10:09:34+09:00,[skip ci] Sample VTune user mode at 100 ms,True
+1a1e7f56047db5332ff0c0b398ad544299254739,2026-08-12T10:04:50+09:00,[skip ci] Remove completed OpenFOAM migration script,True
+d0ac1a7c5a880c071ad76fc28ec5b43be24f246b,2026-08-12T09:58:32+09:00,[skip ci] Request VTune CPU time explicitly,True
+f42170881851788efa90c4f309d38a1c5f0ddda0,2026-08-12T09:47:52+09:00,[skip ci] Use low-overhead VTune hardware sampling,True
+901a11fb1d909799d9ebe1a2ee49da19b67dd26a,2026-08-12T09:02:41+09:00,[skip ci] Export rich VTune Perfetto artifact,False
+f1688c4b8bf67488df31f99f742f09d095806712,2026-08-12T08:41:59+09:00,[skip ci] Reduce VTune hotspot overhead,True
+f40833858464c317ad1d23aa3b20f6afb5c32a47,2026-08-12T07:35:03+09:00,[skip ci] Add VTune Actions hotspot summary,True
+904e5d36d69e981fd91bba9f2c77300368442993,2026-08-12T01:37:00+09:00,[skip ci] Simplify OpenFOAM experiment metrics v2,True
+68bfef87deff9c5c12c2e34ecb91ca5195cc1eff,2026-08-11T23:31:26+09:00,[skip ci] Keep BigQuery publication insert-only,True
+986865389d5386565d2122dbbedf5123d532383e,2026-08-11T23:00:07+09:00,[skip ci] Separate OpenFOAM case preparation,True
+e08350edaafa5d4d92c456b7384bf6bdb2afc579,2026-08-11T22:38:06+09:00,Materialize OpenFOAM cache across filesystems,True
+7705fa0c5e2d951da689e42beec1b2a8d8ad301f,2026-08-11T22:05:39+09:00,Sort OpenFOAM control-plane paths,True
+a9cce5e567fa4567889cde04951c2e4e0f5916e5,2026-08-11T21:58:21+09:00,Cache OpenFOAM case preparation,True
+c9977fd0cdea991073162bc808f4bf0bcfb8b557,2026-08-11T18:07:35+09:00,Flatten OpenFOAM environment facts,True
+b14948c8bd55328913542aa527a6dde9fa333599,2026-08-11T15:12:00+09:00,[skip ci] Parse native perf provenance preamble,True
+b74a34126f597a6169368647fb981138b03b6d6e,2026-08-11T14:16:30+09:00,Encode BigQuery JSON projection fields for streaming,True
+000d7b2457d675ee4491c87d923d6f004bbb7ef2,2026-08-11T14:11:21+09:00,Allow steady-state publication without schema DDL,True
+6793da0ba52ca9d86e6c6bcc62744c128f7183b9,2026-08-11T13:21:16+09:00,Publish v2 facts without per-run schema query,True
+4a1e3640b7a89b3a583eb9b51134da6da4ffb9f2,2026-08-11T12:34:30+09:00,Fix OpenFOAM minimal hardware projection selection,True
+5c217868bca6a1d3fe65a6616030d5410135ba73,2026-08-11T12:28:37+09:00,Fix v2 artifact projection axes and roles,True
+08e9eafb30d1dc481a087694ec061c7821f5eeab,2026-08-11T11:30:33+09:00,[require-build] Separate bundle executable source ownership,True
+de92488e16941e2cf429a261cfe7433e6560e84b,2026-08-11T11:27:43+09:00,[require-build] Fix v2 post-solver evidence collection,True
+3e40f4406a30b7fa90824891e3ba8d298690394e,2026-08-10T23:55:52+09:00,Route hardware probes through provisioned Python,True
+a1db7ed3fe45628b7b20954ce6205cf28caee18c,2026-08-10T23:16:17+09:00,Use direct hardware probe for one-node runs,True
+00610fcdadca1dcedafd5942808949ab62b66a04,2026-08-10T22:39:19+09:00,Fix OpenFOAM terminal accounting and runtime limit,True
+9c697ea7c3e41d51b428228a65f96da4ff4d8af6,2026-08-10T22:04:02+09:00,Publish OpenFOAM v2 artifact projections,True
+6dadad5a206fff52fe49c5aa75f76e775611cbd7,2026-08-10T21:47:04+09:00,Preserve PJM multicall launcher names [skip ci],True
+183779a0e933b6c2f2ec0f59dbae99c1eb9701a2,2026-08-10T21:38:55+09:00,Complete OpenFOAM v2 runtime evidence capture,True
+6ebe4effd7780364d2cd24a26f6b9f59ac964042,2026-08-10T21:34:26+09:00,Extend temporary overhead comparison limit [skip ci],True
+e2e2d20353dac74e740d830f2338edd17f2ea4c4,2026-08-10T21:22:33+09:00,Add OpenFOAM profile perf projection,True
+604932c919b514fa236f1b029e2b895899ec159c,2026-08-10T21:02:54+09:00,[require-build] Add OpenFOAM v2 provenance contracts,True
+88e21527b0d91c2d38579311e2b26e645dee39ba,2026-08-10T20:07:31+09:00,Fix OpenFOAM PJM submission and portable packaging [skip ci],True
+7c3eb9102a1703bb368719f1fb58beffc60b6d95,2026-08-10T20:01:52+09:00,Vendor the pinned OpenFOAM benchmark workload [skip ci],True
+bace8cfedab8bfb5554d3dd441e3d1d258e1d1af,2026-08-10T19:54:23+09:00,Add transient OpenFOAM v2 overhead check [skip ci],True
+a80299e7d63a56f001ae028ceb78a57223087e2d,2026-08-10T19:46:15+09:00,[require-build] Replace OpenFOAM metrics with local-first v2,True
+940d445f8715c3fa477a4523fbacbbf2ebad7fea,2026-08-10T19:18:24+09:00,Align OpenFOAM v2 canonical metric keys [skip ci],True
+285f3c1ed097c5c971eb9b252c5e24300e615ab9,2026-08-10T18:34:06+09:00,Finalize executable v2 metrics scope [skip ci],True
+0e1f9ea085b07279f313bde87a7d9754dfcf0192,2026-08-09T11:42:58+09:00,Make D-001 a one-time implementation check [skip ci],True
+792f74d3da610c074d74178b542540f8daf2e47e,2026-08-09T10:53:04+09:00,Finalize lightweight D-001 qualification contract [skip ci],True
+85c752ec89ef28493e61ff95466d5c809d8dbb43,2026-08-09T09:59:03+09:00,Adopt lane-driven multi-node metrics contracts [skip ci],True
+9a0d6f27eab3a5e29a606d86cfa9678ccad731b5,2026-08-09T09:18:11+09:00,Finalize experiment metrics v2 contracts [skip ci],True
+5ab25efa6be5d469976fc266f8d78f501939c54f,2026-08-09T03:19:26+09:00,Expose remaining metrics scope decisions [skip ci],True
+0a016e487699486b8fd6a65f32b59b4ca5a5ba8b,2026-08-09T03:01:37+09:00,Right-size metrics durability design [skip ci],True
+1e18f4487b30023164dd6dde4b273315a8d31710,2026-08-09T02:01:25+09:00,Separate bench and profile metrics tracks [skip ci],True
+5e5f676c1158fd17cb572780f8cb8e4c070b3ee9,2026-08-09T00:39:13+09:00,Define OpenFOAM metrics consumer contract [skip ci],True
+474384e3002d18a7344edcffaf4e7b8a166c1aac,2026-08-08T23:42:22+09:00,Define recoverable OpenFOAM metrics handoff [skip ci],True
+96e983eefc74b68156ee95636f88fe98708c73b5,2026-08-08T22:57:58+09:00,Specify exact OpenFOAM metrics observation map [skip ci],True
+4f0caa790a8e06db6d8c6a1ecebfaf75774eefb2,2026-08-08T22:00:11+09:00,[skip ci] Refine OpenFOAM metrics design after independent review,True
+fe542eb44be261f705e78301bb400ee789a819fd,2026-08-08T21:12:35+09:00,[skip ci] Redesign OpenFOAM metrics around Git provenance,True
+410ada39d394d482f7ad3aa90d45fba35f209bba,2026-08-07T15:57:36+09:00,[skip ci] update agent instructions.,True
+345c13a676d4405d21da281d90c2bfe54953fff9,2026-08-07T05:40:35+09:00,Run scoring jobs without perf instrumentation,True
+5540c1b0a1988dfe9eeab33f7d24205af8dd8fd1,2026-08-07T04:54:21+09:00,[require-build] Initialize the selected Scotch backend,True
+42414af0abc8d1c864c91ee021b3099a85ab7bf9,2026-08-07T04:42:19+09:00,[require-build] Run the competition cavity3D workload,True
+e38d089ad065d748db02f9bbe4e284120f0497d7,2026-08-01T16:29:48+09:00,[skip ci] Store OpenFOAM command as one metric,True
+9585e170c7f85905c0e73fd872eaa04247bad91b,2026-08-02T18:13:00+09:00,[skip ci] Retain every measured exact task call,False
+ffb732a88a2550c26ad43e249564c13ea6b5c36b,2026-08-02T16:00:26+09:00,[skip ci] Run exact task tracing with Genkai VTune,False
+8dee3bc13a56c6a555d5a2acb29518e81062d4ee,2026-08-01T17:18:25+09:00,Merge pull request #10 from 2026-APAC-HPC-AI-Tokyo-Rapids/agent/remove-openfoam-profile-label,True
+7210ba9f5e83bc301d275527a8d7ad1b2ded3bef,2026-08-01T17:05:40+09:00,[require-build] Remove OpenFOAM profile labels,True
+eb5a0830ddfc2fb614009aead7eadb3a92d76b32,2026-08-01T16:48:03+09:00,[skip ci] Use canonical Linux OpenFOAM source paths,False
+25ecd975b9246d99d6e76ce1ec1cb3417397d7cc,2026-08-01T16:45:10+09:00,[skip ci] Support the Genkai build host Python,False
+22bac12eebefab8a33852140c94fae4dee21125e,2026-08-01T16:41:39+09:00,[skip ci] Add exact OpenFOAM function task boundaries,False
+a76ed834e13cc08b82c24fe5b9fb9ed9ab71a1ec,2026-08-01T14:39:58+09:00,[skip ci] Merge pull request #8 from 2026-APAC-HPC-AI-Tokyo-Rapids/main,False
+7b4f8b9542b27c7c9ef35ffecc84f07c02f26f4e,2026-08-01T14:25:01+09:00,[skip ci] Remove one-time artifact migration utility,True
+378d4547d2001fa178254bc04ca965223e3f5907,2026-08-01T14:18:24+09:00,[skip ci] Preserve Actions completion times on migrated runs,True
+89783fe6751d0046a316a4514628414e125bddc7,2026-08-01T13:51:59+09:00,Make VTune trace continuous and evidence-based [skip ci],False
+abb73d3e4ba95949aa22e1ef5c2e30c554163ec2,2026-08-01T13:47:15+09:00,[skip ci] Add historical artifact migration utility,True
+7666314e0b598d1dd3b3f4cb29f0e23e7a49d563,2026-08-01T12:54:53+09:00,Use the artifact archiver Tailscale tag,True
+1ea11a8f10fc5a746509d62ff415dea8e0364bbd,2026-08-01T09:22:01+09:00,Use managed Python for retained VTune summaries [skip ci],False
+1023f64d811454f2e8b179ddc97679503a772590,2026-08-01T05:20:05+09:00,Use managed Python for retained VTune exports [skip ci],False
+7a4e798d7cd56496e8a46f893277fe5ebd9808c5,2026-08-01T05:16:28+09:00,Export chronological VTune timeline intervals [skip ci],False
+a1d17cc7d580b138df36e72f63ca25f0f518803b,2026-08-01T05:09:06+09:00,Add report-only VTune timeline inspection [skip ci],False
+3c1eba8010c6c18d3b4ef9ab6192b313de74db4e,2026-08-01T04:49:00+09:00,Make VTune trace visually informative [skip ci],False
+e351b5f3515788df5da793e38f9ad3f9b8dd9af5,2026-08-01T04:29:17+09:00,Retain full run outputs on Genkai [skip ci],False
+ad03121c08ea1e7e51f7492455dbbbbb36206a85,2026-08-01T04:17:57+09:00,Publish only direct VTune JSON [skip ci],False
+d517f818fb6bb521245ca9441f7cc062cdbbce13,2026-08-01T04:13:09+09:00,Split lightweight VTune browser artifact [skip ci],False
+8c1c69b5bf08da45483df6d4941cbb641d022a2b,2026-08-01T04:00:09+09:00,Export Perfetto-compatible plain JSON trace [skip ci],False
+45c14aa702856cc3d18bc0f7d0b5db204ea0ec23,2026-08-01T02:48:29+09:00,Archive workflow artifacts on home server,True
+7ddfd5765d420df3a4c6d2b9fb81e264e3b72ed7,2026-08-01T01:25:31+09:00,Show VTune hotspots in Actions summary [skip ci],False
+501522a2330490efce9ece60d1366010cb723c7b,2026-08-01T01:15:36+09:00,Support hotspot-only browser traces [skip ci],False
+b7f72f564328ee2b552b43a25e9fb763b1f363d0,2026-08-01T01:05:58+09:00,[skip ci] Preserve VTune CSV inputs for diagnosis,False
+ded8fb993314c88ec9ebe7f6cd9f20fb30a40084,2026-08-01T00:57:37+09:00,[skip ci] Use the provisioned Python for trace conversion,False
+56ff170b5c6befbc1cac3eb63f42433655bd66a0,2026-08-01T00:49:40+09:00,[skip ci] Find host-suffixed VTune rank results,False
+ddcebca1b74933c934adfebb98c12dc2e95bae07,2026-08-01T00:41:04+09:00,[skip ci] Profile the OpenFOAM rank instead of mpirun,False
+51569c3284bda5e1dd148dc3e3c889ffc770cdb8,2026-08-01T00:31:14+09:00,[skip ci] Add lightweight VTune browser summary,False
+505e5b20c14195e23d5f5904665ecdbcec271a5f,2026-07-31T21:15:41+09:00,[require-build] Build directly from managed source branches,True
+54f075f8bc6a9445cf5f3a95b3a25b216c32d458,2026-07-31T18:10:23+09:00,[require-build] Download dependencies through ThirdParty,True
+eb9a1d75f30302f24d8730263810ef2495944f92,2026-07-31T17:53:51+09:00,[require-build] Restore bundled ThirdParty sources,True
+38d2dc4fd911aed181ea43969d6527b6b5dbe3e3,2026-07-31T17:38:10+09:00,[require-build] Set ccache reshare only when enabled,True
+8f68c5c3fd2eb432bfb332a88e3711974381bc61,2026-07-31T17:33:07+09:00,[require-build] Use shared mirrors for OpenFOAM sources,True
+09c37f183677e574ca43a9fa52dc91f981d7aef6,2026-07-31T15:37:12+09:00,[skip ci] add opt-in ccache remote seeding,True
+b18268f4f9fed8a7386520c5e5b94832d892b430,2026-07-31T10:32:08+09:00,Rename OpenFOAM BigQuery metric resources,True
+972a19dc2fc5e499eb6ab1f836a4119b059eb240,2026-07-31T02:47:09+09:00,Add BigQuery experiment metrics collection,True
+5ea1691329a44ae8e8bde505e1359ece216f4504,2026-07-24T14:44:53+09:00,[skip ci] Enable perf stat for profiler comparison,True
+5262a1b52d65fe97ea14fce631e669dfe7c6ba8f,2026-07-24T14:42:36+09:00,[skip ci] Fix OpenFOAM MPI process initialization,True
+4b1d14ae84ea17148ff542c7b45c266a44e321e1,2026-07-24T14:40:02+09:00,[skip ci] プロファイラスクリプトの実行方法を簡略化し、コメントを整理,True
+82adabfd65d4f7c6012cc6819854710e510ff111,2026-07-24T14:02:20+09:00,[skip ci] Refine profiler launch structure,True
+3b2cba7af076d6979f22021a733f18c747e6c8cc,2026-07-24T13:43:58+09:00,[skip ci] Merge origin/main and preserve OpenFOAM runtime settings,True
+bc227423824f1b6e17f5ce071e4044a94b6433ea,2026-07-24T13:41:44+09:00,[skip ci] update OpenFOAM job scripts for improved environment handling and profiling,True
+5802392548c4bcc86e7892dfdfbccd6b341c55db,2026-07-24T08:32:47+09:00,[skip ci] Merge pull request #5 from 2026-APAC-HPC-AI-Tokyo-Rapids/fix/reuse-nearest-openfoam-archive,True
+71f7e0fb5180c8275ad8351b7c4f8b9c429c987f,2026-07-24T01:58:37+09:00,cleanup: remove obsolete profiler helper,False
+9de62b1792c11a02343b968e8b228166f8791c41,2026-07-24T01:58:23+09:00,cleanup: stop provisioning profiler helper,False
+b322dd12c8693d70d57092700e7fbfc88cf2dd26,2026-07-24T01:57:29+09:00,cleanup: remove profiling scaffolding from OpenFOAM run,False
+e69f555443bf68fb84965ebfef30b058aefa8845,2026-07-24T01:43:19+09:00,Reuse archives from the nearest successful workflow run,True
+1bb73bc764b03d4522ed768f98ad6c93e022b7c1,2026-07-23T22:50:05+09:00,docs: record one-node MPI tuning results,True
+335062099fb17b6d1dbda13657d32aca09f383f9,2026-07-23T22:40:58+09:00,ci: apply shared-memory transport to every MPI phase,True
+8a1aa0069cee91ff781f0b850b8711f98ad422b3,2026-07-23T22:29:52+09:00,ci: use shared-memory MPI for one-node default,True
+14b3b175cc145724b2563dc93415b76a8a790e1f,2026-07-23T22:24:34+09:00,ci: combine shared-memory fabric with knomial allreduce,True
+cdafa2b9df17791a1fbd45ff3a9257b010ce99fe,2026-07-23T22:23:57+09:00,ci: verify one-node shared-memory MPI fabric,True
+1d7b1881327569cc02e7e3f2d8e6feda77bde004,2026-07-23T22:12:41+09:00,ci: autotune one-node MPI collectives,True
+353de8cddc978c3476791530a05fb1faa28f00d0,2026-07-23T22:12:23+09:00,ci: measure shared-memory knomial MPI allreduce,True
+076c0421b875a7835ac93d3c5fcd307f14b9789a,2026-07-23T22:12:14+09:00,ci: measure knomial MPI allreduce,True
+3ddb1922d9a02f90ccc1bf14ce45ec3b3e1132a6,2026-07-23T22:12:05+09:00,ci: measure recursive-doubling MPI allreduce,True
+5f365c67ba5b751c18cbe2f6ddab444bbf424fd9,2026-07-23T22:11:51+09:00,ci: compact one MPI rank per physical core,True
+78901615673a7421c8433a2bc86f8baa136b5796,2026-07-23T22:11:40+09:00,ci: scatter one MPI rank per physical core,True
+0873afc0c94a24b2696318b48b58119f4823b804,2026-07-23T22:11:30+09:00,ci: force shared-memory MPI fabric on one node,True
+b907b011cf5f2efff6af004da08ab209007f90ad,2026-07-23T22:11:11+09:00,ci: baseline one-node 120-rank MPI execution,True
+7f87881b40c95aa635a370fc5ba2262c83efc4c9,2026-07-23T21:54:42+09:00,docs: finalize OpenFOAM runtime tuning results,True
+25d977413c0b5f788838f20304f61f9038e9b953,2026-07-23T21:47:30+09:00,ci: use two nodes and 120 MPI ranks by default,True
+34099b5f451834e9e63e8ac7540aedeadc86403a,2026-07-23T21:44:20+09:00,ci: measure two-node execution with 165 MPI ranks,True
+9cb69a8677d9960e4d25bb563a116921ad84e569,2026-07-23T21:43:58+09:00,ci: measure two-node execution with 135 MPI ranks,True
+8cfba92ab575f3598af9efe55a225377bc0408ae,2026-07-23T21:41:58+09:00,docs: record OpenFOAM profiling and runtime tuning,True
+838f62b282196acf310cccacc5244bc3e56f6141,2026-07-23T21:36:50+09:00,ci: measure two-node execution with 180 MPI ranks,True
+554e23283fe54b213b488a4ca9384958a80812f1,2026-07-23T21:36:34+09:00,ci: measure two-node execution with 150 MPI ranks,True
+f5203068e40765b5d7219a6d5546e540e4b93c54,2026-07-23T21:36:19+09:00,ci: measure two-node execution with 90 MPI ranks,True
+0e06d6a3e9d536f3f413d0c8cf380f373cdfd3d1,2026-07-23T21:34:55+09:00,ci: autotune Intel MPI collectives at 120 ranks,True
+bf7019d9f729c882a1340337ec671915a49b6a26,2026-07-23T21:27:39+09:00,ci: profile MPI communication at the best 120-rank scale,True
+9df8ddffacecc83cc9e39ed66d2798e00a7be36c,2026-07-23T21:27:21+09:00,ci: profile hotspots at the best 120-rank scale,True
+54b1e3e15354f7ce0bbada223c6bd34a5f148ae0,2026-07-23T21:17:44+09:00,ci: autotune Intel MPI collectives for OpenFOAM,True
+d598fc32ccd45a7527a0c9b22cce9c724ac0d77d,2026-07-23T21:16:55+09:00,ci: measure readiness-driven processor interfaces,True
+725a92a30f96050b254ae84642687ecb2bf49a51,2026-07-23T21:16:38+09:00,ci: measure topology-aware OpenFOAM reductions,True
+8d80331659081a2a335af0b39663f56b1398a8e5,2026-07-23T21:14:15+09:00,ci: retry two-node hardware characterization,True
+58179122df1ad0c616b5cb02e2b1ca871a2a1a0b,2026-07-23T21:13:57+09:00,ci: retry two-node hotspots with qualified result path,True
+93d8c7e68058aeb74a7c8a06b282e07206be0586,2026-07-23T21:13:33+09:00,fix: resolve host-qualified MPI VTune results [skip ci],True
+2a54615676dc8b5bb4cc87b69edbe396c118b361,2026-07-23T21:11:06+09:00,ci: measure two-node execution with 60 MPI ranks,True
+e46dd45e42aaea21412e9ca0509b98cce63e6d91,2026-07-23T21:10:51+09:00,ci: measure two-node execution with 120 MPI ranks,True
+5b4d828b20a9a17bb1ea250fcb80f686d5359c04,2026-07-23T21:10:36+09:00,ci: measure two-node bunch MPI pinning,True
+dd9edd71be26c9870fee5a5b2c655d5c39bfe47b,2026-07-23T21:10:16+09:00,ci: measure two-node scatter MPI pinning,True
+bed9bc6eb931c0b0609a0a802bee98643f936966,2026-07-23T21:10:08+09:00,ci: measure two-node default MPI placement,True
+da42d0d7fbb5469b07be8e52e3ab367bbbb7c6f1,2026-07-23T21:09:51+09:00,ci: characterize two-node rank-zero hardware performance,True
+aa306e193fb9f2a7a1b1d433c3ed4b48640627a7,2026-07-23T21:09:37+09:00,ci: profile two-node rank-zero hotspots,True
+71eb2bf762197dd9d5d62b22d70ac3466fa22159,2026-07-23T21:01:34+09:00,refactor: centralize profiling launch and reports [skip ci],True
+1b2100352a4be9485fe306820b19cedecc08631c,2026-07-23T20:56:32+09:00,ci: profile two-node MPI communication with APS,True
+c18a4040096b2dc57c2fbbde8ea66831034a4a04,2026-07-23T20:53:11+09:00,ci: collect OpenFOAM MPI and VTune profiles [skip ci],True
+1a7a58c457158e860f76917cda27f225dcfd6745,2026-07-23T20:29:02+09:00,ci: locate the provisioned execution profiler [skip ci],True
+268c66589bec8464e46462d91b9564b11c06fb78,2026-07-23T20:15:25+09:00,ci: keep node-local ccache private [skip ci],True
+8241e11d55d1813ba70353014b59830da5eb77dd,2026-07-23T20:05:51+09:00,ci: reuse node-local ccache directories [skip ci],True
+fc79100a3e73c78f0d4a890d1e29341d9e193069,2026-07-23T19:59:38+09:00,ci: allow parallel OpenFOAM builds [skip ci],True
+8d551f935c36521d635785765b79a130289bc854,2026-07-23T19:57:20+09:00,ci: use the configured ccache backend [skip ci],True
+ab430a8c672816a4c99228cdd50d64e8ad97ab53,2026-07-23T19:56:16+09:00,ci: preserve the persistent ccache backend [skip ci],True
+a76d0661b26609f7fd0b7297023da2f6fe899823,2026-07-23T19:22:21+09:00,[require-build] ci: isolate the local ccache frontend,True
+175299c8132266f40b951a3bb6a81e60957cefd6,2026-07-23T19:14:27+09:00,[require-build] ci: use Genkai login environment,True
+7068bd14f24d08349c86bf5b60c0adbe17057bec,2026-07-23T19:11:39+09:00,[require-build] ci: initialize environment modules,True
+e3014836340a7dd3e684f1483f19c3ca3af7d939,2026-07-23T19:10:48+09:00,ci: restore queued builds [skip ci],True
+aff18b086ba0203ce8b76089eee7116456a25b49,2026-07-23T19:09:33+09:00,ci: refine OpenFOAM job lifecycle,True
+c011f51980bd66ec475686f1dce41281caa259c5,2026-07-12T17:32:04+09:00,codexにREADMEを作らせた,False
+07607e10b55d1d8cd6448bf84d5e185c786c7255,2026-07-11T17:58:27+09:00,ci: name OpenFOAM log artifacts,True
+17af7dad78ea33ccf918654379425fe679d4e248,2026-07-11T17:57:01+09:00,ci: simplify log artifact names,True
+16a18b9232b4617809aec5d65af5e07970a28d0a,2026-07-11T17:56:07+09:00,ci: upload ParaView case and execution log,True
+ab15be6578f24f50830244057ac435c9b97d29dd,2026-07-11T17:24:10+09:00,ci: restore standard runtime library path,True
+0e90bd0da18beb366686d777decce4f01666cf17,2026-07-11T17:22:46+09:00,ci: retain OpenFOAM runtime dependencies,True
+71b26ac38ca3614fe31fdf9de0162f5e19091f8e,2026-07-11T17:10:59+09:00,ci: expose provisioned runtime libraries,True
+824bbd7faf67a625adc8274ee6ee127526ea3c1a,2026-07-11T17:01:06+09:00,ci: locate provisioned KaHIP library,True
+ed0c43d0600cf9ea8399fc03d1c84e61fee811d0,2026-07-11T16:54:35+09:00,ci: extract provisioned runtime tree,True
+ede797f708884dfafcaede32d729276856112362,2026-07-11T16:50:47+09:00,ci: provision KaHIP runtime library,True
+04b074e15ad6f521ba535b34d0d249e9175b6952,2026-07-11T16:42:45+09:00,ci: wait for OpenFOAM jobs without timeout [skip-build],True
+4a85b09f0aa2b25cba07794e6a017164501c2c5b,2026-07-11T16:25:09+09:00,ci: provision and stream OpenFOAM jobs [skip-build],True
+949c1040c410cb2b836b349c9f46ce53d611380a,2026-07-11T15:16:54+09:00,ci: run provisioned OpenFOAM job via pjsub [skip-build],True
+8c192f7c347240030cd10e85e0d532a8e91e8ad2,2026-07-11T13:19:11+09:00,ci: require explicit marker for OpenFOAM builds,True
+d61503e4dd28cc48a7b58aa367ad5b603d728d20,2026-07-10T17:02:55+09:00,Read build archive in run job [skip-build],True
+741c9c65e1eacd87edae69008099248004194144,2026-07-10T16:54:16+09:00,Simplify skip conditions [skip-build],True
+0760d357f97e9fe324d45f05caf1381b160213b0,2026-07-10T16:50:53+09:00,Document direct skip conditions [skip-build],True
+fbd6b7b8c49e532483137cc74034fbeb9bf36682,2026-07-10T16:48:19+09:00,Honor [skip-build] build reuse marker,True
+1e4937cf8db3a912aad30b1e89077681bc4998ad,2026-07-10T16:39:29+09:00,Use runner GitHub CLI,True
+43db2b7b1c4f0509dfac4deeac705f66f46ae56f,2026-07-10T16:26:27+09:00,Install GitHub CLI for build reuse,True
+5e33478a00ae4619df5b5f52728d12ac0fb5b714,2026-07-10T16:24:43+09:00,Reuse prior OpenFOAM build archives,True
+6d656622b3b0a21eecea2ed783d14c264a579877,2026-07-10T15:49:08+09:00,Add post-build run job,True
+8565c37182813fa16051b976fd3e19f59505091a,2026-07-10T15:47:53+09:00,Rewrite OpenFOAM build research,True
+369f3d262be5c10cec5f41c4ab5dc72c11c2da61,2026-07-10T15:47:53+09:00,Rewrite OpenFOAM build research,False
+389c9d2e581d0af526224f9c37c829f4528bfe67,2026-07-10T13:28:58+09:00,Reset ccache stats before Allwmake,True
+2e92eaabca0a9023b840195bd9b272353b2182c2,2026-07-10T12:34:15+09:00,Normalize Genkai build paths,True
+3eeea271be8a8c05d24e873b65be2263f7452bba,2026-07-10T10:46:58+09:00,Build OpenFOAM v2606 on Genkai,True
+c1e1ddd364ba4c2fb1e989a0e16ccfb39f324d36,2026-07-09T20:42:38+09:00,Restore fixed Genkai build parallelism,True
+67178d433f5b91826df3c6a7f2023e60c08353d4,2026-07-09T19:11:54+09:00,Parameterize Genkai build parallelism,True
+d027059a629b60a44995d53216b3b49f752fe58d,2026-07-09T13:11:02+09:00,Collect ccache log from Genkai builds,True
+e225615e77bc001b10798ab182fee29977d16449,2026-07-09T11:49:29+09:00,Set separate ccache tempdir on Genkai,True
+11d7757b4f155825a26f8bc9535975ac9807da48,2026-07-09T01:25:56+09:00,Refactor Genkai build profiling,True
+552ef7da69d60ffdd6be9e1b3872c8cc520aae2d,2026-06-29T21:51:06+09:00,性能調査を傾向と考察に整理,True
+2c786b8bc7d61edd6fa236786fbc423dd8008f7f,2026-06-29T21:48:34+09:00,genkaiビルド設計の試行錯誤を記録,True
+a1f348633b34dca0435e50bb73bc6d3072f19bbc,2026-06-29T21:48:15+09:00,research全体をCI対象外に設定,True
+c54f2952a5ea7ac1e2f26880608e322e067deb4c,2026-06-29T21:18:12+09:00,性能調査文書を分割,True
+64486e0571a39c551a333238ca0ba47fb9c1ad37,2026-06-29T21:00:49+09:00,ビルド性能調査を文書化,True
+aee888c0ce4ba3e5b6a7f76365e3efe8ff00be20,2026-06-29T19:31:30+09:00,不要なpidstat計測を削除,True
+132b8a9d0e058def9b1ea2ee63bffdcadd943743,2026-06-29T19:13:05+09:00,性能計測の対象をビルドプロセスに限定,True
+e3e1c9ff62f84479477fe06c1377efd5cab52b4a,2026-06-29T18:49:29+09:00,ビルドのI/Oと待機箇所を計測,True
+2326ba806bc7453966169b265c10ab229b871abf,2026-06-29T18:26:32+09:00,OpenFOAMビルドの性能計測を追加,True
+94f3b06d3dc0d54da444eb636c2879d808a33208,2026-06-29T16:49:13+09:00,ベンチマーク用キャッシュの後処理を削除,True
+52fe25b06853964a4fb024732ab830243a7da8c0,2026-06-29T16:33:14+09:00,OpenFOAMビルドを120並列に設定,True
+f403e5bac4b9357347d550bb077d6b90aad5942e,2026-06-29T11:38:10+09:00,ccache計測の並列書き込みを避ける,True
+462063defbc4a1d3d724dfef6362fbb347fa6919,2026-06-29T11:09:36+09:00,OpenFOAMビルド条件の計測を追加,True
+69d081fbdd7025de0271d987f27c5e841a139858,2026-06-29T10:34:21+09:00,最速のqueueなしGNU ld構成を採用,True
+7f48b87ded4a762f9defc5a32bae7eb6d0b160cf,2026-06-29T10:22:22+09:00,queueなしでlld互換性を確認,True
+b4e73a1faf21aa43ad8ede23cb4cbb943a832c6a,2026-06-29T10:07:13+09:00,lldで推移的共有ライブラリを許可,True
+f7294314c8b622a7d3b96a9fc30b663326d82169,2026-06-29T09:51:10+09:00,lld制御値をOpenFOAM形式に修正,True
+a373a588fb17550711374d07dee02055a7892a72,2026-06-29T09:35:18+09:00,queueなしとlldの組み合わせを計測,True
+6c32429ceca7d51e8399b284d0146e6e7f15b620,2026-06-29T09:18:37+09:00,Icxのlldリンクルールを追加,True
+b47ff7ca97cb7caeda1d692a2874ffa52eb16e98,2026-06-29T09:04:03+09:00,queueありでlldのリンク時間を計測,True
+180b0340be1d043a315227f8465bdeedd6d4e502,2026-06-29T08:49:21+09:00,Allwmakeのqueueなし構成を計測,True
+deb34e45216347b372a54bdf232200ed11290439,2026-06-29T02:25:10+09:00,OpenFOAM初期化とビルドログ処理を簡素化,True
+88d13d8597b7fb897b76d8feaca42ca8bdc5d401,2026-06-29T02:23:33+09:00,ビルドログのパス変数を削減,True
+3e89076bd97f6f649c2050b322d725e419c2ea99,2026-06-29T02:21:55+09:00,Allwmakeの早期エラーもログへ保存,True
+fda1566ff3bfa3ad7f77bb3df598bc9a86ba0954,2026-06-29T02:20:16+09:00,OpenFOAMのビルド作業ディレクトリを環境に統一,True
+383466c86c7651bfadb35077bd3328d592c921f0,2026-06-29T02:16:18+09:00,OpenFOAM環境初期化時のnounsetエラーを修正,True
+2a09947f97719eb70b3f656d27094bdf5e720e49,2026-06-29T02:11:50+09:00,OpenFOAMビルドプロセスのログ管理を改善し、一時ディレクトリにビルドログを保存するように変更,True
+337db9e9f29904c11a145829067ec6204fe9fd9f,2026-06-29T02:03:27+09:00,OpenFOAMビルドプロセスをIntel oneAPIに最適化し、ソースアーカイブのダウンロードとパッチ適用を改善,True
+462a63ca435a3e1c27548ccba2e4f83b60734bba,2026-05-31T23:39:27+09:00,Switch genkai build to GCC IntelMPI,True
+bcd53bbd07b169d1ffce6c05de107feeb95ffead,2026-05-31T19:52:55+09:00,Reuse OpenFOAM builds on genkai,True
+9b1198bc910904c8a5bfd160d5fa49d9748d48b7,2026-05-23T00:13:31+09:00,move outdated files.,True
+aa59991f5a9e82393fd9b171d40ac1814c36b312,2026-05-17T11:41:07+09:00,Simplify Genkai OpenFOAM MPI smoke test,True
+14e7891d9eb86c7491551618c9bd4c17911a6621,2026-05-17T09:21:05+09:00,Fix prepared source paths in genkai workflow,True
+72be9eba9000690ce14f1c681436c0cd2022e99d,2026-05-17T02:58:54+09:00,Combine source fetch steps in genkai workflow,True
+96bb9537bf3db877bca5b4dd7ac828dab167c964,2026-05-17T02:52:51+09:00,Fix genkai Allrun workflow,True
+2ae99942e7b759d1a0fcd22c45044b8a556d7170,2026-05-16T23:39:44+09:00,Run tutorials Allrun in genkai workflow,True
+cf7c79b32b6feaa38806813cd7650e11682f44e1,2026-05-16T22:00:44+09:00,Trim genkai artifacts and re-enable ccache,True
+70aff3c61657e41c201500381ff8f80694494441,2026-05-16T20:00:44+09:00,Update CGAL source for genkai workflow,True
+1803ed0c6de0db7622eed8cfb2f78607463e7e59,2026-05-16T19:49:23+09:00,Use FFTW lib directory in genkai workflow,True
+5758418cd020a95c59699146c673064e0a1a7937,2026-05-16T18:43:01+09:00,Add FFTW link path in genkai workflow,True
+ac3587517beeded7cafa92351e9bf6b1c822a21a,2026-05-15T23:41:49+09:00,Disable ccache in genkai workflow,True
+0b3c61c8137e0ef579f8aae44086546158b99fce,2026-05-15T23:15:16+09:00,Update ADIOS2 handling in genkai workflow,True
+0fb980439b7dde5ff2c7ce00d35817467f5e987e,2026-05-15T21:55:47+09:00,genkai temp build root,True
+02ef1739a5320ae19e4d85a6d809e3de1a0fc660,2026-05-14T23:53:56+09:00,genkai.yml: enhance ccache configuration with debug options for improved build insights,True
+246033108e7201f154909849058b75122fe9998c,2026-05-14T23:13:03+09:00,Remove redundant compiler command checks in OpenFOAM build script,True
+6f8723bd52e54d922add88631607eca8daa8fddd,2026-05-14T23:03:05+09:00,OpenFOAM build script: add ccache as compiler launcher for improved build performance,True
+1fc320e6761df55733a911e864d0c6caf58e2ec4,2026-05-14T22:48:42+09:00,Remove CASE_DIR environment variable and streamline OpenFOAM build script with improved error handling and command verification,True
+1fe2e05bb08bfda46464a260bb10e64a45dea36b,2026-05-14T21:03:43+09:00,Refactor OpenFOAM build process to use temporary build root and improve caching mechanism,True
+b4f6742f51aa55f01d8b81783464d15f9a69d2af,2026-05-14T19:05:00+09:00,Update genkai.yml to enhance shell options for improved error handling,True
+1bcf19e7e58cb56a4e7a55621ac1f18638fbfb28,2026-05-14T18:51:03+09:00,Refactor scripts by removing set -e for improved error handling and add .gitignore for OpenFOAM files,True
+72b4df6d7b566dc3d08535587bed3faa77bbb64d,2026-05-14T18:38:40+09:00,Improve OpenFOAM build script by enhancing debugging output and error handling,True
+9930f0b4886e4cceca706070add705e8cdf92702,2026-05-14T18:24:23+09:00,Improve OpenFOAM workflow by caching extracted archives and updating MPI library configuration,True
+56eeca70ddcce3715fe047125d95b7e050342deb,2026-05-14T18:03:23+09:00,Fix OpenFOAM build script by adjusting shell options for variable handling,True
+687ad3b931a9813c59404328b5f61ec968a547eb,2026-05-14T17:57:12+09:00,Update OpenFOAM workflow to use actions/checkout@v6 and improve wget verbosity,True
+b4e72b8ed266fccba1e147ce3b295190335e25ac,2026-05-14T17:52:20+09:00,Add push trigger to OpenFOAM workflow on genkai,True
+6e933e1ce3de9e5e58485ca6ab8fd7175f3857e7,2026-05-14T17:50:57+09:00,Add OpenFOAM workflow configuration for genkai,True
+67a648844c8e6edaf786519436b830fc29acb9d2,2026-05-14T09:36:40+09:00,Merge pull request #1 from 2026-APAC-HPC-AI-Tokyo-Rapids/ni-update,True
+366a0efded84830f969b728bad423a73fe0d36fd,2026-05-14T09:35:43+09:00,add results on firmus,True
+02f2c46920acc3038b38a33d966b7b30dc396a65,2026-05-13T16:49:32+09:00,Initial commit,True

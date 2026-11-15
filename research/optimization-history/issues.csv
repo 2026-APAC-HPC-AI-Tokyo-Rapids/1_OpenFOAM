@@ -1,0 +1,59 @@
+number,title,state,updated_at,comments,url
+58,ASPIRE-2A：MPIの待ちを減らす（GAMGの最も粗い段の集約、UCXの転送方式）,open,2026-10-08T03:22:43Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/58
+57,1 stepのどの段階でrank間の不均衡が生まれるかを、OpenFOAM組み込みのprofilingで全rankについて測る（4ノード、診断run）,closed,2026-10-08T02:41:24Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/57
+56,BasicのMPIを、OFI（SIGBUS回避の環境変数あり）とUCXで比べる（4ノード）,closed,2026-10-07T19:01:41Z,3,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/56
+55,パッチがメモリの読み書きを減らしていることを、ハードウェアカウンタで確かめる（uProf data_access、1ノード）,closed,2026-10-07T12:59:44Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/55
+54,提出用の実行・ビルドスクリプトを単独で再現できる最小の形に書き直し、実際に流して再現を確かめる,closed,2026-10-07T16:13:57Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/54
+53,ASPIRE-2A 発表用：最良Bonus（fa4f5b0）の時間の内訳を#41と同じ方法で取り直し、最適化の前後を比べる,closed,2026-10-06T21:26:48Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/53
+52,発表準備：スライド構成・実験結果の図示・不足する検証・質疑対応を整理する,open,2026-10-08T02:53:44Z,4,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/52
+51,ASPIRE-2A Bonus：Gauss勾配の補間と足し込み、掛け算と面積分を、それぞれ1つの面ループにまとめる,closed,2026-10-06T20:51:20Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/51
+50,ASPIRE-2A Bonus：結果を捨てている境界交換を省き、対流項の係数を1回の面ループで作る（小さな改善をまとめて測る）,closed,2026-10-06T22:59:10Z,5,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/50
+49,ASPIRE-2A Bonus：行列組立・勾配計算の通信待ちを診断し、独立な局所計算と重ねる,closed,2026-10-05T18:05:37Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/49
+48,ASPIRE-2A Bonus：OHC-1を参考にmultiLevelの段別調整とノード間メッセージ数を評価する,closed,2026-10-05T18:05:35Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/48
+47,発表用：ASPIRE-2Aの割当ホストによる実行時間の変動を整理する,closed,2026-10-05T12:25:14Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/47
+46,ASPIRE-2A：計測区間のI/O（function objectsとログの書き出し）のコストを確かめる,closed,2026-10-05T16:57:31Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/46
+45,ASPIRE-2A Bonus：セル数と面（点）の数を同時に均す分割で、計算の不均衡を減らす,closed,2026-10-05T19:20:09Z,5,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/45
+44,ASPIRE-2A Bonus：Uの3成分の平滑化と残差計算をまとめ、行列の読み込みを1回にする,closed,2026-10-06T01:46:49Z,4,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/44
+43,ASPIRE-2A Basic：SMT（1コア2 rank、4ノード1024 rank）で律速の種類を確かめる,closed,2026-10-05T16:48:09Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/43
+42,ASPIRE-2A：Basic／Bonusの1・2・4ノード比較とself-proofを既存成果物から仕上げる,closed,2026-10-05T09:36:21Z,4,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/42
+41,ASPIRE-2A Bonus：現行最良構成の残存コスト診断と配列走査削減の比較実験,closed,2026-10-05T09:36:19Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/41
+40,ASPIRE-2A Bonus の残りの候補（任意、効果は小さい見込み）,closed,2026-10-05T09:36:17Z,3,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/40
+39,paraview,open,2026-10-05T19:25:51Z,4,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/39
+38,ASPIRE-2A Basic の残り（優先度低）：提出前の確認と任意の追い込み,closed,2026-10-04T22:36:23Z,8,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/38
+37,ASPIRE-2A Bonus：境界面を考慮した負荷分散と、確定した Basic を基準にした改善,closed,2026-10-04T22:56:26Z,14,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/37
+36,ASPIRE-2A Basic基準値の確立と、律速に基づく複数回比較キャンペーン,closed,2026-10-04T05:26:23Z,13,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/36
+35,ASPIRE-2A OpenFOAM最適化: Basic分割の確立・実行時設定の調整とBonus実験の検証,closed,2026-10-04T06:41:47Z,23,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/35
+34,ASPIRE-2Aで公式case既定のhierarchical分割を基準として4ノードbaselineを取得する,closed,2026-10-04T05:43:37Z,8,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/34
+33,ASPIRE-2AのOpenFOAM性能律速をuProf・メモリ階層・MPIの計測で特定する,closed,2026-10-04T06:41:44Z,40,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/33
+32,ASPIRE-2Aのデータ分割・ランタイム・通信実装最適化の比較評価,closed,2026-09-23T09:04:18Z,12,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/32
+31,OpenFOAMのBigQueryメトリクスおよびConnected Sheetsビューの拡張（ASPIRE-2A対応）,closed,2026-09-21T07:32:54Z,5,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/31
+30,ASPIRE-2A向けCray PEベースのOpenFOAMツールチェーン再構築,closed,2026-09-22T09:50:43Z,52,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/30
+29,ASPIRE-2AへAMD uProfを導入して自動実験を完了する,closed,2026-09-22T04:55:57Z,19,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/29
+28,ASPIRE-2Aの自動実験環境を構築する,closed,2026-09-22T12:38:15Z,30,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/28
+27,公式ルールに沿った成果物・計測・スケーリングの整備と玄界での検証,closed,2026-09-12T10:28:54Z,6,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/27
+26,AllrunへのfileHandler・hostRoots・ioRanks追加が許容されるか確認する,closed,2026-09-12T10:28:43Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/26
+25,最新版の時間評価・scored cluster・fvops廃止を文書へ反映する,closed,2026-09-12T10:28:40Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/25
+24,1/2/4ノードrunをscaling系列として集約し提出可能にする,closed,2026-09-12T10:28:35Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/24
+23,coefficient.datのCd sanity checkを公式結果判定へ追加する,closed,2026-09-12T10:28:32Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/23
+22,coefficient.datを計算ノードから回収してrun成果物へ保存する,closed,2026-10-04T05:43:36Z,2,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/22
+21,最新版OpenFOAM問題文へtasks submoduleとルール対応表を同期する,closed,2026-09-12T10:28:23Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/21
+20,提出用 submission ディレクトリの構成と配置,closed,2026-09-12T10:28:19Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/20
+19,OpenFOAM runtime およびケースデータのアーカイブ化とクラスタ別展開先（ノードローカルストレージ等）の最適化,closed,2026-09-12T10:27:18Z,6,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/19
+18,公式タスク仕様変更に伴う移行対応: cavity3D/icoFoam から occDrivAerStaticMesh/simpleFoam (OpenFOAM.com v2512) への刷新,closed,2026-09-12T10:26:36Z,24,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/18
+17,GitHub Actions 可視化グラフの対称性向上のための Gadi / 玄界ワークフローにおける依存順序（needs）の統一,closed,2026-09-12T10:22:01Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/17
+16,VTune Memory Access 解析によるメモリ性能ボトルネックの特定と要因分析,closed,2026-09-12T10:24:23Z,6,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/16
+15,OptAVX512 ビルドの適用およびコンパイラ最適化オプションの A/B 比較検証,closed,2026-09-12T10:23:35Z,6,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/15
+14,4ノード・448ランク条件における VTune プロファイルの取得とボトルネック分析,closed,2026-09-12T10:22:58Z,9,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/14
+13,OpenFOAM カスタムビルドにおける WM_LABEL_SIZE=32 の適用可否確認,closed,2026-09-12T10:21:41Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/13
+12,bench/profile ワークフローおよび VTune メトリクスの統合,closed,2026-09-12T10:32:14Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/12
+11,GitHub Actions Summary への VTune ホットスポット情報の追加,closed,2026-09-12T10:32:10Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/11
+10,OPENFOAM_PROFILE_LABEL の廃止およびプロファイル成果物命名規則の固定化,closed,2026-09-12T10:20:53Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/10
+9,OPENFOAM_PROFILE_LABEL の廃止およびプロファイル成果物命名規則の固定化,closed,2026-09-12T10:21:38Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/9
+8,アーティファクト退避ワークフローの実装,closed,2026-09-12T10:32:06Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/8
+7,Organization 管理ソースリポジトリの導入および Genkai /fast 上の共有 Git ベアミラー構築,closed,2026-09-12T10:21:35Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/7
+6,不要となったプロファイリング用構成・スクリプトの削除,closed,2026-09-12T10:32:01Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/6
+5,直近の成功したワークフロー実行からのアーカイブ再利用,closed,2026-09-12T10:31:57Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/5
+4,Codexによる各ディレクトリのREADME.md作成,closed,2026-09-12T10:20:49Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/4
+3,各ディレクトリへの README.md の配置とドキュメント整備,closed,2026-09-12T10:21:32Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/3
+2,Organization Webhook 連携テスト,closed,2026-09-12T10:21:30Z,1,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/issues/2
+1,Firmusにおける実行結果の追加,closed,2026-09-12T10:31:45Z,0,https://github.com/2026-APAC-HPC-AI-Tokyo-Rapids/1_OpenFOAM/pull/1

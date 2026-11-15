@@ -2,3 +2,7 @@ OpenFOAM/**
 __pycache__/
 .pytest_cache/
 .env
+
+# Local agent transcripts, diagnostics and tool caches.
+.codex-diagnostics/
+.ruff_cache/

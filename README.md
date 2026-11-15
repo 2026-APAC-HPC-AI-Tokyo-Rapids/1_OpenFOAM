@@ -1,5 +1,7 @@
 # 玄界とGadiでのOpenFOAM実行
 
+[最適化の履歴と実測結果（不採用・失敗試行を含む）](research/optimization-history/README.md) · [タスク・調査資料の索引](research/README.md)
+
 本リポジトリは、九州大学「玄界」およびNCI「Gadi」においてOpenFOAMの競技ワークロードを実行し、ビルド最適化や実行性能改善の影響を評価・比較するためのリポジトリです。
 
 現在の対象ワークロードは、OpenFOAM.com v2512の`simpleFoam`で実行する公式の`occDrivAerStaticMesh`粗格子（65,334,765セル）です。公式ケースのリビジョン（コミットハッシュ）、Zenodo上で配布されているメッシュのMD5/SHA-256、およびノード数ごとの反復回数（40/80/150反復）については、[`benchmark/workload.json`](benchmark/workload.json)を正本とします。玄界・Gadiの双方において、同一課題で通常計測およびIntel VTuneによるプロファイル計測を実施します。

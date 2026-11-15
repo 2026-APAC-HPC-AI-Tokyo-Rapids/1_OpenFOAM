@@ -1,0 +1,152 @@
+[
+  {
+    "file": "0001-drop-redundant-solver-copies.patch",
+    "repository": "1_OpenFOAM",
+    "commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+    "path": "patches/openfoam/0001-drop-redundant-solver-copies.patch",
+    "paths": [],
+    "command": "git show fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892:patches/openfoam/0001-drop-redundant-solver-copies.patch",
+    "sha256": "2f0371eeb3055f8aa8589a838cbbeb9e836a9eaa00b8c1a0676c64711c9d4b83",
+    "bytes": 1895
+  },
+  {
+    "file": "0002-smooth-vector-components-together.patch",
+    "repository": "1_OpenFOAM",
+    "commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+    "path": "patches/openfoam/0002-smooth-vector-components-together.patch",
+    "paths": [],
+    "command": "git show fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892:patches/openfoam/0002-smooth-vector-components-together.patch",
+    "sha256": "ac8bdafd851ae5fca32b483ebdc9eacf70fccebb97e17c2c1ceb1fce41e638ed",
+    "bytes": 19961
+  },
+  {
+    "file": "0003-skip-discarded-boundary-updates.patch",
+    "repository": "1_OpenFOAM",
+    "commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+    "path": "patches/openfoam/0003-skip-discarded-boundary-updates.patch",
+    "paths": [],
+    "command": "git show fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892:patches/openfoam/0003-skip-discarded-boundary-updates.patch",
+    "sha256": "7353ed84c0479e3ba9986f69c4b751adc66b560c992cf843dad231e2f631dccf",
+    "bytes": 10067
+  },
+  {
+    "file": "0004-fuse-gauss-gradient-and-product-integrate.patch",
+    "repository": "1_OpenFOAM",
+    "commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+    "path": "patches/openfoam/0004-fuse-gauss-gradient-and-product-integrate.patch",
+    "paths": [],
+    "command": "git show fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892:patches/openfoam/0004-fuse-gauss-gradient-and-product-integrate.patch",
+    "sha256": "a4517df30ad51f7b98ba28f12b3d9d6c1ad335e7473aa368e0fff9c77f397224",
+    "bytes": 12313
+  },
+  {
+    "file": "rank-binding.diff",
+    "repository": "1_OpenFOAM",
+    "commit": "5abefc1c0ae77d03654689aacd41a8d6c7a50430",
+    "path": null,
+    "paths": [
+      "platforms/aspire2a/exec-local-numa.sh",
+      "platforms/aspire2a/keep-rank-affinity.sh",
+      "platforms/aspire2a/run-openfoam.pbs"
+    ],
+    "command": "git diff 5abefc1c0ae77d03654689aacd41a8d6c7a50430^ 5abefc1c0ae77d03654689aacd41a8d6c7a50430 -- platforms/aspire2a/exec-local-numa.sh platforms/aspire2a/keep-rank-affinity.sh platforms/aspire2a/run-openfoam.pbs",
+    "sha256": "6fdbfbb18f38010a25a2372539e76ecece523c28bbb4a348a021532cbdd55957",
+    "bytes": 7921
+  },
+  {
+    "file": "multilevel.diff",
+    "repository": "1_OpenFOAM",
+    "commit": "e2730db003e75e8b45c8e36c3cfc768397e28877",
+    "path": null,
+    "paths": [
+      "platforms/aspire2a",
+      "scripts/check-openfoam-case-cache.sh"
+    ],
+    "command": "git diff e2730db003e75e8b45c8e36c3cfc768397e28877^ e2730db003e75e8b45c8e36c3cfc768397e28877 -- platforms/aspire2a scripts/check-openfoam-case-cache.sh",
+    "sha256": "5a491e4df39d77b87ecfd08c0a78263a47bce0e9d9e5bdf3e22e394582f27eab",
+    "bytes": 3898
+  },
+  {
+    "file": "patch-build.diff",
+    "repository": "1_OpenFOAM",
+    "commit": "d36810454347a4de895e87c5c5055e5ef4b3b8b9",
+    "path": null,
+    "paths": [
+      "scripts/build-openfoam.sh",
+      "scripts/build-inputs-match.sh"
+    ],
+    "command": "git diff d36810454347a4de895e87c5c5055e5ef4b3b8b9^ d36810454347a4de895e87c5c5055e5ef4b3b8b9 -- scripts/build-openfoam.sh scripts/build-inputs-match.sh",
+    "sha256": "0924995f93af2477d0f61d234b10de81809ad0814c9842fa7d1b10f3eba5390f",
+    "bytes": 2547
+  },
+  {
+    "file": "gradient-build-fix.diff",
+    "repository": "1_OpenFOAM",
+    "commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+    "path": null,
+    "paths": [
+      "patches"
+    ],
+    "command": "git diff fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892^ fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892 -- patches",
+    "sha256": "44a1df59975d97b658487a70d51a15eac451f93458bd78481b5480e179978a85",
+    "bytes": 2784
+  },
+  {
+    "file": "master-coarsest.diff",
+    "repository": "1_OpenFOAM",
+    "commit": "cc72e444165f6127589916d337d38cd45b1cef43",
+    "path": null,
+    "paths": [
+      "benchmark"
+    ],
+    "command": "git diff cc72e444165f6127589916d337d38cd45b1cef43^ cc72e444165f6127589916d337d38cd45b1cef43 -- benchmark",
+    "sha256": "7362291b0cd88dd63672fcd283f53ddd07cb778bb601271a422af0d92d7a49e6",
+    "bytes": 523
+  },
+  {
+    "file": "dic-cell-gather.diff",
+    "repository": "3_OpenFOAM_Src",
+    "commit": "8ad5ef43ff4e38d89934b591c9bb8b68a7eccec9",
+    "path": null,
+    "paths": [
+      "src"
+    ],
+    "command": "git diff 8ad5ef43ff4e38d89934b591c9bb8b68a7eccec9^ 8ad5ef43ff4e38d89934b591c9bb8b68a7eccec9 -- src",
+    "sha256": "aa1af86d2c6443b03ca42e54bef050943d8875832562947488e26b33a7704988",
+    "bytes": 2578
+  },
+  {
+    "file": "pcg-residual-norm.diff",
+    "repository": "3_OpenFOAM_Src",
+    "commit": "270d7da3a531dd97ece312d7742603fd828f0156",
+    "path": null,
+    "paths": [
+      "src"
+    ],
+    "command": "git diff 270d7da3a531dd97ece312d7742603fd828f0156^ 270d7da3a531dd97ece312d7742603fd828f0156 -- src",
+    "sha256": "b106586ce5a449d0b788bef22eb376f321e9935e771b6ca6a271737b38aa36b5",
+    "bytes": 1218
+  },
+  {
+    "file": "amul-csr.diff",
+    "repository": "3_OpenFOAM_Src",
+    "commit": "e59ba58271d52d44d360b59ef28f1b35f4200569",
+    "path": null,
+    "paths": [
+      "src"
+    ],
+    "command": "git diff e59ba58271d52d44d360b59ef28f1b35f4200569^ e59ba58271d52d44d360b59ef28f1b35f4200569 -- src",
+    "sha256": "43bea8fce2100e1f940f58e726f147f6798c0a7636e4a784f28f8104c6891cb3",
+    "bytes": 745
+  },
+  {
+    "file": "prepare-openfoam-case.sh.txt",
+    "repository": "1_OpenFOAM",
+    "commit": "e2730db003e75e8b45c8e36c3cfc768397e28877",
+    "path": "scripts/prepare-openfoam-case.sh",
+    "paths": [],
+    "command": "git show e2730db003e75e8b45c8e36c3cfc768397e28877:scripts/prepare-openfoam-case.sh",
+    "sha256": "d62db38ac38ef9ed22a7763194d4ff7667cec99dbf4d85cf33c2b9ba37d5e353",
+    "bytes": 8303
+  }
+]

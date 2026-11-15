@@ -1,0 +1,149 @@
+{
+  "status": "completed_verified",
+  "cluster": "ASPIRE-2A",
+  "account": "apacsc14",
+  "project": "59000014",
+  "job_id": "26004695.pbs101",
+  "node": "x1001c5s0b0n0.hostmgmt2001.cm.asp2a.nscc.sg",
+  "scheduler": {
+    "queue": "q4 (normal routing)",
+    "exit_status": 0,
+    "resources_used_walltime": "00:00:17",
+    "pbs_select": "select=1:ncpus=128:mpiprocs=1:ompthreads=128:mem=64gb",
+    "placement": "place=excl",
+    "calibration_process_timeout": "45s"
+  },
+  "placement": {
+    "threads": 128,
+    "physical_cores": 128,
+    "cpu_ids": "0-127",
+    "sockets": 2,
+    "cores_per_socket": 64,
+    "threads_per_core_seen_by_lscpu": 2,
+    "openmp_binding": "each worker calls sched_setaffinity to one selected physical CPU; OMP_PROC_BIND=false",
+    "memory_placement": "per-thread aligned allocation first-touched by its pinned worker",
+    "working_set_order": "rotated by trial index across L1, L2, L3, DRAM"
+  },
+  "read_bandwidth": {
+    "placement_used_for_slide_reference": "all_cache / 128 physical cores",
+    "units": "GB/s of useful sequential read bytes (decimal GB = 1e9 bytes)",
+    "levels": {
+      "L1_resident": {
+        "resident_bytes_per_core": 16384,
+        "values": [
+          15263.105,
+          15335.45,
+          15311.449
+        ],
+        "median": 15311.449,
+        "min": 15263.105,
+        "max": 15335.45,
+        "units": "GB/s useful bytes"
+      },
+      "L2_resident": {
+        "resident_bytes_per_core": 262144,
+        "values": [
+          7984.958,
+          7891.566,
+          8448.244
+        ],
+        "median": 7984.958,
+        "min": 7891.566,
+        "max": 8448.244,
+        "units": "GB/s useful bytes"
+      },
+      "L3_resident": {
+        "resident_bytes_per_core": 2097152,
+        "resident_bytes_per_l3_group": 16777216,
+        "values": [
+          4412.923,
+          4417.1,
+          4413.147
+        ],
+        "median": 4413.147,
+        "min": 4412.923,
+        "max": 4417.1,
+        "units": "GB/s useful bytes"
+      },
+      "DRAM": {
+        "resident_bytes_per_core": 268435456,
+        "total_working_set_bytes": 34359738368,
+        "values": [
+          358.957,
+          360.054,
+          359.943
+        ],
+        "median": 359.943,
+        "min": 358.957,
+        "max": 360.054,
+        "units": "GB/s useful bytes"
+      }
+    }
+  },
+  "auxiliary_one_per_l3": {
+    "threads": 16,
+    "purpose": "context only; not extrapolated to a 128-core node measurement",
+    "values_gbps_by_level": {
+      "L1_resident": [
+        3517.078,
+        3494.224,
+        3513.173
+      ],
+      "L2_resident": [
+        1650.318,
+        1493.956,
+        1698.277
+      ],
+      "L3_resident": [
+        1279.641,
+        1278.702,
+        1259.052
+      ],
+      "DRAM": [
+        403.476,
+        403.493,
+        404.152
+      ]
+    }
+  },
+  "fp64_fma": {
+    "status": "not_measured",
+    "reason": "The supplied all-core process timed out only after the four successful read rows, during its optional adaptive FMA phase. The corrected calibration separates that optional phase and does not invoke it.",
+    "compute_ceiling": {
+      "status": "nominal_not_measured",
+      "value": 4096,
+      "units": "GFLOP/s",
+      "formula": "128 cores * 2.00 GHz base * 16 FP64 FLOP/cycle for two 256-bit AVX2 FMA operations",
+      "limitation": "This is a datasheet/base-frequency roof, not an empirical sustained FMA result."
+    }
+  },
+  "method": {
+    "source": "cache_read_cache_only.c",
+    "script": "calibrate-cache-only.pbs",
+    "compiler": "gcc -O3 -march=znver3 -fopenmp -Wall -Wextra -Werror -lm",
+    "kernel": "eight independent AVX2 load/add accumulators over aligned double arrays; read loop is noinline/noclone and memory-clobbered",
+    "allocation": "posix_memalign(2 MiB); first-touch initialization inside pinned OpenMP workers; MADV_HUGEPAGE requested for working sets >=2 MiB",
+    "validation": "exact all-ones checksum per run; independent SHA-256 validation of every raw file after retrieval",
+    "byte_interpretation": "useful_read_GBps = bytes_per_thread * passes * threads / timed_seconds / 1e9; it is not memory-controller or interface-counter traffic",
+    "limitations": [
+      "Cache-resident labels describe the selected working-set sizes and are not a proof of exclusive residency under every hardware policy.",
+      "The DRAM number is a standalone streaming-read reference, not an OpenFOAM solver-stage byte count.",
+      "No solver FLOP/byte intensity or optimization-arrow magnitude is inferred from this calibration.",
+      "No measured compute ceiling is reported; the FP64 value is nominal only."
+    ]
+  },
+  "raw": {
+    "local_directory": "raw/attempt-cache-only-20261026",
+    "remote_directory": "/scratch/users/industry/ai-hpc/apacsc14/openfoam/aspire2a/calibration/roofline-cache-20261026/attempt-cache-only-20261026",
+    "remote_sha256_manifest": "raw/attempt-cache-only-20261026/remote-sha256.txt",
+    "input_sha256": {
+      "cache_read_cache_only.c": "b7eefcaa8aebcc1e878232f7524629db348c514627e9acc7e2a9212033728dc3",
+      "calibrate-cache-only.pbs": "72f5b213cf098a447b4a98ad0a51e24db5754e60e7cf596475b422ef81c6b9da"
+    }
+  },
+  "queue_check": {
+    "job_state": "F",
+    "exit_status": 0,
+    "qstat_user_check_after_completion": "no calibration jobs listed"
+  }
+}

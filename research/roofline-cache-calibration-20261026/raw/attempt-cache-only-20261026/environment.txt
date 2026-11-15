@@ -1,0 +1,122 @@
+job=26004695.pbs101
+node=x1001c5s0b0n0.hostmgmt2001.cm.asp2a.nscc.sg
+started_utc=2026-10-26T12:51:13Z
+Architecture:        x86_64
+CPU op-mode(s):      32-bit, 64-bit
+Byte Order:          Little Endian
+CPU(s):              256
+On-line CPU(s) list: 0-255
+Thread(s) per core:  2
+Core(s) per socket:  64
+Socket(s):           2
+NUMA node(s):        8
+Vendor ID:           AuthenticAMD
+CPU family:          25
+Model:               1
+Model name:          AMD EPYC 7713 64-Core Processor
+Stepping:            1
+CPU MHz:             2000.000
+CPU max MHz:         3720.7029
+CPU min MHz:         1500.0000
+BogoMIPS:            3992.23
+Virtualization:      AMD-V
+L1d cache:           32K
+L1i cache:           32K
+L2 cache:            512K
+L3 cache:            32768K
+NUMA node0 CPU(s):   0-15,128-143
+NUMA node1 CPU(s):   16-31,144-159
+NUMA node2 CPU(s):   32-47,160-175
+NUMA node3 CPU(s):   48-63,176-191
+NUMA node4 CPU(s):   64-79,192-207
+NUMA node5 CPU(s):   80-95,208-223
+NUMA node6 CPU(s):   96-111,224-239
+NUMA node7 CPU(s):   112-127,240-255
+Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 invpcid_single hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr wbnoinvd amd_ppin brs arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca fsrm
+MemTotal:       527721392 kB
+MemFree:        458541220 kB
+MemAvailable:   465562136 kB
+Buffers:          263828 kB
+Cached:         11313896 kB
+SwapCached:            0 kB
+Active:          4275876 kB
+Inactive:       11294896 kB
+Active(anon):    2013224 kB
+Inactive(anon):  8889648 kB
+Active(file):    2262652 kB
+Inactive(file):  2405248 kB
+Unevictable:    33554432 kB
+Mlocked:        33554432 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:            752624 kB
+Writeback:             0 kB
+AnonPages:      37525564 kB
+Mapped:           610924 kB
+Shmem:           6909824 kB
+KReclaimable:    5139496 kB
+Slab:           12443008 kB
+SReclaimable:    5139496 kB
+SUnreclaim:      7303512 kB
+KernelStack:       74912 kB
+PageTables:        91728 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:    263860696 kB
+Committed_AS:   46302800 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:     2689028 kB
+VmallocChunk:          0 kB
+Percpu:           385024 kB
+HardwareCorrupted:     0 kB
+AnonHugePages:  35524608 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:    17803528 kB
+DirectMap2M:    508430336 kB
+DirectMap1G:    11534336 kB
+[always] madvise never
+available: 8 nodes (0-7)
+node 0 cpus: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143
+node 0 size: 63899 MB
+node 0 free: 56271 MB
+node 1 cpus: 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159
+node 1 size: 64502 MB
+node 1 free: 56997 MB
+node 2 cpus: 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174 175
+node 2 size: 64502 MB
+node 2 free: 52292 MB
+node 3 cpus: 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191
+node 3 size: 64490 MB
+node 3 free: 57483 MB
+node 4 cpus: 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207
+node 4 size: 64459 MB
+node 4 free: 56457 MB
+node 5 cpus: 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223
+node 5 size: 64502 MB
+node 5 free: 56782 MB
+node 6 cpus: 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239
+node 6 size: 64502 MB
+node 6 free: 55345 MB
+node 7 cpus: 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255
+node 7 size: 64491 MB
+node 7 free: 56164 MB
+node distances:
+node   0   1   2   3   4   5   6   7 
+  0:  10  12  12  12  32  32  32  32 
+  1:  12  10  12  12  32  32  32  32 
+  2:  12  12  10  12  32  32  32  32 
+  3:  12  12  12  10  32  32  32  32 
+  4:  32  32  32  32  10  12  12  12 
+  5:  32  32  32  32  12  10  12  12 
+  6:  32  32  32  32  12  12  10  12 
+  7:  32  32  32  32  12  12  12  10 

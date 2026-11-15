@@ -1,0 +1,110 @@
+diff --git a/platforms/aspire2a/exec-local-numa.sh b/platforms/aspire2a/exec-local-numa.sh
+new file mode 100755
+index 0000000..008359a
+--- /dev/null
++++ b/platforms/aspire2a/exec-local-numa.sh
+@@ -0,0 +1,8 @@
++#!/usr/bin/env bash
++# 計算ノードでは、PALSのCPU固定とNUMA固定（--mem-bind local）がMPI_Init中に外され、固定のないrankの
++# メモリは他のNUMAノードへ散らばる（Issue #36 A3）。exec前にメモリポリシーで、各rankのメモリを
++# PMI_LOCAL_RANKのNUMAノード（1 NUMAノードあたり16 core）へ固定する。メモリポリシーはプロセス自身の属性で、
++# 外からのCPU affinityの書き換えでは変わらない。
++set -euo pipefail
++
++exec numactl --membind="$(( PMI_LOCAL_RANK / 16 ))" "$@"
+diff --git a/platforms/aspire2a/keep-rank-affinity.sh b/platforms/aspire2a/keep-rank-affinity.sh
+new file mode 100755
+index 0000000..bc1558e
+--- /dev/null
++++ b/platforms/aspire2a/keep-rank-affinity.sh
+@@ -0,0 +1,58 @@
++#!/usr/bin/env bash
++# 計算ノードでは、PALSの--cpu-bindによるCPU固定がMPI_Init中にプロセスの外から全CPUへ戻される（Issue #36 A3）。
++# このnode上の各simpleFoamのmain threadを、PMI_LOCAL_RANKと同じCPUへtasksetで固定し直す。simpleFoamが
++# 起動するたびに（profileのwarmupと本計算を含む）同じ処理を行い、終了ごとに固定し直した回数をpbs.logへ出力する。
++# 呼び出し側がSIGTERMで止める。
++set -uo pipefail
++
++# 自身は計算に使わない最後のSMT siblingに置く。
++taskset -pc 255 $$ > /dev/null
++user=$(id -un)
++host=$(hostname)
++declare -A local_rank_of
++rebinds=0
++last_rebind=
++seen_at=
++checked=false
++report() {
++  printf 'affinity-keeper host=%s done rebinds=%d last_rebind_after_s=%s\n' "${host}" "${rebinds}" "${last_rebind:-none}"
++}
++trap 'if [[ -n "${seen_at}" ]]; then report; fi; exit 0' TERM INT
++while :; do
++  mapfile -t pids < <(pgrep -u "${user}" -x simpleFoam)
++  if (( ${#pids[@]} == 0 )); then
++    if [[ -n "${seen_at}" ]]; then
++      report
++      local_rank_of=()
++      rebinds=0
++      last_rebind=
++      seen_at=
++      checked=false
++    fi
++    sleep 0.2
++    continue
++  fi
++  [[ -n "${seen_at}" ]] || seen_at=${SECONDS}
++  bound=0
++  for pid in "${pids[@]}"; do
++    if [[ -z "${local_rank_of[${pid}]:-}" ]]; then
++      local_rank=
++      while IFS= read -r -d '' entry; do [[ "${entry}" == PMI_LOCAL_RANK=* ]] && local_rank=${entry#PMI_LOCAL_RANK=}; done 2>/dev/null < "/proc/${pid}/environ"
++      [[ "${local_rank}" =~ ^[0-9]+$ ]] || continue
++      local_rank_of[${pid}]=${local_rank}
++    fi
++    allowed=
++    while IFS=$':\t ' read -r key value; do if [[ "${key}" == Cpus_allowed_list ]]; then allowed=${value}; break; fi; done 2>/dev/null < "/proc/${pid}/status"
++    if [[ "${allowed}" == "${local_rank_of[${pid}]}" ]]; then
++      bound=$(( bound + 1 ))
++    elif [[ -n "${allowed}" ]] && taskset -pc "${local_rank_of[${pid}]}" "${pid}" > /dev/null 2>&1; then
++      rebinds=$(( rebinds + 1 ))
++      last_rebind=$(( SECONDS - seen_at ))
++    fi
++  done
++  if [[ "${checked}" == false ]] && (( SECONDS - seen_at >= 60 )); then
++    printf 'affinity-keeper host=%s after_60s bound=%d/%d rebinds=%d\n' "${host}" "${bound}" "${#pids[@]}" "${rebinds}"
++    checked=true
++  fi
++  if (( SECONDS - seen_at < 60 )); then sleep 0.1; else sleep 2; fi
++done
+diff --git a/platforms/aspire2a/run-openfoam.pbs b/platforms/aspire2a/run-openfoam.pbs
+index da93b11..e921eb4 100755
+--- a/platforms/aspire2a/run-openfoam.pbs
++++ b/platforms/aspire2a/run-openfoam.pbs
+@@ -50,12 +50,7 @@ for ucx_library in libucp.so libucs.so libuct.so; do grep -Fq "${ucx_library}" "
+ if grep -q 'libfabric[.]so' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'UCX版simpleFoamがlibfabricにlinkしています' >&2; exit 1; fi
+ if grep -q '/oneapi/' "${RUN_DIR}/logs/aocl-runtime-link.log"; then printf '%s\n' 'ASPIRE-2A用simpleFoamがIntel oneAPIにlinkしています' >&2; exit 1; fi
+ ranks_per_node=$(( OPENFOAM_MPI_PROCS / OPENFOAM_NODES ))
+-ranks_per_l3=8
+ solver_iterations=${OPENFOAM_DIAGNOSTIC_ITERATIONS:-${OPENFOAM_ITERATIONS}}
+-rank_affinity="${PROVISION_DIR}/platforms/aspire2a/libmpi-rank-affinity.so"
+-ldd "${rank_affinity}" > "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"
+-grep -Eq '/opt/cray/pe/(mpich/.*/lib|lib64)/libmpi' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"
+-if grep -q '/oneapi/' "${RUN_DIR}/logs/mpi-rank-affinity-ldd.log"; then printf '%s\n' 'ASPIRE-2A用MPI affinity interposerがIntel oneAPIにlinkしています' >&2; exit 1; fi
+ case_archive_root="/scratch/users/industry/ai-hpc/${USER}/openfoam/aspire2a/case-archives"
+ case "${OPENFOAM_MPI_PROCS}" in
+   128) decomposition_file=decomposition-1n.txt ;;
+@@ -88,4 +83,13 @@ if (( OPENFOAM_NODES > 1 )); then
+   io_ranks="${io_ranks% })"
+   distributed_root_args=(--openfoam-arg -hostRoots --openfoam-arg "${host_roots}" --openfoam-arg -ioRanks --openfoam-arg "${io_ranks}")
+ fi
+-exec "${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --bind-rank-placement --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg --env --solver-launch-arg "LD_PRELOAD=${rank_affinity}" --solver-launch-arg --env --solver-launch-arg "ASPIRE2A_RANKS_PER_L3=${ranks_per_l3}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --solver-launch-arg --cpu-bind --solver-launch-arg depth --solver-launch-arg -d --solver-launch-arg 1 --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1
++# 計算ノードでは、PALSのCPU固定とNUMA固定がMPI_Init中にプロセスの外から外される（Issue #36 A3）。各rankは
++# exec-local-numa.shのnumactl --membindでメモリを自身のNUMAノードへ固定し、各nodeのkeep-rank-affinity.shが
++# simpleFoamのmain threadをlocal rankと同じCPUへ固定し直す。
++"${mpiexec_path}" -n "${OPENFOAM_NODES}" -ppn 1 --cpu-bind none /usr/bin/bash "${PROVISION_DIR}/platforms/aspire2a/keep-rank-affinity.sh" &
++keeper_pid=$!
++run_status=0
++"${PROVISION_DIR}/scripts/run-openfoam.sh" --job-id "${PBS_JOBID}" --runtime-root "${runtime_root}" --compute-tools-root "${runtime_root}" --case-dir "${case_dir}" --prepared-case-manifest "${case_archive_dir}/case-manifest.json" --rank-manifest "${rank_context_root}/control/run-manifest.json" --rank-placement-root "${rank_context_root}/source/placement" --placement-collector "${runtime_root}/platforms/aspire2a/collect-rank-placement.sh" --bind-rank-placement --imb-bin "${imb_bin}" --global-rank-env PMI_RANK --local-rank-env PMI_LOCAL_RANK --local-size-env PMI_LOCAL_SIZE "${distributed_root_args[@]}" --solver-launch-arg "${mpiexec_path}" --solver-launch-arg -n --solver-launch-arg "${OPENFOAM_MPI_PROCS}" --solver-launch-arg -ppn --solver-launch-arg "${ranks_per_node}" --solver-launch-arg --cpu-bind --solver-launch-arg depth --solver-launch-arg -d --solver-launch-arg 1 --solver-launch-arg /usr/bin/bash --solver-launch-arg "${PROVISION_DIR}/platforms/aspire2a/exec-local-numa.sh" --node-launch-arg "${mpiexec_path}" --node-launch-arg -n --node-launch-arg "${OPENFOAM_NODES}" --node-launch-arg -ppn --node-launch-arg 1 || run_status=$?
++kill "${keeper_pid}"
++wait "${keeper_pid}" || true
++exit "${run_status}"

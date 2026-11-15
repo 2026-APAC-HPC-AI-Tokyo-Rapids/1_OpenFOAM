@@ -1,0 +1,248 @@
+[
+  {
+    "nodes": 1,
+    "unpatched_run": "37207608105",
+    "bonus_run": "37529406508",
+    "coefficient_byte_equal": true,
+    "runs": [
+      {
+        "actions_run": "37207608105",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37207608105/aspire2a/openfoam-aspire2a-v2-r-f4776e59ce577da8192e9790533c29dd",
+        "archive_sha256": "e0374a4488393eeca853d9426d8512d0cbeb81851c2ad6bcacbb3e97ca544aec",
+        "coefficient_sha256": "36d35283932995d8d4569da30cbc3d67d2c75a48e4ca0a1e3b47da9ae2e4adcb",
+        "coefficient_bytes": 13404,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=13.28363071423077 standard_deviation=0.06446271125976222 measured_iterations=39 configured_iterations=40 cells=65334765 ranks=128 nodes=1 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.43827636195043501 step=40 source_member=results/coefficient.dat reference=~0.43 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "6396eeb619048e90f48ae79ff12f6bdd79defe02",
+          "base_role": "score_reference",
+          "head_commit": "2eacff58e59ecc81bdc044b4047d8a8f24ad9b4e",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "5abefc1c0ae77d03654689aacd41a8d6c7a50430",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "895c57266b6d7652939b3254fce6a6f7657eb77f8900c9bfa8dce4db4595c13c",
+        "placement_records": 128,
+        "single_cpu_affinity_records": 128
+      },
+      {
+        "actions_run": "37529406508",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37529406508/aspire2a/openfoam-aspire2a-v2-r-4c16ae33f02d010fb5e033ceaf329f5c",
+        "archive_sha256": "79e7bf546eb71b06add63b33b21edded3720f5f7d377864af80f137a5cc5186c",
+        "coefficient_sha256": "36d35283932995d8d4569da30cbc3d67d2c75a48e4ca0a1e3b47da9ae2e4adcb",
+        "coefficient_bytes": 13404,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=11.66532754253846 standard_deviation=0.06485122279890862 measured_iterations=39 configured_iterations=40 cells=65334765 ranks=128 nodes=1 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.43827636195043501 step=40 source_member=results/coefficient.dat reference=~0.43 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "80b5da59e06939f77b0021eb741d02f0f8ad12f8",
+          "base_role": "score_reference",
+          "head_commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "512e0e1547c8eee4b879cbb32151c600280c1955c10be850cb2d6e945edd1713",
+        "placement_records": 128,
+        "single_cpu_affinity_records": 128
+      }
+    ]
+  },
+  {
+    "nodes": 2,
+    "unpatched_run": "37207589090",
+    "bonus_run": "37529430470",
+    "coefficient_byte_equal": true,
+    "runs": [
+      {
+        "actions_run": "37207589090",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37207589090/aspire2a/openfoam-aspire2a-v2-r-bfa029cc652f26f581b67b2c8ad1ba8b",
+        "archive_sha256": "e183209fbae2ec45b2fcf25627b0c30870841d671a3214ba355734f95012cb5b",
+        "coefficient_sha256": "2a49a26dd354f8414fd69ac007f8e8c9583c860eddc16602d372db4b7f81afe0",
+        "coefficient_bytes": 25565,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=6.353097430873419 standard_deviation=0.03412732438348982 measured_iterations=79 configured_iterations=80 cells=65334765 ranks=256 nodes=2 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.32285935413723610 step=80 source_member=results/coefficient.dat reference=~0.34 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "6396eeb619048e90f48ae79ff12f6bdd79defe02",
+          "base_role": "score_reference",
+          "head_commit": "2eacff58e59ecc81bdc044b4047d8a8f24ad9b4e",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "5abefc1c0ae77d03654689aacd41a8d6c7a50430",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "895c57266b6d7652939b3254fce6a6f7657eb77f8900c9bfa8dce4db4595c13c",
+        "placement_records": 256,
+        "single_cpu_affinity_records": 256
+      },
+      {
+        "actions_run": "37529430470",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37529430470/aspire2a/openfoam-aspire2a-v2-r-75340f2f7630f191da2029b8e1a6330c",
+        "archive_sha256": "66729e8673c631be629b00ca00e1e12c9a8f19c81e13d434e3e7bd8fb0a600f8",
+        "coefficient_sha256": "2a49a26dd354f8414fd69ac007f8e8c9583c860eddc16602d372db4b7f81afe0",
+        "coefficient_bytes": 25565,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=5.643867659784811 standard_deviation=0.044072510154244 measured_iterations=79 configured_iterations=80 cells=65334765 ranks=256 nodes=2 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.32285935413723610 step=80 source_member=results/coefficient.dat reference=~0.34 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "80b5da59e06939f77b0021eb741d02f0f8ad12f8",
+          "base_role": "score_reference",
+          "head_commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "512e0e1547c8eee4b879cbb32151c600280c1955c10be850cb2d6e945edd1713",
+        "placement_records": 256,
+        "single_cpu_affinity_records": 256
+      }
+    ]
+  },
+  {
+    "nodes": 4,
+    "unpatched_run": "37209554319",
+    "bonus_run": "37445116747",
+    "coefficient_byte_equal": true,
+    "runs": [
+      {
+        "actions_run": "37209554319",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37209554319/aspire2a/openfoam-aspire2a-v2-r-5225be8c36cad3ff6a141a700490ee5c",
+        "archive_sha256": "0a407b9a659ff113cf47309f3dbd29edc7136aac7387edf23748f318ef2896ce",
+        "coefficient_sha256": "8952a056c8de917de48cbebaad1af41c2e0abf3382b63dcc666b2ef7c75838ed",
+        "coefficient_bytes": 46844,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=2.873055258167786 standard_deviation=0.01782954405329338 measured_iterations=149 configured_iterations=150 cells=65334765 ranks=512 nodes=4 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.29138777754153217 step=150 source_member=results/coefficient.dat reference=~0.28–0.29 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "6396eeb619048e90f48ae79ff12f6bdd79defe02",
+          "base_role": "score_reference",
+          "head_commit": "2eacff58e59ecc81bdc044b4047d8a8f24ad9b4e",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "5abefc1c0ae77d03654689aacd41a8d6c7a50430",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "895c57266b6d7652939b3254fce6a6f7657eb77f8900c9bfa8dce4db4595c13c",
+        "placement_records": 512,
+        "single_cpu_affinity_records": 512
+      },
+      {
+        "actions_run": "37445116747",
+        "artifact_path": "hdd_raid/samba/net_share/openfoam-artifacts/37445116747/aspire2a/openfoam-aspire2a-v2-r-e1bc9904bb094dd4e8a2130a5106e798",
+        "archive_sha256": "e10c67a1aa1f99297ce5c97bd735168d9c7696182af05e64ca4259e7c1e169fd",
+        "coefficient_sha256": "8952a056c8de917de48cbebaad1af41c2e0abf3382b63dcc666b2ef7c75838ed",
+        "coefficient_bytes": 46844,
+        "result": "STATUS: VALID\nRESULT: average_wall_clock_seconds_per_iteration=2.597249206140942 standard_deviation=0.01563255966580472 measured_iterations=149 configured_iterations=150 cells=65334765 ranks=512 nodes=4 workload_id=occDrivAerStaticMesh-65M distribution=OpenFOAM.com release=v2512 solver=simpleFoam\nCD_SANITY: cd=0.29138777754153217 step=150 source_member=results/coefficient.dat reference=~0.28–0.29 (reference only; no pass/fail threshold)",
+        "source_track": {
+          "base_commit": "80b5da59e06939f77b0021eb741d02f0f8ad12f8",
+          "base_role": "score_reference",
+          "head_commit": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+          "object_hash_algorithm": "sha1"
+        },
+        "build_source_commits": [
+          {
+            "commit_role": "build_definition",
+            "object_hash_algorithm": "sha1",
+            "oid": "fa4f5b04a9e1fa323c5d2c2eb39fa800b3a5f892",
+            "repository_id": "apac2026-openfoam"
+          },
+          {
+            "commit_role": "openfoam_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "5a55da3fb12800863bf76122c50bb0850222cab0",
+            "repository_id": "openfoam-source"
+          },
+          {
+            "commit_role": "thirdparty_source",
+            "object_hash_algorithm": "sha1",
+            "oid": "1eb943261ee0c0f7c5ec180dc012ce8d3b8777e0",
+            "repository_id": "openfoam-thirdparty-source"
+          }
+        ],
+        "build_archive_sha256": "512e0e1547c8eee4b879cbb32151c600280c1955c10be850cb2d6e945edd1713",
+        "placement_records": 512,
+        "single_cpu_affinity_records": 512
+      }
+    ]
+  }
+]

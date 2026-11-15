@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#PBS -P 59000014
+#PBS -q normal
+#PBS -l select=1:ncpus=128:mpiprocs=1:ompthreads=128:mem=64gb
+#PBS -l place=excl
+#PBS -l walltime=02:00:01
+#PBS -N roofline_cache
+#PBS -j oe
+set -euo pipefail
+cd "${PBS_O_WORKDIR:?}"
+trap 'status=$?; printf "exit_status=%d\npbs_job_id=%s\nfinished_utc=%s\n" "$status" "$PBS_JOBID" "$(date -u +%FT%TZ)" > status.txt; exit "$status"' EXIT
+set +u
+source /etc/profile
+module purge
+module load PrgEnv-gnu/8.3.3 craype-x86-milan
+set -u
+export LC_ALL=C
+export OMP_DYNAMIC=false
+export OMP_PROC_BIND=false
+export OMP_WAIT_POLICY=active
+printf 'job=%s\nnode=%s\nstarted_utc=%s\n' "$PBS_JOBID" "$(hostname -f)" "$(date -u +%FT%TZ)" > environment.txt
+lscpu >> environment.txt
+cat /proc/meminfo >> environment.txt
+cat /sys/kernel/mm/transparent_hugepage/enabled >> environment.txt
+numactl --hardware >> environment.txt
+module -t list > modules.txt 2>&1
+gcc --version > compiler.txt
+gcc -O3 -march=znver3 -fopenmp -Wall -Wextra -Werror cache_read.c -lm -o cache_read
+objdump -d -M intel cache_read > disassembly.txt
+for trial in 1 2 3; do
+  timeout 60s ./cache_read all "$trial" > "all-${trial}.csv" 2> "all-${trial}.stderr"
+  timeout 60s ./cache_read one_per_l3 "$trial" > "one_per_l3-${trial}.csv" 2> "one_per_l3-${trial}.stderr"
+done
+printf 'All six benchmark processes and their checksums passed.\n'

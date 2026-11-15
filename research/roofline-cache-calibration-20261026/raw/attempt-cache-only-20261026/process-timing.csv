@@ -1,0 +1,7 @@
+trial,mode,status,elapsed_ns
+1,all_cache,0,1737932744
+1,one_per_l3,0,1081339070
+2,all_cache,0,1739239055
+2,one_per_l3,0,1169306252
+3,all_cache,0,1721447609
+3,one_per_l3,0,1160346947

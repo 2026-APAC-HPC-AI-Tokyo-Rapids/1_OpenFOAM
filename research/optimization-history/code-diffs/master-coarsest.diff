@@ -1,0 +1,12 @@
+diff --git a/benchmark/occDrivAerStaticMesh/system/fvSolution.fixedIter b/benchmark/occDrivAerStaticMesh/system/fvSolution.fixedIter
+index ede5073..298146c 100644
+--- a/benchmark/occDrivAerStaticMesh/system/fvSolution.fixedIter
++++ b/benchmark/occDrivAerStaticMesh/system/fvSolution.fixedIter
+@@ -23,6 +23,7 @@ solvers
+         tolerance       0;
+         relTol          0;
+         maxIter         12;
++        processorAgglomerator masterCoarsest;
+         coarsestLevelCorr
+         {
+             solver          PCG;

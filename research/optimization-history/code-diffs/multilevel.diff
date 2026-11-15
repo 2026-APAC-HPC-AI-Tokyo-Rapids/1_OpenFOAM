@@ -1,0 +1,67 @@
+diff --git a/platforms/aspire2a/decomposition-1n.txt b/platforms/aspire2a/decomposition-1n.txt
+index 73a01ab..072b1b8 100644
+--- a/platforms/aspire2a/decomposition-1n.txt
++++ b/platforms/aspire2a/decomposition-1n.txt
+@@ -1 +1 @@
+-scotch
++multilevel
+diff --git a/platforms/aspire2a/decomposition-2n.txt b/platforms/aspire2a/decomposition-2n.txt
+index 73a01ab..072b1b8 100644
+--- a/platforms/aspire2a/decomposition-2n.txt
++++ b/platforms/aspire2a/decomposition-2n.txt
+@@ -1 +1 @@
+-scotch
++multilevel
+diff --git a/platforms/aspire2a/decomposition-4n.txt b/platforms/aspire2a/decomposition-4n.txt
+index 73a01ab..072b1b8 100644
+--- a/platforms/aspire2a/decomposition-4n.txt
++++ b/platforms/aspire2a/decomposition-4n.txt
+@@ -1 +1 @@
+-scotch
++multilevel
+diff --git a/platforms/aspire2a/prepare-openfoam-case.pbs b/platforms/aspire2a/prepare-openfoam-case.pbs
+index d02f24a..e08d262 100755
+--- a/platforms/aspire2a/prepare-openfoam-case.pbs
++++ b/platforms/aspire2a/prepare-openfoam-case.pbs
+@@ -33,8 +33,9 @@ decomposition=$(cat "${PROVISION_DIR}/platforms/aspire2a/${decomposition_file}")
+ case "${decomposition}" in
+   hierarchical) decomposition_options=(--case-default-hierarchical) ;;
+   multilevel)
+-    [[ "${PREPARE_SUBDOMAINS}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
+-    decomposition_options=(--multi-level-domains 4,2,4,16)
++    # ノード、ソケット（2）、NUMA（ソケットあたり4）、コア（NUMAあたり16）の階層。1ノードではノードの段がない。
++    case "${PREPARE_SUBDOMAINS}" in 128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;; esac
++    decomposition_options=(--multi-level-domains "${multi_level_domains}")
+     ;;
+   scotch|metis|kahip|ptscotch) decomposition_options=(--decomposition-method "${decomposition}") ;;
+   *) echo '未対応の分割条件です' >&2; exit 64 ;;
+diff --git a/platforms/aspire2a/run-openfoam.pbs b/platforms/aspire2a/run-openfoam.pbs
+index e921eb4..0a3ff22 100755
+--- a/platforms/aspire2a/run-openfoam.pbs
++++ b/platforms/aspire2a/run-openfoam.pbs
+@@ -62,8 +62,8 @@ decomposition=$(cat "${PROVISION_DIR}/platforms/aspire2a/${decomposition_file}")
+ case "${decomposition}" in
+   hierarchical) decomposition_options=(--case-default-hierarchical) ;;
+   multilevel)
+-    [[ "${OPENFOAM_MPI_PROCS}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
+-    decomposition_options=(--multi-level-domains 4,2,4,16)
++    case "${OPENFOAM_MPI_PROCS}" in 128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;; esac
++    decomposition_options=(--multi-level-domains "${multi_level_domains}")
+     ;;
+   scotch|metis|kahip|ptscotch) decomposition_options=(--decomposition-method "${decomposition}") ;;
+   *) echo '未対応の分割条件です' >&2; exit 64 ;;
+diff --git a/scripts/check-openfoam-case-cache.sh b/scripts/check-openfoam-case-cache.sh
+index 310d806..97a732e 100755
+--- a/scripts/check-openfoam-case-cache.sh
++++ b/scripts/check-openfoam-case-cache.sh
+@@ -23,8 +23,8 @@ if [[ "${cluster}" == aspire2a ]]; then
+   case "${decomposition}" in
+     hierarchical) prepare_options=(--identity-only --case-default-hierarchical) ;;
+     multilevel)
+-      [[ "${subdomains}" == 512 ]] || { echo 'multiLevelは4ノードのみ対応です' >&2; exit 64; }
+-      prepare_options=(--identity-only --multi-level-domains 4,2,4,16)
++      case "${subdomains}" in 128) multi_level_domains=2,4,16 ;; 256) multi_level_domains=2,2,4,16 ;; 512) multi_level_domains=4,2,4,16 ;; esac
++      prepare_options=(--identity-only --multi-level-domains "${multi_level_domains}")
+       ;;
+     scotch|metis|kahip|ptscotch) prepare_options=(--identity-only --decomposition-method "${decomposition}") ;;
+     *) echo '未対応の分割条件です' >&2; exit 64 ;;

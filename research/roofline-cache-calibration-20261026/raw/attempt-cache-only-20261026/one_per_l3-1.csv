@@ -1,0 +1,5 @@
+trial,placement,level,threads,bytes_per_thread,passes,seconds,useful_read_GBps,checksum,FP64_GFLOPs
+1,one_per_l3,L1_resident,16,16384,2514046,0.187383409,3517.078,82380259328,0
+1,one_per_l3,L2_resident,16,262144,77047,0.195815964,1650.318,40394817536,0
+1,one_per_l3,L3_resident,16,2097152,7349,0.192703721,1279.641,30823940096,0
+1,one_per_l3,DRAM,16,268435456,19,0.202253563,403.476,10200547328,0

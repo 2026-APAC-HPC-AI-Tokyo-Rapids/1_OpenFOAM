@@ -1,0 +1,33 @@
+diff --git a/scripts/build-inputs-match.sh b/scripts/build-inputs-match.sh
+index 3efc763..215e3ef 100755
+--- a/scripts/build-inputs-match.sh
++++ b/scripts/build-inputs-match.sh
+@@ -14,8 +14,8 @@ openfoam_oid=$(jq -er '.source_commits[] | select(.commit_role == "openfoam_sour
+ thirdparty_oid=$(jq -er '.source_commits[] | select(.commit_role == "thirdparty_source") | .oid' "${sidecar}")
+ [[ "${openfoam_oid}" == "${OPENFOAM_SOURCE_OID:?}" && "${thirdparty_oid}" == "${THIRDPARTY_SOURCE_OID:?}" ]]
+ 
+-# modules、compiler flags、Scotch取得、native utilities、archiveへ導入するprobeが
++# modules、compiler flags、Scotch取得、native utilities、archiveへ導入するprobe、OpenFOAMソースへのpatchが
+ # build入力。runtime、解析、文書の変更はarchiveを無効にしない。
+-build_inputs=(scripts/build-openfoam.sh scripts/build-openfoam-task.sh scripts/source-tree-identity.sh "platforms/${cluster}/build-environment.sh" experiment-metrics/native experiment-metrics/src/experiment_metrics/probes/capture_hardware.py)
++build_inputs=(scripts/build-openfoam.sh scripts/build-openfoam-task.sh scripts/source-tree-identity.sh "platforms/${cluster}/build-environment.sh" experiment-metrics/native experiment-metrics/src/experiment_metrics/probes/capture_hardware.py patches/openfoam)
+ if [[ "${cluster}" == aspire2a ]]; then build_inputs+=(platforms/aspire2a/build-openfoam.pbs platforms/aspire2a/toolchain.conf platforms/aspire2a/toolchain.sh); fi
+ git diff --quiet "${definition_oid}" "${GITHUB_SHA:?}" -- "${build_inputs[@]}"
+diff --git a/scripts/build-openfoam.sh b/scripts/build-openfoam.sh
+index 7509787..71ca668 100755
+--- a/scripts/build-openfoam.sh
++++ b/scripts/build-openfoam.sh
+@@ -77,6 +77,13 @@ install -d -m "${build_directory_mode}" "${BUILD_ARCHIVE_DIR}" "${build_tree}" "
+ if [[ "${build_use_ccache}" == true ]]; then install -d -m 0700 "${ccache_local_dir}"; fi
+ 
+ prepare_build_sources
++# Bonusのv2512ソース変更は、組織のsource repositoryを変えずにpatches/openfoam/のpatchとして追跡し、展開したソースへ名前順に当てる。
++for source_patch in "${GITHUB_WORKSPACE}"/patches/openfoam/*.patch
++do
++  [[ -e "${source_patch}" ]] || continue
++  echo "OpenFOAMソースへpatchを適用します: ${source_patch#"${GITHUB_WORKSPACE}/"}"
++  patch -p1 --forward --batch -d "${build_tree}/OpenFOAM" < "${source_patch}"
++done
+ ln -s ../ThirdParty "${build_tree}/OpenFOAM/ThirdParty"
+ 
+ # 使用するコンパイラとccacheが利用可能であることを確認する。

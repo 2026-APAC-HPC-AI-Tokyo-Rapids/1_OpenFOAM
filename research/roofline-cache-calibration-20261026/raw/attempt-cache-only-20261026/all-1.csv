@@ -1,0 +1,5 @@
+trial,placement,level,threads,bytes_per_thread,passes,seconds,useful_read_GBps,checksum,FP64_GFLOPs
+1,all_cache,L1_resident,128,16384,1451763,0.199472371,15263.105,380570959872,0
+1,all_cache,L2_resident,128,262144,46794,0.196637978,7984.958,196268261376,0
+1,all_cache,L3_resident,128,2097152,3047,0.185347183,4412.923,102240354304,0
+1,all_cache,DRAM,128,268435456,3,0.287163450,358.957,12884901888,0
