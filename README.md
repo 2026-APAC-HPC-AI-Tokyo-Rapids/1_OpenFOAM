@@ -43,3 +43,7 @@
 VTuneの完全な解析結果は、クラスタ側の`RUN_DIR/large-output/vtune`に出力されます。プロファイルの完了後、自宅サーバー上の`home-lab`ランナーが直接回収し、整合性検証済みの圧縮データとマニフェストを`/hdd_raid/samba/net_share/openfoam-artifacts/<github-run-id>/<cluster>/openfoam-<cluster>-v2-<run-id>/large-output/`に保存します。VTuneが結果ディレクトリを生成しなかった場合は、固定プロファイル成果物のエラーログを保持し、large-outputマニフェストに`vtune_result_available=false`を記録します。転送または保存に失敗した場合は、調査のためクラスタ側の`RUN_DIR`を保持します。ParaView用データはprofile Actionsでは生成せず、可視化が必要になった時点で永続化されたケースキャッシュまたはケースアーカイブから用意します。
 
 成果物の転送には、ランナー環境にセットアップ済みの`genkai-shell`または`gadi-shell`と既存のSSH鍵を使用するため、転送専用の外部設定ファイルは不要です。転送元パスはワークフロー実行時に`RUN_DIR`から動的に決定され、自宅サーバー側の保存ルートは`OPENFOAM_ARTIFACT_ARCHIVE_ROOT`環境変数経由で渡されます。
+
+## 公開履歴と資料の扱い
+
+非公開資料リンクの省略、実験ブランチの保存先、測定時の来歴IDと公開用リンクの対応は [公開履歴の説明](docs/PUBLICATION.md) を参照してください。
