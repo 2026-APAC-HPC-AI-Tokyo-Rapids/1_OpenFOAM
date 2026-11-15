@@ -298,8 +298,8 @@ def test_gadi_uses_login_build_and_pbs_execution() -> None:
     assert workflow.count("- name: 計測記録を初期化してOpenFOAMを投入") == 1
     assert workflow.count("- name: 計測記録を確定して成果物を梱包") == 1
     assert "steps.v2_context.outputs.pbs_job_id != ''" in workflow
-    assert "if: always() && needs.provision.result == 'success'" in workflow
-    assert "if: always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
+    assert "always() && needs.provision.result == 'success'" in workflow
+    assert "always() && needs.run.outputs.artifact_uploaded == 'true'" in workflow
     assert (
         'export EXPERIMENT_METRICS_GOOGLE_CREDENTIALS_FILE="${credential_file}"'
         in workflow

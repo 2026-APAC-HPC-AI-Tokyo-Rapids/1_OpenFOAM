@@ -18,7 +18,11 @@
 
 ワークフローおよびスクリプトの実装については、[共通の入口](.github/workflows/openfoam.yml)、[玄界用ワークフロー](.github/workflows/genkai.yml)、[Gadi用ワークフロー](.github/workflows/gadi.yml)、[Gadiの記憶領域設計](platforms/gadi/README.md)、[ビルドスクリプト](scripts/build-openfoam.sh)、[実行スクリプト](scripts/run-openfoam.sh)を参照してください。
 
-## GitHub Actionsからの起動
+## 公開用の実行停止
+
+現在のworkflow YAMLは自動起動を除き、全ジョブを明示的なfalse条件で停止しています。過去のログを参照できるよう、GitHub Actions自体は有効のまま保持します。以下のタグ・入力欄と各クラスタのスクリプトは、実験時の構成を記録するために残しています。
+
+## GitHub Actionsからの起動（実験時の構成）
 
 クラスタ上の処理を担当するジョブは、セルフホストランナー（`[self-hosted, home-lab]`）上で起動し、玄界向けには`genkai-shell --github-shell`、Gadi向けには`gadi-shell --github-shell`をカスタムシェル（custom shell）として直接利用します。リポジトリのチェックアウトや各ステップの実行環境は、ログインノード上の実行固有の一時ディレクトリへ転送され、共有キャッシュ、ビルド成果物、ケースキャッシュ、および実行ディレクトリ（RUN_DIR）の既存パス構成は維持されます。
 

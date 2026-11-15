@@ -31,6 +31,7 @@ defaults:
 
 jobs:
   select-build:
+    if: ${{ false }}
     name: OpenFOAMビルドを選択
     runs-on: [self-hosted, home-lab]
     outputs:
@@ -105,7 +106,7 @@ jobs:
   reuse-build:
     name: OpenFOAMビルドを再利用
     needs: select-build
-    if: needs.select-build.outputs.action == 'reuse'
+    if: ${{ false && (needs.select-build.outputs.action == 'reuse') }}
     runs-on: [self-hosted, home-lab]
     steps:
       - name: 選択した成果物をハードリンク
@@ -117,7 +118,7 @@ jobs:
   build-openfoam:
     name: OpenFOAMをビルド
     needs: select-build
-    if: needs.select-build.outputs.action == 'build'
+    if: ${{ false && (needs.select-build.outputs.action == 'build') }}
     runs-on: [self-hosted, home-lab]
     steps:
       - name: ビルド入力を取得
@@ -203,7 +204,7 @@ jobs:
   provision:
     name: OpenFOAM実行環境を配備
     needs: [select-build, reuse-build, build-openfoam]
-    if: always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))
+    if: ${{ false && (always() && needs.select-build.result == 'success' && ((needs.select-build.outputs.action == 'build' && needs.build-openfoam.result == 'success') || (needs.select-build.outputs.action == 'reuse' && needs.reuse-build.result == 'success'))) }}
     runs-on: [self-hosted, home-lab]
     outputs:
       provision_dir: ${{ steps.provision.outputs.provision_dir }}
@@ -250,7 +251,7 @@ jobs:
   prepare-case:
     name: OpenFOAMケースのキャッシュを準備
     needs: [select-build, provision]
-    if: always() && needs.provision.result == 'success'
+    if: ${{ false && (always() && needs.provision.result == 'success') }}
     runs-on: [self-hosted, home-lab]
     concurrency:
       group: aspire2a-openfoam-case-${{ needs.select-build.outputs.ranks }}-${{ needs.select-build.outputs.prepare_script_sha256 }}-${{ needs.select-build.outputs.build_cache_key }}
@@ -297,7 +298,7 @@ jobs:
   run:
     name: OpenFOAMを実行
     needs: [select-build, provision, prepare-case]
-    if: always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success'
+    if: ${{ false && (always() && needs.provision.result == 'success' && needs.prepare-case.result == 'success') }}
     runs-on: [self-hosted, home-lab]
     # 計算ジョブの待ち行列時間は上限がないため、既定の360分ではなく、self-hosted runnerでGITHUB_TOKENを更新できる24時間まで待つ。
     timeout-minutes: 1440
@@ -518,7 +519,7 @@ jobs:
   archive-artifacts:
     name: 成果物を自宅サーバーへ保管
     needs: run
-    if: always() && needs.run.outputs.artifact_uploaded == 'true'
+    if: ${{ false && (always() && needs.run.outputs.artifact_uploaded == 'true') }}
     runs-on: [self-hosted, home-lab]
     defaults:
       run:

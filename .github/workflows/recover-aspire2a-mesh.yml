@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   recover:
+    if: ${{ false }}
     name: Resume Basic mesh recovery
     runs-on: [self-hosted, home-lab]
     concurrency:
